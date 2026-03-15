@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(chmod +x /Users/pesnya/Documents/streamdeck/run.sh)",
+      "Bash(uv run:*)",
+      "Read(//Users/pesnya/.cargo/bin/**)",
+      "Bash(echo $PATH)",
+      "Bash(curl -LsSf https://astral.sh/uv/install.sh)",
+      "Bash(sh)",
+      "Bash(~/.local/bin/uv run:*)",
+      "Bash(brew install:*)",
+      "Bash(python3 -c \":*)",
+      "Bash(uv add:*)",
+      "Bash(make check:*)"
+    ]
+  }
+}
