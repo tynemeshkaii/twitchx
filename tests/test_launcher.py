@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 from unittest.mock import MagicMock, patch
 
 from core.launcher import _get_stream_url, launch_stream
@@ -7,7 +8,7 @@ from core.launcher import _get_stream_url, launch_stream
 
 class TestGetStreamUrl:
     @patch("core.launcher.subprocess.run")
-    def test_returns_url_on_success(self, mock_run: MagicMock) -> None:
+    def test_success(self, mock_run: MagicMock) -> None:
         mock_run.return_value = MagicMock(
             returncode=0,
             stdout=b"https://example.com/stream.m3u8\n",
@@ -17,7 +18,7 @@ class TestGetStreamUrl:
         assert err == ""
 
     @patch("core.launcher.subprocess.run")
-    def test_returns_none_on_failure(self, mock_run: MagicMock) -> None:
+    def test_nonzero(self, mock_run: MagicMock) -> None:
         mock_run.return_value = MagicMock(
             returncode=1,
             stderr=b"error: No streams found",
@@ -27,7 +28,14 @@ class TestGetStreamUrl:
         assert "No streams found" in err
 
     @patch("core.launcher.subprocess.run")
-    def test_returns_none_on_empty_output(self, mock_run: MagicMock) -> None:
+    def test_timeout(self, mock_run: MagicMock) -> None:
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd="streamlink", timeout=15)
+        url, err = _get_stream_url("/usr/bin/streamlink", "https://twitch.tv/xqc", "best")
+        assert url is None
+        assert "timed out" in err.lower()
+
+    @patch("core.launcher.subprocess.run")
+    def test_empty_output(self, mock_run: MagicMock) -> None:
         mock_run.return_value = MagicMock(
             returncode=0,
             stdout=b"",
@@ -51,7 +59,6 @@ class TestLaunchStream:
         mock_check_sl: MagicMock,
         mock_check_iina: MagicMock,
     ) -> None:
-        # First call with "720p60" fails, second with "best" succeeds
         mock_get_url.side_effect = [
             (None, "quality not available"),
             ("https://example.com/best.m3u8", ""),

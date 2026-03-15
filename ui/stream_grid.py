@@ -55,10 +55,16 @@ class StreamCard(ctk.CTkFrame):
         self._login = login
         self._channel = channel
         self._started_at = started_at
+        self._selected = False
 
         self.grid_columnconfigure(0, weight=1)
 
+        # Hover effect
+        self.bind("<Enter>", self._on_enter)
+        self.bind("<Leave>", self._on_leave)
+
         # Thumbnail
+        self._shimmer_job: str | None = None
         if thumbnail:
             self._thumb_label = ctk.CTkLabel(
                 self, image=thumbnail, text="", corner_radius=8
@@ -66,12 +72,12 @@ class StreamCard(ctk.CTkFrame):
         else:
             self._thumb_label = ctk.CTkLabel(
                 self,
-                text="Loading...",
+                text="",
                 height=135,
                 fg_color="#2a2a3e",
                 corner_radius=8,
-                text_color="#666666",
             )
+            self._start_shimmer()
         self._thumb_label.grid(row=0, column=0, sticky="ew", padx=6, pady=(6, 4))
 
         # Info area
@@ -211,7 +217,23 @@ class StreamCard(ctk.CTkFrame):
         self._viewers_label.configure(text=f"\u25cf {format_viewers(count)} viewers")
 
     def update_thumbnail(self, image: ctk.CTkImage) -> None:
-        self._thumb_label.configure(image=image, text="")
+        self._stop_shimmer()
+        self._thumb_label.configure(image=image, text="", fg_color="transparent")
+
+    def _start_shimmer(self) -> None:
+        self._shimmer_bright = False
+        self._shimmer_tick()
+
+    def _shimmer_tick(self) -> None:
+        self._shimmer_bright = not self._shimmer_bright
+        color = "#3a3a4e" if self._shimmer_bright else "#2a2a3e"
+        self._thumb_label.configure(fg_color=color)
+        self._shimmer_job = self.after(600, self._shimmer_tick)
+
+    def _stop_shimmer(self) -> None:
+        if self._shimmer_job:
+            self.after_cancel(self._shimmer_job)
+            self._shimmer_job = None
 
     def update_game(self, name: str) -> None:
         self._game_label.configure(text=name or "Unknown")
@@ -220,10 +242,19 @@ class StreamCard(ctk.CTkFrame):
         self._title_label.configure(text=(title[:120] if title else ""))
 
     def set_selected(self, selected: bool) -> None:
+        self._selected = selected
         if selected:
             self.configure(border_width=2, border_color=ACCENT)
         else:
             self.configure(border_width=0)
+
+    def _on_enter(self, event: tk.Event) -> None:  # type: ignore[type-arg]
+        if not self._selected:
+            self.configure(fg_color="#22223a")
+
+    def _on_leave(self, event: tk.Event) -> None:  # type: ignore[type-arg]
+        if not self._selected:
+            self.configure(fg_color="#1a1a2e")
 
     def set_watching(self, active: bool) -> None:
         if active and not self._watching:

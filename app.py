@@ -268,6 +268,7 @@ class StreamDeckApp(ctk.CTk):
             on_channel_click=self._on_channel_click,
             on_add_channel=self._on_add_channel,
             on_remove_channel=self._on_remove_channel,
+            on_search_channels=self._search_channels,
         )
         self._sidebar.grid(row=0, column=0, sticky="ns")
 
@@ -514,6 +515,32 @@ class StreamDeckApp(ctk.CTk):
             self._player_bar.set_status("Select a channel first", "#FF6B6B")
             return
         webbrowser.open(f"https://twitch.tv/{channel}")
+
+    # ── Channel search ────────────────────────────────────────────
+
+    def _search_channels(self, query: str) -> None:
+        if not self._config.get("client_id") or not self._config.get("client_secret"):
+            return
+
+        def do_search() -> None:
+            loop = asyncio.new_event_loop()
+            try:
+                client = TwitchClient()
+                try:
+                    results = loop.run_until_complete(client.search_channels(query))
+                finally:
+                    loop.run_until_complete(client.close())
+                if not self._shutdown.is_set():
+                    self.after(
+                        0, lambda r=results: self._sidebar.show_search_results(r)
+                    )
+            except Exception:
+                if not self._shutdown.is_set():
+                    self.after(0, lambda: self._sidebar.show_search_results([]))
+            finally:
+                loop.close()
+
+        threading.Thread(target=do_search, daemon=True).start()
 
     # ── Data refresh ─────────────────────────────────────────────
 
@@ -785,7 +812,7 @@ class StreamDeckApp(ctk.CTk):
             cached_bytes = get_cached_avatar(login)
             if cached_bytes:
                 try:
-                    img = Image.open(io.BytesIO(cached_bytes)).resize((28, 28))
+                    img = Image.open(io.BytesIO(cached_bytes)).resize((28, 28), Image.Resampling.LANCZOS)
                     ctk_img = ctk.CTkImage(
                         light_image=img, dark_image=img, size=(28, 28)
                     )
@@ -798,7 +825,7 @@ class StreamDeckApp(ctk.CTk):
             try:
                 resp = httpx.get(url, timeout=10)
                 raw_bytes = resp.content
-                img = Image.open(io.BytesIO(raw_bytes)).resize((28, 28))
+                img = Image.open(io.BytesIO(raw_bytes)).resize((28, 28), Image.Resampling.LANCZOS)
                 ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(28, 28))
                 self._avatar_cache.put(login, ctk_img)
                 save_avatar(login, raw_bytes)
@@ -835,7 +862,7 @@ class StreamDeckApp(ctk.CTk):
                 if raw is None:
                     continue
                 try:
-                    img = Image.open(io.BytesIO(raw)).resize((220, 124))
+                    img = Image.open(io.BytesIO(raw)).resize((220, 124), Image.Resampling.LANCZOS)
                     ctk_img = ctk.CTkImage(
                         light_image=img, dark_image=img, size=(220, 124)
                     )

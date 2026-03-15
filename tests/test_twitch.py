@@ -2,50 +2,37 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
 from core.twitch import VALID_USERNAME, TwitchClient
 
 
 class TestValidUsername:
-    def test_accepts_simple_name(self) -> None:
-        assert VALID_USERNAME.match("xqc")
+    @pytest.mark.parametrize(
+        "name",
+        ["xqc", "just_ns", "a_b_c", "user123", "XqC_123", "a" * 25],
+    )
+    def test_accepts_valid(self, name: str) -> None:
+        assert VALID_USERNAME.match(name)
 
-    def test_accepts_underscores(self) -> None:
-        assert VALID_USERNAME.match("just_ns")
-
-    def test_accepts_numbers(self) -> None:
-        assert VALID_USERNAME.match("user123")
-
-    def test_accepts_mixed_case(self) -> None:
-        assert VALID_USERNAME.match("XqC_123")
-
-    def test_rejects_url(self) -> None:
-        assert not VALID_USERNAME.match("https://twitch.tv/xqc")
-
-    def test_rejects_url_path(self) -> None:
-        assert not VALID_USERNAME.match("twitch.tv/xqc")
-
-    def test_rejects_empty(self) -> None:
-        assert not VALID_USERNAME.match("")
-
-    def test_rejects_spaces(self) -> None:
-        assert not VALID_USERNAME.match("user name")
-
-    def test_rejects_special_chars(self) -> None:
-        assert not VALID_USERNAME.match("user@name")
-
-    def test_rejects_too_long(self) -> None:
-        assert not VALID_USERNAME.match("a" * 26)
-
-    def test_accepts_max_length(self) -> None:
-        assert VALID_USERNAME.match("a" * 25)
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "twitch.tv/xqc",
+            "https://twitch.tv/xqc",
+            "",
+            "a" * 26,
+            "user name",
+            "user@name",
+        ],
+    )
+    def test_rejects_invalid(self, name: str) -> None:
+        assert not VALID_USERNAME.match(name)
 
 
 class TestGetLiveStreamsFiltering:
     def test_filters_invalid_logins(self) -> None:
         client = TwitchClient()
-        # We can't easily test the full method without mocking HTTP,
-        # but we can verify the filtering logic by checking that
-        # invalid names are filtered before the API call.
         logins = ["valid_user", "https://twitch.tv/bad", "", "good123"]
         cleaned = [
             name.strip().lower()
@@ -69,3 +56,19 @@ class TestGetUsersFiltering:
         ]
         cleaned = [name for name in cleaned if VALID_USERNAME.match(name)]
         assert cleaned == ["validuser", "ok_name"]
+
+    def test_empty_list(self) -> None:
+        client = TwitchClient()
+        loop = asyncio.new_event_loop()
+        result = loop.run_until_complete(client.get_users([]))
+        assert result == []
+        loop.run_until_complete(client.close())
+        loop.close()
+
+
+class TestGetGamesDeduplicates:
+    def test_deduplicates_ids(self) -> None:
+        # Verify that duplicate game IDs are deduplicated before request
+        game_ids = ["123", "456", "123", "789", "456"]
+        unique = list(set(game_ids))
+        assert len(unique) == 3

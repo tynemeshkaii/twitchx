@@ -17,3 +17,8 @@ test:
 	uv run pytest tests/ -v
 
 check: lint test
+
+push:
+    git add .
+    git commit -m "update"
+    git push

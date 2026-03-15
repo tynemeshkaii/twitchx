@@ -131,3 +131,11 @@ class TwitchClient:
             data = await self._get("/games", params=params)
             all_games.extend(data.get("data", []))
         return {g["id"]: g["name"] for g in all_games}
+
+    async def search_channels(self, query: str) -> list[dict[str, Any]]:
+        query = query.strip()
+        if not query:
+            return []
+        params = [("query", query), ("live_only", "false"), ("first", "8")]
+        data = await self._get("/search/channels", params=params)
+        return data.get("data", [])
