@@ -7,6 +7,7 @@ import re
 import subprocess
 import threading
 import time
+import traceback
 import webbrowser
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -221,7 +222,7 @@ class SettingsDialog(ctk.CTkToplevel):
         self.destroy()
 
 
-class StreamDeckApp(ctk.CTk):
+class TwitchXApp(ctk.CTk):
     def __init__(self) -> None:
         super().__init__()
         ctk.set_appearance_mode("dark")
@@ -252,6 +253,8 @@ class StreamDeckApp(ctk.CTk):
         self._launch_channel: str | None = None
         # Stale data tracking
         self._last_successful_fetch: float = 0
+        # Long-lived Twitch API client (reused across fetch cycles)
+        self._twitch = TwitchClient()
 
         self._build_ui()
         self._bind_shortcuts()
@@ -525,11 +528,9 @@ class StreamDeckApp(ctk.CTk):
         def do_search() -> None:
             loop = asyncio.new_event_loop()
             try:
-                client = TwitchClient()
-                try:
-                    results = loop.run_until_complete(client.search_channels(query))
-                finally:
-                    loop.run_until_complete(client.close())
+                results = loop.run_until_complete(
+                    self._twitch.search_channels(query)
+                )
                 if not self._shutdown.is_set():
                     self.after(
                         0, lambda r=results: self._sidebar.show_search_results(r)
@@ -663,8 +664,6 @@ class StreamDeckApp(ctk.CTk):
                         )
                     return
                 except Exception as e:
-                    import traceback
-
                     traceback.print_exc()
                     msg = str(e)[:80] if str(e) else "Unknown error"
                     if not self._shutdown.is_set():
@@ -685,20 +684,16 @@ class StreamDeckApp(ctk.CTk):
         self._fetching = False
 
     async def _async_fetch(self, favorites: list[str]) -> tuple[list[dict], list[dict]]:
-        client = TwitchClient()
-        try:
-            await client._ensure_token()
-            streams, users = await asyncio.gather(
-                client.get_live_streams(favorites),
-                client.get_users(favorites),
-            )
-            game_ids = [s.get("game_id", "") for s in streams if s.get("game_id")]
-            if game_ids:
-                games = await client.get_games(game_ids)
-                self._games.update(games)
-            return streams, users
-        finally:
-            await client.close()
+        await self._twitch._ensure_token()
+        streams, users = await asyncio.gather(
+            self._twitch.get_live_streams(favorites),
+            self._twitch.get_users(favorites),
+        )
+        game_ids = [s.get("game_id", "") for s in streams if s.get("game_id")]
+        if game_ids:
+            games = await self._twitch.get_games(game_ids)
+            self._games.update(games)
+        return streams, users
 
     def _on_data_fetched(
         self, favorites: list[str], streams: list[dict], users: list[dict]
@@ -893,4 +888,10 @@ class StreamDeckApp(ctk.CTk):
         self._shutdown.set()
         if self._refresh_job:
             self.after_cancel(self._refresh_job)
+        # Close the long-lived Twitch client
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(self._twitch.close())
+        finally:
+            loop.close()
         super().destroy()

@@ -1,4 +1,4 @@
-.PHONY: run debug lint fmt test check
+.PHONY: run debug lint fmt test check push
 
 run:
 	uv run python main.py
@@ -19,6 +19,6 @@ test:
 check: lint test
 
 push:
-    git add .
-    git commit -m "update"
-    git push
+	git add .
+	git commit -m "update $$(date '+%Y-%m-%d %H:%M')"
+	git push

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import tkinter as tk
+import webbrowser
 from collections.abc import Callable
 from typing import Any
 
 import customtkinter as ctk
 
 ACCENT = "#9146FF"
-SIDEBAR_WIDTH = 220
+SIDEBAR_WIDTH = 240
 
 
 class ChannelItem(ctk.CTkFrame):
@@ -77,6 +78,11 @@ class ChannelItem(ctk.CTkFrame):
 
         # Right-click context menu
         self._menu = tk.Menu(self, tearoff=0)
+        self._menu.add_command(
+            label="Open in Browser",
+            command=lambda: webbrowser.open(f"https://twitch.tv/{channel}"),
+        )
+        self._menu.add_separator()
         self._menu.add_command(label="Remove from favorites", command=self._remove)
         for widget in [self, self._dot, self._name_label]:
             widget.bind("<Button-2>", self._show_menu)

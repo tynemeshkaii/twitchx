@@ -1,3 +1,0 @@
-[lint]
-select = ["E", "F", "I", "UP", "B", "SIM"]
-ignore = ["E501"]

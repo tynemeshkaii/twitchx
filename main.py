@@ -1,7 +1,7 @@
 import logging
 import os
 
-from app import StreamDeckApp
+from app import TwitchXApp
 
 # Enable debug logging with TWITCHX_DEBUG=1
 if os.environ.get("TWITCHX_DEBUG"):
@@ -9,7 +9,7 @@ if os.environ.get("TWITCHX_DEBUG"):
 
 
 def main() -> None:
-    app = StreamDeckApp()
+    app = TwitchXApp()
     app.mainloop()
 
 

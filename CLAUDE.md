@@ -20,13 +20,14 @@ make lint    # ruff check + pyright
 make fmt     # ruff format
 make test    # pytest tests/ -v
 make check   # lint + test
+make push    # git add, commit with timestamp, push
 ```
 
 ## Architecture
 
 TwitchX is a single-window CustomTkinter app that polls the Twitch Helix API for live streams and launches them via streamlink + IINA.
 
-**Data flow:** UI event → `StreamDeckApp` callback → background `threading.Thread` → `asyncio.new_event_loop()` runs async httpx calls → results marshalled back to UI via `self.after(0, callback)`.
+**Data flow:** UI event → `TwitchXApp` callback → background `threading.Thread` → `asyncio.new_event_loop()` runs async httpx calls → results marshalled back to UI via `self.after(0, callback)`.
 
 ### Core modules (`core/`)
 
@@ -37,13 +38,13 @@ TwitchX is a single-window CustomTkinter app that polls the Twitch Helix API for
 
 ### UI modules (`ui/`)
 
-- **sidebar.py** — Favorites list with live indicator dots, async-loaded avatars, add/remove channels. All channels are clickable (live and offline). Diff-based updates: if channels/live-set haven't changed, only avatar images are patched in-place. Right-click context menu for "Remove from favorites". Integrated channel search: typing in the entry queries the Twitch API (400ms debounce) and shows a dropdown with up to 8 results. Callback-driven (accepts `on_click`, `on_add_channel`, `on_remove_channel`, `on_search_channels`).
+- **sidebar.py** — Favorites list with live indicator dots, async-loaded avatars, add/remove channels. All channels are clickable (live and offline). Diff-based updates: if channels/live-set haven't changed, only avatar images are patched in-place. Right-click context menu for "Open in Browser" and "Remove from favorites". Integrated channel search: typing in the entry queries the Twitch API (400ms debounce) and shows a dropdown with up to 8 results. Callback-driven (accepts `on_click`, `on_add_channel`, `on_remove_channel`, `on_search_channels`).
 - **stream_grid.py** — 3-column scrollable grid of `StreamCard` widgets showing thumbnail, game, viewer count, uptime. Supports diff-based in-place updates, sort (viewers/recent/alpha), and game filter. Right-click context menu (Watch / Open in Browser / Copy URL). Green "▶ WATCHING" overlay on the active card. Skeleton shimmer animation while thumbnails load. Hover effect on cards. Also renders onboarding screen for new users.
 - **player_bar.py** — Bottom bar with quality dropdown, Watch button, globe (🌐) open-in-browser button, status text, total viewer count, last-updated timestamp (turns red when stale), refresh button, settings gear.
 
 ### Orchestrator (`app.py`)
 
-`StreamDeckApp` owns all mutable state. UI components are view-only and updated via their `update_*` methods. Settings dialog (`SettingsDialog`) is a modal `CTkToplevel` (Escape closes, `grab_set` makes modal) with a "Test Connection" button that validates credentials before saving. Token is cleared when credentials change.
+`TwitchXApp` owns all mutable state. UI components are view-only and updated via their `update_*` methods. A single long-lived `TwitchClient` instance (`self._twitch`) is created in `__init__` and reused across all fetch cycles — no new TCP connections per poll. Settings dialog (`SettingsDialog`) is a modal `CTkToplevel` (Escape closes, `grab_set` makes modal) with a "Test Connection" button that validates credentials before saving. Token is cleared when credentials change.
 
 ## Key Patterns
 
@@ -75,14 +76,14 @@ Run with `make test` or `uv run pytest tests/ -v`.
 ## Adding New Functionality
 
 - **New Twitch API endpoint:** Add async method to `TwitchClient`, call it in `_async_fetch` (app.py), handle result in `_on_data_fetched`.
-- **New UI component:** Inherit from `ctk.CTkFrame`, accept callbacks in `__init__`, expose `update_*` methods. Wire into `StreamDeckApp._build_ui`. Keep components stateless — `StreamDeckApp` owns the data.
+- **New UI component:** Inherit from `ctk.CTkFrame`, accept callbacks in `__init__`, expose `update_*` methods. Wire into `TwitchXApp._build_ui`. Keep components stateless — `TwitchXApp` owns the data.
 - **New config field:** Add default to `DEFAULT_CONFIG` in `storage.py`. The merge-on-load pattern ensures backward compatibility.
 - **New shared utility:** Put it in `core/utils.py` so both UI and core modules can import it.
 - **New sort/filter option:** Add constant to `SORT_OPTIONS` in `stream_grid.py`, handle in `_apply_sort_filter`, wire dropdown in `app.py._build_ui`.
 
 ## Gotchas
 
-- `TwitchClient` uses an `asyncio.Lock` for token refresh — creating multiple clients per fetch is fine since each gets its own event loop, but don't share a client across threads.
+- `TwitchClient` is now long-lived (created once in `TwitchXApp.__init__`). Each fetch cycle reuses the same `httpx.AsyncClient` and TCP connections. The client is closed in `destroy()`. Don't share the client across threads — each background thread gets its own `asyncio.new_event_loop()`.
 - `streamlink --stream-url` can take up to 15s; the timeout is set accordingly. If the quality isn't available, `launcher.py` automatically retries with `best`.
 - The `_shutdown` `threading.Event` guards all `self.after()` calls from background threads to prevent callbacks after window destruction.
 - The `_clear_fetching` call is in a `finally` block to guarantee the fetching lock is always released, even on retry exhaustion.
