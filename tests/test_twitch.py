@@ -72,3 +72,147 @@ class TestGetGamesDeduplicates:
         game_ids = ["123", "456", "123", "789", "456"]
         unique = list(set(game_ids))
         assert len(unique) == 3
+
+
+class TestGetFollowedChannels:
+    def test_reports_progress_after_each_page(self) -> None:
+        client = TwitchClient.__new__(TwitchClient)
+        pages = iter(
+            [
+                {
+                    "data": [
+                        {"broadcaster_login": "alpha"},
+                        {"broadcaster_login": "beta"},
+                    ],
+                    "pagination": {"cursor": "next-page"},
+                },
+                {
+                    "data": [{"broadcaster_login": "gamma"}],
+                    "pagination": {},
+                },
+            ]
+        )
+
+        async def fake_get(endpoint: str, params: object = None) -> dict[str, object]:
+            assert endpoint == "/channels/followed"
+            return next(pages)
+
+        client._get = fake_get  # type: ignore[attr-defined]
+        progress: list[int] = []
+        loop = asyncio.new_event_loop()
+        try:
+            result = loop.run_until_complete(
+                client.get_followed_channels("user-1", on_progress=progress.append)
+            )
+        finally:
+            loop.close()
+
+        assert result == ["alpha", "beta", "gamma"]
+        assert progress == [2, 3]
+
+
+class TestBatchFetching:
+    def test_get_live_streams_fetches_batches_concurrently(self) -> None:
+        client = TwitchClient.__new__(TwitchClient)
+        active = 0
+        max_active = 0
+        requests: list[list[tuple[str, str]]] = []
+
+        async def fake_get(endpoint: str, params: object = None) -> dict[str, object]:
+            nonlocal active, max_active
+            assert endpoint == "/streams"
+            batch = list(params or [])
+            requests.append(batch)
+            active += 1
+            max_active = max(max_active, active)
+            await asyncio.sleep(0.01)
+            active -= 1
+            return {
+                "data": [
+                    {"user_login": value}
+                    for key, value in batch
+                    if key == "user_login"
+                ]
+            }
+
+        client._get = fake_get  # type: ignore[attr-defined]
+        logins = [f"user{i}" for i in range(250)]
+        loop = asyncio.new_event_loop()
+        try:
+            result = loop.run_until_complete(client.get_live_streams(logins))
+        finally:
+            loop.close()
+
+        assert len(result) == 250
+        assert len(requests) == 3
+        assert max_active > 1
+
+    def test_get_users_fetches_batches_concurrently(self) -> None:
+        client = TwitchClient.__new__(TwitchClient)
+        active = 0
+        max_active = 0
+        requests: list[list[tuple[str, str]]] = []
+
+        async def fake_get(endpoint: str, params: object = None) -> dict[str, object]:
+            nonlocal active, max_active
+            assert endpoint == "/users"
+            batch = list(params or [])
+            requests.append(batch)
+            active += 1
+            max_active = max(max_active, active)
+            await asyncio.sleep(0.01)
+            active -= 1
+            return {
+                "data": [
+                    {"login": value}
+                    for key, value in batch
+                    if key == "login"
+                ]
+            }
+
+        client._get = fake_get  # type: ignore[attr-defined]
+        logins = [f"user{i}" for i in range(250)]
+        loop = asyncio.new_event_loop()
+        try:
+            result = loop.run_until_complete(client.get_users(logins))
+        finally:
+            loop.close()
+
+        assert len(result) == 250
+        assert len(requests) == 3
+        assert max_active > 1
+
+    def test_get_games_fetches_batches_concurrently(self) -> None:
+        client = TwitchClient.__new__(TwitchClient)
+        active = 0
+        max_active = 0
+        requests: list[list[tuple[str, str]]] = []
+
+        async def fake_get(endpoint: str, params: object = None) -> dict[str, object]:
+            nonlocal active, max_active
+            assert endpoint == "/games"
+            batch = list(params or [])
+            requests.append(batch)
+            active += 1
+            max_active = max(max_active, active)
+            await asyncio.sleep(0.01)
+            active -= 1
+            return {
+                "data": [
+                    {"id": value, "name": f"Game {value}"}
+                    for key, value in batch
+                    if key == "id"
+                ]
+            }
+
+        client._get = fake_get  # type: ignore[attr-defined]
+        game_ids = [str(i) for i in range(250)]
+        loop = asyncio.new_event_loop()
+        try:
+            result = loop.run_until_complete(client.get_games(game_ids))
+        finally:
+            loop.close()
+
+        assert len(result) == 250
+        assert len(requests) == 3
+        assert max_active > 1

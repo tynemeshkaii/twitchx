@@ -133,6 +133,31 @@ class ChannelItem(ctk.CTkFrame):
     def update_avatar(self, image: ctk.CTkImage) -> None:
         if self._avatar:
             self._avatar.configure(image=image)
+            return
+
+        self._avatar = ctk.CTkLabel(self, image=image, text="", width=28, height=28)
+        self._avatar.grid(row=0, column=2, padx=(2, 6), pady=(3, 3))
+        self._avatar.bind("<Enter>", self._on_enter, add="+")
+        self._avatar.bind("<Leave>", self._on_leave, add="+")
+        if self._on_click:
+            self._avatar.bind(
+                "<Button-1>", lambda e, ch=self._channel: self._on_click(ch)
+            )
+        self.grid_columnconfigure(3, weight=1)
+        self._name_label.grid(row=0, column=3, sticky="w", padx=(2, 4), pady=(3, 3))
+
+    def set_selected(self, selected: bool) -> None:
+        self._selected = selected
+        self.configure(fg_color=BG_OVERLAY if selected else "transparent")
+        self._accent_bar.configure(fg_color=ACCENT if selected else "transparent")
+        self._name_label.configure(
+            font=(FONT_SYSTEM, 13, "bold") if selected else (FONT_SYSTEM, 13),
+            text_color=(
+                TEXT_PRIMARY
+                if self._is_live
+                else (TEXT_SECONDARY if selected else TEXT_MUTED)
+            ),
+        )
 
     def _remove(self) -> None:
         if self._on_remove:
@@ -424,6 +449,12 @@ class Sidebar(ctk.CTkFrame):
             for ch in channels:
                 item = self._items_by_channel.get(ch.lower())
                 avatar = avatars.get(ch.lower())
+                is_selected = (
+                    self._selected_channel is not None
+                    and ch.lower() == self._selected_channel.lower()
+                )
+                if item:
+                    item.set_selected(is_selected)
                 if item and avatar:
                     item.update_avatar(avatar)
             return

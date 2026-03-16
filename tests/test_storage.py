@@ -108,3 +108,54 @@ def test_save_avatar_creates_dir(tmp_path: Path, monkeypatch: object) -> None:
     save_avatar("testuser", b"\x89PNG_fake_data")
     assert avatar_dir.exists()
     assert (avatar_dir / "testuser.png").read_bytes() == b"\x89PNG_fake_data"
+
+
+def test_save_config_uses_private_permissions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import core.storage as mod
+
+    config_file = tmp_path / "config.json"
+    monkeypatch.setattr(mod, "CONFIG_DIR", tmp_path)  # type: ignore[attr-defined]
+    monkeypatch.setattr(mod, "CONFIG_FILE", config_file)  # type: ignore[attr-defined]
+    monkeypatch.setattr(mod, "_OLD_CONFIG_DIR", tmp_path / "nonexistent")  # type: ignore[attr-defined]
+
+    save_config({**DEFAULT_CONFIG, "client_secret": "super-secret"})
+
+    assert oct(config_file.stat().st_mode & 0o777) == "0o600"
+
+
+def test_load_config_recovers_from_invalid_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import core.storage as mod
+
+    config_file = tmp_path / "config.json"
+    monkeypatch.setattr(mod, "CONFIG_DIR", tmp_path)  # type: ignore[attr-defined]
+    monkeypatch.setattr(mod, "CONFIG_FILE", config_file)  # type: ignore[attr-defined]
+    monkeypatch.setattr(mod, "_OLD_CONFIG_DIR", tmp_path / "nonexistent")  # type: ignore[attr-defined]
+
+    config_file.write_text("{invalid json")
+
+    config = load_config()
+
+    assert config == DEFAULT_CONFIG
+    assert json.loads(config_file.read_text()) == DEFAULT_CONFIG
+
+
+def test_load_config_recovers_from_non_object_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import core.storage as mod
+
+    config_file = tmp_path / "config.json"
+    monkeypatch.setattr(mod, "CONFIG_DIR", tmp_path)  # type: ignore[attr-defined]
+    monkeypatch.setattr(mod, "CONFIG_FILE", config_file)  # type: ignore[attr-defined]
+    monkeypatch.setattr(mod, "_OLD_CONFIG_DIR", tmp_path / "nonexistent")  # type: ignore[attr-defined]
+
+    config_file.write_text(json.dumps(["not", "a", "mapping"]))
+
+    config = load_config()
+
+    assert config == DEFAULT_CONFIG
+    assert json.loads(config_file.read_text()) == DEFAULT_CONFIG

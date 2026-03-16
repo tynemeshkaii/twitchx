@@ -10,9 +10,10 @@ import time
 import traceback
 import webbrowser
 from collections import OrderedDict
+from collections.abc import Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
-from typing import Any
+from typing import Any, TypeVar
 
 import customtkinter as ctk
 import httpx
@@ -50,6 +51,18 @@ from ui.theme import (
 )
 
 MAX_CACHE = 50
+FOLLOWED_SYNC_INTERVAL_MS = 300_000
+T = TypeVar("T")
+
+
+def _format_error_message(
+    exc: object | None,
+    fallback: str,
+    *,
+    limit: int = 80,
+) -> str:
+    msg = str(exc).strip() if exc is not None else ""
+    return (msg or fallback)[:limit]
 
 
 class ImageCache:
@@ -74,6 +87,7 @@ class ImageCache:
 class SettingsDialog(ctk.CTkToplevel):
     def __init__(self, master: Any, config: dict[str, Any], on_save: Any) -> None:
         super().__init__(master)
+        self._closed = False
         self.configure(fg_color=BG_SURFACE)
         self.title("TwitchX Settings")
         self.geometry("440x520")
@@ -222,6 +236,36 @@ class SettingsDialog(ctk.CTkToplevel):
         self.grab_set()
         self.focus_force()
 
+    def destroy(self) -> None:
+        self._closed = True
+        super().destroy()
+
+    def _queue_ui(self, callback: Callable[[], None]) -> bool:
+        if getattr(self, "_closed", False):
+            return False
+        try:
+            self.after(0, callback)
+            return True
+        except Exception:
+            return False
+
+    def _queue_feedback(self, text: str, color: str = TEXT_MUTED) -> bool:
+        return SettingsDialog._queue_ui(
+            self, lambda: self._set_feedback(text, color)
+        )
+
+    def _queue_feedback_error(
+        self,
+        exc: object | None,
+        *,
+        fallback: str = "Connection test failed",
+    ) -> bool:
+        return SettingsDialog._queue_feedback(
+            self,
+            f"\u2717 {_format_error_message(exc, fallback, limit=60)}",
+            ERROR_RED,
+        )
+
     def _set_feedback(self, text: str, color: str = TEXT_MUTED) -> None:
         self._feedback_label.configure(text=text, text_color=color)
 
@@ -266,30 +310,23 @@ class SettingsDialog(ctk.CTkToplevel):
                     timeout=10,
                 )
                 if resp.status_code == 200:
-                    self.after(
-                        0, lambda: self._set_feedback("\u2713 Connected", LIVE_GREEN)
+                    SettingsDialog._queue_feedback(
+                        self, "\u2713 Connected", LIVE_GREEN
                     )
                 else:
-                    self.after(
-                        0,
-                        lambda: self._set_feedback(
-                            "\u2717 Invalid credentials", ERROR_RED
-                        ),
+                    SettingsDialog._queue_feedback(
+                        self, "\u2717 Invalid credentials", ERROR_RED
                     )
             except httpx.ConnectError:
-                self.after(
-                    0,
-                    lambda: self._set_feedback(
-                        "\u2717 No internet connection", ERROR_RED
-                    ),
+                SettingsDialog._queue_feedback(
+                    self, "\u2717 No internet connection", ERROR_RED
                 )
             except Exception as exc:
-                msg = str(exc)[:60]
-                self.after(
-                    0, lambda m=msg: self._set_feedback(f"\u2717 {m}", ERROR_RED)
-                )
+                SettingsDialog._queue_feedback_error(self, exc)
             finally:
-                self.after(0, lambda: self._test_btn.configure(state="normal"))
+                SettingsDialog._queue_ui(
+                    self, lambda: self._test_btn.configure(state="normal")
+                )
 
         threading.Thread(target=do_test, daemon=True).start()
 
@@ -330,8 +367,11 @@ class TwitchXApp(ctk.CTk):
         self._games: dict[str, str] = {}
         self._selected_channel: str | None = None
         self._refresh_job: str | None = None
+        self._followed_sync_job: str | None = None
         self._fetching = False
+        self._importing_follows = False
         self._shutdown = threading.Event()
+        self._destroyed = False
         # Notification state
         self._prev_live_logins: set[str] = set()
         self._first_fetch_done = False
@@ -359,6 +399,94 @@ class TwitchXApp(ctk.CTk):
         self._player_bar.set_quality(self._config.get("quality", "best"))
         self._player_bar.set_channel_selected(False)
         self._schedule_refresh()
+        if self._current_user:
+            self._schedule_followed_sync(0)
+
+    def _queue_ui(self, callback: Callable[[], None]) -> bool:
+        if self._shutdown.is_set():
+            return False
+        try:
+            self.after(0, callback)
+            return True
+        except Exception:
+            return False
+
+    def _queue_status(self, text: str, color: str) -> bool:
+        return TwitchXApp._queue_ui(
+            self, lambda: self._player_bar.set_status(text, color)
+        )
+
+    def _queue_error_status(
+        self,
+        prefix: str,
+        exc: object | None,
+        fallback: str,
+        *,
+        limit: int = 80,
+    ) -> bool:
+        return TwitchXApp._queue_status(
+            self,
+            f"{prefix}: {_format_error_message(exc, fallback, limit=limit)}",
+            ERROR_RED,
+        )
+
+    def _cancel_refresh_job(self) -> bool:
+        refresh_job = getattr(self, "_refresh_job", None)
+        if not refresh_job:
+            return False
+        try:
+            self.after_cancel(refresh_job)
+        except Exception:
+            pass
+        self._refresh_job = None
+        return True
+
+    def _schedule_next_refresh(self, interval: int) -> bool:
+        try:
+            self._refresh_job = self.after(
+                interval, lambda: TwitchXApp._schedule_refresh(self)
+            )
+            return True
+        except Exception:
+            self._refresh_job = None
+            return False
+
+    def _cancel_followed_sync_job(self) -> bool:
+        followed_sync_job = getattr(self, "_followed_sync_job", None)
+        if not followed_sync_job:
+            return False
+        try:
+            self.after_cancel(followed_sync_job)
+        except Exception:
+            pass
+        self._followed_sync_job = None
+        return True
+
+    def _schedule_followed_sync(self, delay: int = FOLLOWED_SYNC_INTERVAL_MS) -> bool:
+        if self._shutdown.is_set():
+            return False
+        current_user = getattr(self, "_current_user", None)
+        user_id = ""
+        if current_user:
+            user_id = str(current_user.get("id", ""))
+        if not user_id:
+            user_id = str(getattr(self, "_config", {}).get("user_id", ""))
+        if not user_id:
+            return False
+        try:
+            self._followed_sync_job = self.after(
+                delay, lambda: TwitchXApp._run_followed_sync(self)
+            )
+            return True
+        except Exception:
+            self._followed_sync_job = None
+            return False
+
+    def _run_followed_sync(self) -> None:
+        self._followed_sync_job = None
+        if self._shutdown.is_set():
+            return
+        TwitchXApp._on_import_follows(self, show_status=False)
 
     def _build_ui(self) -> None:
         self.grid_rowconfigure(0, weight=1)
@@ -602,8 +730,9 @@ class TwitchXApp(ctk.CTk):
                     "iina_path", "/Applications/IINA.app/Contents/MacOS/iina-cli"
                 ),
             )
-            if not self._shutdown.is_set():
-                self.after(0, lambda: self._on_launch_result(channel, result))
+            TwitchXApp._queue_ui(
+                self, lambda: self._on_launch_result(channel, result)
+            )
 
         threading.Thread(target=do_launch, daemon=True).start()
 
@@ -615,13 +744,13 @@ class TwitchXApp(ctk.CTk):
             if not self._shutdown.is_set() and self._launch_channel:
                 ch = self._launch_channel
                 elapsed = self._launch_elapsed
-                self.after(
-                    0,
+                if TwitchXApp._queue_ui(
+                    self,
                     lambda: self._player_bar.set_status(
                         f"Launching {ch}... ({elapsed}s)", WARN_YELLOW
                     ),
-                )
-                self._start_launch_timer()
+                ):
+                    self._start_launch_timer()
 
         self._launch_timer = threading.Timer(3.0, tick)
         self._launch_timer.daemon = True
@@ -674,18 +803,30 @@ class TwitchXApp(ctk.CTk):
         webbrowser.open(auth_url)
 
     def _await_oauth_code(self) -> None:
-        code = wait_for_oauth_code()
-        if self._shutdown.is_set():
-            return
-        if code is None:
-            self.after(
-                0,
-                lambda: self._player_bar.set_status("Login timed out", ERROR_RED),
+        try:
+            callback = wait_for_oauth_code()
+        except OSError:
+            TwitchXApp._queue_status(
+                self, "Login error: port 3457 is busy", ERROR_RED
             )
             return
-        loop = asyncio.new_event_loop()
+        if self._shutdown.is_set():
+            return
+        if callback is None:
+            TwitchXApp._queue_status(self, "Login timed out", ERROR_RED)
+            return
+        if not self._twitch.consume_oauth_state(callback.state):
+            TwitchXApp._queue_status(
+                self, "Login error: invalid OAuth state", ERROR_RED
+            )
+            return
         try:
-            token_data = loop.run_until_complete(self._twitch.exchange_code(code))
+            async def finish_login() -> tuple[dict[str, Any], dict[str, Any]]:
+                token_data = await self._twitch.exchange_code(callback.code)
+                user = await self._twitch.get_current_user()
+                return token_data, user
+
+            token_data, user = TwitchXApp._run_twitch_temp_loop(self, finish_login)
             self._config["access_token"] = token_data["access_token"]
             self._config["refresh_token"] = token_data.get("refresh_token", "")
             self._config["token_expires_at"] = int(time.time()) + token_data.get(
@@ -693,28 +834,19 @@ class TwitchXApp(ctk.CTk):
             )
             self._config["token_type"] = "user"
             save_config(self._config)
-
-            user = loop.run_until_complete(self._twitch.get_current_user())
             self._config["user_id"] = user["id"]
             self._config["user_login"] = user["login"]
             self._config["user_display_name"] = user.get("display_name", user["login"])
             save_config(self._config)
 
-            if not self._shutdown.is_set():
-                self.after(0, lambda u=user: self._on_login_complete(u))
-        except Exception as e:
-            msg = str(e)[:80] if str(e) else "Login failed"
-            if not self._shutdown.is_set():
-                self.after(
-                    0,
-                    lambda m=msg: self._player_bar.set_status(
-                        f"Login error: {m}", ERROR_RED
-                    ),
-                )
-        finally:
-            loop.close()
-            # Discard stale connections bound to the now-closed event loop
-            self._twitch.reset_client()
+            TwitchXApp._queue_ui(self, lambda u=user: self._on_login_complete(u))
+        except Exception as exc:
+            TwitchXApp._queue_error_status(
+                self,
+                "Login error",
+                exc,
+                "Login failed",
+            )
 
     def _on_login_complete(self, user: dict[str, Any]) -> None:
         self._current_user = user
@@ -730,9 +862,17 @@ class TwitchXApp(ctk.CTk):
                 args=({login: avatar_url},),
                 daemon=True,
             ).start()
-        self._refresh_data()
+        favorites = [
+            self._sanitize_username(f) for f in self._config.get("favorites", [])
+        ]
+        favorites = [f for f in favorites if f]
+        if favorites:
+            self._refresh_data()
+        self._on_import_follows()
 
     def _on_logout(self) -> None:
+        TwitchXApp._cancel_followed_sync_job(self)
+        self._importing_follows = False
         for key in (
             "user_id",
             "user_login",
@@ -748,38 +888,65 @@ class TwitchXApp(ctk.CTk):
         self._sidebar.update_user_profile(None)
         self._player_bar.set_status("Logged out", TEXT_MUTED)
 
-    def _on_import_follows(self) -> None:
+    def _on_import_follows(self, show_status: bool = True) -> None:
         if not self._current_user:
+            return
+        if self._importing_follows:
             return
         user_id = self._current_user.get("id", self._config.get("user_id", ""))
         if not user_id:
             return
-        self._player_bar.set_status("Importing followed channels...", WARN_YELLOW)
+        self._importing_follows = True
+        TwitchXApp._cancel_followed_sync_job(self)
+        if show_status:
+            self._player_bar.set_status("Importing followed channels...", WARN_YELLOW)
 
         def do_import() -> None:
-            loop = asyncio.new_event_loop()
-            try:
-                logins = loop.run_until_complete(
-                    self._twitch.get_followed_channels(user_id)
+            def report_progress(count: int) -> None:
+                if not show_status:
+                    return
+                TwitchXApp._queue_status(
+                    self,
+                    f"Importing followed channels... ({count} loaded)",
+                    WARN_YELLOW,
                 )
-                if not self._shutdown.is_set():
-                    self.after(0, lambda follows=logins: self._merge_follows(follows))
-            except Exception as e:
-                msg = str(e)[:80] if str(e) else "Import failed"
-                if not self._shutdown.is_set():
-                    self.after(
-                        0,
-                        lambda m=msg: self._player_bar.set_status(
-                            f"Import error: {m}", ERROR_RED
-                        ),
+
+            try:
+                logins = TwitchXApp._run_twitch_temp_loop(
+                    self,
+                    lambda: self._twitch.get_followed_channels(
+                        user_id,
+                        on_progress=report_progress,
+                    ),
+                )
+                TwitchXApp._queue_ui(
+                    self,
+                    lambda follows=logins, visible=show_status: self._merge_follows(
+                        follows,
+                        show_status=visible,
+                    ),
+                )
+            except Exception as exc:
+                if show_status:
+                    TwitchXApp._queue_error_status(
+                        self,
+                        "Import error",
+                        exc,
+                        "Import failed",
                     )
             finally:
-                loop.close()
-                self._twitch.reset_client()
+                if not TwitchXApp._queue_ui(
+                    self,
+                    lambda: (
+                        setattr(self, "_importing_follows", False),
+                        TwitchXApp._schedule_followed_sync(self),
+                    ),
+                ):
+                    self._importing_follows = False
 
         threading.Thread(target=do_import, daemon=True).start()
 
-    def _merge_follows(self, logins: list[str]) -> None:
+    def _merge_follows(self, logins: list[str], show_status: bool = True) -> None:
         favorites = self._config.get("favorites", [])
         existing = {f.lower() for f in favorites}
         added = 0
@@ -790,10 +957,12 @@ class TwitchXApp(ctk.CTk):
                 added += 1
         self._config["favorites"] = favorites
         save_config(self._config)
-        self._player_bar.set_status(
-            f"Imported {added} channel{'s' if added != 1 else ''}", LIVE_GREEN
-        )
-        self._refresh_data()
+        if show_status:
+            self._player_bar.set_status(
+                f"Imported {added} channel{'s' if added != 1 else ''}", LIVE_GREEN
+            )
+        if added:
+            self._refresh_data()
 
     # ── Channel search ────────────────────────────────────────────
 
@@ -802,42 +971,45 @@ class TwitchXApp(ctk.CTk):
             return
 
         def do_search() -> None:
-            loop = asyncio.new_event_loop()
             try:
-                results = loop.run_until_complete(
-                    self._twitch.search_channels(query)
+                results = TwitchXApp._run_twitch_temp_loop(
+                    self,
+                    lambda: self._twitch.search_channels(query),
                 )
-                if not self._shutdown.is_set():
-                    self.after(
-                        0, lambda r=results: self._sidebar.show_search_results(r)
-                    )
+                TwitchXApp._queue_ui(
+                    self, lambda r=results: self._sidebar.show_search_results(r)
+                )
             except Exception:
-                if not self._shutdown.is_set():
-                    self.after(0, lambda: self._sidebar.show_search_results([]))
-            finally:
-                loop.close()
+                TwitchXApp._queue_ui(
+                    self, lambda: self._sidebar.show_search_results([])
+                )
 
         threading.Thread(target=do_search, daemon=True).start()
 
     # ── Data refresh ─────────────────────────────────────────────
 
     def _schedule_refresh(self) -> None:
+        if self._shutdown.is_set():
+            return
         self._refresh_data()
         interval = self._config.get("refresh_interval", 60) * 1000
         # Check for stale data
         if self._last_successful_fetch > 0:
             stale = time.time() - self._last_successful_fetch > 2 * (interval / 1000)
             self._player_bar.set_stale(stale)
-        self._refresh_job = self.after(interval, self._schedule_refresh)
+        TwitchXApp._schedule_next_refresh(self, interval)
 
     def _manual_refresh(self) -> None:
-        if self._refresh_job:
-            self.after_cancel(self._refresh_job)
+        if self._shutdown.is_set():
+            return
+        TwitchXApp._cancel_refresh_job(self)
         self._refresh_data()
         interval = self._config.get("refresh_interval", 60) * 1000
-        self._refresh_job = self.after(interval, self._schedule_refresh)
+        TwitchXApp._schedule_next_refresh(self, interval)
 
     def _refresh_data(self) -> None:
+        if self._shutdown.is_set():
+            return
         favorites = [
             self._sanitize_username(f) for f in self._config.get("favorites", [])
         ]
@@ -884,87 +1056,64 @@ class TwitchXApp(ctk.CTk):
             for attempt in range(1, max_attempts + 1):
                 if self._shutdown.is_set():
                     return
-                loop = asyncio.new_event_loop()
                 try:
-                    streams, users = loop.run_until_complete(
-                        self._async_fetch(favorites)
+                    streams, users = TwitchXApp._run_twitch_temp_loop(
+                        self,
+                        lambda: self._async_fetch(favorites),
                     )
-                    if not self._shutdown.is_set():
-                        self.after(
-                            0,
-                            lambda s=streams, u=users: self._on_data_fetched(
-                                favorites, s, u
-                            ),
-                        )
+                    TwitchXApp._queue_ui(
+                        self,
+                        lambda s=streams, u=users: self._on_data_fetched(
+                            favorites, s, u
+                        ),
+                    )
                     return
                 except httpx.ConnectError:
                     if attempt < max_attempts:
                         delay = retry_delays[attempt - 1]
                         att = attempt + 1
-                        if not self._shutdown.is_set():
-                            self.after(
-                                0,
-                                lambda a=att, mx=max_attempts: (
-                                    self._player_bar.set_status(
-                                        f"Reconnecting... (attempt {a}/{mx})",
-                                        WARN_YELLOW,
-                                    )
-                                ),
-                            )
+                        TwitchXApp._queue_status(
+                            self,
+                            f"Reconnecting... (attempt {att}/{max_attempts})",
+                            WARN_YELLOW,
+                        )
                         time.sleep(delay)
                     else:
-                        if not self._shutdown.is_set():
-                            self.after(
-                                0,
-                                lambda: self._player_bar.set_status(
-                                    "No internet connection", ERROR_RED
-                                ),
-                            )
+                        TwitchXApp._queue_status(
+                            self, "No internet connection", ERROR_RED
+                        )
                 except httpx.HTTPStatusError as e:
                     status_code = e.response.status_code
-                    if not self._shutdown.is_set():
-                        if status_code in (401, 403):
-                            self.after(
-                                0,
-                                lambda: self._player_bar.set_status(
-                                    "Check your Twitch API credentials in Settings",
-                                    ERROR_RED,
-                                ),
-                            )
-                        else:
-                            self.after(
-                                0,
-                                lambda code=status_code: self._player_bar.set_status(
-                                    f"API error: {code}", ERROR_RED
-                                ),
-                            )
+                    if status_code in (401, 403):
+                        TwitchXApp._queue_status(
+                            self,
+                            "Check your Twitch API credentials in Settings",
+                            ERROR_RED,
+                        )
+                    else:
+                        TwitchXApp._queue_status(
+                            self, f"API error: {status_code}", ERROR_RED
+                        )
                     return
                 except ValueError:
-                    if not self._shutdown.is_set():
-                        self.after(
-                            0,
-                            lambda: self._player_bar.set_status(
-                                "Set Twitch API credentials in Settings",
-                                ERROR_RED,
-                            ),
-                        )
+                    TwitchXApp._queue_status(
+                        self,
+                        "Set Twitch API credentials in Settings",
+                        ERROR_RED,
+                    )
                     return
-                except Exception as e:
+                except Exception as exc:
                     traceback.print_exc()
-                    msg = str(e)[:80] if str(e) else "Unknown error"
-                    if not self._shutdown.is_set():
-                        self.after(
-                            0,
-                            lambda m=msg: self._player_bar.set_status(
-                                f"Error: {m}", ERROR_RED
-                            ),
-                        )
+                    TwitchXApp._queue_error_status(
+                        self,
+                        "Error",
+                        exc,
+                        "Unknown error",
+                    )
                     return
-                finally:
-                    loop.close()
         finally:
-            if not self._shutdown.is_set():
-                self.after(0, self._clear_fetching)
+            if not TwitchXApp._queue_ui(self, self._clear_fetching):
+                self._clear_fetching()
 
     def _clear_fetching(self) -> None:
         self._fetching = False
@@ -980,6 +1129,18 @@ class TwitchXApp(ctk.CTk):
             games = await self._twitch.get_games(game_ids)
             self._games.update(games)
         return streams, users
+
+    def _run_twitch_temp_loop(
+        self,
+        action: Callable[[], Awaitable[T]],
+    ) -> T:
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(action())
+        finally:
+            with contextlib.suppress(Exception):
+                loop.run_until_complete(self._twitch.rebind_client())
+            loop.close()
 
     def _on_data_fetched(
         self, favorites: list[str], streams: list[dict], users: list[dict]
@@ -1082,6 +1243,19 @@ class TwitchXApp(ctk.CTk):
 
     # ── Avatar loading (with disk cache) ──────────────────────────
 
+    def _fetch_image_bytes(self, url: str) -> bytes | None:
+        try:
+            resp = httpx.get(url, timeout=10)
+            if resp is None:
+                return None
+            raise_for_status = getattr(resp, "raise_for_status", None)
+            if callable(raise_for_status):
+                raise_for_status()
+            raw_bytes = getattr(resp, "content", b"")
+            return raw_bytes or None
+        except Exception:
+            return None
+
     def _load_avatars(self, avatars: dict[str, str]) -> None:
         for login, url in avatars.items():
             if self._shutdown.is_set():
@@ -1104,8 +1278,9 @@ class TwitchXApp(ctk.CTk):
 
             # Fetch from network
             try:
-                resp = httpx.get(url, timeout=10)
-                raw_bytes = resp.content
+                raw_bytes = self._fetch_image_bytes(url)
+                if raw_bytes is None:
+                    continue
                 img = Image.open(io.BytesIO(raw_bytes)).resize((28, 28), Image.Resampling.LANCZOS)
                 ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(28, 28))
                 self._avatar_cache.put(login, ctk_img)
@@ -1113,8 +1288,7 @@ class TwitchXApp(ctk.CTk):
             except Exception:
                 pass
 
-        if not self._shutdown.is_set():
-            self.after(0, self._update_sidebar_avatars)
+        TwitchXApp._queue_ui(self, self._update_sidebar_avatars)
 
     def _update_sidebar_avatars(self) -> None:
         favorites = self._config.get("favorites", [])
@@ -1131,11 +1305,7 @@ class TwitchXApp(ctk.CTk):
 
     def _load_thumbnails(self, thumb_urls: dict[str, str]) -> None:
         def fetch_one(login: str, url: str) -> tuple[str, bytes | None]:
-            try:
-                resp = httpx.get(url, timeout=10)
-                return login, resp.content
-            except Exception:
-                return login, None
+            return login, self._fetch_image_bytes(url)
 
         with ThreadPoolExecutor(max_workers=5) as executor:
             futures = {
@@ -1154,13 +1324,12 @@ class TwitchXApp(ctk.CTk):
                         light_image=img, dark_image=img, size=(220, 124)
                     )
                     self._thumb_cache.put(login, ctk_img)
-                    if not self._shutdown.is_set():
-                        self.after(
-                            0,
-                            lambda lg=login, im=ctk_img: (
-                                self._stream_grid.update_thumbnail(lg, im)
-                            ),
-                        )
+                    TwitchXApp._queue_ui(
+                        self,
+                        lambda lg=login, im=ctk_img: (
+                            self._stream_grid.update_thumbnail(lg, im)
+                        ),
+                    )
                 except Exception:
                     pass
 
@@ -1177,13 +1346,28 @@ class TwitchXApp(ctk.CTk):
     # ── Cleanup ──────────────────────────────────────────────────
 
     def destroy(self) -> None:
-        self._shutdown.set()
-        if self._refresh_job:
-            self.after_cancel(self._refresh_job)
-        # Close the long-lived Twitch client
-        loop = asyncio.new_event_loop()
-        try:
-            loop.run_until_complete(self._twitch.close())
-        finally:
-            loop.close()
-        super().destroy()
+        if getattr(self, "_destroyed", False):
+            return
+        self._destroyed = True
+
+        shutdown = getattr(self, "_shutdown", None)
+        if shutdown is not None:
+            shutdown.set()
+
+        with contextlib.suppress(Exception):
+            self._cancel_launch_timer()
+
+        TwitchXApp._cancel_refresh_job(self)
+        TwitchXApp._cancel_followed_sync_job(self)
+
+        close_client = getattr(getattr(self, "_twitch", None), "close", None)
+        if callable(close_client):
+            loop = asyncio.new_event_loop()
+            try:
+                with contextlib.suppress(Exception):
+                    loop.run_until_complete(close_client())
+            finally:
+                loop.close()
+
+        with contextlib.suppress(Exception):
+            super().destroy()

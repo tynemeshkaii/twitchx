@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -26,6 +28,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "user_display_name": "",
     "refresh_token": "",
     "token_type": "app",
+    "oauth_state": "",
 }
 
 
@@ -35,6 +38,7 @@ def _migrate_old_config() -> None:
     if old_config.exists() and not CONFIG_FILE.exists():
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         shutil.copy2(old_config, CONFIG_FILE)
+        CONFIG_FILE.chmod(0o600)
         old_avatars = _OLD_CONFIG_DIR / "avatars"
         new_avatars = CONFIG_DIR / "avatars"
         if old_avatars.is_dir() and not new_avatars.exists():
@@ -47,16 +51,34 @@ def load_config() -> dict[str, Any]:
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         save_config(DEFAULT_CONFIG)
         return dict(DEFAULT_CONFIG)
-    with open(CONFIG_FILE) as f:
-        stored = json.load(f)
+    try:
+        with open(CONFIG_FILE) as f:
+            stored = json.load(f)
+        if not isinstance(stored, dict):
+            raise TypeError("Config root must be a JSON object")
+    except (json.JSONDecodeError, OSError, TypeError):
+        save_config(DEFAULT_CONFIG)
+        return dict(DEFAULT_CONFIG)
     merged = {**DEFAULT_CONFIG, **stored}
     return merged
 
 
 def save_config(config: dict[str, Any]) -> None:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(CONFIG_FILE, "w") as f:
-        json.dump(config, f, indent=2)
+    fd, temp_path = tempfile.mkstemp(
+        dir=CONFIG_DIR,
+        prefix="config.",
+        suffix=".tmp",
+    )
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump(config, f, indent=2)
+        os.replace(temp_path, CONFIG_FILE)
+        CONFIG_FILE.chmod(0o600)
+    finally:
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
 
 
 def token_is_valid(config: dict[str, Any]) -> bool:

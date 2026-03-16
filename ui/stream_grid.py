@@ -601,10 +601,10 @@ class StreamGrid(ctk.CTkScrollableFrame):
             self._no_results_label.grid(row=0, column=0, columnspan=COLUMNS, pady=80)
             return
 
-        incoming_logins = {s.get("user_login", "").lower() for s in visible}
-        existing_logins = set(self._cards_by_login)
+        visible_logins = [s.get("user_login", "").lower() for s in visible]
+        existing_logins = list(self._cards_by_login)
 
-        if incoming_logins == existing_logins and self._cards_by_login:
+        if visible_logins == existing_logins and self._cards_by_login:
             # Same set of channels — update in-place (no flicker)
             for stream in visible:
                 login = stream.get("user_login", "").lower()

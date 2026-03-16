@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import threading
+from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from secrets import compare_digest
 from urllib.parse import parse_qs, urlparse
 
 _RESPONSE_HTML = """\
@@ -37,12 +39,22 @@ h1 { color: #FF6B6B; }
 """
 
 
-def wait_for_oauth_code(port: int = 3457, timeout: int = 120) -> str | None:
+@dataclass(frozen=True)
+class OAuthCallback:
+    code: str
+    state: str | None
+
+
+def validate_state(expected: str | None, received: str | None) -> bool:
+    return bool(expected and received and compare_digest(expected, received))
+
+
+def wait_for_oauth_code(port: int = 3457, timeout: int = 120) -> OAuthCallback | None:
     """Start a temporary HTTP server and wait for Twitch OAuth callback.
 
-    Returns the authorization code, or None on timeout.
+    Returns the callback payload, or None on timeout.
     """
-    result: list[str | None] = [None]
+    result: list[OAuthCallback | None] = [None]
     server_ready = threading.Event()
 
     class Handler(BaseHTTPRequestHandler):
@@ -55,9 +67,10 @@ def wait_for_oauth_code(port: int = 3457, timeout: int = 120) -> str | None:
 
             params = parse_qs(parsed.query)
             code = params.get("code", [None])[0]
+            state = params.get("state", [None])[0]
 
             if code:
-                result[0] = code
+                result[0] = OAuthCallback(code=code, state=state)
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.end_headers()
