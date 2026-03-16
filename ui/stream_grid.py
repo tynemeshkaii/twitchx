@@ -8,9 +8,25 @@ from typing import Any
 
 import customtkinter as ctk
 
-from core.utils import format_viewers
+from core.utils import Tooltip, format_viewers
+from ui.theme import (
+    ACCENT,
+    ACCENT_HOVER,
+    BG_BASE,
+    BG_BORDER,
+    BG_ELEVATED,
+    BG_OVERLAY,
+    FONT_SYSTEM,
+    LIVE_GREEN,
+    LIVE_RED,
+    RADIUS_LG,
+    RADIUS_MD,
+    RADIUS_SM,
+    TEXT_MUTED,
+    TEXT_PRIMARY,
+    TEXT_SECONDARY,
+)
 
-ACCENT = "#9146FF"
 CARD_WIDTH = 240
 COLUMNS = 3
 
@@ -50,8 +66,16 @@ class StreamCard(ctk.CTkFrame):
         thumbnail: ctk.CTkImage | None = None,
         on_click: Callable[[str], None] | None = None,
         on_double_click: Callable[[str], None] | None = None,
+        on_add_favorite: Callable[[str], None] | None = None,
     ) -> None:
-        super().__init__(master, fg_color="#1a1a2e", corner_radius=10, cursor="hand2")
+        super().__init__(
+            master,
+            fg_color=BG_ELEVATED,
+            corner_radius=RADIUS_LG,
+            border_width=1,
+            border_color=BG_BORDER,
+            cursor="hand2",
+        )
         self._login = login
         self._channel = channel
         self._started_at = started_at
@@ -67,65 +91,72 @@ class StreamCard(ctk.CTkFrame):
         self._shimmer_job: str | None = None
         if thumbnail:
             self._thumb_label = ctk.CTkLabel(
-                self, image=thumbnail, text="", corner_radius=8
+                self, image=thumbnail, text="", corner_radius=RADIUS_MD
             )
         else:
             self._thumb_label = ctk.CTkLabel(
                 self,
                 text="",
                 height=135,
-                fg_color="#2a2a3e",
-                corner_radius=8,
+                fg_color=BG_ELEVATED,
+                corner_radius=RADIUS_MD,
             )
             self._start_shimmer()
-        self._thumb_label.grid(row=0, column=0, sticky="ew", padx=6, pady=(6, 4))
+        self._thumb_label.grid(row=0, column=0, sticky="ew", padx=8, pady=(8, 6))
 
         # Info area
         info = ctk.CTkFrame(self, fg_color="transparent")
-        info.grid(row=1, column=0, sticky="ew", padx=8, pady=(0, 8))
+        info.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 10))
         info.grid_columnconfigure(0, weight=1)
 
         # LIVE badge + viewers + uptime row
         badge_row = ctk.CTkFrame(info, fg_color="transparent")
         badge_row.grid(row=0, column=0, sticky="ew", pady=(0, 2))
         badge_row.grid_columnconfigure(2, weight=1)
+        self._prev_viewers: int | None = None
 
         live_badge = ctk.CTkLabel(
             badge_row,
             text=" LIVE ",
-            font=("", 10, "bold"),
-            fg_color="#E91E3A",
-            corner_radius=4,
+            font=(FONT_SYSTEM, 9, "bold"),
+            fg_color=LIVE_RED,
+            corner_radius=RADIUS_SM,
             text_color="white",
             height=18,
+            padx=5,
         )
-        live_badge.grid(row=0, column=0, sticky="w")
+        live_badge.grid(row=0, column=0, sticky="w", pady=1)
 
         uptime_text = format_uptime(started_at) if started_at else ""
         self._uptime_label = ctk.CTkLabel(
             badge_row,
             text=uptime_text,
-            font=("", 10),
-            text_color="#999999",
+            font=(FONT_SYSTEM, 10),
+            text_color=TEXT_MUTED,
             anchor="w",
         )
         self._uptime_label.grid(row=0, column=1, sticky="w", padx=(6, 0))
 
         self._viewers_label = ctk.CTkLabel(
             badge_row,
-            text=f"\u25cf {format_viewers(viewers)} viewers",
-            font=("", 11),
-            text_color="#cccccc",
+            text=f"{format_viewers(viewers)} viewers",
+            font=(FONT_SYSTEM, 11),
+            text_color=TEXT_SECONDARY,
             anchor="e",
         )
         self._viewers_label.grid(row=0, column=2, sticky="e", padx=(6, 0))
+
+        self._trend_label = ctk.CTkLabel(
+            badge_row, text="", font=(FONT_SYSTEM, 9), width=14, text_color=TEXT_MUTED
+        )
+        self._trend_label.grid(row=0, column=3, sticky="e", padx=(2, 4))
 
         # Channel name
         name_label = ctk.CTkLabel(
             info,
             text=channel,
-            font=("", 14, "bold"),
-            text_color="white",
+            font=(FONT_SYSTEM, 14, "bold"),
+            text_color=TEXT_PRIMARY,
             anchor="w",
         )
         name_label.grid(row=1, column=0, sticky="w", pady=(2, 0))
@@ -135,19 +166,27 @@ class StreamCard(ctk.CTkFrame):
         self._title_label = ctk.CTkLabel(
             info,
             text=display_title,
-            font=("", 11),
-            text_color="#bbbbbb",
+            font=(FONT_SYSTEM, 11),
+            text_color=TEXT_SECONDARY,
             anchor="w",
-            wraplength=210,
+            wraplength=200,
             justify="left",
         )
         self._title_label.grid(row=2, column=0, sticky="w", pady=(1, 0))
 
+        # Tooltip for long titles
+        self._title_tooltip: Tooltip | None = None
+        if len(title) > 60:
+            self._title_tooltip = Tooltip(self._title_label, title)
+
         # Game
+        display_game = game or "Unknown"
+        if len(display_game) > 28:
+            display_game = display_game[:28] + "\u2026"
         self._game_label = ctk.CTkLabel(
             info,
-            text=game or "Unknown",
-            font=("", 11),
+            text=display_game,
+            font=(FONT_SYSTEM, 11, "bold"),
             text_color=ACCENT,
             anchor="w",
         )
@@ -157,8 +196,8 @@ class StreamCard(ctk.CTkFrame):
         self._watching_label = ctk.CTkLabel(
             self._thumb_label,
             text=" \u25b6 WATCHING ",
-            font=("", 9, "bold"),
-            fg_color="#00C853",
+            font=(FONT_SYSTEM, 9, "bold"),
+            fg_color=LIVE_GREEN,
             corner_radius=4,
             text_color="white",
             height=16,
@@ -186,6 +225,14 @@ class StreamCard(ctk.CTkFrame):
 
         # Right-click context menu
         self._menu = tk.Menu(self, tearoff=0)
+        self._menu.configure(
+            background=BG_ELEVATED,
+            foreground=TEXT_PRIMARY,
+            activebackground=ACCENT,
+            activeforeground="white",
+            borderwidth=0,
+            font=(FONT_SYSTEM, 12),
+        )
         self._menu.add_command(
             label="\u25b6 Watch",
             command=lambda: on_double_click(login) if on_double_click else None,
@@ -199,6 +246,12 @@ class StreamCard(ctk.CTkFrame):
             label="Copy URL",
             command=lambda: self._copy_url(login),
         )
+        if on_add_favorite:
+            self._menu.add_separator()
+            self._menu.add_command(
+                label="\u2606 Add to favorites",
+                command=lambda: on_add_favorite(login),
+            )
         for w in clickable:
             w.bind("<Button-2>", self._show_menu)
             w.bind("<Control-Button-1>", self._show_menu)
@@ -214,7 +267,15 @@ class StreamCard(ctk.CTkFrame):
     # ── In-place update methods (no widget rebuild) ──────────────
 
     def update_viewers(self, count: int) -> None:
-        self._viewers_label.configure(text=f"\u25cf {format_viewers(count)} viewers")
+        self._viewers_label.configure(text=f"{format_viewers(count)} viewers")
+        if self._prev_viewers is not None:
+            if count > self._prev_viewers:
+                self._trend_label.configure(text="\u25b2", text_color=LIVE_GREEN)
+            elif count < self._prev_viewers:
+                self._trend_label.configure(text="\u25bc", text_color="#FF6B6B")
+            else:
+                self._trend_label.configure(text="")
+        self._prev_viewers = count
 
     def update_thumbnail(self, image: ctk.CTkImage) -> None:
         self._stop_shimmer()
@@ -226,7 +287,7 @@ class StreamCard(ctk.CTkFrame):
 
     def _shimmer_tick(self) -> None:
         self._shimmer_bright = not self._shimmer_bright
-        color = "#3a3a4e" if self._shimmer_bright else "#2a2a3e"
+        color = BG_OVERLAY if self._shimmer_bright else BG_ELEVATED
         self._thumb_label.configure(fg_color=color)
         self._shimmer_job = self.after(600, self._shimmer_tick)
 
@@ -236,7 +297,10 @@ class StreamCard(ctk.CTkFrame):
             self._shimmer_job = None
 
     def update_game(self, name: str) -> None:
-        self._game_label.configure(text=name or "Unknown")
+        display = name or "Unknown"
+        if len(display) > 28:
+            display = display[:28] + "\u2026"
+        self._game_label.configure(text=display)
 
     def update_title(self, title: str) -> None:
         self._title_label.configure(text=(title[:120] if title else ""))
@@ -246,15 +310,15 @@ class StreamCard(ctk.CTkFrame):
         if selected:
             self.configure(border_width=2, border_color=ACCENT)
         else:
-            self.configure(border_width=0)
+            self.configure(border_width=1, border_color=BG_BORDER)
 
     def _on_enter(self, event: tk.Event) -> None:  # type: ignore[type-arg]
         if not self._selected:
-            self.configure(fg_color="#22223a")
+            self.configure(fg_color=BG_OVERLAY, border_color=ACCENT)
 
     def _on_leave(self, event: tk.Event) -> None:  # type: ignore[type-arg]
         if not self._selected:
-            self.configure(fg_color="#1a1a2e")
+            self.configure(fg_color=BG_ELEVATED, border_color=BG_BORDER)
 
     def set_watching(self, active: bool) -> None:
         if active and not self._watching:
@@ -275,13 +339,21 @@ class StreamGrid(ctk.CTkScrollableFrame):
         master: Any,
         on_stream_click: Callable[[str], None] | None = None,
         on_stream_double_click: Callable[[str], None] | None = None,
+        on_add_favorite: Callable[[str], None] | None = None,
     ) -> None:
-        super().__init__(master, fg_color="transparent")
+        super().__init__(
+            master,
+            fg_color=BG_BASE,
+            scrollbar_button_color=BG_BORDER,
+            scrollbar_button_hover_color=ACCENT,
+        )
         self._on_stream_click = on_stream_click
         self._on_stream_double_click = on_stream_double_click
+        self._on_add_favorite = on_add_favorite
         self._cards_by_login: dict[str, StreamCard] = {}
         self._selected_login: str | None = None
         self._empty_label: ctk.CTkLabel | None = None
+        self._empty_subtitle: ctk.CTkLabel | None = None
         self._loading_label: ctk.CTkLabel | None = None
         self._onboarding_frame: ctk.CTkFrame | None = None
         self._no_results_label: ctk.CTkLabel | None = None
@@ -313,6 +385,9 @@ class StreamGrid(ctk.CTkScrollableFrame):
         if self._empty_label:
             self._empty_label.destroy()
             self._empty_label = None
+        if self._empty_subtitle:
+            self._empty_subtitle.destroy()
+            self._empty_subtitle = None
         if self._loading_label:
             self._loading_label.destroy()
             self._loading_label = None
@@ -328,8 +403,8 @@ class StreamGrid(ctk.CTkScrollableFrame):
         self._loading_label = ctk.CTkLabel(
             self,
             text="Loading streams...",
-            font=("", 16),
-            text_color="#666666",
+            font=(FONT_SYSTEM, 16),
+            text_color=TEXT_MUTED,
         )
         self._loading_label.grid(row=0, column=0, columnspan=COLUMNS, pady=80)
 
@@ -337,23 +412,58 @@ class StreamGrid(ctk.CTkScrollableFrame):
         self._clear()
         self._empty_label = ctk.CTkLabel(
             self,
-            text="None of your favorites are live",
-            font=("", 16),
-            text_color="#666666",
+            text="All quiet right now",
+            font=(FONT_SYSTEM, 16),
+            text_color=TEXT_SECONDARY,
         )
-        self._empty_label.grid(row=0, column=0, columnspan=COLUMNS, pady=80)
+        self._empty_label.grid(row=0, column=0, columnspan=COLUMNS, pady=(80, 4))
+        self._empty_subtitle = ctk.CTkLabel(
+            self,
+            text="None of your followed channels are live",
+            font=(FONT_SYSTEM, 12),
+            text_color=TEXT_MUTED,
+        )
+        self._empty_subtitle.grid(row=1, column=0, columnspan=COLUMNS, pady=(0, 40))
 
-    def show_onboarding(self, on_open_settings: Callable[[], None]) -> None:
+    def show_onboarding(
+        self,
+        on_open_settings: Callable[[], None],
+        has_credentials: bool = False,
+    ) -> None:
         self._clear()
         frame = ctk.CTkFrame(self, fg_color="transparent")
         frame.grid(row=0, column=0, columnspan=COLUMNS, pady=40)
         self._onboarding_frame = frame
 
+        if has_credentials:
+            # "No favorites" state
+            ctk.CTkLabel(
+                frame, text="\U0001f4fa", font=(FONT_SYSTEM, 40), text_color=ACCENT
+            ).pack(pady=(0, 12))
+            ctk.CTkLabel(
+                frame,
+                text="No favorites yet",
+                font=(FONT_SYSTEM, 20, "bold"),
+                text_color=TEXT_PRIMARY,
+            ).pack(pady=(0, 8))
+            ctk.CTkLabel(
+                frame,
+                text="Search for channels in the sidebar to add them here",
+                font=(FONT_SYSTEM, 13),
+                text_color=TEXT_MUTED,
+            ).pack()
+            return
+
+        # Icon
+        ctk.CTkLabel(
+            frame, text="\u26a1", font=(FONT_SYSTEM, 40), text_color=ACCENT
+        ).pack(pady=(0, 12))
+
         ctk.CTkLabel(
             frame,
             text="Welcome to TwitchX",
-            font=("", 22, "bold"),
-            text_color="white",
+            font=(FONT_SYSTEM, 20, "bold"),
+            text_color=TEXT_PRIMARY,
         ).pack(pady=(0, 20))
 
         steps = [
@@ -362,30 +472,37 @@ class StreamGrid(ctk.CTkScrollableFrame):
             ("3.", "Paste them in Settings (\u2699 button below)"),
         ]
         for num, text in steps:
-            row_f = ctk.CTkFrame(frame, fg_color="transparent")
-            row_f.pack(anchor="w", padx=40, pady=4)
+            row_f = ctk.CTkFrame(
+                frame,
+                fg_color=BG_ELEVATED,
+                corner_radius=RADIUS_MD,
+            )
+            row_f.pack(anchor="w", padx=40, pady=4, fill="x")
             ctk.CTkLabel(
                 row_f,
                 text=num,
-                font=("", 14, "bold"),
+                font=(FONT_SYSTEM, 14, "bold"),
                 text_color=ACCENT,
                 width=24,
-            ).pack(side="left", padx=(0, 8))
+            ).pack(side="left", padx=(16, 8), pady=8)
             ctk.CTkLabel(
                 row_f,
                 text=text,
-                font=("", 13),
-                text_color="#cccccc",
+                font=(FONT_SYSTEM, 13),
+                text_color=TEXT_SECONDARY,
                 anchor="w",
-            ).pack(side="left")
+            ).pack(side="left", padx=(0, 16), pady=8)
 
         ctk.CTkButton(
             frame,
             text="Open Settings",
             fg_color=ACCENT,
-            hover_color="#7B38D8",
+            hover_color=ACCENT_HOVER,
             command=on_open_settings,
             width=140,
+            height=36,
+            corner_radius=RADIUS_MD,
+            font=(FONT_SYSTEM, 13, "bold"),
         ).pack(pady=(24, 0))
 
     # ── Sort / Filter ────────────────────────────────────────────
@@ -428,8 +545,8 @@ class StreamGrid(ctk.CTkScrollableFrame):
             self._no_results_label = ctk.CTkLabel(
                 self,
                 text=f"No results for \u2018{query}\u2019",
-                font=("", 16),
-                text_color="#666666",
+                font=(FONT_SYSTEM, 16),
+                text_color=TEXT_MUTED,
             )
             self._no_results_label.grid(row=0, column=0, columnspan=COLUMNS, pady=80)
             return
@@ -461,6 +578,9 @@ class StreamGrid(ctk.CTkScrollableFrame):
         if self._empty_label:
             self._empty_label.destroy()
             self._empty_label = None
+        if self._empty_subtitle:
+            self._empty_subtitle.destroy()
+            self._empty_subtitle = None
         if self._onboarding_frame:
             self._onboarding_frame.destroy()
             self._onboarding_frame = None
@@ -475,8 +595,8 @@ class StreamGrid(ctk.CTkScrollableFrame):
             self._no_results_label = ctk.CTkLabel(
                 self,
                 text=f"No results for \u2018{query}\u2019",
-                font=("", 16),
-                text_color="#666666",
+                font=(FONT_SYSTEM, 16),
+                text_color=TEXT_MUTED,
             )
             self._no_results_label.grid(row=0, column=0, columnspan=COLUMNS, pady=80)
             return
@@ -536,10 +656,11 @@ class StreamGrid(ctk.CTkScrollableFrame):
                 thumbnail=thumb,
                 on_click=self._on_stream_click,
                 on_double_click=self._on_stream_double_click,
+                on_add_favorite=self._on_add_favorite,
             )
             row = idx // COLUMNS
             col = idx % COLUMNS
-            card.grid(row=row, column=col, padx=8, pady=8, sticky="nsew")
+            card.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
             self._cards_by_login[login] = card
 
     def update_thumbnail(self, login: str, image: ctk.CTkImage) -> None:

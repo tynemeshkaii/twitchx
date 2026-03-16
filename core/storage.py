@@ -21,6 +21,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "refresh_interval": 60,
     "streamlink_path": "streamlink",
     "iina_path": "/Applications/IINA.app/Contents/MacOS/iina-cli",
+    "user_id": "",
+    "user_login": "",
+    "user_display_name": "",
+    "refresh_token": "",
+    "token_type": "app",
 }
 
 

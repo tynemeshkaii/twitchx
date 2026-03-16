@@ -11,7 +11,9 @@
       "Bash(brew install:*)",
       "Bash(python3 -c \":*)",
       "Bash(uv add:*)",
-      "Bash(make check:*)"
+      "Bash(make check:*)",
+      "Bash(make lint:*)",
+      "Bash(make test:*)"
     ]
   }
 }

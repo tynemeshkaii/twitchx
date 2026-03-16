@@ -5,6 +5,7 @@ import logging
 import re
 import time
 from typing import Any
+from urllib.parse import urlencode
 
 import httpx
 
@@ -16,6 +17,8 @@ VALID_USERNAME = re.compile(r"^[a-zA-Z0-9_]{1,25}$")
 
 TWITCH_AUTH_URL = "https://id.twitch.tv/oauth2/token"
 TWITCH_API_URL = "https://api.twitch.tv/helix"
+TWITCH_REDIRECT_URI = "http://localhost:3457/callback"
+OAUTH_SCOPE = "user:read:follows"
 
 
 class TwitchClient:
@@ -27,17 +30,33 @@ class TwitchClient:
     async def close(self) -> None:
         await self._client.aclose()
 
+    def reset_client(self) -> None:
+        """Replace the httpx client to discard stale connections.
+
+        Call this after running async operations on a temporary event loop
+        that has since been closed — the old connections are bound to that
+        loop and will raise RuntimeError('Event loop is closed') if reused.
+        """
+        self._client = httpx.AsyncClient(timeout=15.0)
+
     def _reload_config(self) -> None:
         self._config = load_config()
 
     async def _ensure_token(self) -> str:
         async with self._token_lock:
             self._reload_config()
+            # Prefer user token if available
+            if self._config.get("token_type") == "user":
+                if token_is_valid(self._config):
+                    return self._config["access_token"]
+                if self._config.get("refresh_token"):
+                    return await self.refresh_user_token()
+            # Fall back to app-level client_credentials
             if token_is_valid(self._config):
                 return self._config["access_token"]
-            return await self._refresh_token()
+            return await self._refresh_app_token()
 
-    async def _refresh_token(self) -> str:
+    async def _refresh_app_token(self) -> str:
         client_id = self._config.get("client_id", "")
         client_secret = self._config.get("client_secret", "")
         if not client_id or not client_secret:
@@ -60,6 +79,94 @@ class TwitchClient:
         self._config["token_expires_at"] = int(time.time()) + expires_in
         save_config(self._config)
         return token
+
+    # ── OAuth (user-level) ───────────────────────────────────────
+
+    def get_auth_url(self) -> str:
+        self._reload_config()
+        params = urlencode({
+            "client_id": self._config["client_id"],
+            "redirect_uri": TWITCH_REDIRECT_URI,
+            "response_type": "code",
+            "scope": OAUTH_SCOPE,
+            "force_verify": "false",
+        })
+        return f"https://id.twitch.tv/oauth2/authorize?{params}"
+
+    async def exchange_code(self, code: str) -> dict[str, Any]:
+        self._reload_config()
+        resp = await self._client.post(
+            TWITCH_AUTH_URL,
+            data={
+                "client_id": self._config["client_id"],
+                "client_secret": self._config["client_secret"],
+                "code": code,
+                "grant_type": "authorization_code",
+                "redirect_uri": TWITCH_REDIRECT_URI,
+            },
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    async def refresh_user_token(self) -> str:
+        resp = await self._client.post(
+            TWITCH_AUTH_URL,
+            data={
+                "client_id": self._config["client_id"],
+                "client_secret": self._config["client_secret"],
+                "refresh_token": self._config["refresh_token"],
+                "grant_type": "refresh_token",
+            },
+        )
+        if resp.status_code in (400, 401):
+            # Token revoked — clear user auth
+            self._config["access_token"] = ""
+            self._config["refresh_token"] = ""
+            self._config["token_expires_at"] = 0
+            self._config["token_type"] = "app"
+            self._config["user_id"] = ""
+            self._config["user_login"] = ""
+            self._config["user_display_name"] = ""
+            save_config(self._config)
+            raise ValueError("User token expired. Please log in again.")
+        resp.raise_for_status()
+        data = resp.json()
+        self._config["access_token"] = data["access_token"]
+        self._config["refresh_token"] = data.get(
+            "refresh_token", self._config["refresh_token"]
+        )
+        self._config["token_expires_at"] = int(time.time()) + data.get(
+            "expires_in", 3600
+        )
+        save_config(self._config)
+        return data["access_token"]
+
+    async def get_current_user(self) -> dict[str, Any]:
+        data = await self._get("/users")
+        users = data.get("data", [])
+        if not users:
+            raise ValueError("Could not fetch current user")
+        return users[0]
+
+    async def get_followed_channels(self, user_id: str) -> list[str]:
+        all_logins: list[str] = []
+        cursor: str | None = None
+        while True:
+            params: list[tuple[str, str]] = [
+                ("user_id", user_id),
+                ("first", "100"),
+            ]
+            if cursor:
+                params.append(("after", cursor))
+            data = await self._get("/channels/followed", params=params)
+            for ch in data.get("data", []):
+                login = ch.get("broadcaster_login", "").lower()
+                if login:
+                    all_logins.append(login)
+            cursor = data.get("pagination", {}).get("cursor")
+            if not cursor:
+                break
+        return all_logins
 
     async def _get(
         self,
@@ -87,7 +194,10 @@ class TwitchClient:
         if resp.status_code == 401:
             self._config["access_token"] = ""
             save_config(self._config)
-            token = await self._refresh_token()
+            if self._config.get("token_type") == "user" and self._config.get("refresh_token"):
+                token = await self.refresh_user_token()
+            else:
+                token = await self._refresh_app_token()
             headers["Authorization"] = f"Bearer {token}"
             resp = await self._client.get(url, headers=headers, params=params)
         resp.raise_for_status()

@@ -7,8 +7,20 @@ import customtkinter as ctk
 
 from core.launcher import QUALITIES
 from core.utils import format_viewers
-
-ACCENT = "#9146FF"
+from ui.theme import (
+    ACCENT,
+    ACCENT_HOVER,
+    BG_BORDER,
+    BG_ELEVATED,
+    BG_OVERLAY,
+    BG_SURFACE,
+    FONT_SYSTEM,
+    LIVE_RED,
+    RADIUS_MD,
+    RADIUS_SM,
+    TEXT_MUTED,
+    TEXT_SECONDARY,
+)
 
 
 class PlayerBar(ctk.CTkFrame):
@@ -20,10 +32,12 @@ class PlayerBar(ctk.CTkFrame):
         on_settings: Callable[[], None] | None = None,
         on_refresh: Callable[[], None] | None = None,
     ) -> None:
-        super().__init__(master, height=44, corner_radius=0, fg_color="#16162a")
+        super().__init__(master, height=48, corner_radius=0, fg_color=BG_SURFACE)
         self._on_watch = on_watch
-        self.grid_columnconfigure(3, weight=1)
+        self.grid_columnconfigure(4, weight=1)
         self.grid_propagate(False)
+        self._pulse_job: str | None = None
+        self._pulse_bright = False
 
         # Quality selector
         self._quality_var = ctk.StringVar(value="best")
@@ -32,90 +46,109 @@ class PlayerBar(ctk.CTkFrame):
             variable=self._quality_var,
             values=QUALITIES,
             width=130,
-            height=30,
-            fg_color="#2a2a3e",
-            button_color=ACCENT,
-            button_hover_color="#7B38D8",
+            height=32,
+            fg_color=BG_ELEVATED,
+            button_color=BG_BORDER,
+            button_hover_color=ACCENT,
+            corner_radius=RADIUS_MD,
         )
-        self._quality_menu.grid(row=0, column=0, padx=(12, 6), pady=7)
+        self._quality_menu.grid(row=0, column=0, padx=(12, 6), pady=8)
 
         # Watch button
         self._watch_btn = ctk.CTkButton(
             self,
             text="\u25b6  Watch",
             width=90,
-            height=30,
-            fg_color=ACCENT,
-            hover_color="#7B38D8",
+            height=32,
+            fg_color=BG_ELEVATED,
+            hover_color=BG_OVERLAY,
+            text_color=TEXT_MUTED,
+            font=(FONT_SYSTEM, 13, "bold"),
+            corner_radius=RADIUS_MD,
             command=self._on_watch_pressed,
         )
-        self._watch_btn.grid(row=0, column=1, padx=4, pady=7)
+        self._watch_btn.grid(row=0, column=1, padx=4, pady=8)
 
         # Open in Browser button
         self._browser_btn = ctk.CTkButton(
             self,
             text="\U0001f310",
-            width=30,
-            height=30,
-            fg_color="#2a2a3e",
-            hover_color="#3a3a4e",
+            width=32,
+            height=32,
+            fg_color=BG_ELEVATED,
+            hover_color=BG_OVERLAY,
+            border_width=1,
+            border_color=BG_BORDER,
+            corner_radius=RADIUS_SM,
             command=on_open_browser,
         )
-        self._browser_btn.grid(row=0, column=2, padx=(0, 4), pady=7)
+        self._browser_btn.grid(row=0, column=2, padx=(0, 4), pady=8)
+
+        # Live pulse dot (hidden by default)
+        self._live_dot = ctk.CTkLabel(
+            self, text="\u25cf", font=(FONT_SYSTEM, 12), text_color=BG_SURFACE, width=14
+        )
+        self._live_dot.grid(row=0, column=3, padx=(0, 2), pady=8)
 
         # Status label (spacer)
         self._status_label = ctk.CTkLabel(
             self,
             text="",
-            font=("", 11),
-            text_color="#888888",
+            font=(FONT_SYSTEM, 12),
+            text_color=TEXT_SECONDARY,
             anchor="w",
         )
-        self._status_label.grid(row=0, column=3, sticky="ew", padx=12, pady=7)
+        self._status_label.grid(row=0, column=4, sticky="ew", padx=12, pady=8)
 
         # Total viewers
         self._total_label = ctk.CTkLabel(
             self,
             text="",
-            font=("", 10),
-            text_color="#777777",
+            font=(FONT_SYSTEM, 10),
+            text_color=TEXT_MUTED,
             anchor="e",
         )
-        self._total_label.grid(row=0, column=4, padx=(4, 4), pady=7)
+        self._total_label.grid(row=0, column=5, padx=(4, 4), pady=8)
 
         # Last updated
         self._updated_label = ctk.CTkLabel(
             self,
             text="",
-            font=("", 10),
-            text_color="#555555",
+            font=(FONT_SYSTEM, 10),
+            text_color=TEXT_MUTED,
             anchor="e",
         )
-        self._updated_label.grid(row=0, column=5, padx=(4, 4), pady=7)
+        self._updated_label.grid(row=0, column=6, padx=(4, 4), pady=8)
 
         # Refresh button
         self._refresh_btn = ctk.CTkButton(
             self,
             text="\u21bb",
-            width=30,
-            height=30,
-            fg_color="#2a2a3e",
-            hover_color="#3a3a4e",
+            width=32,
+            height=32,
+            fg_color=BG_ELEVATED,
+            hover_color=BG_OVERLAY,
+            border_width=1,
+            border_color=BG_BORDER,
+            corner_radius=RADIUS_SM,
             command=on_refresh,
         )
-        self._refresh_btn.grid(row=0, column=6, padx=(0, 4), pady=7)
+        self._refresh_btn.grid(row=0, column=7, padx=(0, 4), pady=8)
 
         # Settings button
         self._settings_btn = ctk.CTkButton(
             self,
             text="\u2699",
-            width=30,
-            height=30,
-            fg_color="#2a2a3e",
-            hover_color="#3a3a4e",
+            width=32,
+            height=32,
+            fg_color=BG_ELEVATED,
+            hover_color=BG_OVERLAY,
+            border_width=1,
+            border_color=BG_BORDER,
+            corner_radius=RADIUS_SM,
             command=on_settings,
         )
-        self._settings_btn.grid(row=0, column=7, padx=(0, 12), pady=7)
+        self._settings_btn.grid(row=0, column=8, padx=(0, 12), pady=8)
 
     def _on_watch_pressed(self) -> None:
         if self._on_watch:
@@ -127,14 +160,14 @@ class PlayerBar(ctk.CTkFrame):
     def get_quality(self) -> str:
         return self._quality_var.get()
 
-    def set_status(self, text: str, color: str = "#888888") -> None:
+    def set_status(self, text: str, color: str = TEXT_SECONDARY) -> None:
         self._status_label.configure(text=text, text_color=color)
 
     def set_updated(self, text: str) -> None:
         self._updated_label.configure(text=text)
 
     def set_stale(self, stale: bool) -> None:
-        self._updated_label.configure(text_color="#FF6B6B" if stale else "#555555")
+        self._updated_label.configure(text_color="#FF6B6B" if stale else TEXT_MUTED)
 
     def set_total_viewers(self, count: int) -> None:
         if count > 0:
@@ -143,3 +176,33 @@ class PlayerBar(ctk.CTkFrame):
             )
         else:
             self._total_label.configure(text="")
+
+    def set_watching(self, active: bool) -> None:
+        if active:
+            self._pulse_bright = False
+            self._pulse_tick()
+        else:
+            if self._pulse_job:
+                self.after_cancel(self._pulse_job)
+                self._pulse_job = None
+            self._live_dot.configure(text_color=BG_SURFACE)
+
+    def _pulse_tick(self) -> None:
+        self._pulse_bright = not self._pulse_bright
+        color = "#FF6B6B" if self._pulse_bright else LIVE_RED
+        self._live_dot.configure(text_color=color)
+        self._pulse_job = self.after(800, self._pulse_tick)
+
+    def set_channel_selected(self, selected: bool) -> None:
+        if selected:
+            self._watch_btn.configure(
+                fg_color=ACCENT,
+                hover_color=ACCENT_HOVER,
+                text_color="white",
+            )
+        else:
+            self._watch_btn.configure(
+                fg_color=BG_ELEVATED,
+                hover_color=BG_OVERLAY,
+                text_color=TEXT_MUTED,
+            )
