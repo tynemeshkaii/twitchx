@@ -13,7 +13,9 @@ class TestGetStreamUrl:
             returncode=0,
             stdout=b"https://example.com/stream.m3u8\n",
         )
-        url, err = _get_stream_url("/usr/bin/streamlink", "https://twitch.tv/xqc", "best")
+        url, err = _get_stream_url(
+            "/usr/bin/streamlink", "https://twitch.tv/xqc", "best"
+        )
         assert url == "https://example.com/stream.m3u8"
         assert err == ""
 
@@ -23,14 +25,18 @@ class TestGetStreamUrl:
             returncode=1,
             stderr=b"error: No streams found",
         )
-        url, err = _get_stream_url("/usr/bin/streamlink", "https://twitch.tv/xqc", "best")
+        url, err = _get_stream_url(
+            "/usr/bin/streamlink", "https://twitch.tv/xqc", "best"
+        )
         assert url is None
         assert "No streams found" in err
 
     @patch("core.launcher.subprocess.run")
     def test_timeout(self, mock_run: MagicMock) -> None:
         mock_run.side_effect = subprocess.TimeoutExpired(cmd="streamlink", timeout=15)
-        url, err = _get_stream_url("/usr/bin/streamlink", "https://twitch.tv/xqc", "best")
+        url, err = _get_stream_url(
+            "/usr/bin/streamlink", "https://twitch.tv/xqc", "best"
+        )
         assert url is None
         assert "timed out" in err.lower()
 
@@ -40,7 +46,9 @@ class TestGetStreamUrl:
             returncode=0,
             stdout=b"",
         )
-        url, err = _get_stream_url("/usr/bin/streamlink", "https://twitch.tv/xqc", "best")
+        url, err = _get_stream_url(
+            "/usr/bin/streamlink", "https://twitch.tv/xqc", "best"
+        )
         assert url is None
         assert "empty" in err.lower()
 

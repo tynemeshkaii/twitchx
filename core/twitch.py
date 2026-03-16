@@ -84,13 +84,15 @@ class TwitchClient:
 
     def get_auth_url(self) -> str:
         self._reload_config()
-        params = urlencode({
-            "client_id": self._config["client_id"],
-            "redirect_uri": TWITCH_REDIRECT_URI,
-            "response_type": "code",
-            "scope": OAUTH_SCOPE,
-            "force_verify": "false",
-        })
+        params = urlencode(
+            {
+                "client_id": self._config["client_id"],
+                "redirect_uri": TWITCH_REDIRECT_URI,
+                "response_type": "code",
+                "scope": OAUTH_SCOPE,
+                "force_verify": "false",
+            }
+        )
         return f"https://id.twitch.tv/oauth2/authorize?{params}"
 
     async def exchange_code(self, code: str) -> dict[str, Any]:
@@ -194,7 +196,9 @@ class TwitchClient:
         if resp.status_code == 401:
             self._config["access_token"] = ""
             save_config(self._config)
-            if self._config.get("token_type") == "user" and self._config.get("refresh_token"):
+            if self._config.get("token_type") == "user" and self._config.get(
+                "refresh_token"
+            ):
                 token = await self.refresh_user_token()
             else:
                 token = await self._refresh_app_token()

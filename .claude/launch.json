@@ -1,0 +1,21 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "TwitchX",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "python", "main.py"]
+    },
+    {
+      "name": "TwitchX (Debug)",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["TWITCHX_DEBUG=1", "uv", "run", "python", "main.py"]
+    },
+    {
+      "name": "ui-preview",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8199", "--directory", "ui"],
+      "port": 8199
+    }
+  ]
+}

@@ -34,11 +34,7 @@ class TestGetLiveStreamsFiltering:
     def test_filters_invalid_logins(self) -> None:
         client = TwitchClient()
         logins = ["valid_user", "https://twitch.tv/bad", "", "good123"]
-        cleaned = [
-            name.strip().lower()
-            for name in logins
-            if name and name.strip()
-        ]
+        cleaned = [name.strip().lower() for name in logins if name and name.strip()]
         cleaned = [name for name in cleaned if VALID_USERNAME.match(name)]
         assert cleaned == ["valid_user", "good123"]
         loop = asyncio.new_event_loop()
@@ -49,11 +45,7 @@ class TestGetLiveStreamsFiltering:
 class TestGetUsersFiltering:
     def test_filters_invalid_logins(self) -> None:
         logins = ["ValidUser", "twitch.tv/bad", "ok_name", ""]
-        cleaned = [
-            name.strip().lower()
-            for name in logins
-            if name and name.strip()
-        ]
+        cleaned = [name.strip().lower() for name in logins if name and name.strip()]
         cleaned = [name for name in cleaned if VALID_USERNAME.match(name)]
         assert cleaned == ["validuser", "ok_name"]
 
