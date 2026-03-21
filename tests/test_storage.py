@@ -5,6 +5,8 @@ import os
 import time
 from pathlib import Path
 
+import pytest
+
 from core.storage import (
     DEFAULT_CONFIG,
     get_cached_avatar,
@@ -26,6 +28,8 @@ def test_load_config_defaults(tmp_path: Path, monkeypatch: object) -> None:
     for key in DEFAULT_CONFIG:
         assert key in config, f"Missing key: {key}"
     assert config["client_id"] == ""
+    assert config["kick_client_id"] == ""
+    assert config["kick_access_token"] == ""
     assert config["refresh_interval"] == 60
     assert config_file.exists()
 

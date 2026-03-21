@@ -131,11 +131,12 @@ def _install_customtkinter_stub() -> None:
 _install_tkinter_stub()
 _install_customtkinter_stub()
 
-from ui.stream_grid import SORT_MOST_VIEWERS, StreamGrid
+from ui.stream_grid import SORT_MOST_VIEWERS, StreamGrid  # noqa: E402
 
 
 def _stream(login: str, viewers: int) -> dict[str, Any]:
     return {
+        "channel_ref": login,
         "user_login": login,
         "user_name": login.capitalize(),
         "viewer_count": viewers,
@@ -170,25 +171,25 @@ class _FakeStreamGrid:
         self._last_streams: list[dict[str, Any]] = []
         self._last_thumbnails: dict[str, Any] = {}
         self._last_games: dict[str, str] = {}
-        self._cards_by_login: dict[str, _FakeCard] = {}
-        self._selected_login: str | None = None
+        self._cards_by_channel: dict[str, _FakeCard] = {}
+        self._selected_channel: str | None = None
         self._empty_label = None
         self._empty_subtitle = None
         self._loading_label = None
         self._onboarding_frame = None
         self._no_results_label = None
-        self.rendered_logins: list[str] = []
+        self.rendered_channels: list[str] = []
 
     def _apply_sort_filter(self, streams: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return StreamGrid._apply_sort_filter(self, streams)
 
     def _show_empty(self) -> None:
-        self.rendered_logins = []
-        self._cards_by_login = {}
+        self.rendered_channels = []
+        self._cards_by_channel = {}
 
     def _clear(self) -> None:
-        self.rendered_logins = []
-        self._cards_by_login = {}
+        self.rendered_channels = []
+        self._cards_by_channel = {}
 
     def _full_rebuild(
         self,
@@ -196,9 +197,9 @@ class _FakeStreamGrid:
         thumbnails: dict[str, Any],
         games: dict[str, str],
     ) -> None:
-        self.rendered_logins = [stream["user_login"].lower() for stream in streams]
-        self._cards_by_login = {
-            stream["user_login"].lower(): _FakeCard() for stream in streams
+        self.rendered_channels = [stream["channel_ref"].lower() for stream in streams]
+        self._cards_by_channel = {
+            stream["channel_ref"].lower(): _FakeCard() for stream in streams
         }
 
 
@@ -211,7 +212,7 @@ def test_update_streams_rebuilds_when_sorted_order_changes() -> None:
         {},
         {},
     )
-    assert grid.rendered_logins == ["alpha", "beta"]
+    assert grid.rendered_channels == ["alpha", "beta"]
 
     StreamGrid.update_streams(
         grid,
@@ -220,4 +221,20 @@ def test_update_streams_rebuilds_when_sorted_order_changes() -> None:
         {},
     )
 
-    assert grid.rendered_logins == ["beta", "alpha"]
+    assert grid.rendered_channels == ["beta", "alpha"]
+
+
+def test_update_streams_keeps_same_login_from_different_platforms_distinct() -> None:
+    grid = _FakeStreamGrid()
+
+    StreamGrid.update_streams(
+        grid,
+        [
+            {**_stream("alpha", 200), "channel_ref": "alpha"},
+            {**_stream("alpha", 150), "channel_ref": "kick:alpha", "user_name": "Kick Alpha"},
+        ],
+        {},
+        {},
+    )
+
+    assert grid.rendered_channels == ["alpha", "kick:alpha"]

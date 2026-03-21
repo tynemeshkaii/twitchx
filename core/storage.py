@@ -16,8 +16,12 @@ _OLD_CONFIG_DIR = Path.home() / ".config" / "streamdeck"
 DEFAULT_CONFIG: dict[str, Any] = {
     "client_id": "",
     "client_secret": "",
+    "kick_client_id": "",
+    "kick_client_secret": "",
     "access_token": "",
     "token_expires_at": 0,
+    "kick_access_token": "",
+    "kick_token_expires_at": 0,
     "favorites": [],
     "quality": "best",
     "refresh_interval": 60,

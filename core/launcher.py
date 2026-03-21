@@ -5,6 +5,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from core.platforms import build_channel_url, format_channel_ref
+
 QUALITIES = ["best", "1080p60", "720p60", "480p", "360p", "audio_only"]
 
 DEFAULT_IINA_PATH = "/Applications/IINA.app/Contents/MacOS/iina-cli"
@@ -67,14 +69,15 @@ def launch_stream(
         return LaunchResult(success=False, message=iina_err)
 
     resolved_sl = shutil.which(streamlink_path) or streamlink_path
-    twitch_url = f"https://twitch.tv/{channel}"
+    stream_url = build_channel_url(channel)
+    display_channel = format_channel_ref(channel)
 
     # Step 1: resolve the direct HLS URL via streamlink --stream-url
-    hls_url, err = _get_stream_url(resolved_sl, twitch_url, quality)
+    hls_url, err = _get_stream_url(resolved_sl, stream_url, quality)
 
     # Quality fallback: if requested quality unavailable, retry with "best"
     if not hls_url and quality != "best":
-        hls_url, err = _get_stream_url(resolved_sl, twitch_url, "best")
+        hls_url, err = _get_stream_url(resolved_sl, stream_url, "best")
 
     if not hls_url:
         return LaunchResult(
@@ -92,6 +95,8 @@ def launch_stream(
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        return LaunchResult(success=True, message=f"Launched {channel} ({quality})")
+        return LaunchResult(
+            success=True, message=f"Launched {display_channel} ({quality})"
+        )
     except Exception as e:
         return LaunchResult(success=False, message=f"Failed to launch IINA: {e}")

@@ -28,6 +28,15 @@ class TestSanitizeUsername:
     def test_url_with_path(self) -> None:
         assert TwitchXApp._sanitize_username("https://twitch.tv/just_ns") == "just_ns"
 
+    def test_kick_url(self) -> None:
+        assert (
+            TwitchXApp._sanitize_username("https://kick.com/Trainwreckstv")
+            == "kick:trainwreckstv"
+        )
+
+    def test_kick_prefixed_ref(self) -> None:
+        assert TwitchXApp._sanitize_username("kick:Trainwreckstv") == "kick:trainwreckstv"
+
     def test_only_special_chars(self) -> None:
         assert TwitchXApp._sanitize_username("@#$%") == ""
 
@@ -56,3 +65,20 @@ class TestMigrateFavorites:
                 cleaned.append(name)
                 seen.add(name)
         assert cleaned == raw
+
+    def test_dedupes_default_and_non_default_platform_refs(self) -> None:
+        raw = [
+            "https://twitch.tv/xqc",
+            "twitch:xqc",
+            "https://kick.com/Trainwreckstv",
+            "kick:trainwreckstv",
+        ]
+        sanitize = TwitchXApp._sanitize_username
+        cleaned = []
+        seen: set[str] = set()
+        for entry in raw:
+            name = sanitize(entry)
+            if name and name not in seen:
+                cleaned.append(name)
+                seen.add(name)
+        assert cleaned == ["xqc", "kick:trainwreckstv"]

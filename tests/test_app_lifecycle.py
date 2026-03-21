@@ -254,7 +254,37 @@ class _FakeTwitch:
         self.reset_calls = 0
 
     async def search_channels(self, query: str) -> list[dict[str, Any]]:
-        return [{"login": query}]
+        return [
+            {
+                "platform": "twitch",
+                "broadcaster_login": query,
+                "display_name": query.capitalize(),
+                "is_live": False,
+                "game_name": "",
+            }
+        ]
+
+    async def rebind_client(self) -> None:
+        self.reset_calls += 1
+
+    def reset_client(self) -> None:
+        self.reset_calls += 1
+
+
+class _FakeKick:
+    def __init__(self) -> None:
+        self.reset_calls = 0
+
+    async def search_channels(self, query: str) -> list[dict[str, Any]]:
+        return [
+            {
+                "platform": "kick",
+                "broadcaster_login": f"kick:{query}",
+                "display_name": query.capitalize(),
+                "is_live": True,
+                "game_name": "Slots",
+            }
+        ]
 
     async def rebind_client(self) -> None:
         self.reset_calls += 1
@@ -293,22 +323,47 @@ class _FakeStreamGridUpdates:
 class _FakeFetchApp:
     def __init__(self) -> None:
         self._shutdown = threading.Event()
+        self._config = {
+            "client_id": "id",
+            "client_secret": "secret",
+            "kick_client_id": "kick-id",
+            "kick_client_secret": "kick-secret",
+        }
         self._twitch = _FakeTwitch()
+        self._kick = _FakeKick()
         self._player_bar = _FakePlayerBar()
-        self.fetch_result: tuple[list[str], list[dict[str, Any]], list[dict[str, Any]]] | None = None
+        self.fetch_result: tuple[
+            list[str],
+            list[dict[str, Any]],
+            list[dict[str, Any]],
+            dict[str, str] | None,
+            str | None,
+        ] | None = None
+        self.fetch_inputs: list[list[str]] = []
         self.clear_calls = 0
         self._fetching = True
 
-    async def _async_fetch(self, favorites: list[str]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        return ([{"user_login": favorites[0]}], [{"login": favorites[0]}])
+    async def _async_fetch_all(
+        self,
+        twitch_favorites: list[str],
+        kick_favorites: list[str],
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, str]]:
+        if twitch_favorites:
+            self.fetch_inputs.append(list(twitch_favorites))
+            return ([{"channel_ref": twitch_favorites[0], "user_login": twitch_favorites[0]}], [{"login": twitch_favorites[0]}], {})
+        if kick_favorites:
+            return ([{"channel_ref": f"kick:{kick_favorites[0]}", "user_login": kick_favorites[0]}], [{"channel_ref": f"kick:{kick_favorites[0]}", "login": kick_favorites[0]}], {})
+        return ([], [], {})
 
     def _on_data_fetched(
         self,
         favorites: list[str],
         streams: list[dict[str, Any]],
         users: list[dict[str, Any]],
+        games: dict[str, str] | None = None,
+        warning: str | None = None,
     ) -> None:
-        self.fetch_result = (favorites, streams, users)
+        self.fetch_result = (favorites, streams, users, games, warning)
 
     def _clear_fetching(self) -> None:
         self.clear_calls += 1
@@ -342,14 +397,25 @@ class _FakeTimer:
         self.cancel_calls += 1
 
 
+class _FakeFocusedEntry:
+    def winfo_class(self) -> str:
+        return "Entry"
+
+
 def test_search_channels_resets_client_after_temp_loop(
     monkeypatch: Any,
 ) -> None:
     monkeypatch.setattr(app.threading, "Thread", _ImmediateThread)
 
     fake_app = types.SimpleNamespace(
-        _config={"client_id": "id", "client_secret": "secret"},
+        _config={
+            "client_id": "id",
+            "client_secret": "secret",
+            "kick_client_id": "kick-id",
+            "kick_client_secret": "kick-secret",
+        },
         _twitch=_FakeTwitch(),
+        _kick=_FakeKick(),
         _shutdown=threading.Event(),
         _sidebar=_FakeSidebar(),
         after=lambda delay, callback: callback(),
@@ -357,8 +423,162 @@ def test_search_channels_resets_client_after_temp_loop(
 
     app.TwitchXApp._search_channels(fake_app, "alpha")
 
-    assert fake_app._sidebar.results == [{"login": "alpha"}]
+    assert fake_app._sidebar.results == [
+        {
+            "platform": "kick",
+            "broadcaster_login": "kick:alpha",
+            "display_name": "Kick · Alpha",
+            "is_live": True,
+            "game_name": "Slots",
+        },
+        {
+            "platform": "twitch",
+            "broadcaster_login": "alpha",
+            "display_name": "Alpha",
+            "is_live": False,
+            "game_name": "",
+        },
+    ]
     assert fake_app._twitch.reset_calls == 1
+    assert fake_app._kick.reset_calls == 1
+
+
+def test_entry_has_focus_detects_inner_entry_widget() -> None:
+    fake_app = types.SimpleNamespace(focus_get=lambda: _FakeFocusedEntry())
+
+    assert app.TwitchXApp._entry_has_focus(fake_app) is True
+
+
+def test_shortcut_refresh_ignores_inner_entry_focus() -> None:
+    refresh_calls: list[str] = []
+
+    class FakeApp:
+        def focus_get(self) -> _FakeFocusedEntry:
+            return _FakeFocusedEntry()
+
+        def _entry_has_focus(self) -> bool:
+            return app.TwitchXApp._entry_has_focus(self)
+
+        def _manual_refresh(self) -> None:
+            refresh_calls.append("refresh")
+
+    fake_app = FakeApp()
+
+    app.TwitchXApp._shortcut_refresh(fake_app)
+
+    assert refresh_calls == []
+
+
+def test_search_channels_uses_kick_without_twitch_credentials(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setattr(app.threading, "Thread", _ImmediateThread)
+
+    fake_app = types.SimpleNamespace(
+        _config={
+            "client_id": "",
+            "client_secret": "",
+            "kick_client_id": "kick-id",
+            "kick_client_secret": "kick-secret",
+        },
+        _twitch=_FakeTwitch(),
+        _kick=_FakeKick(),
+        _shutdown=threading.Event(),
+        _sidebar=_FakeSidebar(),
+        after=lambda delay, callback: callback(),
+    )
+
+    app.TwitchXApp._search_channels(fake_app, "alpha")
+
+    assert fake_app._sidebar.results == [
+        {
+            "platform": "kick",
+            "broadcaster_login": "kick:alpha",
+            "display_name": "Kick · Alpha",
+            "is_live": True,
+            "game_name": "Slots",
+        }
+    ]
+    assert fake_app._twitch.reset_calls == 0
+    assert fake_app._kick.reset_calls == 1
+
+
+def test_search_channels_skips_kick_without_kick_credentials(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setattr(app.threading, "Thread", _ImmediateThread)
+
+    fake_app = types.SimpleNamespace(
+        _config={
+            "client_id": "id",
+            "client_secret": "secret",
+            "kick_client_id": "",
+            "kick_client_secret": "",
+        },
+        _twitch=_FakeTwitch(),
+        _kick=_FakeKick(),
+        _shutdown=threading.Event(),
+        _sidebar=_FakeSidebar(),
+        after=lambda delay, callback: callback(),
+    )
+
+    app.TwitchXApp._search_channels(fake_app, "alpha")
+
+    assert fake_app._sidebar.results == [
+        {
+            "platform": "twitch",
+            "broadcaster_login": "alpha",
+            "display_name": "Alpha",
+            "is_live": False,
+            "game_name": "",
+        }
+    ]
+    assert fake_app._twitch.reset_calls == 1
+    assert fake_app._kick.reset_calls == 0
+
+
+def test_search_channels_reloads_disk_config_before_credential_checks(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setattr(app.threading, "Thread", _ImmediateThread)
+    monkeypatch.setattr(
+        app,
+        "load_config",
+        lambda: {
+            "client_id": "",
+            "client_secret": "",
+            "kick_client_id": "kick-id",
+            "kick_client_secret": "kick-secret",
+        },
+    )
+
+    fake_app = types.SimpleNamespace(
+        _config={
+            "client_id": "",
+            "client_secret": "",
+            "kick_client_id": "",
+            "kick_client_secret": "",
+        },
+        _reload_config_enabled=True,
+        _twitch=_FakeTwitch(),
+        _kick=_FakeKick(),
+        _shutdown=threading.Event(),
+        _sidebar=_FakeSidebar(),
+        after=lambda delay, callback: callback(),
+    )
+
+    app.TwitchXApp._search_channels(fake_app, "alpha")
+
+    assert fake_app._sidebar.results == [
+        {
+            "platform": "kick",
+            "broadcaster_login": "kick:alpha",
+            "display_name": "Kick · Alpha",
+            "is_live": True,
+            "game_name": "Slots",
+        }
+    ]
+    assert fake_app._kick.reset_calls == 1
 
 
 def test_run_twitch_temp_loop_returns_result_and_resets_client() -> None:
@@ -412,11 +632,182 @@ def test_fetch_data_resets_client_after_temp_loop() -> None:
 
     assert fake_app.fetch_result == (
         ["alpha"],
-        [{"user_login": "alpha"}],
+        [{"channel_ref": "alpha", "user_login": "alpha"}],
         [{"login": "alpha"}],
+        {},
+        None,
     )
+    assert fake_app.fetch_inputs == [["alpha"]]
     assert fake_app._twitch.reset_calls == 1
     assert fake_app.clear_calls == 1
+
+
+def test_fetch_data_filters_non_twitch_favorites_before_helix() -> None:
+    fake_app = _FakeFetchApp()
+
+    app.TwitchXApp._fetch_data(fake_app, ["alpha", "kick:trainwreckstv"])
+
+    assert fake_app.fetch_result == (
+        ["alpha", "kick:trainwreckstv"],
+        [{"channel_ref": "alpha", "user_login": "alpha"}],
+        [{"login": "alpha"}],
+        {},
+        None,
+    )
+    assert fake_app.fetch_inputs == [["alpha"]]
+    assert fake_app._twitch.reset_calls == 1
+    assert fake_app.clear_calls == 1
+
+
+def test_fetch_data_skips_helix_when_only_non_twitch_favorites() -> None:
+    fake_app = _FakeFetchApp()
+    fake_app._config = {
+        "client_id": "",
+        "client_secret": "",
+        "kick_client_id": "kick-id",
+        "kick_client_secret": "kick-secret",
+    }
+
+    app.TwitchXApp._fetch_data(fake_app, ["kick:trainwreckstv"])
+
+    assert fake_app.fetch_result == (
+        ["kick:trainwreckstv"],
+        [{"channel_ref": "kick:trainwreckstv", "user_login": "trainwreckstv"}],
+        [{"channel_ref": "kick:trainwreckstv", "login": "trainwreckstv"}],
+        {},
+        None,
+    )
+    assert fake_app.fetch_inputs == []
+    assert fake_app._twitch.reset_calls == 0
+    assert fake_app.clear_calls == 1
+
+
+def test_refresh_data_allows_kick_only_favorites_without_twitch_credentials(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setattr(app.threading, "Thread", _ImmediateThread)
+    fetch_calls: list[list[str]] = []
+
+    fake_app = types.SimpleNamespace(
+        _shutdown=threading.Event(),
+        _config={
+            "favorites": ["kick:trainwreckstv"],
+            "client_id": "",
+            "client_secret": "",
+            "kick_client_id": "kick-id",
+            "kick_client_secret": "kick-secret",
+        },
+        _sidebar=types.SimpleNamespace(update_channels=lambda channels, live_set, avatars: None),
+        _stream_grid=types.SimpleNamespace(
+            show_onboarding=lambda *args, **kwargs: (_ for _ in ()).throw(
+                AssertionError("should not show onboarding")
+            ),
+            update_streams=lambda *args, **kwargs: None,
+        ),
+        _player_bar=types.SimpleNamespace(
+            set_status=lambda text, color: None,
+            set_total_viewers=lambda total: None,
+        ),
+        _fetching=False,
+        _fetch_data=lambda favorites: fetch_calls.append(list(favorites)),
+        _config_title=None,
+        title=lambda text: None,
+        _open_settings=lambda: None,
+        _sanitize_username=lambda value: value,
+        _avatar_cache=types.SimpleNamespace(as_dict=lambda: {}),
+    )
+
+    app.TwitchXApp._refresh_data(fake_app)
+
+    assert fetch_calls == [["kick:trainwreckstv"]]
+
+
+def test_refresh_data_requires_kick_credentials_for_kick_only_favorites() -> None:
+    status_calls: list[tuple[str, Any]] = []
+    fetch_calls: list[list[str]] = []
+    onboarding_calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+
+    fake_app = types.SimpleNamespace(
+        _shutdown=threading.Event(),
+        _config={
+            "favorites": ["kick:trainwreckstv"],
+            "client_id": "",
+            "client_secret": "",
+            "kick_client_id": "",
+            "kick_client_secret": "",
+        },
+        _sidebar=types.SimpleNamespace(update_channels=lambda channels, live_set, avatars: None),
+        _stream_grid=types.SimpleNamespace(
+            show_onboarding=lambda *args, **kwargs: onboarding_calls.append((args, kwargs)),
+            update_streams=lambda *args, **kwargs: None,
+        ),
+        _player_bar=types.SimpleNamespace(
+            set_status=lambda text, color: status_calls.append((text, color)),
+            set_total_viewers=lambda total: None,
+        ),
+        _fetching=False,
+        _fetch_data=lambda favorites: fetch_calls.append(list(favorites)),
+        title=lambda text: None,
+        _open_settings=lambda: None,
+        _sanitize_username=lambda value: value,
+        _avatar_cache=types.SimpleNamespace(as_dict=lambda: {}),
+    )
+
+    app.TwitchXApp._refresh_data(fake_app)
+
+    assert fetch_calls == []
+    assert onboarding_calls
+    assert status_calls == [("Set Kick API credentials in Settings", app.ERROR_RED)]
+
+
+def test_refresh_data_reloads_disk_config_before_kick_gating(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setattr(
+        app,
+        "load_config",
+        lambda: {
+            "favorites": ["kick:trainwreckstv"],
+            "client_id": "",
+            "client_secret": "",
+            "kick_client_id": "kick-id",
+            "kick_client_secret": "kick-secret",
+        },
+    )
+    fetch_calls: list[list[str]] = []
+
+    fake_app = types.SimpleNamespace(
+        _shutdown=threading.Event(),
+        _config={
+            "favorites": ["kick:trainwreckstv"],
+            "client_id": "",
+            "client_secret": "",
+            "kick_client_id": "",
+            "kick_client_secret": "",
+        },
+        _reload_config_enabled=True,
+        _sidebar=types.SimpleNamespace(update_channels=lambda channels, live_set, avatars: None),
+        _stream_grid=types.SimpleNamespace(
+            show_onboarding=lambda *args, **kwargs: (_ for _ in ()).throw(
+                AssertionError("should not show onboarding")
+            ),
+            update_streams=lambda *args, **kwargs: None,
+        ),
+        _player_bar=types.SimpleNamespace(
+            set_status=lambda text, color: None,
+            set_total_viewers=lambda total: None,
+        ),
+        _fetching=False,
+        _fetch_data=lambda favorites: fetch_calls.append(list(favorites)),
+        title=lambda text: None,
+        _open_settings=lambda: None,
+        _sanitize_username=lambda value: value,
+        _avatar_cache=types.SimpleNamespace(as_dict=lambda: {}),
+    )
+
+    app.TwitchXApp._refresh_data(fake_app)
+
+    assert fetch_calls == [["kick:trainwreckstv"]]
 
 
 def test_fetch_image_bytes_returns_none_on_http_error(
@@ -782,6 +1173,8 @@ def test_settings_test_connection_ignores_after_errors_when_closed(
         _entries={
             "client_id": _FakeDialogEntry("client"),
             "client_secret": _FakeDialogEntry("secret"),
+            "kick_client_id": _FakeDialogEntry(""),
+            "kick_client_secret": _FakeDialogEntry(""),
         },
         after=lambda delay, callback: (_ for _ in ()).throw(RuntimeError("window destroyed")),
     )
@@ -790,6 +1183,77 @@ def test_settings_test_connection_ignores_after_errors_when_closed(
 
     assert feedback_calls == [("Testing...", app.TEXT_MUTED)]
     assert button.configure_calls == [{"state": "disabled"}]
+
+
+def test_settings_validate_allows_kick_only_credentials() -> None:
+    feedback_calls: list[tuple[str, Any]] = []
+    fake_dialog = types.SimpleNamespace(
+        _entries={
+            "client_id": _FakeDialogEntry(""),
+            "client_secret": _FakeDialogEntry(""),
+            "kick_client_id": _FakeDialogEntry("kick-client"),
+            "kick_client_secret": _FakeDialogEntry("kick-secret"),
+        },
+        _set_feedback=lambda text, color=None: feedback_calls.append((text, color)),
+    )
+
+    assert app.SettingsDialog._validate(fake_dialog) is True
+    assert feedback_calls == []
+
+
+def test_settings_save_clears_kick_token_when_kick_credentials_change(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    saved: list[dict[str, Any]] = []
+    monkeypatch.setattr(
+        app,
+        "load_config",
+        lambda: {
+            "client_id": "",
+            "client_secret": "",
+            "kick_client_id": "old-kick-client",
+            "kick_client_secret": "old-kick-secret",
+        },
+    )
+
+    fake_dialog = types.SimpleNamespace(
+        _validate=lambda: True,
+        _entries={
+            "client_id": _FakeDialogEntry(""),
+            "client_secret": _FakeDialogEntry(""),
+            "kick_client_id": _FakeDialogEntry("new-kick-client"),
+            "kick_client_secret": _FakeDialogEntry("new-kick-secret"),
+            "streamlink_path": _FakeDialogEntry("streamlink"),
+            "iina_path": _FakeDialogEntry("/Applications/IINA.app/Contents/MacOS/iina-cli"),
+        },
+        _config={
+            "access_token": "twitch-token",
+            "token_expires_at": 100,
+            "kick_access_token": "kick-token",
+            "kick_token_expires_at": 200,
+        },
+        _interval_var=types.SimpleNamespace(get=lambda: "60"),
+        _on_save=lambda config: saved.append(dict(config)),
+        destroy=lambda: None,
+    )
+
+    app.SettingsDialog._save(fake_dialog)
+
+    assert saved == [
+        {
+            "access_token": "twitch-token",
+            "token_expires_at": 100,
+            "kick_access_token": "",
+            "kick_token_expires_at": 0,
+            "client_id": "",
+            "client_secret": "",
+            "kick_client_id": "new-kick-client",
+            "kick_client_secret": "new-kick-secret",
+            "streamlink_path": "streamlink",
+            "iina_path": "/Applications/IINA.app/Contents/MacOS/iina-cli",
+            "refresh_interval": 60,
+        }
+    ]
 
 
 def test_import_follows_reports_progress_while_loading(
@@ -929,3 +1393,23 @@ def test_login_complete_refreshes_existing_favorites_before_auto_import() -> Non
 
     assert refresh_calls == ["refresh"]
     assert import_calls == ["import"]
+
+
+def test_watch_rejects_non_twitch_channel_refs() -> None:
+    status_calls: list[tuple[str, Any]] = []
+
+    fake_app = types.SimpleNamespace(
+        _selected_channel="kick:trainwreckstv",
+        _live_streams=[],
+        _player_bar=types.SimpleNamespace(
+            set_status=lambda text, color: status_calls.append((text, color)),
+            set_watching=lambda active: None,
+            get_quality=lambda: "best",
+        ),
+    )
+
+    app.TwitchXApp._on_watch(fake_app, "best")
+
+    assert status_calls == [
+        ("kick:trainwreckstv is offline", app.ERROR_RED)
+    ]

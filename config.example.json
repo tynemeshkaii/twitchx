@@ -1,0 +1,24 @@
+{
+  "client_id": "your_twitch_client_id",
+  "client_secret": "your_twitch_client_secret",
+  "kick_client_id": "your_kick_client_id",
+  "kick_client_secret": "your_kick_client_secret",
+  "access_token": "",
+  "token_expires_at": 0,
+  "kick_access_token": "",
+  "kick_token_expires_at": 0,
+  "favorites": [
+    "xqc",
+    "kick:trainwreckstv"
+  ],
+  "quality": "best",
+  "refresh_interval": 60,
+  "streamlink_path": "streamlink",
+  "iina_path": "/Applications/IINA.app/Contents/MacOS/iina-cli",
+  "user_id": "",
+  "user_login": "",
+  "user_display_name": "",
+  "refresh_token": "",
+  "token_type": "app",
+  "oauth_state": ""
+}

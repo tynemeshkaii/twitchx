@@ -8,6 +8,7 @@ from typing import Any
 
 import customtkinter as ctk
 
+from core.platforms import build_channel_url
 from core.utils import Tooltip, format_viewers
 from ui.theme import (
     ACCENT,
@@ -240,7 +241,7 @@ class StreamCard(ctk.CTkFrame):
         self._menu.add_separator()
         self._menu.add_command(
             label="Open in Browser",
-            command=lambda: webbrowser.open(f"https://twitch.tv/{login}"),
+            command=lambda: webbrowser.open(build_channel_url(login)),
         )
         self._menu.add_command(
             label="Copy URL",
@@ -260,7 +261,7 @@ class StreamCard(ctk.CTkFrame):
         self._menu.post(event.x_root, event.y_root)
 
     def _copy_url(self, login: str) -> None:
-        url = f"https://twitch.tv/{login}"
+        url = build_channel_url(login)
         self.clipboard_clear()
         self.clipboard_append(url)
 
@@ -350,8 +351,8 @@ class StreamGrid(ctk.CTkScrollableFrame):
         self._on_stream_click = on_stream_click
         self._on_stream_double_click = on_stream_double_click
         self._on_add_favorite = on_add_favorite
-        self._cards_by_login: dict[str, StreamCard] = {}
-        self._selected_login: str | None = None
+        self._cards_by_channel: dict[str, StreamCard] = {}
+        self._selected_channel: str | None = None
         self._empty_label: ctk.CTkLabel | None = None
         self._empty_subtitle: ctk.CTkLabel | None = None
         self._loading_label: ctk.CTkLabel | None = None
@@ -375,13 +376,13 @@ class StreamGrid(ctk.CTkScrollableFrame):
         self._tick_job = self.after(60_000, self._schedule_tick)
 
     def _tick_all_cards(self) -> None:
-        for card in self._cards_by_login.values():
+        for card in self._cards_by_channel.values():
             card.tick()
 
     def _clear(self) -> None:
-        for card in self._cards_by_login.values():
+        for card in self._cards_by_channel.values():
             card.destroy()
-        self._cards_by_login.clear()
+        self._cards_by_channel.clear()
         if self._empty_label:
             self._empty_label.destroy()
             self._empty_label = None
@@ -419,7 +420,7 @@ class StreamGrid(ctk.CTkScrollableFrame):
         self._empty_label.grid(row=0, column=0, columnspan=COLUMNS, pady=(80, 4))
         self._empty_subtitle = ctk.CTkLabel(
             self,
-            text="None of your followed channels are live",
+            text="None of your favorite channels are live",
             font=(FONT_SYSTEM, 12),
             text_color=TEXT_MUTED,
         )
@@ -448,7 +449,7 @@ class StreamGrid(ctk.CTkScrollableFrame):
             ).pack(pady=(0, 8))
             ctk.CTkLabel(
                 frame,
-                text="Search for channels in the sidebar to add them here",
+                text="Search for Twitch or Kick channels in the sidebar to add them here",
                 font=(FONT_SYSTEM, 13),
                 text_color=TEXT_MUTED,
             ).pack()
@@ -467,9 +468,9 @@ class StreamGrid(ctk.CTkScrollableFrame):
         ).pack(pady=(0, 20))
 
         steps = [
-            ("1.", "Get your Twitch API credentials at dev.twitch.tv/console"),
-            ("2.", "Create a new application \u2192 copy Client ID and Client Secret"),
-            ("3.", "Paste them in Settings (\u2699 button below)"),
+            ("1.", "Open Settings and add Twitch and/or Kick API credentials"),
+            ("2.", "Kick apps are created at docs.kick.com/getting-started/kick-apps-setup"),
+            ("3.", "Then search channels in the sidebar or paste a Twitch/Kick URL"),
         ]
         for num, text in steps:
             row_f = ctk.CTkFrame(
@@ -551,8 +552,8 @@ class StreamGrid(ctk.CTkScrollableFrame):
             self._no_results_label.grid(row=0, column=0, columnspan=COLUMNS, pady=80)
             return
         self._full_rebuild(visible, self._last_thumbnails, self._last_games)
-        if self._selected_login and self._selected_login in self._cards_by_login:
-            self._cards_by_login[self._selected_login].set_selected(True)
+        if self._selected_channel and self._selected_channel in self._cards_by_channel:
+            self._cards_by_channel[self._selected_channel].set_selected(True)
 
     # ── Main update ──────────────────────────────────────────────
 
@@ -601,14 +602,18 @@ class StreamGrid(ctk.CTkScrollableFrame):
             self._no_results_label.grid(row=0, column=0, columnspan=COLUMNS, pady=80)
             return
 
-        visible_logins = [s.get("user_login", "").lower() for s in visible]
-        existing_logins = list(self._cards_by_login)
+        visible_channels = [
+            str(s.get("channel_ref", s.get("user_login", ""))).lower() for s in visible
+        ]
+        existing_channels = list(self._cards_by_channel)
 
-        if visible_logins == existing_logins and self._cards_by_login:
+        if visible_channels == existing_channels and self._cards_by_channel:
             # Same set of channels — update in-place (no flicker)
             for stream in visible:
-                login = stream.get("user_login", "").lower()
-                card = self._cards_by_login.get(login)
+                channel_ref = str(
+                    stream.get("channel_ref", stream.get("user_login", ""))
+                ).lower()
+                card = self._cards_by_channel.get(channel_ref)
                 if not card:
                     continue
                 card.update_viewers(stream.get("viewer_count", 0))
@@ -616,7 +621,7 @@ class StreamGrid(ctk.CTkScrollableFrame):
                 game_name = stream.get("game_name", "") or games.get(game_id, "")
                 card.update_game(game_name)
                 card.update_title(stream.get("title", ""))
-                thumb = thumbnails.get(login)
+                thumb = thumbnails.get(channel_ref)
                 if thumb:
                     card.update_thumbnail(thumb)
         else:
@@ -624,8 +629,8 @@ class StreamGrid(ctk.CTkScrollableFrame):
             self._full_rebuild(visible, thumbnails, games)
 
         # Restore selection highlight
-        if self._selected_login and self._selected_login in self._cards_by_login:
-            self._cards_by_login[self._selected_login].set_selected(True)
+        if self._selected_channel and self._selected_channel in self._cards_by_channel:
+            self._cards_by_channel[self._selected_channel].set_selected(True)
 
     def _full_rebuild(
         self,
@@ -636,6 +641,9 @@ class StreamGrid(ctk.CTkScrollableFrame):
         self._clear()
 
         for idx, stream in enumerate(streams):
+            channel_ref = str(
+                stream.get("channel_ref", stream.get("user_login", ""))
+            ).lower()
             login = stream.get("user_login", "").lower()
             display_name = stream.get("user_name", login)
             game_id = stream.get("game_id", "")
@@ -643,11 +651,11 @@ class StreamGrid(ctk.CTkScrollableFrame):
             viewers = stream.get("viewer_count", 0)
             title = stream.get("title", "")
             started_at = stream.get("started_at", "")
-            thumb = thumbnails.get(login)
+            thumb = thumbnails.get(channel_ref)
 
             card = StreamCard(
                 self,
-                login=login,
+                login=channel_ref,
                 channel=display_name,
                 title=title,
                 game=game_name,
@@ -661,23 +669,23 @@ class StreamGrid(ctk.CTkScrollableFrame):
             row = idx // COLUMNS
             col = idx % COLUMNS
             card.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
-            self._cards_by_login[login] = card
+            self._cards_by_channel[channel_ref] = card
 
-    def update_thumbnail(self, login: str, image: ctk.CTkImage) -> None:
-        card = self._cards_by_login.get(login)
+    def update_thumbnail(self, channel: str, image: ctk.CTkImage) -> None:
+        card = self._cards_by_channel.get(channel)
         if card:
             card.update_thumbnail(image)
 
-    def set_selected(self, login: str | None) -> None:
-        if self._selected_login and self._selected_login in self._cards_by_login:
-            self._cards_by_login[self._selected_login].set_selected(False)
-        self._selected_login = login
-        if login and login in self._cards_by_login:
-            self._cards_by_login[login].set_selected(True)
+    def set_selected(self, channel: str | None) -> None:
+        if self._selected_channel and self._selected_channel in self._cards_by_channel:
+            self._cards_by_channel[self._selected_channel].set_selected(False)
+        self._selected_channel = channel
+        if channel and channel in self._cards_by_channel:
+            self._cards_by_channel[channel].set_selected(True)
 
-    def set_watching(self, login: str | None) -> None:
-        for card_login, card in self._cards_by_login.items():
-            card.set_watching(card_login == login)
+    def set_watching(self, channel: str | None) -> None:
+        for card_channel, card in self._cards_by_channel.items():
+            card.set_watching(card_channel == channel)
 
     def destroy(self) -> None:
         if self._tick_job:

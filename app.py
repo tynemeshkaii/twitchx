@@ -19,8 +19,15 @@ import customtkinter as ctk
 import httpx
 from PIL import Image
 
+from core.kick import KickClient
 from core.launcher import launch_stream
 from core.oauth_server import wait_for_oauth_code
+from core.platforms import (
+    build_channel_ref,
+    build_channel_url,
+    format_channel_ref,
+    split_channel_ref,
+)
 from core.storage import (
     get_cached_avatar,
     load_config,
@@ -28,6 +35,7 @@ from core.storage import (
     save_config,
 )
 from core.twitch import TwitchClient
+from core.utils import bind_standard_text_shortcuts, is_text_input_widget
 from ui.player_bar import PlayerBar
 from ui.sidebar import Sidebar
 from ui.stream_grid import SORT_OPTIONS, StreamGrid
@@ -90,7 +98,7 @@ class SettingsDialog(ctk.CTkToplevel):
         self._closed = False
         self.configure(fg_color=BG_SURFACE)
         self.title("TwitchX Settings")
-        self.geometry("440x520")
+        self.geometry("440x620")
         self.resizable(False, False)
         self._config = dict(config)
         self._on_save = on_save
@@ -112,13 +120,15 @@ class SettingsDialog(ctk.CTkToplevel):
         row += 1
 
         fields = [
-            ("Client ID", "client_id"),
-            ("Client Secret", "client_secret"),
+            ("Twitch Client ID", "client_id"),
+            ("Twitch Client Secret", "client_secret"),
+            ("Kick Client ID", "kick_client_id"),
+            ("Kick Client Secret", "kick_client_secret"),
             ("Streamlink Path", "streamlink_path"),
             ("IINA Path", "iina_path"),
         ]
         self._entries: dict[str, ctk.CTkEntry] = {}
-        self._secret_visible = False
+        self._secret_visible: dict[str, bool] = {}
         for label, key in fields:
             ctk.CTkLabel(
                 self,
@@ -137,10 +147,12 @@ class SettingsDialog(ctk.CTkToplevel):
                 height=34,
             )
             entry.insert(0, str(config.get(key, "")))
-            if key == "client_secret":
+            bind_standard_text_shortcuts(entry)
+            if key.endswith("_secret"):
+                self._secret_visible[key] = False
                 entry.configure(show="*")
                 entry.grid(row=row, column=1, padx=(0, 4), pady=8, sticky="ew")
-                self._eye_btn = ctk.CTkButton(
+                eye_btn = ctk.CTkButton(
                     self,
                     text="\U0001f441",
                     width=28,
@@ -148,9 +160,9 @@ class SettingsDialog(ctk.CTkToplevel):
                     fg_color="transparent",
                     hover_color=BG_OVERLAY,
                     corner_radius=RADIUS_SM,
-                    command=self._toggle_secret,
+                    command=lambda secret_key=key: self._toggle_secret(secret_key),
                 )
-                self._eye_btn.grid(row=row, column=2, padx=(0, 16), pady=8)
+                eye_btn.grid(row=row, column=2, padx=(0, 16), pady=8)
             else:
                 entry.grid(row=row, column=1, padx=(0, 16), pady=8, sticky="ew")
             self._entries[key] = entry
@@ -182,8 +194,10 @@ class SettingsDialog(ctk.CTkToplevel):
         note = ctk.CTkLabel(
             self,
             text=(
-                "OAuth Redirect URL (add to dev.twitch.tv/console):\n"
-                "http://localhost:3457/callback"
+                "Twitch OAuth Redirect URL:\n"
+                "http://localhost:3457/callback\n\n"
+                "Kick app setup:\n"
+                "https://docs.kick.com/getting-started/kick-apps-setup"
             ),
             font=(FONT_SYSTEM, 10),
             text_color=TEXT_MUTED,
@@ -269,54 +283,121 @@ class SettingsDialog(ctk.CTkToplevel):
     def _set_feedback(self, text: str, color: str = TEXT_MUTED) -> None:
         self._feedback_label.configure(text=text, text_color=color)
 
-    def _toggle_secret(self) -> None:
-        self._secret_visible = not self._secret_visible
-        entry = self._entries["client_secret"]
-        entry.configure(show="" if self._secret_visible else "*")
+    def _toggle_secret(self, key: str) -> None:
+        current = self._secret_visible.get(key, False)
+        self._secret_visible[key] = not current
+        entry = self._entries[key]
+        entry.configure(show="" if not current else "*")
 
     _VALID_CRED = re.compile(r"^[A-Za-z0-9_-]+$")
+    _CREDENTIAL_PAIRS = (
+        ("Twitch", "client_id", "client_secret"),
+        ("Kick", "kick_client_id", "kick_client_secret"),
+    )
+
+    def _get_credential_pair(self, id_key: str, secret_key: str) -> tuple[str, str]:
+        client_id = self._entries.get(id_key)
+        client_secret = self._entries.get(secret_key)
+        return (
+            client_id.get().strip() if client_id else "",
+            client_secret.get().strip() if client_secret else "",
+        )
+
+    def _validate_credential_pair(
+        self,
+        service: str,
+        id_key: str,
+        secret_key: str,
+    ) -> bool:
+        client_id, client_secret = SettingsDialog._get_credential_pair(
+            self,
+            id_key,
+            secret_key,
+        )
+        if not client_id and not client_secret:
+            return True
+        if not client_id or not client_secret:
+            self._set_feedback(
+                f"{service} Client ID and Secret must both be set",
+                ERROR_RED,
+            )
+            return False
+        if not SettingsDialog._VALID_CRED.match(client_id):
+            self._set_feedback(
+                f"{service} Client ID contains invalid characters",
+                ERROR_RED,
+            )
+            return False
+        if not SettingsDialog._VALID_CRED.match(client_secret):
+            self._set_feedback(
+                f"{service} Client Secret contains invalid characters",
+                ERROR_RED,
+            )
+            return False
+        return True
 
     def _validate(self) -> bool:
-        client_id = self._entries["client_id"].get().strip()
-        client_secret = self._entries["client_secret"].get().strip()
-        if not client_id or not client_secret:
-            self._set_feedback("Client ID and Secret are required", ERROR_RED)
-            return False
-        if not self._VALID_CRED.match(client_id):
-            self._set_feedback("Client ID contains invalid characters", ERROR_RED)
-            return False
-        if not self._VALID_CRED.match(client_secret):
-            self._set_feedback("Client Secret contains invalid characters", ERROR_RED)
-            return False
+        for service, id_key, secret_key in SettingsDialog._CREDENTIAL_PAIRS:
+            if not SettingsDialog._validate_credential_pair(
+                self,
+                service,
+                id_key,
+                secret_key,
+            ):
+                return False
         return True
 
     def _test_connection(self) -> None:
         if not self._validate():
             return
-        self._set_feedback("Testing...", TEXT_MUTED)
-        self._test_btn.configure(state="disabled")
-        client_id = self._entries["client_id"].get().strip()
-        client_secret = self._entries["client_secret"].get().strip()
-
-        def do_test() -> None:
-            try:
-                resp = httpx.post(
-                    "https://id.twitch.tv/oauth2/token",
-                    data={
+        service_requests: list[tuple[str, str, dict[str, str]]] = []
+        for service, id_key, secret_key in SettingsDialog._CREDENTIAL_PAIRS:
+            client_id, client_secret = SettingsDialog._get_credential_pair(
+                self,
+                id_key,
+                secret_key,
+            )
+            if not client_id or not client_secret:
+                continue
+            auth_url = "https://id.twitch.tv/oauth2/token"
+            if service == "Kick":
+                auth_url = "https://id.kick.com/oauth/token"
+            service_requests.append(
+                (
+                    service,
+                    auth_url,
+                    {
                         "client_id": client_id,
                         "client_secret": client_secret,
                         "grant_type": "client_credentials",
                     },
-                    timeout=10,
                 )
-                if resp.status_code == 200:
-                    SettingsDialog._queue_feedback(
-                        self, "\u2713 Connected", LIVE_GREEN
-                    )
-                else:
-                    SettingsDialog._queue_feedback(
-                        self, "\u2717 Invalid credentials", ERROR_RED
-                    )
+            )
+        if not service_requests:
+            self._set_feedback("Set Twitch or Kick credentials first", ERROR_RED)
+            return
+        self._set_feedback("Testing...", TEXT_MUTED)
+        self._test_btn.configure(state="disabled")
+
+        def do_test() -> None:
+            try:
+                for service, auth_url, form_data in service_requests:
+                    resp = httpx.post(auth_url, data=form_data, timeout=10)
+                    if resp.status_code != 200:
+                        SettingsDialog._queue_feedback(
+                            self,
+                            f"\u2717 Invalid {service} credentials",
+                            ERROR_RED,
+                        )
+                        return
+                connected_services = " + ".join(
+                    service for service, _, _ in service_requests
+                )
+                SettingsDialog._queue_feedback(
+                    self,
+                    f"\u2713 {connected_services} connected",
+                    LIVE_GREEN,
+                )
             except httpx.ConnectError:
                 SettingsDialog._queue_feedback(
                     self, "\u2717 No internet connection", ERROR_RED
@@ -339,11 +420,18 @@ class SettingsDialog(ctk.CTkToplevel):
         # Clear token if credentials changed
         orig = load_config()
         if (
-            self._config["client_id"] != orig["client_id"]
-            or self._config["client_secret"] != orig["client_secret"]
+            self._config.get("client_id") != orig.get("client_id")
+            or self._config.get("client_secret") != orig.get("client_secret")
         ):
             self._config["access_token"] = ""
             self._config["token_expires_at"] = 0
+        if (
+            self._config.get("kick_client_id") != orig.get("kick_client_id")
+            or self._config.get("kick_client_secret")
+            != orig.get("kick_client_secret")
+        ):
+            self._config["kick_access_token"] = ""
+            self._config["kick_token_expires_at"] = 0
         self._on_save(self._config)
         self.destroy()
 
@@ -372,6 +460,7 @@ class TwitchXApp(ctk.CTk):
         self._importing_follows = False
         self._shutdown = threading.Event()
         self._destroyed = False
+        self._reload_config_enabled = True
         # Notification state
         self._prev_live_logins: set[str] = set()
         self._first_fetch_done = False
@@ -385,6 +474,7 @@ class TwitchXApp(ctk.CTk):
         self._last_successful_fetch: float = 0
         # Long-lived Twitch API client (reused across fetch cycles)
         self._twitch = TwitchClient()
+        self._kick = KickClient()
         # OAuth user state
         self._current_user: dict[str, Any] | None = None
         if self._config.get("user_id") and self._config.get("user_login"):
@@ -430,14 +520,46 @@ class TwitchXApp(ctk.CTk):
             ERROR_RED,
         )
 
+    @staticmethod
+    def _has_twitch_credentials(self) -> bool:
+        config = getattr(self, "_config", {}) or {}
+        return bool(config.get("client_id") and config.get("client_secret"))
+
+    @staticmethod
+    def _reload_config_from_disk(self) -> dict[str, Any]:
+        if not getattr(self, "_reload_config_enabled", False):
+            return getattr(self, "_config", {}) or {}
+        config = load_config()
+        self._config = config
+        return config
+
+    @staticmethod
+    def _has_kick_credentials(self) -> bool:
+        config = getattr(self, "_config", {}) or {}
+        return bool(config.get("kick_client_id") and config.get("kick_client_secret"))
+
+    @staticmethod
+    def _channel_ref_from_stream(stream: dict[str, Any]) -> str:
+        channel_ref = str(stream.get("channel_ref", "")).strip().lower()
+        if channel_ref:
+            return channel_ref
+        login = str(stream.get("user_login", "")).strip().lower()
+        return build_channel_ref(str(stream.get("platform", "twitch")), login)
+
+    @staticmethod
+    def _live_channel_refs(self) -> set[str]:
+        return {
+            TwitchXApp._channel_ref_from_stream(stream)
+            for stream in self._live_streams
+            if TwitchXApp._channel_ref_from_stream(stream)
+        }
+
     def _cancel_refresh_job(self) -> bool:
         refresh_job = getattr(self, "_refresh_job", None)
         if not refresh_job:
             return False
-        try:
+        with contextlib.suppress(Exception):
             self.after_cancel(refresh_job)
-        except Exception:
-            pass
         self._refresh_job = None
         return True
 
@@ -455,10 +577,8 @@ class TwitchXApp(ctk.CTk):
         followed_sync_job = getattr(self, "_followed_sync_job", None)
         if not followed_sync_job:
             return False
-        try:
+        with contextlib.suppress(Exception):
             self.after_cancel(followed_sync_job)
-        except Exception:
-            pass
         self._followed_sync_job = None
         return True
 
@@ -557,6 +677,7 @@ class TwitchXApp(ctk.CTk):
         )
         self._filter_entry.grid(row=0, column=1, padx=(0, 8), pady=6, sticky="w")
         self._filter_entry.bind("<KeyRelease>", self._on_filter_changed)
+        bind_standard_text_shortcuts(self._filter_entry)
 
         # Toolbar separator
         toolbar_sep = ctk.CTkFrame(
@@ -605,8 +726,7 @@ class TwitchXApp(ctk.CTk):
         self.bind("<Escape>", self._shortcut_deselect)
 
     def _entry_has_focus(self) -> bool:
-        focused = self.focus_get()
-        return isinstance(focused, ctk.CTkEntry)
+        return is_text_input_widget(self.focus_get())
 
     def _shortcut_refresh(self, event: Any = None) -> None:
         if self._entry_has_focus():
@@ -627,10 +747,10 @@ class TwitchXApp(ctk.CTk):
         self._selected_channel = None
         self._stream_grid.set_selected(None)
         self._sidebar.set_selected(None)
-        live_logins = {s["user_login"].lower() for s in self._live_streams}
+        live_refs = TwitchXApp._live_channel_refs(self)
         favorites = self._config.get("favorites", [])
         self._sidebar.update_channels(
-            favorites, live_logins, self._avatar_cache.as_dict()
+            favorites, live_refs, self._avatar_cache.as_dict()
         )
         self._player_bar.set_status("", TEXT_SECONDARY)
         self._player_bar.set_channel_selected(False)
@@ -654,12 +774,14 @@ class TwitchXApp(ctk.CTk):
         self._selected_channel = channel
         self._stream_grid.set_selected(channel)
         self._sidebar.set_selected(channel)
-        live_logins = {s["user_login"].lower() for s in self._live_streams}
+        live_refs = TwitchXApp._live_channel_refs(self)
         favorites = self._config.get("favorites", [])
         self._sidebar.update_channels(
-            favorites, live_logins, self._avatar_cache.as_dict()
+            favorites, live_refs, self._avatar_cache.as_dict()
         )
-        self._player_bar.set_status(f"Selected: {channel}", TEXT_PRIMARY)
+        self._player_bar.set_status(
+            f"Selected: {format_channel_ref(channel)}", TEXT_PRIMARY
+        )
         self._player_bar.set_channel_selected(True)
 
     def _on_stream_double_click(self, login: str) -> None:
@@ -670,10 +792,19 @@ class TwitchXApp(ctk.CTk):
     @staticmethod
     def _sanitize_username(raw: str) -> str:
         raw = raw.strip()
-        match = re.search(r"(?:twitch\.tv/)([A-Za-z0-9_]+)", raw)
-        if match:
-            return match.group(1).lower()
-        return re.sub(r"[^A-Za-z0-9_]", "", raw).lower()
+        if not raw:
+            return ""
+        raw_lower = raw.lower()
+        if raw_lower.startswith(("http://", "https://", "twitch.tv/", "kick.com/")):
+            platform, login = split_channel_ref(raw)
+        else:
+            cleaned = "".join(ch for ch in raw if ch.isalnum() or ch in "._:-/").lower()
+            platform, login = split_channel_ref(cleaned)
+        if not login:
+            return ""
+        if platform == "twitch":
+            return login
+        return format_channel_ref(f"{platform}:{login}")
 
     def _on_add_channel(self, username: str) -> None:
         username = self._sanitize_username(username)
@@ -706,18 +837,19 @@ class TwitchXApp(ctk.CTk):
         if not channel:
             self._player_bar.set_status("Select a channel first", ERROR_RED)
             return
-        live_logins = {s["user_login"].lower() for s in self._live_streams}
-        if channel.lower() not in live_logins:
-            self._player_bar.set_status(f"{channel} is offline", ERROR_RED)
+        display_channel = format_channel_ref(channel)
+        live_refs = TwitchXApp._live_channel_refs(self)
+        if channel.lower() not in live_refs:
+            self._player_bar.set_status(f"{display_channel} is offline", ERROR_RED)
             return
 
         self._player_bar.set_watching(False)
         self._config["quality"] = quality
         save_config(self._config)
-        self._player_bar.set_status(f"Launching {channel}...", WARN_YELLOW)
+        self._player_bar.set_status(f"Launching {display_channel}...", WARN_YELLOW)
 
         # Start launch progress timer
-        self._launch_channel = channel
+        self._launch_channel = display_channel
         self._launch_elapsed = 0
         self._start_launch_timer()
 
@@ -785,7 +917,7 @@ class TwitchXApp(ctk.CTk):
         if not channel:
             self._player_bar.set_status("Select a channel first", ERROR_RED)
             return
-        webbrowser.open(f"https://twitch.tv/{channel}")
+        webbrowser.open(build_channel_url(channel))
 
     # ── OAuth login ────────────────────────────────────────────────
 
@@ -966,15 +1098,70 @@ class TwitchXApp(ctk.CTk):
 
     # ── Channel search ────────────────────────────────────────────
 
-    def _search_channels(self, query: str) -> None:
-        if not self._config.get("client_id") or not self._config.get("client_secret"):
-            return
+    @staticmethod
+    def _merge_search_results(
+        twitch_results: list[dict[str, Any]],
+        kick_results: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        merged: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for result in [*twitch_results, *kick_results]:
+            broadcaster_login = str(result.get("broadcaster_login", "")).strip().lower()
+            if not broadcaster_login or broadcaster_login in seen:
+                continue
+            seen.add(broadcaster_login)
+            item = dict(result)
+            if item.get("platform") == "kick":
+                display_name = str(item.get("display_name", broadcaster_login)).strip()
+                item["display_name"] = f"Kick · {display_name}"
+            merged.append(item)
+        merged.sort(
+            key=lambda item: (
+                not item.get("is_live", False),
+                str(item.get("display_name", "")).lower(),
+            )
+        )
+        return merged[:8]
 
+    def _search_channels(self, query: str) -> None:
         def do_search() -> None:
             try:
-                results = TwitchXApp._run_twitch_temp_loop(
+                TwitchXApp._reload_config_from_disk(self)
+                has_twitch = TwitchXApp._has_twitch_credentials(self)
+                has_kick = TwitchXApp._has_kick_credentials(self)
+
+                async def search_all() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+                    twitch_search = (
+                        self._twitch.search_channels(query)
+                        if has_twitch
+                        else asyncio.sleep(0, result=[])
+                    )
+                    kick_search = (
+                        self._kick.search_channels(query)
+                        if has_kick
+                        else asyncio.sleep(0, result=[])
+                    )
+                    twitch_results, kick_results = await asyncio.gather(
+                        twitch_search,
+                        kick_search,
+                    )
+                    return list(twitch_results), list(kick_results)
+
+                twitch_results, kick_results = TwitchXApp._run_async_temp_loop(
                     self,
-                    lambda: self._twitch.search_channels(query),
+                    search_all,
+                    [
+                        client
+                        for client, enabled in (
+                            (self._twitch, has_twitch),
+                            (self._kick, has_kick),
+                        )
+                        if enabled
+                    ],
+                )
+                results = TwitchXApp._merge_search_results(
+                    twitch_results,
+                    kick_results,
                 )
                 TwitchXApp._queue_ui(
                     self, lambda r=results: self._sidebar.show_search_results(r)
@@ -1010,21 +1197,24 @@ class TwitchXApp(ctk.CTk):
     def _refresh_data(self) -> None:
         if self._shutdown.is_set():
             return
+        TwitchXApp._reload_config_from_disk(self)
         favorites = [
             self._sanitize_username(f) for f in self._config.get("favorites", [])
         ]
         favorites = [f for f in favorites if f]
+        twitch_favorites = TwitchXApp._twitch_favorites(favorites)
+        kick_favorites = TwitchXApp._kick_favorites(favorites)
+        has_twitch = TwitchXApp._has_twitch_credentials(self)
+        has_kick = TwitchXApp._has_kick_credentials(self)
         if not favorites:
             self._sidebar.update_channels([], set(), {})
-            has_creds = bool(
-                self._config.get("client_id") and self._config.get("client_secret")
-            )
+            has_creds = has_twitch or has_kick
             if has_creds:
                 self._stream_grid.show_onboarding(
                     self._open_settings, has_credentials=True
                 )
             else:
-                self._stream_grid.update_streams([], {}, {})
+                self._stream_grid.show_onboarding(self._open_settings)
             self._player_bar.set_status(
                 "Add channels to get started", TEXT_MUTED
             )
@@ -1032,11 +1222,18 @@ class TwitchXApp(ctk.CTk):
             self.title("TwitchX")
             return
 
-        if not self._config.get("client_id") or not self._config.get("client_secret"):
+        if twitch_favorites and not kick_favorites and not has_twitch:
             self._sidebar.update_channels(favorites, set(), {})
             self._stream_grid.show_onboarding(self._open_settings)
             self._player_bar.set_status(
                 "Set Twitch API credentials in Settings", ERROR_RED
+            )
+            return
+        if kick_favorites and not twitch_favorites and not has_kick:
+            self._sidebar.update_channels(favorites, set(), {})
+            self._stream_grid.show_onboarding(self._open_settings)
+            self._player_bar.set_status(
+                "Set Kick API credentials in Settings", ERROR_RED
             )
             return
 
@@ -1051,20 +1248,67 @@ class TwitchXApp(ctk.CTk):
     def _fetch_data(self, favorites: list[str]) -> None:
         retry_delays = [5, 15, 30]
         max_attempts = len(retry_delays) + 1
+        twitch_favorites = TwitchXApp._twitch_favorites(favorites)
+        kick_favorites = TwitchXApp._kick_favorites(favorites)
+        has_twitch = TwitchXApp._has_twitch_credentials(self)
+        has_kick = TwitchXApp._has_kick_credentials(self)
+        warning: str | None = None
+        missing_platforms: list[str] = []
+        if twitch_favorites and not has_twitch:
+            missing_platforms.append("Twitch")
+            twitch_favorites = []
+        if kick_favorites and not has_kick:
+            missing_platforms.append("Kick")
+            kick_favorites = []
+        if missing_platforms:
+            if len(missing_platforms) == 1:
+                warning = (
+                    f"{missing_platforms[0]} credentials needed for "
+                    f"{missing_platforms[0]} channels"
+                )
+            else:
+                warning = "Credentials needed for some channels"
 
         try:
+            if not twitch_favorites and not kick_favorites:
+                TwitchXApp._queue_ui(
+                    self,
+                    lambda favs=list(favorites), note=warning: self._on_data_fetched(
+                        favs,
+                        [],
+                        [],
+                        {},
+                        note,
+                    ),
+                )
+                return
             for attempt in range(1, max_attempts + 1):
                 if self._shutdown.is_set():
                     return
                 try:
-                    streams, users = TwitchXApp._run_twitch_temp_loop(
+                    streams, users, games = TwitchXApp._run_async_temp_loop(
                         self,
-                        lambda: self._async_fetch(favorites),
+                        lambda: self._async_fetch_all(
+                            twitch_favorites,
+                            kick_favorites,
+                        ),
+                        [
+                            client
+                            for client, enabled in (
+                                (self._twitch, bool(twitch_favorites)),
+                                (self._kick, bool(kick_favorites)),
+                            )
+                            if enabled
+                        ],
                     )
                     TwitchXApp._queue_ui(
                         self,
-                        lambda s=streams, u=users: self._on_data_fetched(
-                            favorites, s, u
+                        lambda favs=list(favorites), s=streams, u=users, g=games, note=warning: self._on_data_fetched(
+                            favs,
+                            s,
+                            u,
+                            g,
+                            note,
                         ),
                     )
                     return
@@ -1095,10 +1339,10 @@ class TwitchXApp(ctk.CTk):
                             self, f"API error: {status_code}", ERROR_RED
                         )
                     return
-                except ValueError:
+                except ValueError as exc:
                     TwitchXApp._queue_status(
                         self,
-                        "Set Twitch API credentials in Settings",
+                        _format_error_message(exc, "Set API credentials in Settings"),
                         ERROR_RED,
                     )
                     return
@@ -1118,57 +1362,133 @@ class TwitchXApp(ctk.CTk):
     def _clear_fetching(self) -> None:
         self._fetching = False
 
-    async def _async_fetch(self, favorites: list[str]) -> tuple[list[dict], list[dict]]:
+    @staticmethod
+    def _twitch_favorites(favorites: list[str]) -> list[str]:
+        twitch_favorites: list[str] = []
+        for favorite in favorites:
+            platform, login = split_channel_ref(favorite)
+            if platform == "twitch" and login:
+                twitch_favorites.append(login)
+        return twitch_favorites
+
+    @staticmethod
+    def _kick_favorites(favorites: list[str]) -> list[str]:
+        kick_favorites: list[str] = []
+        for favorite in favorites:
+            platform, login = split_channel_ref(favorite)
+            if platform == "kick" and login:
+                kick_favorites.append(login)
+        return kick_favorites
+
+    async def _async_fetch_twitch(
+        self,
+        favorites: list[str],
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, str]]:
+        if not favorites:
+            return [], [], {}
         await self._twitch._ensure_token()
         streams, users = await asyncio.gather(
             self._twitch.get_live_streams(favorites),
             self._twitch.get_users(favorites),
         )
         game_ids = [s.get("game_id", "") for s in streams if s.get("game_id")]
+        games: dict[str, str] = {}
         if game_ids:
             games = await self._twitch.get_games(game_ids)
-            self._games.update(games)
-        return streams, users
+        return streams, users, games
 
-    def _run_twitch_temp_loop(
+    async def _async_fetch_all(
+        self,
+        twitch_favorites: list[str],
+        kick_favorites: list[str],
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, str]]:
+        twitch_fetch = (
+            self._async_fetch_twitch(twitch_favorites)
+            if twitch_favorites
+            else asyncio.sleep(0, result=([], [], {}))
+        )
+        kick_fetch = (
+            self._kick.get_streams_and_users(kick_favorites)
+            if kick_favorites
+            else asyncio.sleep(0, result=([], []))
+        )
+        (
+            (twitch_streams, twitch_users, games),
+            (kick_streams, kick_users),
+        ) = await asyncio.gather(twitch_fetch, kick_fetch)
+        return (
+            [*twitch_streams, *kick_streams],
+            [*twitch_users, *kick_users],
+            games,
+        )
+
+    def _run_async_temp_loop(
         self,
         action: Callable[[], Awaitable[T]],
+        clients: list[Any],
     ) -> T:
         loop = asyncio.new_event_loop()
         try:
             return loop.run_until_complete(action())
         finally:
-            with contextlib.suppress(Exception):
-                loop.run_until_complete(self._twitch.rebind_client())
+            for client in clients:
+                rebind_client = getattr(client, "rebind_client", None)
+                if callable(rebind_client):
+                    with contextlib.suppress(Exception):
+                        loop.run_until_complete(rebind_client())
             loop.close()
 
+    def _run_twitch_temp_loop(
+        self,
+        action: Callable[[], Awaitable[T]],
+    ) -> T:
+        return TwitchXApp._run_async_temp_loop(self, action, [self._twitch])
+
     def _on_data_fetched(
-        self, favorites: list[str], streams: list[dict], users: list[dict]
+        self,
+        favorites: list[str],
+        streams: list[dict[str, Any]],
+        users: list[dict[str, Any]],
+        games: dict[str, str] | None = None,
+        warning: str | None = None,
     ) -> None:
         self._live_streams = streams
+        if games:
+            self._games.update(games)
         self._last_successful_fetch = time.time()
         self._player_bar.set_stale(False)
-        live_logins = {s["user_login"].lower() for s in streams}
+        live_refs = TwitchXApp._live_channel_refs(self)
 
         # ── Notifications ─────────────────────────────────────────
         if self._first_fetch_done:
-            newly_live = live_logins - self._prev_live_logins
+            newly_live = live_refs - self._prev_live_logins
             if newly_live:
-                stream_map = {s["user_login"].lower(): s for s in streams}
-                for login in newly_live:
-                    s = stream_map.get(login)
+                stream_map = {
+                    TwitchXApp._channel_ref_from_stream(s): s for s in streams
+                }
+                for channel_ref in newly_live:
+                    s = stream_map.get(channel_ref)
                     if s:
                         self._send_notification(
-                            s.get("user_name", login),
+                            s.get("user_name", channel_ref),
                             s.get("title", ""),
                             s.get("game_name", ""),
                         )
-        self._prev_live_logins = set(live_logins)
+        self._prev_live_logins = set(live_refs)
         self._first_fetch_done = True
 
         # Load avatars in background (with disk cache)
         user_avatars = {
-            u["login"].lower(): u.get("profile_image_url", "") for u in users
+            str(
+                u.get(
+                    "channel_ref",
+                    build_channel_ref(
+                        str(u.get("platform", "twitch")),
+                        str(u.get("login", "")),
+                    ),
+                )
+            ).lower(): u.get("profile_image_url", "")
+            for u in users
         }
         threading.Thread(
             target=self._load_avatars, args=(user_avatars,), daemon=True
@@ -1177,14 +1497,14 @@ class TwitchXApp(ctk.CTk):
         # Load thumbnails in background
         thumb_urls = {}
         for s in streams:
-            login = s["user_login"].lower()
+            channel_ref = TwitchXApp._channel_ref_from_stream(s)
             url = (
                 s.get("thumbnail_url", "")
                 .replace("{width}", "880")
                 .replace("{height}", "496")
             )
             if url:
-                thumb_urls[login] = url
+                thumb_urls[channel_ref] = url
         if thumb_urls:
             threading.Thread(
                 target=self._load_thumbnails, args=(thumb_urls,), daemon=True
@@ -1192,7 +1512,7 @@ class TwitchXApp(ctk.CTk):
 
         # Update sidebar
         self._sidebar.update_channels(
-            favorites, live_logins, self._avatar_cache.as_dict()
+            favorites, live_refs, self._avatar_cache.as_dict()
         )
 
         # Update grid
@@ -1203,10 +1523,12 @@ class TwitchXApp(ctk.CTk):
         now = datetime.now().strftime("%H:%M:%S")
         self._player_bar.set_updated(f"Updated {now}")
         live_count = len(streams)
-        self._player_bar.set_status(
-            f"{live_count} channel{'s' if live_count != 1 else ''} live",
-            LIVE_GREEN if live_count else TEXT_MUTED,
-        )
+        status_text = f"{live_count} channel{'s' if live_count != 1 else ''} live"
+        status_color = LIVE_GREEN if live_count else TEXT_MUTED
+        if warning:
+            status_text = f"{status_text} • {warning}"
+            status_color = WARN_YELLOW
+        self._player_bar.set_status(status_text, status_color)
 
         # Total viewers
         total = sum(s.get("viewer_count", 0) for s in streams)
@@ -1256,15 +1578,20 @@ class TwitchXApp(ctk.CTk):
         except Exception:
             return None
 
+    @staticmethod
+    def _avatar_disk_key(cache_key: str) -> str:
+        return cache_key.replace(":", "__")
+
     def _load_avatars(self, avatars: dict[str, str]) -> None:
         for login, url in avatars.items():
             if self._shutdown.is_set():
                 return
             if self._avatar_cache.get(login) or not url:
                 continue
+            disk_key = TwitchXApp._avatar_disk_key(login)
 
             # Try disk cache first
-            cached_bytes = get_cached_avatar(login)
+            cached_bytes = get_cached_avatar(disk_key)
             if cached_bytes:
                 try:
                     img = Image.open(io.BytesIO(cached_bytes)).resize((28, 28), Image.Resampling.LANCZOS)
@@ -1284,7 +1611,7 @@ class TwitchXApp(ctk.CTk):
                 img = Image.open(io.BytesIO(raw_bytes)).resize((28, 28), Image.Resampling.LANCZOS)
                 ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(28, 28))
                 self._avatar_cache.put(login, ctk_img)
-                save_avatar(login, raw_bytes)
+                save_avatar(disk_key, raw_bytes)
             except Exception:
                 pass
 
@@ -1292,9 +1619,9 @@ class TwitchXApp(ctk.CTk):
 
     def _update_sidebar_avatars(self) -> None:
         favorites = self._config.get("favorites", [])
-        live_logins = {s["user_login"].lower() for s in self._live_streams}
+        live_refs = TwitchXApp._live_channel_refs(self)
         self._sidebar.update_channels(
-            favorites, live_logins, self._avatar_cache.as_dict()
+            favorites, live_refs, self._avatar_cache.as_dict()
         )
         # Update user profile avatar if logged in
         if self._current_user:
@@ -1304,8 +1631,8 @@ class TwitchXApp(ctk.CTk):
                 self._sidebar.update_user_profile(self._current_user, avatar_image=avatar)
 
     def _load_thumbnails(self, thumb_urls: dict[str, str]) -> None:
-        def fetch_one(login: str, url: str) -> tuple[str, bytes | None]:
-            return login, self._fetch_image_bytes(url)
+        def fetch_one(channel_ref: str, url: str) -> tuple[str, bytes | None]:
+            return channel_ref, self._fetch_image_bytes(url)
 
         with ThreadPoolExecutor(max_workers=5) as executor:
             futures = {
@@ -1315,7 +1642,7 @@ class TwitchXApp(ctk.CTk):
             for future in as_completed(futures):
                 if self._shutdown.is_set():
                     return
-                login, raw = future.result()
+                channel_ref, raw = future.result()
                 if raw is None:
                     continue
                 try:
@@ -1323,11 +1650,11 @@ class TwitchXApp(ctk.CTk):
                     ctk_img = ctk.CTkImage(
                         light_image=img, dark_image=img, size=(220, 124)
                     )
-                    self._thumb_cache.put(login, ctk_img)
+                    self._thumb_cache.put(channel_ref, ctk_img)
                     TwitchXApp._queue_ui(
                         self,
-                        lambda lg=login, im=ctk_img: (
-                            self._stream_grid.update_thumbnail(lg, im)
+                        lambda ref=channel_ref, im=ctk_img: (
+                            self._stream_grid.update_thumbnail(ref, im)
                         ),
                     )
                 except Exception:
@@ -1360,12 +1687,17 @@ class TwitchXApp(ctk.CTk):
         TwitchXApp._cancel_refresh_job(self)
         TwitchXApp._cancel_followed_sync_job(self)
 
-        close_client = getattr(getattr(self, "_twitch", None), "close", None)
-        if callable(close_client):
+        close_clients = [
+            getattr(client, "close", None)
+            for client in (getattr(self, "_twitch", None), getattr(self, "_kick", None))
+        ]
+        close_clients = [close_client for close_client in close_clients if callable(close_client)]
+        if close_clients:
             loop = asyncio.new_event_loop()
             try:
-                with contextlib.suppress(Exception):
-                    loop.run_until_complete(close_client())
+                for close_client in close_clients:
+                    with contextlib.suppress(Exception):
+                        loop.run_until_complete(close_client())
             finally:
                 loop.close()
 

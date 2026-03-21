@@ -7,6 +7,8 @@ from typing import Any
 
 import customtkinter as ctk
 
+from core.platforms import build_channel_url
+from core.utils import bind_standard_text_shortcuts
 from ui.theme import (
     ACCENT,
     ACCENT_HOVER,
@@ -111,7 +113,7 @@ class ChannelItem(ctk.CTkFrame):
         )
         self._menu.add_command(
             label="Open in Browser",
-            command=lambda: webbrowser.open(f"https://twitch.tv/{channel}"),
+            command=lambda: webbrowser.open(build_channel_url(channel)),
         )
         self._menu.add_separator()
         self._menu.add_command(label="Remove from favorites", command=self._remove)
@@ -302,7 +304,7 @@ class Sidebar(ctk.CTkFrame):
 
         self._add_entry = ctk.CTkEntry(
             self._add_frame,
-            placeholder_text="Search channels...",
+            placeholder_text="Search channels or paste URL...",
             height=30,
             fg_color=BG_ELEVATED,
             border_color=BG_BORDER,
@@ -315,6 +317,7 @@ class Sidebar(ctk.CTkFrame):
         self._add_entry.bind("<KeyRelease>", self._on_search_key)
         self._add_entry.bind("<Escape>", lambda e: self._hide_search_dropdown())
         self._add_entry.bind("<FocusOut>", self._on_entry_focus_out)
+        bind_standard_text_shortcuts(self._add_entry)
 
         self._add_btn = ctk.CTkButton(
             self._add_frame,
@@ -477,7 +480,8 @@ class Sidebar(ctk.CTkFrame):
             )
         else:
             sorted_channels = sorted(
-                channels, key=lambda c: (c.lower() not in live_set, c.lower())
+                channels,
+                key=lambda c: (c.lower() not in live_set, c.lower()),
             )
 
         live_count = sum(1 for c in channels if c.lower() in live_set)

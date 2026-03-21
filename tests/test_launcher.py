@@ -88,3 +88,27 @@ class TestLaunchStream:
         result = launch_stream("xqc", "best")
         assert result.success is False
         assert "not found" in result.message.lower()
+
+    @patch("core.launcher.check_iina", return_value=None)
+    @patch("core.launcher.check_streamlink", return_value=None)
+    @patch("core.launcher.shutil.which", return_value="/usr/bin/streamlink")
+    @patch("core.launcher._get_stream_url")
+    @patch("core.launcher.subprocess.Popen")
+    def test_supports_platform_prefixed_channel_refs(
+        self,
+        mock_popen: MagicMock,
+        mock_get_url: MagicMock,
+        mock_which: MagicMock,
+        mock_check_sl: MagicMock,
+        mock_check_iina: MagicMock,
+    ) -> None:
+        mock_get_url.return_value = ("https://example.com/kick.m3u8", "")
+
+        result = launch_stream("kick:trainwreckstv", "best")
+
+        assert result.success is True
+        mock_get_url.assert_called_once_with(
+            "/usr/bin/streamlink",
+            "https://kick.com/trainwreckstv",
+            "best",
+        )
