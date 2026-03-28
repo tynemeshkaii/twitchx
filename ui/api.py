@@ -20,14 +20,17 @@ from PIL import Image
 
 from core.launcher import launch_stream
 from core.oauth_server import wait_for_oauth_code
+from core.platforms.twitch import TwitchClient
 from core.storage import (
     get_cached_avatar,
+    get_favorite_logins,
+    get_platform_config,
+    get_settings,
     load_config,
     save_avatar,
     save_config,
 )
 from core.stream_resolver import resolve_hls_url
-from core.twitch import TwitchClient
 from core.utils import format_viewers
 
 logger = logging.getLogger(__name__)
@@ -40,6 +43,8 @@ class TwitchXApi:
         self._window: Any = None
         self._config = load_config()
         self._twitch = TwitchClient()
+        self._platforms: dict[str, Any] = {"twitch": self._twitch}
+        self._active_platform: str = "twitch"
         self._shutdown = threading.Event()
         self._fetching = False
         self._polling_timer: threading.Timer | None = None
@@ -58,11 +63,12 @@ class TwitchXApi:
         self._user_avatars: dict[str, str] = {}
 
         # Restore user profile if logged in
-        if self._config.get("user_id") and self._config.get("user_login"):
+        twitch_conf = get_platform_config(self._config, "twitch")
+        if twitch_conf.get("user_id") and twitch_conf.get("user_login"):
             self._current_user = {
-                "id": self._config["user_id"],
-                "login": self._config["user_login"],
-                "display_name": self._config.get("user_display_name", ""),
+                "id": twitch_conf["user_id"],
+                "login": twitch_conf["user_login"],
+                "display_name": twitch_conf.get("user_display_name", ""),
             }
 
     def set_window(self, window: Any) -> None:
@@ -78,6 +84,13 @@ class TwitchXApi:
     def _run_in_thread(self, fn: Any) -> None:
         threading.Thread(target=fn, daemon=True).start()
 
+    def _get_platform(self, platform_id: str) -> Any:
+        """Get a platform client by ID."""
+        return self._platforms.get(platform_id)
+
+    def _get_twitch_config(self) -> dict[str, Any]:
+        """Get Twitch platform config section."""
+        return get_platform_config(self._config, "twitch")
 
     def _close_thread_loop(self, loop: asyncio.AbstractEventLoop) -> None:
         try:
@@ -99,54 +112,59 @@ class TwitchXApi:
 
     def get_config(self) -> dict[str, Any]:
         self._config = load_config()
-        safe = dict(self._config)
-        # Mask secret
-        secret = safe.get("client_secret", "")
-        if len(secret) > 4:
-            safe["client_secret_masked"] = secret[:4] + "****"
-        else:
-            safe["client_secret_masked"] = "****" if secret else ""
-        safe.pop("client_secret", None)
-        safe.pop("access_token", None)
-        safe.pop("refresh_token", None)
-        safe.pop("token_expires_at", None)
-        # Include user info
+        twitch_conf = get_platform_config(self._config, "twitch")
+        settings = get_settings(self._config)
+        masked = {
+            "client_id": twitch_conf.get("client_id", "")[:8] + "..." if twitch_conf.get("client_id") else "",
+            "has_credentials": bool(twitch_conf.get("client_id") and twitch_conf.get("client_secret")),
+            "quality": settings.get("quality", "best"),
+            "refresh_interval": settings.get("refresh_interval", 60),
+            "favorites": get_favorite_logins(self._config, "twitch"),
+        }
         if self._current_user:
-            safe["current_user"] = self._current_user
-        return safe
+            masked["current_user"] = self._current_user
+        return masked
 
     def get_full_config_for_settings(self) -> dict[str, Any]:
         """Return config including secret for the settings dialog."""
         self._config = load_config()
+        twitch_conf = get_platform_config(self._config, "twitch")
+        settings = get_settings(self._config)
         return {
-            "client_id": self._config.get("client_id", ""),
-            "client_secret": self._config.get("client_secret", ""),
-            "streamlink_path": self._config.get("streamlink_path", "streamlink"),
-            "iina_path": self._config.get(
-                "iina_path", "/Applications/IINA.app/Contents/MacOS/iina-cli"
-            ),
-            "refresh_interval": self._config.get("refresh_interval", 60),
+            "client_id": twitch_conf.get("client_id", ""),
+            "client_secret": twitch_conf.get("client_secret", ""),
+            "quality": settings.get("quality", "best"),
+            "refresh_interval": settings.get("refresh_interval", 60),
+            "streamlink_path": settings.get("streamlink_path", "streamlink"),
+            "iina_path": settings.get("iina_path", ""),
         }
 
     def save_settings(self, data: str) -> None:
         """Save settings from JS. data is JSON string."""
         parsed = json.loads(data) if isinstance(data, str) else data
-        orig = load_config()
-        creds_changed = parsed.get("client_id", "") != orig.get(
-            "client_id", ""
-        ) or parsed.get("client_secret", "") != orig.get("client_secret", "")
-        for key in ("client_id", "client_secret", "streamlink_path", "iina_path"):
-            if key in parsed:
-                self._config[key] = parsed[key].strip()
+        twitch_conf = get_platform_config(self._config, "twitch")
+        settings = get_settings(self._config)
+
+        if "client_id" in parsed:
+            twitch_conf["client_id"] = parsed["client_id"].strip()
+        if "client_secret" in parsed:
+            twitch_conf["client_secret"] = parsed["client_secret"].strip()
+        if "quality" in parsed:
+            settings["quality"] = parsed["quality"]
         if "refresh_interval" in parsed:
-            self._config["refresh_interval"] = int(parsed["refresh_interval"])
-        if creds_changed:
-            self._config["access_token"] = ""
-            self._config["token_expires_at"] = 0
+            settings["refresh_interval"] = int(parsed["refresh_interval"])
+        if "streamlink_path" in parsed:
+            settings["streamlink_path"] = parsed["streamlink_path"].strip()
+        if "iina_path" in parsed:
+            settings["iina_path"] = parsed["iina_path"].strip()
+
+        self._config["platforms"]["twitch"] = twitch_conf
+        self._config["settings"] = settings
         save_config(self._config)
+
+        interval = settings.get("refresh_interval", 60)
+        self.start_polling(interval)
         self._eval_js("window.onSettingsSaved()")
-        # Restart polling with new interval
-        self.start_polling(self._config.get("refresh_interval", 60))
 
     def test_connection(self, client_id: str, client_secret: str) -> None:
         def do_test() -> None:
@@ -180,7 +198,8 @@ class TwitchXApi:
     # ── Auth ────────────────────────────────────────────────────
 
     def login(self) -> None:
-        if not self._config.get("client_id") or not self._config.get("client_secret"):
+        twitch_conf = self._get_twitch_config()
+        if not twitch_conf.get("client_id") or not twitch_conf.get("client_secret"):
             self._eval_js(
                 'window.onLoginError("Set API credentials in Settings first")'
             )
@@ -202,18 +221,19 @@ class TwitchXApi:
             asyncio.set_event_loop(loop)
             try:
                 token_data = loop.run_until_complete(self._twitch.exchange_code(code))
-                self._config["access_token"] = token_data["access_token"]
-                self._config["refresh_token"] = token_data.get("refresh_token", "")
-                self._config["token_expires_at"] = int(time.time()) + token_data.get(
+                twitch_conf = self._config["platforms"]["twitch"]
+                twitch_conf["access_token"] = token_data["access_token"]
+                twitch_conf["refresh_token"] = token_data.get("refresh_token", "")
+                twitch_conf["token_expires_at"] = int(time.time()) + token_data.get(
                     "expires_in", 3600
                 )
-                self._config["token_type"] = "user"
+                twitch_conf["token_type"] = "user"
                 save_config(self._config)
 
                 user = loop.run_until_complete(self._twitch.get_current_user())
-                self._config["user_id"] = user["id"]
-                self._config["user_login"] = user["login"]
-                self._config["user_display_name"] = user.get(
+                twitch_conf["user_id"] = user["id"]
+                twitch_conf["user_login"] = user["login"]
+                twitch_conf["user_display_name"] = user.get(
                     "display_name", user["login"]
                 )
                 save_config(self._config)
@@ -243,16 +263,14 @@ class TwitchXApi:
         self._run_in_thread(do_login)
 
     def logout(self) -> None:
-        for key in (
-            "user_id",
-            "user_login",
-            "user_display_name",
-            "refresh_token",
-        ):
-            self._config[key] = ""
-        self._config["access_token"] = ""
-        self._config["token_expires_at"] = 0
-        self._config["token_type"] = "app"
+        twitch_conf = self._config["platforms"]["twitch"]
+        twitch_conf["access_token"] = ""
+        twitch_conf["refresh_token"] = ""
+        twitch_conf["token_expires_at"] = 0
+        twitch_conf["token_type"] = "app"
+        twitch_conf["user_id"] = ""
+        twitch_conf["user_login"] = ""
+        twitch_conf["user_display_name"] = ""
         save_config(self._config)
         self._current_user = None
         self._eval_js("window.onLogout()")
@@ -261,7 +279,8 @@ class TwitchXApi:
         if not self._current_user:
             self._eval_js('window.onImportError("Not logged in")')
             return
-        user_id = self._current_user.get("id", self._config.get("user_id", ""))
+        twitch_conf = self._get_twitch_config()
+        user_id = self._current_user.get("id", twitch_conf.get("user_id", ""))
         if not user_id:
             self._eval_js('window.onImportError("No user ID")')
             return
@@ -276,15 +295,19 @@ class TwitchXApi:
                 logins = loop.run_until_complete(
                     self._twitch.get_followed_channels(user_id)
                 )
-                favorites = self._config.get("favorites", [])
-                existing = {f.lower() for f in favorites}
+                existing_logins = {
+                    f["login"]
+                    for f in self._config.get("favorites", [])
+                    if f.get("platform") == "twitch"
+                }
                 added = 0
                 for login in logins:
-                    if login.lower() not in existing:
-                        favorites.append(login)
-                        existing.add(login.lower())
+                    if login.lower() not in existing_logins:
+                        self._config["favorites"].append(
+                            {"platform": "twitch", "login": login.lower(), "display_name": login}
+                        )
+                        existing_logins.add(login.lower())
                         added += 1
-                self._config["favorites"] = favorites
                 save_config(self._config)
                 result = json.dumps({"added": added})
                 self._eval_js(f"window.onImportComplete({result})")
@@ -301,36 +324,42 @@ class TwitchXApi:
     # ── Channels ────────────────────────────────────────────────
 
     def add_channel(self, username: str) -> None:
-        username = self._sanitize_username(username)
-        if not username:
+        clean = self._sanitize_username(username)
+        if not clean:
             return
         favorites = self._config.get("favorites", [])
-        if username not in [f.lower() for f in favorites]:
-            favorites.append(username)
-            self._config["favorites"] = favorites
-            save_config(self._config)
-            self.refresh()
+        if any(f.get("login") == clean and f.get("platform") == "twitch" for f in favorites):
+            return
+        favorites.append({"platform": "twitch", "login": clean, "display_name": clean})
+        self._config["favorites"] = favorites
+        save_config(self._config)
+        self.refresh()
 
     def remove_channel(self, channel: str) -> None:
         favorites = self._config.get("favorites", [])
         self._config["favorites"] = [
-            f for f in favorites if f.lower() != channel.lower()
+            f for f in favorites
+            if not (f.get("login") == channel.lower() and f.get("platform") == "twitch")
         ]
         save_config(self._config)
         self.refresh()
 
     def reorder_channels(self, new_order_json: str) -> None:
-        new_order = (
-            json.loads(new_order_json)
-            if isinstance(new_order_json, str)
-            else new_order_json
-        )
-        self._config["favorites"] = new_order
+        new_order = json.loads(new_order_json) if isinstance(new_order_json, str) else new_order_json
+        old_favs = {f["login"]: f for f in self._config.get("favorites", []) if f.get("platform") == "twitch"}
+        reordered = []
+        for login in new_order:
+            if login in old_favs:
+                reordered.append(old_favs[login])
+            else:
+                reordered.append({"platform": "twitch", "login": login, "display_name": login})
+        non_twitch = [f for f in self._config.get("favorites", []) if f.get("platform") != "twitch"]
+        self._config["favorites"] = reordered + non_twitch
         save_config(self._config)
-        self.refresh()
 
     def search_channels(self, query: str) -> None:
-        if not self._config.get("client_id") or not self._config.get("client_secret"):
+        twitch_conf = self._get_twitch_config()
+        if not twitch_conf.get("client_id") or not twitch_conf.get("client_secret"):
             self._eval_js("window.onSearchResults([])")
             return
 
@@ -363,14 +392,12 @@ class TwitchXApi:
 
     def refresh(self) -> None:
         self._config = load_config()
-        favorites = [
-            self._sanitize_username(f) for f in self._config.get("favorites", [])
-        ]
-        favorites = [f for f in favorites if f]
+        favorites = get_favorite_logins(self._config, "twitch")
+        twitch_conf = get_platform_config(self._config, "twitch")
 
         if not favorites:
             has_creds = bool(
-                self._config.get("client_id") and self._config.get("client_secret")
+                twitch_conf.get("client_id") and twitch_conf.get("client_secret")
             )
             data = json.dumps(
                 {
@@ -385,7 +412,7 @@ class TwitchXApi:
             self._eval_js(f"window.onStreamsUpdate({data})")
             return
 
-        if not self._config.get("client_id") or not self._config.get("client_secret"):
+        if not twitch_conf.get("client_id") or not twitch_conf.get("client_secret"):
             data = json.dumps(
                 {
                     "streams": [],
@@ -525,6 +552,7 @@ class TwitchXApi:
                     "started_at": s.get("started_at", ""),
                     "thumbnail_url": thumb_url,
                     "viewer_trend": None,
+                    "platform": "twitch",
                 }
             )
 
@@ -615,7 +643,7 @@ class TwitchXApi:
             )
             return
 
-        self._config["quality"] = quality
+        self._config["settings"]["quality"] = quality
         save_config(self._config)
         safe_ch = json.dumps(channel)
         self._eval_js(
@@ -635,10 +663,11 @@ class TwitchXApi:
                 break
 
         def do_resolve() -> None:
+            settings = get_settings(self._config)
             hls_url, err = resolve_hls_url(
                 channel,
                 quality,
-                self._config.get("streamlink_path", "streamlink"),
+                settings.get("streamlink_path", "streamlink"),
             )
             self._cancel_launch_timer()
             self._launch_channel = None
@@ -691,11 +720,12 @@ class TwitchXApi:
             return
 
         def do_launch() -> None:
+            settings = get_settings(self._config)
             result = launch_stream(
                 channel,
                 quality,
-                self._config.get("streamlink_path", "streamlink"),
-                self._config.get(
+                settings.get("streamlink_path", "streamlink"),
+                settings.get(
                     "iina_path", "/Applications/IINA.app/Contents/MacOS/iina-cli"
                 ),
             )

@@ -7,7 +7,6 @@ from pathlib import Path
 
 from core.storage import (
     DEFAULT_CONFIG,
-    DEFAULT_SETTINGS,
     get_cached_avatar,
     get_favorite_logins,
     get_favorites,
@@ -18,7 +17,6 @@ from core.storage import (
     save_config,
     token_is_valid,
 )
-
 
 # ── Helper to patch storage paths ───────────────────────────
 
