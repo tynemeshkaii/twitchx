@@ -46,3 +46,19 @@ class TestResolveHlsUrl:
         url, err = resolve_hls_url("xqc", "720p60")
         assert url is None
         assert err != ""
+
+
+class TestResolveKickHlsUrl:
+    @patch("core.stream_resolver.subprocess.run")
+    def test_builds_kick_url(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=b"https://hls.kick.com/test.m3u8\n",
+        )
+        url, err = resolve_hls_url("xqc", "best", platform="kick")
+        assert url == "https://hls.kick.com/test.m3u8"
+        assert err == ""
+        # Verify that kick.com URL was passed to streamlink
+        assert mock_run.call_count == 1
+        call_args = mock_run.call_args[0][0]
+        assert "https://kick.com/xqc" in call_args

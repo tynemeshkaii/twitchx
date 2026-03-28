@@ -36,8 +36,9 @@ def resolve_hls_url(
     channel: str,
     quality: str,
     streamlink_path: str = "streamlink",
+    platform: str = "twitch",
 ) -> tuple[str | None, str]:
-    """Resolve HLS URL for a Twitch channel.
+    """Resolve HLS URL for a stream channel.
 
     Returns (hls_url, error_message). Falls back to 'best' quality
     if the requested quality is unavailable.
@@ -49,10 +50,14 @@ def resolve_hls_url(
             "streamlink not found.\n\nInstall it with:\n  brew install streamlink",
         )
 
-    twitch_url = f"https://twitch.tv/{channel}"
-    hls_url, err = _run_streamlink(resolved_sl, twitch_url, quality)
+    if platform == "kick":
+        stream_url = f"https://kick.com/{channel}"
+    else:
+        stream_url = f"https://twitch.tv/{channel}"
+
+    hls_url, err = _run_streamlink(resolved_sl, stream_url, quality)
 
     if not hls_url and quality != "best":
-        hls_url, err = _run_streamlink(resolved_sl, twitch_url, "best")
+        hls_url, err = _run_streamlink(resolved_sl, stream_url, "best")
 
     return hls_url, err
