@@ -121,6 +121,7 @@ class KickClient:
             f"{KICK_AUTH_URL}/oauth/token",
             data={
                 "client_id": kc.get("client_id", ""),
+                "client_secret": kc.get("client_secret", ""),
                 "code": code,
                 "code_verifier": kc.get("pkce_verifier", ""),
                 "grant_type": "authorization_code",
@@ -128,6 +129,8 @@ class KickClient:
             },
         )
         resp.raise_for_status()
+        kc["pkce_verifier"] = ""
+        save_config(self._config)
         return resp.json()
 
     async def refresh_user_token(self) -> str:
@@ -209,23 +212,20 @@ class KickClient:
         if resp.status_code != 200:
             logger.debug("Body: %s", resp.text[:300])
         if resp.status_code == 429:
-            retry_after = (
-                float(resp.headers.get("Retry-After", time.time() + 2)) - time.time()
-            )
+            retry_after = float(resp.headers.get("Retry-After", "2"))
             await asyncio.sleep(max(retry_after, 1))
             return await self._get(url, params, auth_required)
         if resp.status_code == 401 and token:
-            # Try refreshing once on 401
-            kc = self._kconf()
-            kc["access_token"] = ""
-            save_config(self._config)
-            if kc.get("refresh_token"):
-                try:
-                    new_token = await self.refresh_user_token()
-                    headers["Authorization"] = f"Bearer {new_token}"
-                    resp = await client.get(url, headers=headers, params=params)
-                except ValueError:
-                    pass
+            async with self._get_token_lock():
+                kc = self._kconf()
+                kc["access_token"] = ""
+                save_config(self._config)
+            new_token = await self._ensure_token()
+            if new_token:
+                headers["Authorization"] = f"Bearer {new_token}"
+                resp = await client.get(url, headers=headers, params=params)
+            else:
+                resp.raise_for_status()
         resp.raise_for_status()
         return resp.json()
 
@@ -237,6 +237,8 @@ class KickClient:
         slugs = [s for s in slugs if VALID_SLUG.match(s)]
         if not slugs:
             return []
+        # Kick's public livestreams endpoint does not support filtering by slug.
+        # We fetch all live streams and filter client-side.
         data = await self._get(f"{KICK_API_URL}/public/v1/livestreams")
         streams: list[dict[str, Any]] = data.get("data", data) if isinstance(data, dict) else data
         slug_set = set(slugs)
