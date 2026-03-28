@@ -6,7 +6,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
-from core.twitch import VALID_USERNAME, TwitchClient
+from core.platforms.twitch import VALID_USERNAME, TwitchClient
 
 
 class _KeepAliveHandler(BaseHTTPRequestHandler):
