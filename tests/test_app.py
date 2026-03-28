@@ -45,7 +45,7 @@ class TestMigrateFavorites:
         monkeypatch.setattr("app.save_config", lambda c: saved.update(c))
 
         app = TwitchXApp.__new__(TwitchXApp)
-        app._api = type("FakeApi", (), {"set_window": lambda s, w: None})()
+        app._api = type("FakeApi", (), {"set_window": lambda s, w: None})()  # type: ignore[assignment]
         app._config = config
         app._migrate_favorites()
 
@@ -70,7 +70,7 @@ class TestMigrateFavorites:
         monkeypatch.setattr("app.save_config", lambda c: save_called.append(True))
 
         app = TwitchXApp.__new__(TwitchXApp)
-        app._api = type("FakeApi", (), {"set_window": lambda s, w: None})()
+        app._api = type("FakeApi", (), {"set_window": lambda s, w: None})()  # type: ignore[assignment]
         app._config = config
         app._migrate_favorites()
 
@@ -90,7 +90,7 @@ class TestMigrateFavorites:
         monkeypatch.setattr("app.save_config", lambda c: None)
 
         app = TwitchXApp.__new__(TwitchXApp)
-        app._api = type("FakeApi", (), {"set_window": lambda s, w: None})()
+        app._api = type("FakeApi", (), {"set_window": lambda s, w: None})()  # type: ignore[assignment]
         app._config = config
         app._migrate_favorites()
 
@@ -111,7 +111,7 @@ class TestMigrateFavorites:
         monkeypatch.setattr("app.save_config", lambda c: save_called.append(True))
 
         app = TwitchXApp.__new__(TwitchXApp)
-        app._api = type("FakeApi", (), {"set_window": lambda s, w: None})()
+        app._api = type("FakeApi", (), {"set_window": lambda s, w: None})()  # type: ignore[assignment]
         app._config = config
         app._migrate_favorites()
 
