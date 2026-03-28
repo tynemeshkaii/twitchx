@@ -4,6 +4,7 @@ import asyncio
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+import httpx
 import pytest
 
 from core.platforms.twitch import VALID_USERNAME, TwitchClient
@@ -91,21 +92,21 @@ class TestLoopLocalHttpClient:
         thread.start()
 
         client = TwitchClient()
-        client_ids: list[int] = []
+        http_clients: list[httpx.AsyncClient] = []
         responses: list[str] = []
 
-        async def fetch_once() -> tuple[int, str]:
+        async def fetch_once() -> tuple[httpx.AsyncClient, str]:
             http_client = client._get_client()
             response = await http_client.get(f"http://127.0.0.1:{port}/")
-            return id(http_client), response.text
+            return http_client, response.text
 
         try:
             for _ in range(2):
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 try:
-                    client_id, body = loop.run_until_complete(fetch_once())
-                    client_ids.append(client_id)
+                    http_client, body = loop.run_until_complete(fetch_once())
+                    http_clients.append(http_client)
                     responses.append(body)
                     loop.run_until_complete(client.close_loop_resources())
                 finally:
@@ -116,4 +117,6 @@ class TestLoopLocalHttpClient:
             server.server_close()
 
         assert responses == ["ok", "ok"]
-        assert client_ids[0] != client_ids[1]
+        # Keep strong references to both clients before comparing identity so
+        # CPython cannot reuse the first client's memory address for the second.
+        assert http_clients[0] is not http_clients[1]
