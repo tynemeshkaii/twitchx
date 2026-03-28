@@ -58,6 +58,7 @@ def launch_stream(
     quality: str,
     streamlink_path: str = "streamlink",
     iina_path: str = DEFAULT_IINA_PATH,
+    platform: str = "twitch",
 ) -> LaunchResult:
     sl_err = check_streamlink(streamlink_path)
     if sl_err:
@@ -67,14 +68,17 @@ def launch_stream(
         return LaunchResult(success=False, message=iina_err)
 
     resolved_sl = shutil.which(streamlink_path) or streamlink_path
-    twitch_url = f"https://twitch.tv/{channel}"
+    if platform == "kick":
+        stream_url = f"https://kick.com/{channel}"
+    else:
+        stream_url = f"https://twitch.tv/{channel}"
 
     # Step 1: resolve the direct HLS URL via streamlink --stream-url
-    hls_url, err = _get_stream_url(resolved_sl, twitch_url, quality)
+    hls_url, err = _get_stream_url(resolved_sl, stream_url, quality)
 
     # Quality fallback: if requested quality unavailable, retry with "best"
     if not hls_url and quality != "best":
-        hls_url, err = _get_stream_url(resolved_sl, twitch_url, "best")
+        hls_url, err = _get_stream_url(resolved_sl, stream_url, "best")
 
     if not hls_url:
         return LaunchResult(
