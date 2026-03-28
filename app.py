@@ -28,14 +28,42 @@ class TwitchXApp:
 
     def _migrate_favorites(self) -> None:
         raw = self._config.get("favorites", [])
-        cleaned: list[str] = []
-        seen: set[str] = set()
+        cleaned: list[dict[str, str]] = []
+        seen: set[tuple[str, str]] = set()
+        changed = False
         for entry in raw:
-            name = self._sanitize_username(entry)
-            if name and name not in seen:
-                cleaned.append(name)
-                seen.add(name)
-        if cleaned != raw:
+            if isinstance(entry, str):
+                # v1 legacy string — convert to v2 object
+                name = self._sanitize_username(entry)
+                if not name:
+                    changed = True
+                    continue
+                key = ("twitch", name)
+                if key in seen:
+                    changed = True
+                    continue
+                seen.add(key)
+                cleaned.append({"platform": "twitch", "login": name, "display_name": name})
+                changed = True
+            elif isinstance(entry, dict):
+                login = entry.get("login", "")
+                platform = entry.get("platform", "twitch")
+                name = self._sanitize_username(login) if login else ""
+                if not name:
+                    changed = True
+                    continue
+                key = (platform, name)
+                if key in seen:
+                    changed = True
+                    continue
+                seen.add(key)
+                if name != login:
+                    entry = {**entry, "login": name}
+                    changed = True
+                cleaned.append(entry)
+            else:
+                changed = True
+        if changed:
             self._config["favorites"] = cleaned
             save_config(self._config)
 
