@@ -89,6 +89,25 @@ body {
 }
 #user-actions a:hover { color: var(--accent); }
 
+#platform-tabs {
+  display: flex; gap: 0;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--bg-border);
+}
+.platform-tab {
+  flex: 1; padding: 8px 0;
+  background: transparent; border: none;
+  color: var(--text-muted); font-size: 11px; font-weight: 700;
+  letter-spacing: 0.5px; text-transform: uppercase;
+  cursor: pointer; font-family: inherit;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s ease;
+}
+.platform-tab:hover { color: var(--text-secondary); }
+.platform-tab.active {
+  color: var(--accent); border-bottom-color: var(--accent);
+}
+
 #favorites-header {
   padding: 12px 12px 8px;
   display: flex; align-items: center; justify-content: space-between;
@@ -496,6 +515,17 @@ body {
   background: rgba(0, 0, 0, 0.7); color: var(--text-secondary);
   font-size: 10px; padding: 2px 6px; border-radius: var(--radius-sm);
 }
+.platform-badge {
+  position: absolute; top: 8px; right: 8px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 800;
+  color: white; text-transform: uppercase;
+  backdrop-filter: blur(4px);
+}
+.platform-badge.twitch { background: rgba(145, 70, 255, 0.85); }
+.platform-badge.kick { background: rgba(83, 252, 24, 0.85); color: #000; }
 
 .card-info { padding: 8px 10px; }
 .card-meta {
@@ -786,6 +816,25 @@ body {
   transition: color 0.15s ease;
 }
 #close-settings:hover { color: var(--text-primary); }
+
+.settings-tabs {
+  display: flex; gap: 0; margin-bottom: 16px;
+  border-bottom: 1px solid var(--bg-border);
+}
+.settings-tab {
+  flex: 1; padding: 8px 0;
+  background: transparent; border: none;
+  color: var(--text-muted); font-size: 12px; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s ease;
+}
+.settings-tab:hover { color: var(--text-secondary); }
+.settings-tab.active {
+  color: var(--accent); border-bottom-color: var(--accent);
+}
+.settings-panel { display: none; }
+.settings-panel.active { display: block; }
 </style>
 </head>
 <body>
@@ -805,6 +854,12 @@ body {
             </div>
           </div>
         </div>
+      </div>
+
+      <div id="platform-tabs">
+        <button class="platform-tab active" data-platform="all">All</button>
+        <button class="platform-tab" data-platform="twitch">Twitch</button>
+        <button class="platform-tab" data-platform="kick">Kick</button>
       </div>
 
       <div id="favorites-header">
@@ -893,43 +948,82 @@ body {
     <button id="close-settings">&#10005;</button>
     <h2>&#9881; TwitchX Settings</h2>
 
-    <div class="setting-group">
-      <label>Client ID</label>
-      <input id="s-client-id" type="text" autocomplete="off">
-    </div>
-    <div class="setting-group">
-      <label>Client Secret</label>
-      <div class="secret-row">
-        <input id="s-client-secret" type="password" autocomplete="off">
-        <button class="eye-btn" id="eye-toggle-btn">&#128065;</button>
-      </div>
-    </div>
-    <div class="setting-group">
-      <label>Streamlink Path</label>
-      <input id="s-streamlink" type="text" autocomplete="off">
-    </div>
-    <div class="setting-group">
-      <label>IINA Path</label>
-      <input id="s-iina" type="text" autocomplete="off">
-    </div>
-    <div class="setting-group">
-      <label>Refresh Interval</label>
-      <select id="s-interval">
-        <option value="30">30 seconds</option>
-        <option value="60">60 seconds</option>
-        <option value="120">120 seconds</option>
-      </select>
+    <div class="settings-tabs">
+      <button class="settings-tab active" data-tab="general">General</button>
+      <button class="settings-tab" data-tab="twitch">Twitch</button>
+      <button class="settings-tab" data-tab="kick">Kick</button>
     </div>
 
-    <div class="oauth-note">
-      OAuth Redirect URL (add to dev.twitch.tv/console):<br>
-      http://localhost:3457/callback
+    <!-- General panel -->
+    <div class="settings-panel active" id="settings-panel-general">
+      <div class="setting-group">
+        <label>Streamlink Path</label>
+        <input id="s-streamlink" type="text" autocomplete="off">
+      </div>
+      <div class="setting-group">
+        <label>IINA Path</label>
+        <input id="s-iina" type="text" autocomplete="off">
+      </div>
+      <div class="setting-group">
+        <label>Refresh Interval</label>
+        <select id="s-interval">
+          <option value="30">30 seconds</option>
+          <option value="60">60 seconds</option>
+          <option value="120">120 seconds</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Twitch panel -->
+    <div class="settings-panel" id="settings-panel-twitch">
+      <div class="setting-group">
+        <label>Client ID</label>
+        <input id="s-client-id" type="text" autocomplete="off">
+      </div>
+      <div class="setting-group">
+        <label>Client Secret</label>
+        <div class="secret-row">
+          <input id="s-client-secret" type="password" autocomplete="off">
+          <button class="eye-btn" id="eye-toggle-btn">&#128065;</button>
+        </div>
+      </div>
+      <div class="oauth-note">
+        OAuth Redirect URL (add to dev.twitch.tv/console):<br>
+        http://localhost:3457/callback
+      </div>
+      <div class="settings-btns">
+        <button id="test-btn">Test Connection</button>
+      </div>
+    </div>
+
+    <!-- Kick panel -->
+    <div class="settings-panel" id="settings-panel-kick">
+      <div class="setting-group">
+        <label>Kick Client ID</label>
+        <input id="s-kick-client-id" type="text" autocomplete="off">
+      </div>
+      <div class="setting-group">
+        <label>Kick Client Secret</label>
+        <div class="secret-row">
+          <input id="s-kick-client-secret" type="password" autocomplete="off">
+          <button class="eye-btn" id="kick-eye-toggle-btn">&#128065;</button>
+        </div>
+      </div>
+      <div id="kick-login-area" class="setting-group">
+        <button id="kick-login-btn" style="width:100%;height:36px;background:var(--accent);color:white;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Login with Kick</button>
+      </div>
+      <div id="kick-user-area" class="setting-group" style="display:none;">
+        <div id="kick-user-display" style="font-size:13px;color:var(--text-primary);margin-bottom:8px;"></div>
+        <a id="kick-logout-link" style="font-size:12px;color:var(--text-muted);cursor:pointer;text-decoration:none;">Logout from Kick</a>
+      </div>
+      <div class="settings-btns">
+        <button id="kick-test-btn">Test Kick Connection</button>
+      </div>
     </div>
 
     <div id="settings-feedback"></div>
 
     <div class="settings-btns">
-      <button id="test-btn">Test Connection</button>
       <button id="save-btn">Save</button>
     </div>
   </div>
@@ -957,6 +1051,7 @@ const state = {
   playerTitle: '',
   playerError: '',
   sidebarSections: loadSidebarSections(),
+  activePlatformFilter: 'all',
 };
 
 let api = null;
@@ -1012,6 +1107,54 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('test-btn').addEventListener('click', testConnection);
   document.getElementById('save-btn').addEventListener('click', saveSettings);
 
+  // Settings tab switching
+  document.querySelectorAll('.settings-tab').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.settings-tab').forEach(function(b) { b.classList.remove('active'); });
+      document.querySelectorAll('.settings-panel').forEach(function(p) { p.classList.remove('active'); });
+      btn.classList.add('active');
+      document.getElementById('settings-panel-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  // Kick eye toggle
+  document.getElementById('kick-eye-toggle-btn').addEventListener('click', function() {
+    var input = document.getElementById('s-kick-client-secret');
+    input.type = input.type === 'password' ? 'text' : 'password';
+  });
+
+  // Kick login/logout
+  document.getElementById('kick-login-btn').addEventListener('click', function() {
+    var cid = document.getElementById('s-kick-client-id').value.trim();
+    var cs = document.getElementById('s-kick-client-secret').value.trim();
+    if (!cid || !cs) {
+      var fb = document.getElementById('settings-feedback');
+      fb.textContent = 'Kick Client ID and Secret are required';
+      fb.style.color = 'var(--error-red)';
+      return;
+    }
+    if (api) api.kick_login();
+  });
+  document.getElementById('kick-logout-link').addEventListener('click', function() {
+    if (api) api.kick_logout();
+  });
+
+  // Kick test connection
+  document.getElementById('kick-test-btn').addEventListener('click', function() {
+    var cid = document.getElementById('s-kick-client-id').value.trim();
+    var cs = document.getElementById('s-kick-client-secret').value.trim();
+    if (!cid || !cs) {
+      var fb = document.getElementById('settings-feedback');
+      fb.textContent = 'Kick Client ID and Secret are required';
+      fb.style.color = 'var(--error-red)';
+      return;
+    }
+    document.getElementById('kick-test-btn').disabled = true;
+    document.getElementById('settings-feedback').textContent = 'Testing Kick...';
+    document.getElementById('settings-feedback').style.color = 'var(--text-muted)';
+    api.kick_test_connection(cid, cs);
+  });
+
   document.getElementById('sort-select').addEventListener('change', function(e) {
     state.sortKey = e.target.value;
     renderGrid();
@@ -1019,6 +1162,17 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('filter-input').addEventListener('input', function(e) {
     state.filterText = e.target.value;
     renderGrid();
+  });
+
+  // Platform tab switching
+  document.querySelectorAll('.platform-tab').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.platform-tab').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      state.activePlatformFilter = btn.dataset.platform;
+      renderGrid();
+      renderSidebar();
+    });
   });
 
   document.getElementById('search-input').addEventListener('input', function(e) {
@@ -1029,7 +1183,8 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     state.searchDebounce = setTimeout(function() {
-      if (api) api.search_channels(query);
+      var searchPlatform = state.activePlatformFilter === 'all' ? 'twitch' : state.activePlatformFilter;
+      if (api) api.search_channels(query, searchPlatform);
     }, 400);
   });
   document.getElementById('search-input').addEventListener('keydown', function(e) {
@@ -1040,16 +1195,21 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('context-menu').addEventListener('click', function(e) {
     const action = e.target.dataset.action;
     if (!action || !ctxChannel) return;
+    var ctxStream = state.streams.find(function(s) { return s.login === ctxChannel; });
+    var ctxPlat = (ctxStream && ctxStream.platform) || 'twitch';
     if (action === 'watch') { selectChannel(ctxChannel); doWatch(); }
     else if (action === 'watch-external') {
       selectChannel(ctxChannel);
       var quality = document.getElementById('quality-select').value;
       if (api) api.watch_external(ctxChannel, quality);
     }
-    else if (action === 'browser') { if (api) api.open_browser(ctxChannel); }
-    else if (action === 'copy') { navigator.clipboard.writeText('https://twitch.tv/' + ctxChannel); }
-    else if (action === 'favorite') { if (api) api.add_channel(ctxChannel); }
-    else if (action === 'remove') { if (api) api.remove_channel(ctxChannel); }
+    else if (action === 'browser') { if (api) api.open_browser(ctxChannel, ctxPlat); }
+    else if (action === 'copy') {
+      var baseUrl = ctxPlat === 'kick' ? 'https://kick.com/' : 'https://twitch.tv/';
+      navigator.clipboard.writeText(baseUrl + ctxChannel);
+    }
+    else if (action === 'favorite') { if (api) api.add_channel(ctxChannel, ctxPlat); }
+    else if (action === 'remove') { if (api) api.remove_channel(ctxChannel, ctxPlat); }
     document.getElementById('context-menu').style.display = 'none';
     ctxChannel = null;
   });
@@ -1160,13 +1320,13 @@ window.onSearchResults = function(results) {
     addBtn.title = 'Add to favorites';
     addBtn.addEventListener('click', function(e) {
       e.stopPropagation();
-      addChannelDirect(r.login);
+      addChannelDirect(r.login, r.platform || 'twitch');
     });
 
     row.appendChild(info);
     row.appendChild(addBtn);
     row.addEventListener('click', function() {
-      addChannelDirect(r.login);
+      addChannelDirect(r.login, r.platform || 'twitch');
       dd.style.display = 'none';
       document.getElementById('search-input').value = '';
     });
@@ -1303,6 +1463,43 @@ window.onSettingsSaved = function() {
   closeSettings();
 };
 
+window.onKickLoginComplete = function(data) {
+  document.getElementById('kick-login-area').style.display = 'none';
+  document.getElementById('kick-user-area').style.display = 'block';
+  document.getElementById('kick-user-display').textContent = 'Logged in as ' + (data.display_name || data.login);
+  var fb = document.getElementById('settings-feedback');
+  fb.textContent = '\u2713 Kick login successful';
+  fb.style.color = 'var(--live-green)';
+  setStatus('Logged in to Kick as ' + (data.display_name || data.login), 'success');
+};
+
+window.onKickLoginError = function(msg) {
+  var fb = document.getElementById('settings-feedback');
+  fb.textContent = '\u2717 Kick login failed: ' + msg;
+  fb.style.color = 'var(--error-red)';
+};
+
+window.onKickLogout = function() {
+  document.getElementById('kick-login-area').style.display = 'block';
+  document.getElementById('kick-user-area').style.display = 'none';
+  document.getElementById('kick-user-display').textContent = '';
+  var fb = document.getElementById('settings-feedback');
+  fb.textContent = 'Logged out from Kick';
+  fb.style.color = 'var(--text-muted)';
+};
+
+window.onKickTestResult = function(data) {
+  var fb = document.getElementById('settings-feedback');
+  if (data.success) {
+    fb.textContent = '\u2713 ' + data.message;
+    fb.style.color = 'var(--live-green)';
+  } else {
+    fb.textContent = '\u2717 ' + data.message;
+    fb.style.color = 'var(--error-red)';
+  }
+  document.getElementById('kick-test-btn').disabled = false;
+};
+
 window.onAvatar = function(data) {
   state.avatars[data.login] = data.data;
   // Update sidebar avatars
@@ -1336,6 +1533,9 @@ window.onStatusUpdate = function(data) {
 
 function getFilteredSortedStreams() {
   var streams = state.streams.slice();
+  if (state.activePlatformFilter !== 'all') {
+    streams = streams.filter(function(s) { return s.platform === state.activePlatformFilter; });
+  }
   if (state.filterText) {
     var ft = state.filterText.toLowerCase();
     streams = streams.filter(function(s) { return s.game.toLowerCase().indexOf(ft) !== -1; });
@@ -1457,6 +1657,7 @@ function createStreamCard(s) {
   card.className = 'stream-card' + (state.selectedChannel === s.login ? ' selected' : '');
   card.dataset.login = s.login;
   card.dataset.started = s.started_at;
+  card.dataset.platform = s.platform || 'twitch';
 
   // Thumb area
   var thumb = document.createElement('div');
@@ -1476,6 +1677,11 @@ function createStreamCard(s) {
   liveBadge.className = 'live-badge';
   liveBadge.textContent = 'LIVE';
   thumb.appendChild(liveBadge);
+
+  var platformBadge = document.createElement('span');
+  platformBadge.className = 'platform-badge ' + (s.platform || 'twitch');
+  platformBadge.textContent = s.platform === 'kick' ? 'K' : 'T';
+  thumb.appendChild(platformBadge);
 
   var watchBadge = document.createElement('span');
   watchBadge.className = 'watching-badge' + (state.watchingChannel === s.login ? ' visible' : '');
@@ -1912,14 +2118,15 @@ function addChannel() {
   var input = document.getElementById('search-input');
   var val = input.value.trim();
   if (val && api) {
-    api.add_channel(val);
+    var platform = state.activePlatformFilter === 'all' ? 'twitch' : state.activePlatformFilter;
+    api.add_channel(val, platform);
     input.value = '';
     document.getElementById('search-dropdown').style.display = 'none';
   }
 }
 
-function addChannelDirect(login) {
-  if (api) api.add_channel(login);
+function addChannelDirect(login, platform) {
+  if (api) api.add_channel(login, platform || 'twitch');
 }
 
 function doWatch() {
@@ -1970,6 +2177,22 @@ function openSettings() {
   document.getElementById('s-streamlink').value = config.streamlink_path || 'streamlink';
   document.getElementById('s-iina').value = config.iina_path || '/Applications/IINA.app/Contents/MacOS/iina-cli';
   document.getElementById('s-interval').value = String(config.refresh_interval || 60);
+  document.getElementById('s-kick-client-id').value = config.kick_client_id || '';
+  document.getElementById('s-kick-client-secret').value = config.kick_client_secret || '';
+  // Show/hide Kick login/user area
+  if (config.kick_display_name) {
+    document.getElementById('kick-login-area').style.display = 'none';
+    document.getElementById('kick-user-area').style.display = 'block';
+    document.getElementById('kick-user-display').textContent = 'Logged in as ' + config.kick_display_name;
+  } else {
+    document.getElementById('kick-login-area').style.display = 'block';
+    document.getElementById('kick-user-area').style.display = 'none';
+  }
+  // Reset to General tab
+  document.querySelectorAll('.settings-tab').forEach(function(b) { b.classList.remove('active'); });
+  document.querySelectorAll('.settings-panel').forEach(function(p) { p.classList.remove('active'); });
+  document.querySelector('.settings-tab[data-tab="general"]').classList.add('active');
+  document.getElementById('settings-panel-general').classList.add('active');
   document.getElementById('settings-feedback').textContent = '';
   document.getElementById('settings-overlay').classList.add('visible');
 }
@@ -2005,6 +2228,8 @@ function saveSettings() {
     streamlink_path: document.getElementById('s-streamlink').value.trim(),
     iina_path: document.getElementById('s-iina').value.trim(),
     refresh_interval: parseInt(document.getElementById('s-interval').value, 10),
+    kick_client_id: document.getElementById('s-kick-client-id').value.trim(),
+    kick_client_secret: document.getElementById('s-kick-client-secret').value.trim(),
   };
   if (api) api.save_settings(JSON.stringify(data));
 }
