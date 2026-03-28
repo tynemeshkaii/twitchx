@@ -14,7 +14,13 @@
       "Bash(make check:*)",
       "Bash(make lint:*)",
       "Bash(make test:*)",
-      "Bash(uv sync:*)"
+      "Bash(uv sync:*)",
+      "Bash(./run.sh)",
+      "Bash(gtimeout 10 uv run python main.py)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(TWITCHX_DEBUG=1 uv run python -c \":*)",
+      "Bash(gtimeout 8 uv run python main.py)",
+      "Bash(python3 -c \"import webview; print\\(webview.__file__\\)\")"
     ]
   }
 }

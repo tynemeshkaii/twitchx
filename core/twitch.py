@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import threading
 import time
 from typing import Any
 from urllib.parse import urlencode
@@ -23,27 +24,53 @@ OAUTH_SCOPE = "user:read:follows"
 
 class TwitchClient:
     def __init__(self) -> None:
-        self._client = httpx.AsyncClient(timeout=15.0)
         self._config = load_config()
-        self._token_lock = asyncio.Lock()
+        self._loop_clients: dict[asyncio.AbstractEventLoop, httpx.AsyncClient] = {}
+        self._token_locks: dict[asyncio.AbstractEventLoop, asyncio.Lock] = {}
+        self._loop_state_lock = threading.Lock()
 
     async def close(self) -> None:
-        await self._client.aclose()
+        await self.close_loop_resources()
 
     def reset_client(self) -> None:
-        """Replace the httpx client to discard stale connections.
+        """Compatibility no-op.
 
-        Call this after running async operations on a temporary event loop
-        that has since been closed — the old connections are bound to that
-        loop and will raise RuntimeError('Event loop is closed') if reused.
+        HTTP clients are now scoped per event loop, so a new temporary loop
+        automatically gets a fresh client and never reuses sockets from a
+        previously closed loop.
         """
-        self._client = httpx.AsyncClient(timeout=15.0)
+
+    def _get_client(self) -> httpx.AsyncClient:
+        loop = asyncio.get_running_loop()
+        with self._loop_state_lock:
+            client = self._loop_clients.get(loop)
+            if client is None:
+                client = httpx.AsyncClient(timeout=15.0)
+                self._loop_clients[loop] = client
+            return client
+
+    def _get_token_lock(self) -> asyncio.Lock:
+        loop = asyncio.get_running_loop()
+        with self._loop_state_lock:
+            lock = self._token_locks.get(loop)
+            if lock is None:
+                lock = asyncio.Lock()
+                self._token_locks[loop] = lock
+            return lock
+
+    async def close_loop_resources(self) -> None:
+        loop = asyncio.get_running_loop()
+        with self._loop_state_lock:
+            client = self._loop_clients.pop(loop, None)
+            self._token_locks.pop(loop, None)
+        if client is not None:
+            await client.aclose()
 
     def _reload_config(self) -> None:
         self._config = load_config()
 
     async def _ensure_token(self) -> str:
-        async with self._token_lock:
+        async with self._get_token_lock():
             self._reload_config()
             # Prefer user token if available
             if self._config.get("token_type") == "user":
@@ -63,7 +90,7 @@ class TwitchClient:
             raise ValueError(
                 "Twitch Client ID and Secret are required. Set them in Settings."
             )
-        resp = await self._client.post(
+        resp = await self._get_client().post(
             TWITCH_AUTH_URL,
             data={
                 "client_id": client_id,
@@ -97,7 +124,7 @@ class TwitchClient:
 
     async def exchange_code(self, code: str) -> dict[str, Any]:
         self._reload_config()
-        resp = await self._client.post(
+        resp = await self._get_client().post(
             TWITCH_AUTH_URL,
             data={
                 "client_id": self._config["client_id"],
@@ -111,7 +138,7 @@ class TwitchClient:
         return resp.json()
 
     async def refresh_user_token(self) -> str:
-        resp = await self._client.post(
+        resp = await self._get_client().post(
             TWITCH_AUTH_URL,
             data={
                 "client_id": self._config["client_id"],
@@ -182,7 +209,8 @@ class TwitchClient:
         }
         url = f"{TWITCH_API_URL}{endpoint}"
         logger.debug("GET %s params=%s", url, params)
-        resp = await self._client.get(url, headers=headers, params=params)
+        client = self._get_client()
+        resp = await client.get(url, headers=headers, params=params)
         logger.debug("Response: %d", resp.status_code)
         if resp.status_code != 200:
             logger.debug("Body: %s", resp.text[:300])
@@ -203,7 +231,7 @@ class TwitchClient:
             else:
                 token = await self._refresh_app_token()
             headers["Authorization"] = f"Bearer {token}"
-            resp = await self._client.get(url, headers=headers, params=params)
+            resp = await client.get(url, headers=headers, params=params)
         resp.raise_for_status()
         return resp.json()
 

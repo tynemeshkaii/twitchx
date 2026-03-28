@@ -1,10 +1,27 @@
 from __future__ import annotations
 
 import asyncio
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
 from core.twitch import VALID_USERNAME, TwitchClient
+
+
+class _KeepAliveHandler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def do_GET(self) -> None:
+        body = b"ok"
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Connection", "keep-alive")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, format: str, *args: object) -> None:  # noqa: A002
+        pass
 
 
 class TestValidUsername:
@@ -64,3 +81,39 @@ class TestGetGamesDeduplicates:
         game_ids = ["123", "456", "123", "789", "456"]
         unique = list(set(game_ids))
         assert len(unique) == 3
+
+
+class TestLoopLocalHttpClient:
+    def test_uses_separate_clients_for_separate_event_loops(self) -> None:
+        server = HTTPServer(("127.0.0.1", 0), _KeepAliveHandler)
+        port = server.server_address[1]
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        client = TwitchClient()
+        client_ids: list[int] = []
+        responses: list[str] = []
+
+        async def fetch_once() -> tuple[int, str]:
+            http_client = client._get_client()
+            response = await http_client.get(f"http://127.0.0.1:{port}/")
+            return id(http_client), response.text
+
+        try:
+            for _ in range(2):
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    client_id, body = loop.run_until_complete(fetch_once())
+                    client_ids.append(client_id)
+                    responses.append(body)
+                    loop.run_until_complete(client.close_loop_resources())
+                finally:
+                    asyncio.set_event_loop(None)
+                    loop.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+
+        assert responses == ["ok", "ok"]
+        assert client_ids[0] != client_ids[1]

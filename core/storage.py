@@ -26,6 +26,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "user_display_name": "",
     "refresh_token": "",
     "token_type": "app",
+    "player_height": 360,
 }
 
 

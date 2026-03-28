@@ -40,9 +40,29 @@ class TwitchXApp:
             save_config(self._config)
 
     def _on_loaded(self) -> None:
-        """Called when the webview window finishes loading."""
+        """Called when the webview window finishes loading.
+
+        NOTE: pywebview fires this on a background thread (Thread-2),
+        so AppKit operations must be dispatched to the main thread.
+        """
+        from PyObjCTools import AppHelper
+
+        AppHelper.callAfter(self._enable_video_fullscreen)
         interval = self._config.get("refresh_interval", 60)
         self._api.start_polling(interval)
+
+    @staticmethod
+    def _enable_video_fullscreen() -> None:
+        """Enable HTML5 Fullscreen API for <video> in WKWebView."""
+        try:
+            from webview.platforms import cocoa
+
+            for bv in cocoa.BrowserView.instances.values():
+                prefs = bv.webview.configuration().preferences()
+                prefs.setValue_forKey_(True, "elementFullscreenEnabled")
+                break
+        except Exception:
+            pass
 
     def _on_closing(self) -> None:
         """Called when the webview window is closing."""
@@ -61,6 +81,9 @@ class TwitchXApp:
             min_size=(700, 500),
             background_color="#0E0E1A",
         )
+        if window is None:
+            raise RuntimeError("Failed to create the TwitchX window")
+        self._window = window
         self._api.set_window(window)
         window.events.loaded += self._on_loaded
         window.events.closing += self._on_closing

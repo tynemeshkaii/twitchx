@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
 ## Running the App
 
@@ -46,7 +46,7 @@ A minimal `ui/theme.py` exists only to provide `ACCENT`, `BG_ELEVATED`, `FONT_SY
 
 - **api.py** — `TwitchXApi` class: the Python↔JS bridge exposed to pywebview via `js_api`. Wraps all `core/` modules. All network I/O runs in `threading.Thread` with `asyncio.new_event_loop()`. Results are pushed to JS via `window.evaluate_js()` calling global callbacks (`onStreamsUpdate`, `onAvatar`, `onThumbnail`, `onLaunchResult`, `onPlayerState`, etc.). `watch()` resolves HLS URL in background thread, then plays via native AVPlayer on main thread. `watch_external()` launches IINA as fallback. `stop_player()` stops native playback. Images are resized via Pillow and base64-encoded before sending to JS.
 - **native_player.py** — macOS `NativePlayerController`: manages `AVPlayerView` docked in an `NSSplitView` above the `WKWebView`. Player pane collapsed by default, expands on play. KVO observes `AVPlayerItem.status` and `AVPlayer.timeControlStatus`. State changes pushed to JS via `onPlayerState` callback. Player height persisted in config. Fullscreen and PiP from native `AVPlayerView` controls. All AppKit/AVKit operations must run on main thread.
-- **index.html** — Single self-contained HTML file with all CSS and JS inline. No external dependencies. Contains the full UI: sidebar (profile, favorites, search), stream grid (glassmorphism cards with shimmer placeholders), toolbar (sort/filter), player bar (quality, watch, status), settings modal, and custom context menus. Uses diff-based rendering (compares login sets, updates in-place when unchanged). All DOM manipulation uses safe methods (createElement, textContent) — no innerHTML with user data.
+- **index.html** — Single self-contained HTML file with all CSS and JS inline. No external dependencies. Contains the full UI: sidebar (profile, favorites, search), stream grid (glassmorphism cards with shimmer placeholders), toolbar (sort/filter), player bar (quality, watch, stop, IINA fallback, status), settings modal, and custom context menus. Uses diff-based rendering (compares login sets, updates in-place when unchanged). All DOM manipulation uses safe methods (createElement, textContent) — no innerHTML with user data.
 - **theme.py** — Minimal constants (`ACCENT`, `BG_ELEVATED`, `FONT_SYSTEM`, `TEXT_PRIMARY`) retained only for `core/utils.py` imports.
 
 ### Orchestrator (`app.py`)

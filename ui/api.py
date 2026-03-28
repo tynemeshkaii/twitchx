@@ -26,6 +26,7 @@ from core.storage import (
     save_avatar,
     save_config,
 )
+from core.stream_resolver import resolve_hls_url
 from core.twitch import TwitchClient
 from core.utils import format_viewers
 
@@ -76,6 +77,15 @@ class TwitchXApi:
 
     def _run_in_thread(self, fn: Any) -> None:
         threading.Thread(target=fn, daemon=True).start()
+
+
+    def _close_thread_loop(self, loop: asyncio.AbstractEventLoop) -> None:
+        try:
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(self._twitch.close_loop_resources())
+        finally:
+            asyncio.set_event_loop(None)
+            loop.close()
 
     @staticmethod
     def _sanitize_username(raw: str) -> str:
@@ -189,6 +199,7 @@ class TwitchXApi:
                 self._eval_js('window.onLoginError("Login timed out")')
                 return
             loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
             try:
                 token_data = loop.run_until_complete(self._twitch.exchange_code(code))
                 self._config["access_token"] = token_data["access_token"]
@@ -227,8 +238,7 @@ class TwitchXApi:
                 safe_msg = json.dumps(msg)
                 self._eval_js(f"window.onLoginError({safe_msg})")
             finally:
-                loop.close()
-                self._twitch.reset_client()
+                self._close_thread_loop(loop)
 
         self._run_in_thread(do_login)
 
@@ -261,6 +271,7 @@ class TwitchXApi:
 
         def do_import() -> None:
             loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
             try:
                 logins = loop.run_until_complete(
                     self._twitch.get_followed_channels(user_id)
@@ -283,8 +294,7 @@ class TwitchXApi:
                 safe_msg = json.dumps(msg)
                 self._eval_js(f"window.onImportError({safe_msg})")
             finally:
-                loop.close()
-                self._twitch.reset_client()
+                self._close_thread_loop(loop)
 
         self._run_in_thread(do_import)
 
@@ -326,6 +336,7 @@ class TwitchXApi:
 
         def do_search() -> None:
             loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
             try:
                 results = loop.run_until_complete(self._twitch.search_channels(query))
                 items = []
@@ -344,7 +355,7 @@ class TwitchXApi:
             except Exception:
                 self._eval_js("window.onSearchResults([])")
             finally:
-                loop.close()
+                self._close_thread_loop(loop)
 
         self._run_in_thread(do_search)
 
@@ -403,6 +414,7 @@ class TwitchXApi:
                 if self._shutdown.is_set():
                     return
                 loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
                 try:
                     streams, users = loop.run_until_complete(
                         self._async_fetch(favorites)
@@ -446,7 +458,7 @@ class TwitchXApi:
                     )
                     return
                 finally:
-                    loop.close()
+                    self._close_thread_loop(loop)
         finally:
             self._fetching = False
 
@@ -589,6 +601,7 @@ class TwitchXApi:
     # ── Watch ────────────────────────────────────────────────────
 
     def watch(self, channel: str, quality: str) -> None:
+        """Resolve HLS URL in background, then play natively via AVPlayer."""
         if not channel:
             self._eval_js(
                 "window.onLaunchResult({success: false, message: 'Select a channel first', channel: ''})"
@@ -606,13 +619,76 @@ class TwitchXApi:
         save_config(self._config)
         safe_ch = json.dumps(channel)
         self._eval_js(
-            f"window.onStatusUpdate({{text: 'Launching ' + {safe_ch} + '...', type: 'warn'}})"
+            f"window.onStatusUpdate({{text: 'Loading ' + {safe_ch} + '...', type: 'warn'}})"
         )
 
         # Start launch progress timer
         self._launch_channel = channel
         self._launch_elapsed = 0
         self._start_launch_timer()
+
+        # Find stream title for player
+        title = ""
+        for s in self._live_streams:
+            if s["user_login"].lower() == channel.lower():
+                title = s.get("title", "")
+                break
+
+        def do_resolve() -> None:
+            hls_url, err = resolve_hls_url(
+                channel,
+                quality,
+                self._config.get("streamlink_path", "streamlink"),
+            )
+            self._cancel_launch_timer()
+            self._launch_channel = None
+
+            if not hls_url:
+                r = json.dumps(
+                    {
+                        "success": False,
+                        "message": f"streamlink error: {err}"
+                        if err
+                        else "Could not resolve stream URL",
+                        "channel": channel,
+                    }
+                )
+                self._eval_js(f"window.onLaunchResult({r})")
+                return
+
+            # Send HLS URL to JS for <video> playback
+            self._watching_channel = channel
+            stream_data = json.dumps(
+                {
+                    "url": hls_url,
+                    "channel": channel,
+                    "title": title,
+                }
+            )
+            self._eval_js(f"window.onStreamReady({stream_data})")
+            r = json.dumps(
+                {
+                    "success": True,
+                    "message": f"Playing {channel}",
+                    "channel": channel,
+                }
+            )
+            self._eval_js(f"window.onLaunchResult({r})")
+
+        self._run_in_thread(do_resolve)
+
+    def stop_player(self) -> None:
+        """Stop playback — tells JS to tear down the <video> player."""
+        self._watching_channel = None
+        self._eval_js("window.onPlayerStop()")
+
+    def watch_external(self, channel: str, quality: str) -> None:
+        """Launch stream in IINA (fallback)."""
+        if not channel:
+            return
+        live_logins = {s["user_login"].lower() for s in self._live_streams}
+        if channel.lower() not in live_logins:
+            return
 
         def do_launch() -> None:
             result = launch_stream(
@@ -623,8 +699,6 @@ class TwitchXApi:
                     "iina_path", "/Applications/IINA.app/Contents/MacOS/iina-cli"
                 ),
             )
-            self._cancel_launch_timer()
-            self._launch_channel = None
             r = json.dumps(
                 {
                     "success": result.success,
@@ -733,8 +807,11 @@ class TwitchXApi:
         self._shutdown.set()
         self.stop_polling()
         self._cancel_launch_timer()
+        # Close twitch client
         loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         try:
             loop.run_until_complete(self._twitch.close())
         finally:
+            asyncio.set_event_loop(None)
             loop.close()
