@@ -15,7 +15,9 @@ class TestChatMessage:
             text="Hello stream!",
             timestamp="2026-03-28T16:00:00Z",
             badges=[Badge(name="subscriber", icon_url="https://example.com/sub.png")],
-            emotes=[Emote(code="Kappa", url="https://example.com/kappa.png", start=0, end=4)],
+            emotes=[
+                Emote(code="Kappa", url="https://example.com/kappa.png", start=0, end=4)
+            ],
             is_system=False,
             message_type="text",
             raw={},
@@ -35,7 +37,9 @@ class TestChatStatus:
         assert s.error is None
 
     def test_error(self):
-        s = ChatStatus(connected=False, platform="youtube", channel_id="abc", error="Auth failed")
+        s = ChatStatus(
+            connected=False, platform="youtube", channel_id="abc", error="Auth failed"
+        )
         assert s.connected is False
         assert s.error == "Auth failed"
 
@@ -43,5 +47,6 @@ class TestChatStatus:
 class TestChatClientIsAbstract:
     def test_cannot_instantiate(self):
         import pytest
+
         with pytest.raises(TypeError):
             ChatClient()  # type: ignore[abstract]

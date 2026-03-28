@@ -145,11 +145,13 @@ def _migrate_v1_to_v2(v1: dict[str, Any]) -> dict[str, Any]:
     if old_favs and isinstance(old_favs, list):
         for fav in old_favs:
             if isinstance(fav, str):
-                v2["favorites"].append({
-                    "platform": "twitch",
-                    "login": fav,
-                    "display_name": fav,
-                })
+                v2["favorites"].append(
+                    {
+                        "platform": "twitch",
+                        "login": fav,
+                        "display_name": fav,
+                    }
+                )
             elif isinstance(fav, dict):
                 # Already an object, keep it
                 v2["favorites"].append(fav)

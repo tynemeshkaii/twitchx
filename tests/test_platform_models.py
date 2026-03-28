@@ -32,11 +32,15 @@ class TestStreamInfo:
 
 class TestPlaybackInfo:
     def test_hls_type(self):
-        p = PlaybackInfo(url="https://example.com/stream.m3u8", playback_type="hls", quality="best")
+        p = PlaybackInfo(
+            url="https://example.com/stream.m3u8", playback_type="hls", quality="best"
+        )
         assert p.playback_type == "hls"
 
     def test_youtube_embed_type(self):
-        p = PlaybackInfo(url="dQw4w9WgXcQ", playback_type="youtube_embed", quality="best")
+        p = PlaybackInfo(
+            url="dQw4w9WgXcQ", playback_type="youtube_embed", quality="best"
+        )
         assert p.playback_type == "youtube_embed"
 
 
@@ -58,17 +62,34 @@ class TestChannelInfo:
 
 class TestTokenData:
     def test_create(self):
-        t = TokenData(access_token="abc", refresh_token="def", expires_at=9999999999.0, token_type="user")
+        t = TokenData(
+            access_token="abc",
+            refresh_token="def",
+            expires_at=9999999999.0,
+            token_type="user",
+        )
         assert t.token_type == "user"
 
 
 class TestUserInfo:
     def test_create(self):
-        u = UserInfo(platform="youtube", user_id="UC123", login="pewdiepie", display_name="PewDiePie", avatar_url="")
+        u = UserInfo(
+            platform="youtube",
+            user_id="UC123",
+            login="pewdiepie",
+            display_name="PewDiePie",
+            avatar_url="",
+        )
         assert u.platform == "youtube"
 
 
 class TestCategoryInfo:
     def test_create(self):
-        c = CategoryInfo(platform="twitch", category_id="509658", name="Just Chatting", box_art_url="", viewers=500000)
+        c = CategoryInfo(
+            platform="twitch",
+            category_id="509658",
+            name="Just Chatting",
+            box_art_url="",
+            viewers=500000,
+        )
         assert c.name == "Just Chatting"

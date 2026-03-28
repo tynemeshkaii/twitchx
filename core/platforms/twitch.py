@@ -170,12 +170,8 @@ class TwitchClient:
         resp.raise_for_status()
         data = resp.json()
         tc["access_token"] = data["access_token"]
-        tc["refresh_token"] = data.get(
-            "refresh_token", tc["refresh_token"]
-        )
-        tc["token_expires_at"] = int(time.time()) + data.get(
-            "expires_in", 3600
-        )
+        tc["refresh_token"] = data.get("refresh_token", tc["refresh_token"])
+        tc["token_expires_at"] = int(time.time()) + data.get("expires_in", 3600)
         save_config(self._config)
         return data["access_token"]
 
@@ -234,9 +230,7 @@ class TwitchClient:
         if resp.status_code == 401:
             tc["access_token"] = ""
             save_config(self._config)
-            if tc.get("token_type") == "user" and tc.get(
-                "refresh_token"
-            ):
+            if tc.get("token_type") == "user" and tc.get("refresh_token"):
                 token = await self.refresh_user_token()
             else:
                 token = await self._refresh_app_token()

@@ -88,7 +88,9 @@ def test_save_and_reload(tmp_path: Path, monkeypatch: object) -> None:
             "kick": {**DEFAULT_CONFIG["platforms"]["kick"]},
             "youtube": {**DEFAULT_CONFIG["platforms"]["youtube"]},
         },
-        "favorites": [{"platform": "twitch", "login": "streamer1", "display_name": "streamer1"}],
+        "favorites": [
+            {"platform": "twitch", "login": "streamer1", "display_name": "streamer1"}
+        ],
         "settings": {**DEFAULT_CONFIG["settings"]},
     }
     save_config(data)

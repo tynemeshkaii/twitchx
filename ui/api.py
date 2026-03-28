@@ -122,8 +122,12 @@ class TwitchXApi:
         twitch_conf = get_platform_config(self._config, "twitch")
         settings = get_settings(self._config)
         masked = {
-            "client_id": twitch_conf.get("client_id", "")[:8] + "..." if twitch_conf.get("client_id") else "",
-            "has_credentials": bool(twitch_conf.get("client_id") and twitch_conf.get("client_secret")),
+            "client_id": twitch_conf.get("client_id", "")[:8] + "..."
+            if twitch_conf.get("client_id")
+            else "",
+            "has_credentials": bool(
+                twitch_conf.get("client_id") and twitch_conf.get("client_secret")
+            ),
             "quality": settings.get("quality", "best"),
             "refresh_interval": settings.get("refresh_interval", 60),
             "favorites": get_favorite_logins(self._config, "twitch"),
@@ -131,7 +135,9 @@ class TwitchXApi:
         if self._current_user:
             masked["current_user"] = self._current_user
         kick_conf = get_platform_config(self._config, "kick")
-        masked["kick_has_credentials"] = bool(kick_conf.get("client_id") and kick_conf.get("client_secret"))
+        masked["kick_has_credentials"] = bool(
+            kick_conf.get("client_id") and kick_conf.get("client_secret")
+        )
         if kick_conf.get("user_login"):
             masked["kick_user"] = {
                 "login": kick_conf["user_login"],
@@ -428,7 +434,11 @@ class TwitchXApi:
                 for login in logins:
                     if login.lower() not in existing_logins:
                         self._config["favorites"].append(
-                            {"platform": "twitch", "login": login.lower(), "display_name": login}
+                            {
+                                "platform": "twitch",
+                                "login": login.lower(),
+                                "display_name": login,
+                            }
                         )
                         existing_logins.add(login.lower())
                         added += 1
@@ -452,7 +462,9 @@ class TwitchXApi:
         if not clean:
             return
         favorites = self._config.get("favorites", [])
-        if any(f.get("login") == clean and f.get("platform") == platform for f in favorites):
+        if any(
+            f.get("login") == clean and f.get("platform") == platform for f in favorites
+        ):
             return
         favorites.append({"platform": platform, "login": clean, "display_name": clean})
         self._config["favorites"] = favorites
@@ -462,22 +474,37 @@ class TwitchXApi:
     def remove_channel(self, channel: str, platform: str = "twitch") -> None:
         favorites = self._config.get("favorites", [])
         self._config["favorites"] = [
-            f for f in favorites
+            f
+            for f in favorites
             if not (f.get("login") == channel.lower() and f.get("platform") == platform)
         ]
         save_config(self._config)
         self.refresh()
 
     def reorder_channels(self, new_order_json: str, platform: str = "twitch") -> None:
-        new_order = json.loads(new_order_json) if isinstance(new_order_json, str) else new_order_json
-        old_favs = {f["login"]: f for f in self._config.get("favorites", []) if f.get("platform") == platform}
+        new_order = (
+            json.loads(new_order_json)
+            if isinstance(new_order_json, str)
+            else new_order_json
+        )
+        old_favs = {
+            f["login"]: f
+            for f in self._config.get("favorites", [])
+            if f.get("platform") == platform
+        }
         reordered = []
         for login in new_order:
             if login in old_favs:
                 reordered.append(old_favs[login])
             else:
-                reordered.append({"platform": platform, "login": login, "display_name": login})
-        other_platforms = [f for f in self._config.get("favorites", []) if f.get("platform") != platform]
+                reordered.append(
+                    {"platform": platform, "login": login, "display_name": login}
+                )
+        other_platforms = [
+            f
+            for f in self._config.get("favorites", [])
+            if f.get("platform") != platform
+        ]
         self._config["favorites"] = reordered + other_platforms
         save_config(self._config)
 
@@ -495,13 +522,19 @@ class TwitchXApi:
                     results = loop.run_until_complete(self._kick.search_channels(query))
                     items = []
                     for r in results:
-                        slug = r.get("slug", r.get("channel", {}).get("slug", "")).lower()
+                        slug = r.get(
+                            "slug", r.get("channel", {}).get("slug", "")
+                        ).lower()
                         items.append(
                             {
                                 "login": slug,
-                                "display_name": r.get("username", r.get("user", {}).get("username", slug)),
+                                "display_name": r.get(
+                                    "username", r.get("user", {}).get("username", slug)
+                                ),
                                 "is_live": r.get("is_live", False),
-                                "game_name": r.get("category", {}).get("name", "") if isinstance(r.get("category"), dict) else "",
+                                "game_name": r.get("category", {}).get("name", "")
+                                if isinstance(r.get("category"), dict)
+                                else "",
                                 "platform": "kick",
                             }
                         )
@@ -574,8 +607,12 @@ class TwitchXApi:
             self._eval_js(f"window.onStreamsUpdate({data})")
             return
 
-        twitch_has_creds = bool(twitch_conf.get("client_id") and twitch_conf.get("client_secret"))
-        kick_has_creds = bool(kick_conf.get("client_id") and kick_conf.get("client_secret"))
+        twitch_has_creds = bool(
+            twitch_conf.get("client_id") and twitch_conf.get("client_secret")
+        )
+        kick_has_creds = bool(
+            kick_conf.get("client_id") and kick_conf.get("client_secret")
+        )
 
         if not twitch_has_creds and not kick_has_creds:
             data = json.dumps(
@@ -596,10 +633,14 @@ class TwitchXApi:
         self._fetching = True
         self._eval_js("window.onStatusUpdate({text: 'Refreshing...', type: 'info'})")
         self._run_in_thread(
-            lambda tf=list(twitch_favorites), kf=list(kick_favorites): self._fetch_data(tf, kf)
+            lambda tf=list(twitch_favorites), kf=list(kick_favorites): self._fetch_data(
+                tf, kf
+            )
         )
 
-    def _fetch_data(self, twitch_favorites: list[str], kick_favorites: list[str]) -> None:
+    def _fetch_data(
+        self, twitch_favorites: list[str], kick_favorites: list[str]
+    ) -> None:
         retry_delays = [5, 15, 30]
         max_attempts = len(retry_delays) + 1
 
@@ -610,10 +651,18 @@ class TwitchXApi:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 try:
-                    twitch_streams, twitch_users, kick_streams = loop.run_until_complete(
-                        self._async_fetch(twitch_favorites, kick_favorites)
+                    twitch_streams, twitch_users, kick_streams = (
+                        loop.run_until_complete(
+                            self._async_fetch(twitch_favorites, kick_favorites)
+                        )
                     )
-                    self._on_data_fetched(twitch_favorites, kick_favorites, twitch_streams, twitch_users, kick_streams)
+                    self._on_data_fetched(
+                        twitch_favorites,
+                        kick_favorites,
+                        twitch_streams,
+                        twitch_users,
+                        kick_streams,
+                    )
                     return
                 except httpx.ConnectError:
                     if attempt < max_attempts:
@@ -665,20 +714,30 @@ class TwitchXApi:
 
         # Fetch Twitch data if credentials exist and favorites are set
         twitch_conf = get_platform_config(self._config, "twitch")
-        if twitch_favorites and twitch_conf.get("client_id") and twitch_conf.get("client_secret"):
+        if (
+            twitch_favorites
+            and twitch_conf.get("client_id")
+            and twitch_conf.get("client_secret")
+        ):
             await self._twitch._ensure_token()
             twitch_streams, twitch_users = await asyncio.gather(
                 self._twitch.get_live_streams(twitch_favorites),
                 self._twitch.get_users(twitch_favorites),
             )
-            game_ids = [s.get("game_id", "") for s in twitch_streams if s.get("game_id")]
+            game_ids = [
+                s.get("game_id", "") for s in twitch_streams if s.get("game_id")
+            ]
             if game_ids:
                 games = await self._twitch.get_games(game_ids)
                 self._games.update(games)
 
         # Fetch Kick data if credentials exist and favorites are set
         kick_conf = get_platform_config(self._config, "kick")
-        if kick_favorites and kick_conf.get("client_id") and kick_conf.get("client_secret"):
+        if (
+            kick_favorites
+            and kick_conf.get("client_id")
+            and kick_conf.get("client_secret")
+        ):
             try:
                 kick_streams = await self._kick.get_live_streams(kick_favorites)
             except Exception as e:
@@ -762,7 +821,11 @@ class TwitchXApi:
             game_name = category.get("name", "") if isinstance(category, dict) else ""
             viewers = s.get("viewer_count", s.get("viewers", 0))
             started_at = s.get("created_at", s.get("started_at", ""))
-            thumbnail_url = s.get("thumbnail", {}).get("url", "") if isinstance(s.get("thumbnail"), dict) else s.get("thumbnail_url", "")
+            thumbnail_url = (
+                s.get("thumbnail", {}).get("url", "")
+                if isinstance(s.get("thumbnail"), dict)
+                else s.get("thumbnail_url", "")
+            )
             stream_items.append(
                 {
                     "login": slug,
@@ -861,14 +924,22 @@ class TwitchXApi:
         # Determine which platform owns this channel
         platform = "twitch"
         for s in self._live_streams:
-            stream_login = (s.get("user_login") or s.get("channel", {}).get("slug", "") or s.get("slug", "")).lower()
+            stream_login = (
+                s.get("user_login")
+                or s.get("channel", {}).get("slug", "")
+                or s.get("slug", "")
+            ).lower()
             if stream_login == channel.lower():
                 platform = s.get("platform", "twitch")
                 break
 
         # Check if channel is live
         live_logins = {
-            (s.get("user_login") or s.get("channel", {}).get("slug", "") or s.get("slug", "")).lower()
+            (
+                s.get("user_login")
+                or s.get("channel", {}).get("slug", "")
+                or s.get("slug", "")
+            ).lower()
             for s in self._live_streams
         }
         if channel.lower() not in live_logins:
@@ -893,7 +964,11 @@ class TwitchXApi:
         # Find stream title for player
         title = ""
         for s in self._live_streams:
-            stream_login = (s.get("user_login") or s.get("channel", {}).get("slug", "") or s.get("slug", "")).lower()
+            stream_login = (
+                s.get("user_login")
+                or s.get("channel", {}).get("slug", "")
+                or s.get("slug", "")
+            ).lower()
             if stream_login == channel.lower():
                 title = s.get("title", s.get("session_title", ""))
                 break
@@ -957,13 +1032,21 @@ class TwitchXApi:
         # Determine which platform owns this channel
         platform = "twitch"
         for s in self._live_streams:
-            stream_login = (s.get("user_login") or s.get("channel", {}).get("slug", "") or s.get("slug", "")).lower()
+            stream_login = (
+                s.get("user_login")
+                or s.get("channel", {}).get("slug", "")
+                or s.get("slug", "")
+            ).lower()
             if stream_login == channel.lower():
                 platform = s.get("platform", "twitch")
                 break
 
         live_logins = {
-            (s.get("user_login") or s.get("channel", {}).get("slug", "") or s.get("slug", "")).lower()
+            (
+                s.get("user_login")
+                or s.get("channel", {}).get("slug", "")
+                or s.get("slug", "")
+            ).lower()
             for s in self._live_streams
         }
         if channel.lower() not in live_logins:

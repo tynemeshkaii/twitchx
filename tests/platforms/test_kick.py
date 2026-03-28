@@ -14,7 +14,6 @@ from core.platforms.kick import (
     _generate_code_verifier,
 )
 
-
 # ── Helpers ───────────────────────────────────────────────────
 
 
@@ -82,7 +81,10 @@ class TestPKCEHelpers:
     def test_verifier_is_url_safe_base64(self) -> None:
         verifier = _generate_code_verifier()
         # Must only contain URL-safe base64 chars (no padding =)
-        assert all(c in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_" for c in verifier)
+        assert all(
+            c in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+            for c in verifier
+        )
         assert "=" not in verifier
 
     def test_verifier_length_in_range(self) -> None:
@@ -98,7 +100,10 @@ class TestPKCEHelpers:
     def test_challenge_is_url_safe_base64(self) -> None:
         verifier = _generate_code_verifier()
         challenge = _generate_code_challenge(verifier)
-        assert all(c in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_" for c in challenge)
+        assert all(
+            c in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+            for c in challenge
+        )
         assert "=" not in challenge
 
     def test_challenge_is_43_chars_for_sha256(self) -> None:
@@ -125,7 +130,9 @@ class TestPKCEHelpers:
 
         verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
         expected_digest = hashlib.sha256(verifier.encode("ascii")).digest()
-        expected = base64.urlsafe_b64encode(expected_digest).rstrip(b"=").decode("ascii")
+        expected = (
+            base64.urlsafe_b64encode(expected_digest).rstrip(b"=").decode("ascii")
+        )
         assert _generate_code_challenge(verifier) == expected
 
 

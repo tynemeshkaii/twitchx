@@ -1,4 +1,5 @@
 """Abstract base class for platform chat clients and shared chat data models."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -10,6 +11,7 @@ from typing import Any
 @dataclass
 class Badge:
     """Chat badge (moderator, subscriber, etc.)."""
+
     name: str
     icon_url: str
 
@@ -17,6 +19,7 @@ class Badge:
 @dataclass
 class Emote:
     """Chat emote with position in message text."""
+
     code: str
     url: str
     start: int
@@ -26,6 +29,7 @@ class Emote:
 @dataclass
 class ChatMessage:
     """Normalized chat message from any platform."""
+
     platform: str
     author: str
     author_display: str
@@ -43,6 +47,7 @@ class ChatMessage:
 @dataclass
 class ChatStatus:
     """Chat connection status."""
+
     connected: bool
     platform: str
     channel_id: str
@@ -51,6 +56,7 @@ class ChatStatus:
 
 class ChatClient(ABC):
     """Abstract interface for a platform chat client."""
+
     platform: str
 
     @abstractmethod

@@ -96,16 +96,12 @@ class NativePlayerController:
 
         # Create AVPlayerView
         self._player = AVPlayer.alloc().init()
-        self._player_view = AVPlayerView.alloc().initWithFrame_(
-            content_view.bounds()
-        )
+        self._player_view = AVPlayerView.alloc().initWithFrame_(content_view.bounds())
         self._player_view.setPlayer_(self._player)
         self._player_view.setControlsStyle_(1)  # AVPlayerViewControlsStyleFloating
 
         # Create NSSplitView (horizontal split: top=player, bottom=webview)
-        self._split_view = NSSplitView.alloc().initWithFrame_(
-            content_view.bounds()
-        )
+        self._split_view = NSSplitView.alloc().initWithFrame_(content_view.bounds())
         self._split_view.setVertical_(False)  # horizontal = top/bottom
         self._split_view.setDividerStyle_(2)  # thin divider
         self._split_view.setAutoresizingMask_(

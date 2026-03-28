@@ -240,10 +240,13 @@ class KickClient:
         # Kick's public livestreams endpoint does not support filtering by slug.
         # We fetch all live streams and filter client-side.
         data = await self._get(f"{KICK_API_URL}/public/v1/livestreams")
-        streams: list[dict[str, Any]] = data.get("data", data) if isinstance(data, dict) else data
+        streams: list[dict[str, Any]] = (
+            data.get("data", data) if isinstance(data, dict) else data
+        )
         slug_set = set(slugs)
         return [
-            s for s in streams
+            s
+            for s in streams
             if s.get("channel", {}).get("slug", "").lower() in slug_set
             or s.get("slug", "").lower() in slug_set
         ]

@@ -1,4 +1,5 @@
 """Abstract base class for streaming platform clients and shared data models."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -8,6 +9,7 @@ from dataclasses import dataclass
 @dataclass
 class StreamInfo:
     """Normalized live stream data from any platform."""
+
     platform: str
     channel_id: str
     channel_login: str
@@ -23,6 +25,7 @@ class StreamInfo:
 @dataclass
 class PlaybackInfo:
     """Stream playback URL and type."""
+
     url: str
     playback_type: str  # "hls" | "youtube_embed"
     quality: str
@@ -31,6 +34,7 @@ class PlaybackInfo:
 @dataclass
 class ChannelInfo:
     """Normalized channel/streamer profile."""
+
     platform: str
     channel_id: str
     login: str
@@ -45,6 +49,7 @@ class ChannelInfo:
 @dataclass
 class CategoryInfo:
     """Stream category / game."""
+
     platform: str
     category_id: str
     name: str
@@ -55,6 +60,7 @@ class CategoryInfo:
 @dataclass
 class TokenData:
     """OAuth token pair."""
+
     access_token: str
     refresh_token: str
     expires_at: float
@@ -64,6 +70,7 @@ class TokenData:
 @dataclass
 class UserInfo:
     """Authenticated user profile."""
+
     platform: str
     user_id: str
     login: str
@@ -73,6 +80,7 @@ class UserInfo:
 
 class PlatformClient(ABC):
     """Abstract interface for a streaming platform client."""
+
     platform_id: str
     platform_name: str
 
@@ -92,7 +100,9 @@ class PlatformClient(ABC):
     async def get_live_streams(self, channel_ids: list[str]) -> list[StreamInfo]: ...
 
     @abstractmethod
-    async def get_top_streams(self, category: str | None = None, limit: int = 20) -> list[StreamInfo]: ...
+    async def get_top_streams(
+        self, category: str | None = None, limit: int = 20
+    ) -> list[StreamInfo]: ...
 
     @abstractmethod
     async def search_channels(self, query: str) -> list[ChannelInfo]: ...
@@ -113,7 +123,9 @@ class PlatformClient(ABC):
     async def get_categories(self, query: str | None = None) -> list[CategoryInfo]: ...
 
     @abstractmethod
-    async def resolve_stream_url(self, channel_id: str, quality: str) -> PlaybackInfo: ...
+    async def resolve_stream_url(
+        self, channel_id: str, quality: str
+    ) -> PlaybackInfo: ...
 
     @abstractmethod
     async def close(self) -> None: ...
