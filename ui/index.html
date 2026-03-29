@@ -699,9 +699,96 @@ body {
 }
 #close-player-btn:hover { opacity: 0.85; }
 #stream-video {
-  flex: 1; width: 100%; background: #000;
+  flex: 1; min-width: 0; background: #000;
   outline: none;
 }
+
+/* ── Chat panel ───────────────────────────────────────── */
+#player-content {
+  display: flex; flex: 1; overflow: hidden;
+}
+#chat-panel {
+  width: var(--chat-width, 340px);
+  min-width: 250px; max-width: 500px;
+  display: flex; flex-direction: column;
+  background: var(--bg-surface);
+  border-left: 1px solid var(--bg-border);
+}
+#chat-panel.hidden { display: none; }
+#chat-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--bg-border);
+  flex-shrink: 0;
+}
+#chat-title {
+  font-size: 13px; font-weight: 600;
+  color: var(--text-secondary);
+}
+#chat-status-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+#chat-status-dot.connected { background: var(--live-green); }
+#chat-messages {
+  flex: 1; overflow-y: auto;
+  padding: 8px; font-size: 13px; line-height: 1.4;
+}
+.chat-msg { padding: 2px 0; word-wrap: break-word; }
+.chat-msg .badge {
+  width: 18px; height: 18px;
+  vertical-align: middle; margin-right: 2px;
+}
+.chat-msg .nick { font-weight: 600; cursor: pointer; }
+.chat-msg .emote { height: 28px; vertical-align: middle; }
+.chat-msg.system { color: var(--text-muted); font-style: italic; }
+#chat-new-messages {
+  display: none; position: sticky; bottom: 0;
+  text-align: center; padding: 4px;
+  background: var(--bg-elevated);
+  color: var(--accent); cursor: pointer;
+  font-size: 12px; font-weight: 600;
+  border-top: 1px solid var(--bg-border);
+}
+#chat-new-messages.visible { display: block; }
+#chat-input-area {
+  display: flex; padding: 8px; gap: 6px;
+  border-top: 1px solid var(--bg-border);
+}
+#chat-input {
+  flex: 1; background: var(--bg-elevated);
+  border: 1px solid var(--bg-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary); padding: 6px 10px;
+  font-size: 13px; font-family: inherit;
+  outline: none;
+}
+#chat-input:focus { border-color: var(--accent); }
+#chat-input:disabled { opacity: 0.5; cursor: not-allowed; }
+#chat-send-btn {
+  padding: 6px 12px; background: var(--accent);
+  color: white; border: none;
+  border-radius: var(--radius-sm);
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  font-family: inherit;
+}
+#chat-send-btn:hover { background: var(--accent-hover); }
+#chat-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+#chat-resize-handle {
+  width: 4px; cursor: col-resize;
+  background: var(--bg-border); flex-shrink: 0;
+}
+#chat-resize-handle:hover { background: var(--accent); }
+#toggle-chat-btn {
+  height: 28px; padding: 0 10px;
+  background: var(--bg-elevated); color: var(--text-secondary);
+  border: 1px solid var(--bg-border);
+  border-radius: var(--radius-sm);
+  font-size: 13px; cursor: pointer; font-family: inherit;
+  transition: all 0.15s ease;
+}
+#toggle-chat-btn:hover { border-color: var(--accent); color: var(--accent); }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; color: var(--live-red); }
@@ -900,11 +987,27 @@ body {
           <span id="player-channel-name"></span>
           <span id="player-stream-title"></span>
           <div id="player-header-actions">
+            <button id="toggle-chat-btn" title="Toggle Chat (C)">&#128172;</button>
             <button id="fullscreen-player-btn" title="Fullscreen (F)">&#9974;</button>
             <button id="close-player-btn">&#10005; Close</button>
           </div>
         </div>
-        <video id="stream-video" autoplay controls playsinline></video>
+        <div id="player-content">
+          <video id="stream-video" autoplay controls playsinline></video>
+          <div id="chat-resize-handle"></div>
+          <div id="chat-panel">
+            <div id="chat-header">
+              <span id="chat-title">Chat</span>
+              <span id="chat-status-dot"></span>
+            </div>
+            <div id="chat-messages"></div>
+            <div id="chat-new-messages">&#8595; New messages</div>
+            <div id="chat-input-area">
+              <input id="chat-input" type="text" placeholder="Send a message..." maxlength="500" disabled />
+              <button id="chat-send-btn" disabled>Send</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -1221,6 +1324,76 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Keyboard shortcuts
   document.addEventListener('keydown', handleKeydown);
+
+  // Chat scroll detection
+  document.getElementById('chat-messages').addEventListener('scroll', function() {
+    var el = this;
+    chatAutoScroll = (el.scrollHeight - el.scrollTop - el.clientHeight) < 60;
+    if (chatAutoScroll) {
+      var btn = document.getElementById('chat-new-messages');
+      if (btn) btn.classList.remove('visible');
+    }
+  });
+
+  document.getElementById('chat-new-messages').addEventListener('click', function() {
+    var container = document.getElementById('chat-messages');
+    container.scrollTop = container.scrollHeight;
+    chatAutoScroll = true;
+    this.classList.remove('visible');
+  });
+
+  // Chat input
+  document.getElementById('chat-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && this.value.trim()) {
+      pywebview.api.send_chat(this.value.trim());
+      this.value = '';
+    }
+  });
+
+  document.getElementById('chat-send-btn').addEventListener('click', function() {
+    var input = document.getElementById('chat-input');
+    if (input.value.trim()) {
+      pywebview.api.send_chat(input.value.trim());
+      input.value = '';
+    }
+  });
+
+  // Toggle chat
+  document.getElementById('toggle-chat-btn').addEventListener('click', function() {
+    toggleChatPanel();
+  });
+
+  // Chat resize
+  (function() {
+    var handle = document.getElementById('chat-resize-handle');
+    var panel = document.getElementById('chat-panel');
+    var dragging = false;
+
+    handle.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      dragging = true;
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', function(e) {
+      if (!dragging) return;
+      var container = document.getElementById('player-content');
+      var rect = container.getBoundingClientRect();
+      var newWidth = rect.right - e.clientX;
+      newWidth = Math.max(250, Math.min(500, newWidth));
+      panel.style.width = newWidth + 'px';
+    });
+
+    document.addEventListener('mouseup', function() {
+      if (!dragging) return;
+      dragging = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      var w = parseInt(panel.style.width) || 340;
+      pywebview.api.save_chat_width(w);
+    });
+  })();
 });
 
 /* ── Global callbacks (called from Python via evaluate_js) ── */
@@ -1394,6 +1567,124 @@ window.onPlayerState = function(data) {
   state.playerError = data.error || '';
 };
 
+/* ── Chat ───────────────────────────────────────────────── */
+
+var chatAutoScroll = true;
+
+window.onChatMessage = function(msg) {
+  var container = document.getElementById('chat-messages');
+  if (!container) return;
+
+  var el = document.createElement('div');
+  el.className = 'chat-msg' + (msg.is_system ? ' system' : '');
+
+  for (var i = 0; i < msg.badges.length; i++) {
+    var badge = msg.badges[i];
+    if (badge.icon_url) {
+      var img = document.createElement('img');
+      img.className = 'badge';
+      img.src = badge.icon_url;
+      img.alt = badge.name;
+      el.appendChild(img);
+    }
+  }
+
+  if (!msg.is_system) {
+    var nick = document.createElement('span');
+    nick.className = 'nick';
+    nick.textContent = msg.author_display;
+    if (msg.author_color) nick.style.color = msg.author_color;
+    el.appendChild(nick);
+
+    var sep = document.createElement('span');
+    sep.textContent = ': ';
+    el.appendChild(sep);
+  }
+
+  renderChatEmotes(el, msg.text, msg.emotes);
+  container.appendChild(el);
+
+  while (container.children.length > 500) {
+    container.removeChild(container.firstChild);
+  }
+
+  if (chatAutoScroll) {
+    container.scrollTop = container.scrollHeight;
+  } else {
+    var btn = document.getElementById('chat-new-messages');
+    if (btn) btn.classList.add('visible');
+  }
+};
+
+function renderChatEmotes(parent, text, emotes) {
+  if (!emotes || emotes.length === 0) {
+    parent.appendChild(document.createTextNode(text));
+    return;
+  }
+  var sorted = emotes.slice().sort(function(a, b) { return a.start - b.start; });
+  var lastIdx = 0;
+  for (var i = 0; i < sorted.length; i++) {
+    var emote = sorted[i];
+    if (emote.start > lastIdx) {
+      parent.appendChild(document.createTextNode(text.slice(lastIdx, emote.start)));
+    }
+    var img = document.createElement('img');
+    img.className = 'emote';
+    img.src = emote.url;
+    img.alt = emote.code;
+    img.title = emote.code;
+    parent.appendChild(img);
+    lastIdx = emote.end + 1;
+  }
+  if (lastIdx < text.length) {
+    parent.appendChild(document.createTextNode(text.slice(lastIdx)));
+  }
+}
+
+function clearChatMessages() {
+  var container = document.getElementById('chat-messages');
+  if (!container) return;
+  while (container.firstChild) {
+    container.removeChild(container.firstChild);
+  }
+}
+
+window.onChatStatus = function(status) {
+  var dot = document.getElementById('chat-status-dot');
+  if (dot) {
+    if (status.connected) {
+      dot.classList.add('connected');
+      dot.title = 'Connected';
+      clearChatMessages();
+      chatAutoScroll = true;
+      var newBtn = document.getElementById('chat-new-messages');
+      if (newBtn) newBtn.classList.remove('visible');
+    } else {
+      dot.classList.remove('connected');
+      dot.title = status.error || 'Disconnected';
+    }
+  }
+  updateChatInput();
+};
+
+function updateChatInput() {
+  var input = document.getElementById('chat-input');
+  var btn = document.getElementById('chat-send-btn');
+  if (!input || !btn) return;
+  var hasAuth = !!(state.currentUser);
+  input.disabled = !hasAuth;
+  btn.disabled = !hasAuth;
+  input.placeholder = hasAuth ? 'Send a message...' : 'Log in to chat';
+}
+
+function toggleChatPanel() {
+  var panel = document.getElementById('chat-panel');
+  var handle = document.getElementById('chat-resize-handle');
+  panel.classList.toggle('hidden');
+  if (handle) handle.style.display = panel.classList.contains('hidden') ? 'none' : '';
+  pywebview.api.save_chat_visibility(!panel.classList.contains('hidden'));
+}
+
 function showPlayerView() {
   document.getElementById('toolbar').style.display = 'none';
   document.getElementById('stream-grid').style.display = 'none';
@@ -1404,6 +1695,21 @@ function showPlayerView() {
   document.getElementById('watch-btn').classList.add('active');
   document.getElementById('stop-player-btn').style.display = 'inline-flex';
   document.getElementById('live-dot').classList.add('visible');
+
+  // Restore chat panel visibility and width from config
+  var chatPanel = document.getElementById('chat-panel');
+  var chatHandle = document.getElementById('chat-resize-handle');
+  var cfg = pywebview.api.get_full_config_for_settings();
+  if (cfg && cfg.chat_width) chatPanel.style.width = cfg.chat_width + 'px';
+  if (cfg && cfg.chat_visible === false) {
+    chatPanel.classList.add('hidden');
+    if (chatHandle) chatHandle.style.display = 'none';
+  } else {
+    chatPanel.classList.remove('hidden');
+    if (chatHandle) chatHandle.style.display = '';
+  }
+  updateChatInput();
+
   renderSidebar();
 }
 
@@ -1412,6 +1718,9 @@ function hidePlayerView() {
   video.pause();
   video.removeAttribute('src');
   video.load();
+
+  // Clear chat
+  clearChatMessages();
 
   document.getElementById('player-view').classList.remove('active');
   document.getElementById('toolbar').style.display = '';
@@ -2297,6 +2606,8 @@ function handleKeydown(e) {
     e.preventDefault(); doWatch();
   } else if (e.key === 'f' && document.getElementById('player-view').classList.contains('active')) {
     e.preventDefault(); toggleVideoFullscreen();
+  } else if (e.key === 'c' && document.getElementById('player-view').classList.contains('active')) {
+    e.preventDefault(); toggleChatPanel();
   } else if (e.metaKey && e.key === ',') {
     e.preventDefault(); openSettings();
   }
