@@ -242,7 +242,7 @@ class TwitchChatClient:
                             line = raw_line.strip()
                             if not line:
                                 continue
-                            if line.startswith("PING"):
+                            if line.startswith("PING ") or line == "PING":
                                 await ws.send(line.replace("PING", "PONG", 1))
                                 continue
                             msg = parse_irc_message(line, channel_id)
@@ -260,7 +260,7 @@ class TwitchChatClient:
                     else RECONNECT_DELAYS[-1]
                 )
                 attempt += 1
-                if attempt > len(RECONNECT_DELAYS):
+                if attempt >= len(RECONNECT_DELAYS):
                     self._emit_status(
                         connected=False, error="Max reconnect attempts reached"
                     )
