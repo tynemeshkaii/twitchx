@@ -15,9 +15,7 @@ from core.chat import Badge, ChatMessage, ChatStatus, Emote
 logger = logging.getLogger(__name__)
 
 TWITCH_IRC_URL = "wss://irc-ws.chat.twitch.tv:443"
-EMOTE_URL_TEMPLATE = (
-    "https://static-cdn.jtvnw.net/emoticons/v2/{id}/default/dark/1.0"
-)
+EMOTE_URL_TEMPLATE = "https://static-cdn.jtvnw.net/emoticons/v2/{id}/default/dark/1.0"
 
 # IRC tag escape sequences
 _TAG_ESCAPES = {
