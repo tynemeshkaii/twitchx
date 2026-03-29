@@ -18,6 +18,8 @@ from typing import Any
 import httpx
 from PIL import Image
 
+from core.chat import ChatMessage, ChatStatus
+from core.chats.twitch_chat import TwitchChatClient
 from core.launcher import launch_stream
 from core.oauth_server import wait_for_oauth_code
 from core.platforms.kick import KickClient
@@ -63,6 +65,9 @@ class TwitchXApi:
         self._last_successful_fetch: float = 0
         # User avatar URLs for lazy loading
         self._user_avatars: dict[str, str] = {}
+        # Chat
+        self._chat_client: TwitchChatClient | None = None
+        self._chat_thread: threading.Thread | None = None
 
         # Restore user profile if logged in
         twitch_conf = get_platform_config(self._config, "twitch")
@@ -160,6 +165,8 @@ class TwitchXApi:
             "iina_path": settings.get("iina_path", ""),
             "kick_client_id": kick_conf.get("client_id", ""),
             "kick_client_secret": kick_conf.get("client_secret", ""),
+            "chat_visible": settings.get("chat_visible", True),
+            "chat_width": settings.get("chat_width", 340),
         }
 
     def save_settings(self, data: str) -> None:
@@ -1008,6 +1015,8 @@ class TwitchXApi:
                 }
             )
             self._eval_js(f"window.onStreamReady({stream_data})")
+            # Start chat for this channel
+            self.start_chat(channel, platform)
             r = json.dumps(
                 {
                     "success": True,
@@ -1021,6 +1030,7 @@ class TwitchXApi:
 
     def stop_player(self) -> None:
         """Stop playback — tells JS to tear down the <video> player."""
+        self.stop_chat()
         self._watching_channel = None
         self._eval_js("window.onPlayerStop()")
 
@@ -1168,9 +1178,126 @@ class TwitchXApi:
 
         self._run_in_thread(do_fetch)
 
+    # ── Chat ──────────────────────────────────────────────────
+
+    def start_chat(self, channel: str, platform: str = "twitch") -> None:
+        """Start chat for a channel. Called when entering player-view."""
+        self.stop_chat()
+
+        if platform != "twitch":
+            return  # Only Twitch chat for now
+
+        twitch_conf = get_platform_config(self._config, "twitch")
+        token = twitch_conf.get("access_token") or None
+        login = twitch_conf.get("user_login") or None
+
+        self._chat_client = TwitchChatClient()
+        self._chat_client.on_message(self._on_chat_message)
+        self._chat_client.on_status(self._on_chat_status)
+
+        def run_chat() -> None:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(
+                    self._chat_client.connect(channel, token=token, login=login)  # type: ignore[union-attr]
+                )
+            except Exception:
+                pass
+            finally:
+                loop.close()
+
+        self._chat_thread = threading.Thread(target=run_chat, daemon=True)
+        self._chat_thread.start()
+
+    def stop_chat(self) -> None:
+        """Stop current chat connection."""
+        if self._chat_client:
+            client = self._chat_client
+            client._running = False
+            if client._ws:
+
+                def do_close() -> None:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        loop.run_until_complete(client.disconnect())
+                    except Exception:
+                        pass
+                    finally:
+                        loop.close()
+
+                threading.Thread(target=do_close, daemon=True).start()
+        self._chat_client = None
+        self._chat_thread = None
+
+    def send_chat(self, text: str) -> None:
+        """Send a chat message."""
+        if not self._chat_client or not text:
+            return
+        client = self._chat_client
+
+        def do_send() -> None:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(client.send_message(text))
+            except Exception:
+                pass
+            finally:
+                loop.close()
+
+        threading.Thread(target=do_send, daemon=True).start()
+
+    def save_chat_width(self, width: int) -> None:
+        """Persist chat panel width."""
+        self._config["settings"]["chat_width"] = max(250, min(500, width))
+        save_config(self._config)
+
+    def save_chat_visibility(self, visible: bool) -> None:
+        """Persist chat panel visibility."""
+        self._config["settings"]["chat_visible"] = visible
+        save_config(self._config)
+
+    def _on_chat_message(self, msg: ChatMessage) -> None:
+        """Callback from chat client — push to JS."""
+        data = json.dumps(
+            {
+                "platform": msg.platform,
+                "author": msg.author,
+                "author_display": msg.author_display,
+                "author_color": msg.author_color,
+                "text": msg.text,
+                "timestamp": msg.timestamp,
+                "badges": [
+                    {"name": b.name, "icon_url": b.icon_url} for b in msg.badges
+                ],
+                "emotes": [
+                    {"code": e.code, "url": e.url, "start": e.start, "end": e.end}
+                    for e in msg.emotes
+                ],
+                "is_system": msg.is_system,
+                "message_type": msg.message_type,
+            }
+        )
+        self._eval_js(f"window.onChatMessage({data})")
+
+    def _on_chat_status(self, status: ChatStatus) -> None:
+        """Callback from chat client — push connection status to JS."""
+        data = json.dumps(
+            {
+                "connected": status.connected,
+                "platform": status.platform,
+                "channel_id": status.channel_id,
+                "error": status.error,
+            }
+        )
+        self._eval_js(f"window.onChatStatus({data})")
+
     # ── Cleanup ──────────────────────────────────────────────────
 
     def close(self) -> None:
+        self.stop_chat()
         self._shutdown.set()
         self.stop_polling()
         self._cancel_launch_timer()
