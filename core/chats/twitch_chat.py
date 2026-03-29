@@ -17,15 +17,6 @@ logger = logging.getLogger(__name__)
 TWITCH_IRC_URL = "wss://irc-ws.chat.twitch.tv:443"
 EMOTE_URL_TEMPLATE = "https://static-cdn.jtvnw.net/emoticons/v2/{id}/default/dark/1.0"
 
-# IRC tag escape sequences
-_TAG_ESCAPES = {
-    r"\s": " ",
-    r"\n": "\n",
-    r"\\": "\\",
-    r"\r": "\r",
-    r"\:": ";",
-}
-
 # USERNOTICE msg-id values that map to "sub"
 _SUB_MSG_IDS = {"sub", "resub", "subgift", "submysterygift", "giftpaidupgrade"}
 
