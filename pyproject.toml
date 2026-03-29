@@ -9,6 +9,7 @@ dependencies = [
     "pyobjc-framework-avfoundation>=12.1",
     "pyobjc-framework-avkit>=12.1",
     "pywebview>=5.0",
+    "websockets>=16.0",
 ]
 
 [build-system]
