@@ -735,7 +735,11 @@ body {
   flex: 1; overflow-y: auto;
   padding: 8px; font-size: 13px; line-height: 1.4;
 }
-.chat-msg { padding: 2px 0; word-wrap: break-word; }
+.chat-msg {
+  padding: 2px 4px; word-wrap: break-word;
+  position: relative; border-radius: 4px;
+}
+.chat-msg:hover { background: var(--bg-elevated); }
 .chat-msg .badge {
   width: 18px; height: 18px;
   vertical-align: middle; margin-right: 2px;
@@ -743,6 +747,41 @@ body {
 .chat-msg .nick { font-weight: 600; cursor: pointer; }
 .chat-msg .emote { height: 28px; vertical-align: middle; }
 .chat-msg.system { color: var(--text-muted); font-style: italic; }
+.chat-msg.self .nick { color: var(--accent) !important; }
+.chat-msg .reply-btn {
+  display: none; position: absolute; right: 4px; top: 2px;
+  background: var(--bg-overlay); border: 1px solid var(--bg-border);
+  border-radius: 4px; color: var(--text-muted);
+  font-size: 14px; cursor: pointer; padding: 1px 5px; line-height: 1;
+}
+.chat-msg:hover .reply-btn { display: block; }
+.chat-msg .reply-btn:hover { color: var(--accent); border-color: var(--accent); }
+.chat-reply-ctx {
+  font-size: 11px; color: var(--text-muted);
+  padding: 1px 0 2px 12px;
+  border-left: 2px solid var(--bg-border);
+  margin-bottom: 1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.chat-reply-ctx .reply-nick { font-weight: 600; }
+#chat-reply-bar {
+  display: none; align-items: center; gap: 6px;
+  padding: 4px 8px;
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--bg-border);
+  font-size: 12px; color: var(--text-secondary);
+}
+#chat-reply-bar.active { display: flex; }
+#chat-reply-bar .reply-nick { font-weight: 600; color: var(--text-primary); }
+#chat-reply-bar .reply-body {
+  flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--text-muted);
+}
+#chat-reply-bar .reply-close {
+  background: none; border: none; color: var(--text-muted);
+  cursor: pointer; font-size: 16px; padding: 0 2px; line-height: 1;
+}
+#chat-reply-bar .reply-close:hover { color: var(--text-primary); }
 #chat-new-messages {
   display: none; position: sticky; bottom: 0;
   text-align: center; padding: 4px;
@@ -1002,6 +1041,12 @@ body {
             </div>
             <div id="chat-messages"></div>
             <div id="chat-new-messages">&#8595; New messages</div>
+            <div id="chat-reply-bar">
+              <span>Replying to</span>
+              <span class="reply-nick" id="chat-reply-nick"></span>
+              <span class="reply-body" id="chat-reply-body"></span>
+              <button class="reply-close" id="chat-reply-close">&times;</button>
+            </div>
             <div id="chat-input-area">
               <input id="chat-input" type="text" placeholder="Send a message..." maxlength="500" disabled />
               <button id="chat-send-btn" disabled>Send</button>
@@ -1345,17 +1390,29 @@ document.addEventListener('DOMContentLoaded', function() {
   // Chat input
   document.getElementById('chat-input').addEventListener('keydown', function(e) {
     if (e.key === 'Enter' && this.value.trim()) {
-      pywebview.api.send_chat(this.value.trim());
+      var r = chatReplyTo;
+      pywebview.api.send_chat(this.value.trim(), r ? r.id : null, r ? r.display : null, r ? r.body : null);
       this.value = '';
+      clearChatReply();
+    }
+    if (e.key === 'Escape') {
+      if (chatReplyTo) clearChatReply();
+      e.stopPropagation();
     }
   });
 
   document.getElementById('chat-send-btn').addEventListener('click', function() {
     var input = document.getElementById('chat-input');
     if (input.value.trim()) {
-      pywebview.api.send_chat(input.value.trim());
+      var r = chatReplyTo;
+      pywebview.api.send_chat(input.value.trim(), r ? r.id : null, r ? r.display : null, r ? r.body : null);
       input.value = '';
+      clearChatReply();
     }
+  });
+
+  document.getElementById('chat-reply-close').addEventListener('click', function() {
+    clearChatReply();
   });
 
   // Toggle chat
@@ -1570,13 +1627,46 @@ window.onPlayerState = function(data) {
 /* ── Chat ───────────────────────────────────────────────── */
 
 var chatAutoScroll = true;
+var chatAuthenticated = false;
+var chatReplyTo = null; // { id, display, body }
+
+function setChatReply(id, display, body) {
+  chatReplyTo = { id: id, display: display, body: body };
+  var bar = document.getElementById('chat-reply-bar');
+  document.getElementById('chat-reply-nick').textContent = display;
+  document.getElementById('chat-reply-body').textContent = body;
+  bar.classList.add('active');
+  var input = document.getElementById('chat-input');
+  if (input && !input.disabled) input.focus();
+}
+
+function clearChatReply() {
+  chatReplyTo = null;
+  document.getElementById('chat-reply-bar').classList.remove('active');
+}
 
 window.onChatMessage = function(msg) {
   var container = document.getElementById('chat-messages');
   if (!container) return;
 
   var el = document.createElement('div');
-  el.className = 'chat-msg' + (msg.is_system ? ' system' : '');
+  var cls = 'chat-msg';
+  if (msg.is_system) cls += ' system';
+  if (msg.is_self) cls += ' self';
+  el.className = cls;
+  if (msg.msg_id) el.dataset.msgId = msg.msg_id;
+
+  // Reply context line
+  if (msg.reply_to_display && msg.reply_to_body) {
+    var ctx = document.createElement('div');
+    ctx.className = 'chat-reply-ctx';
+    var rNick = document.createElement('span');
+    rNick.className = 'reply-nick';
+    rNick.textContent = '@' + msg.reply_to_display;
+    ctx.appendChild(rNick);
+    ctx.appendChild(document.createTextNode(': ' + msg.reply_to_body));
+    el.appendChild(ctx);
+  }
 
   for (var i = 0; i < msg.badges.length; i++) {
     var badge = msg.badges[i];
@@ -1602,6 +1692,20 @@ window.onChatMessage = function(msg) {
   }
 
   renderChatEmotes(el, msg.text, msg.emotes);
+
+  // Reply button (hover) — for non-system messages with an id, when authenticated
+  if (!msg.is_system && msg.msg_id && chatAuthenticated) {
+    var replyBtn = document.createElement('button');
+    replyBtn.className = 'reply-btn';
+    replyBtn.title = 'Reply';
+    replyBtn.textContent = '\u21A9';
+    replyBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      setChatReply(msg.msg_id, msg.author_display, msg.text);
+    });
+    el.appendChild(replyBtn);
+  }
+
   container.appendChild(el);
 
   while (container.children.length > 500) {
@@ -1647,14 +1751,16 @@ function clearChatMessages() {
   while (container.firstChild) {
     container.removeChild(container.firstChild);
   }
+  clearChatReply();
 }
 
 window.onChatStatus = function(status) {
+  chatAuthenticated = !!(status.authenticated);
   var dot = document.getElementById('chat-status-dot');
   if (dot) {
     if (status.connected) {
       dot.classList.add('connected');
-      dot.title = 'Connected';
+      dot.title = status.authenticated ? 'Connected' : 'Connected (read-only)';
       clearChatMessages();
       chatAutoScroll = true;
       var newBtn = document.getElementById('chat-new-messages');
@@ -1662,6 +1768,7 @@ window.onChatStatus = function(status) {
     } else {
       dot.classList.remove('connected');
       dot.title = status.error || 'Disconnected';
+      clearChatReply();
     }
   }
   updateChatInput();
@@ -1671,10 +1778,16 @@ function updateChatInput() {
   var input = document.getElementById('chat-input');
   var btn = document.getElementById('chat-send-btn');
   if (!input || !btn) return;
-  var hasAuth = !!(state.currentUser);
-  input.disabled = !hasAuth;
-  btn.disabled = !hasAuth;
-  input.placeholder = hasAuth ? 'Send a message...' : 'Log in to chat';
+  var canSend = !!(state.currentUser) && chatAuthenticated;
+  input.disabled = !canSend;
+  btn.disabled = !canSend;
+  if (!state.currentUser) {
+    input.placeholder = 'Log in to chat';
+  } else if (!chatAuthenticated) {
+    input.placeholder = 'Chat is read-only (re-login to send)';
+  } else {
+    input.placeholder = 'Send a message...';
+  }
 }
 
 function toggleChatPanel() {
@@ -2460,6 +2573,7 @@ function doLogout() {
 /* ── User profile ───────────────────────────────────────── */
 
 function showUserProfile(user) {
+  state.currentUser = user;
   document.getElementById('login-btn').style.display = 'none';
   var info = document.getElementById('user-info');
   info.style.display = 'flex';
@@ -2472,6 +2586,7 @@ function showUserProfile(user) {
 }
 
 function hideUserProfile() {
+  state.currentUser = null;
   document.getElementById('login-btn').style.display = 'block';
   document.getElementById('user-info').style.display = 'none';
 }

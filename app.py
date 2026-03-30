@@ -43,7 +43,9 @@ class TwitchXApp:
                     changed = True
                     continue
                 seen.add(key)
-                cleaned.append({"platform": "twitch", "login": name, "display_name": name})
+                cleaned.append(
+                    {"platform": "twitch", "login": name, "display_name": name}
+                )
                 changed = True
             elif isinstance(entry, dict):
                 login = entry.get("login", "")

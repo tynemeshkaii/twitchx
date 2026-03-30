@@ -126,6 +126,12 @@ def parse_irc_message(line: str, channel: str) -> ChatMessage | None:
     badges = parse_badges(tags.get("badges", ""))
     emotes = parse_emotes(tags.get("emotes") or None, trailing)
     timestamp = tags.get("tmi-sent-ts", "")
+    msg_id = tags.get("id") or None
+
+    # Reply threading
+    reply_to_id = tags.get("reply-parent-msg-id") or None
+    reply_to_display = tags.get("reply-parent-display-name") or None
+    reply_to_body = tags.get("reply-parent-msg-body") or None
 
     if command == "PRIVMSG":
         return ChatMessage(
@@ -141,6 +147,10 @@ def parse_irc_message(line: str, channel: str) -> ChatMessage | None:
             is_system=False,
             message_type="text",
             raw=tags,
+            msg_id=msg_id,
+            reply_to_id=reply_to_id,
+            reply_to_display=reply_to_display,
+            reply_to_body=reply_to_body,
         )
 
     # USERNOTICE
@@ -181,6 +191,7 @@ class TwitchChatClient:
 
     def __init__(self) -> None:
         self._ws: Any = None
+        self._loop: asyncio.AbstractEventLoop | None = None
         self._message_callback: Callable[[ChatMessage], None] | None = None
         self._status_callback: Callable[[ChatStatus], None] | None = None
         self._channel: str | None = None
@@ -197,6 +208,7 @@ class TwitchChatClient:
         """Connect to Twitch IRC and join channel. token=None for anonymous."""
         self._channel = channel_id
         self._running = True
+        self._loop = asyncio.get_event_loop()
 
         if token and login:
             self._authenticated = True
@@ -212,6 +224,7 @@ class TwitchChatClient:
         attempt = 0
         while self._running:
             try:
+                login_failed = False
                 async with websockets.connect(TWITCH_IRC_URL) as ws:
                     self._ws = ws
                     await ws.send(f"PASS {password}")
@@ -223,7 +236,7 @@ class TwitchChatClient:
                     attempt = 0
                     self._emit_status(connected=True)
 
-                    while self._running:
+                    while self._running and not login_failed:
                         data = await ws.recv()
                         if isinstance(data, bytes):
                             data = data.decode("utf-8", errors="replace")
@@ -234,11 +247,28 @@ class TwitchChatClient:
                             if line.startswith("PING ") or line == "PING":
                                 await ws.send(line.replace("PING", "PONG", 1))
                                 continue
+                            # Detect login failure and fall back to anonymous
+                            if "Login unsuccessful" in line or "Login authentication failed" in line:
+                                logger.warning(
+                                    "Twitch IRC login failed, falling back to anonymous"
+                                )
+                                login_failed = True
+                                break
                             msg = parse_irc_message(line, channel_id)
                             if msg and self._message_callback:
                                 self._message_callback(msg)
 
+                if login_failed:
+                        # Switch to anonymous credentials and reconnect immediately
+                        self._authenticated = False
+                        self._login = None
+                        nick = "justinfan12345"
+                        password = "SCHMOOPIIE"
+                        self._emit_status(connected=False, error="anonymous")
+                        continue
+
             except websockets.exceptions.ConnectionClosedOK:
+                self._emit_status(connected=False)
                 break
             except Exception:
                 if not self._running:
@@ -275,13 +305,23 @@ class TwitchChatClient:
             self._ws = None
         self._emit_status(connected=False)
 
-    async def send_message(self, text: str) -> bool:
-        """Send a chat message. Returns False if not authenticated."""
-        if not self._authenticated:
+    async def send_message(self, text: str, reply_to: str | None = None) -> bool:
+        """Send a chat message. Returns False if not authenticated.
+
+        Args:
+            text: Message text to send.
+            reply_to: Optional message ID to reply to (threaded reply).
+        """
+        if not self._authenticated or not self._running:
             return False
         if not self._ws or not self._channel:
             return False
-        await self._ws.send(f"PRIVMSG #{self._channel} :{text}")
+        if reply_to:
+            await self._ws.send(
+                f"@reply-parent-msg-id={reply_to} PRIVMSG #{self._channel} :{text}"
+            )
+        else:
+            await self._ws.send(f"PRIVMSG #{self._channel} :{text}")
         return True
 
     def on_message(self, callback: Callable[[ChatMessage], None]) -> None:
@@ -301,5 +341,6 @@ class TwitchChatClient:
                     platform="twitch",
                     channel_id=self._channel,
                     error=error,
+                    authenticated=self._authenticated,
                 )
             )

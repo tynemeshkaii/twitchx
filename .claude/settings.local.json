@@ -20,7 +20,16 @@
       "Bash(echo \"EXIT: $?\")",
       "Bash(TWITCHX_DEBUG=1 uv run python -c \":*)",
       "Bash(gtimeout 8 uv run python main.py)",
-      "Bash(python3 -c \"import webview; print\\(webview.__file__\\)\")"
+      "Bash(python3 -c \"import webview; print\\(webview.__file__\\)\")",
+      "Bash(make fmt:*)",
+      "Bash(git reset:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(grep -o ❌[^\"\"]* /Users/pesnya/.claude/projects/-Users-pesnya-Documents-streamdeck/0cb098da-1c0c-4e9d-bdbf-f706254d53e0/tool-results/bq97m8bw6.txt)",
+      "Bash(grep -o ✅[^\"\"]* /Users/pesnya/.claude/projects/-Users-pesnya-Documents-streamdeck/0cb098da-1c0c-4e9d-bdbf-f706254d53e0/tool-results/bq97m8bw6.txt)",
+      "Bash(grep -o ❌[^\"\"]* /Users/pesnya/.claude/projects/-Users-pesnya-Documents-streamdeck/0cb098da-1c0c-4e9d-bdbf-f706254d53e0/tool-results/bs1vct3k6.txt)",
+      "Bash(grep -o Issue[^\"\"]* /Users/pesnya/.claude/projects/-Users-pesnya-Documents-streamdeck/0cb098da-1c0c-4e9d-bdbf-f706254d53e0/tool-results/bs1vct3k6.txt)",
+      "Bash(grep -o Assessment[^\"\"]* /Users/pesnya/.claude/projects/-Users-pesnya-Documents-streamdeck/0cb098da-1c0c-4e9d-bdbf-f706254d53e0/tool-results/bs1vct3k6.txt)"
     ]
   }
 }

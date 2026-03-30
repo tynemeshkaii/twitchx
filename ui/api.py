@@ -1215,39 +1215,68 @@ class TwitchXApi:
         if self._chat_client:
             client = self._chat_client
             client._running = False
-            if client._ws:
-
-                def do_close() -> None:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    try:
-                        loop.run_until_complete(client.disconnect())
-                    except Exception:
-                        pass
-                    finally:
-                        loop.close()
-
-                threading.Thread(target=do_close, daemon=True).start()
+            loop = client._loop
+            if loop and not loop.is_closed():
+                fut = asyncio.run_coroutine_threadsafe(client.disconnect(), loop)
+                with contextlib.suppress(Exception):
+                    fut.result(timeout=3)
         self._chat_client = None
         self._chat_thread = None
 
-    def send_chat(self, text: str) -> None:
-        """Send a chat message."""
+    def send_chat(
+        self,
+        text: str,
+        reply_to: str | None = None,
+        reply_display: str | None = None,
+        reply_body: str | None = None,
+    ) -> None:
+        """Send a chat message, optionally as a reply.
+
+        After sending, pushes a local echo to JS because Twitch IRC
+        does not echo your own messages back.
+        """
         if not self._chat_client or not text:
             return
         client = self._chat_client
+        loop = client._loop
+        if not loop or loop.is_closed():
+            return
 
-        def do_send() -> None:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+        twitch_conf = get_platform_config(self._config, "twitch")
+        login = twitch_conf.get("user_login", "")
+        display = twitch_conf.get("user_display_name", "") or login
+
+        def _do_send() -> None:
+            future = asyncio.run_coroutine_threadsafe(
+                client.send_message(text, reply_to=reply_to), loop
+            )
             try:
-                loop.run_until_complete(client.send_message(text))
+                ok = future.result(timeout=5)
             except Exception:
-                pass
-            finally:
-                loop.close()
+                ok = False
+            if ok:
+                echo = json.dumps(
+                    {
+                        "platform": "twitch",
+                        "author": login,
+                        "author_display": display,
+                        "author_color": None,
+                        "text": text,
+                        "timestamp": "",
+                        "badges": [],
+                        "emotes": [],
+                        "is_system": False,
+                        "message_type": "text",
+                        "msg_id": None,
+                        "reply_to_id": reply_to,
+                        "reply_to_display": reply_display,
+                        "reply_to_body": reply_body,
+                        "is_self": True,
+                    }
+                )
+                self._eval_js(f"window.onChatMessage({echo})")
 
-        threading.Thread(target=do_send, daemon=True).start()
+        threading.Thread(target=_do_send, daemon=True).start()
 
     def save_chat_width(self, width: int) -> None:
         """Persist chat panel width."""
@@ -1278,6 +1307,10 @@ class TwitchXApi:
                 ],
                 "is_system": msg.is_system,
                 "message_type": msg.message_type,
+                "msg_id": msg.msg_id,
+                "reply_to_id": msg.reply_to_id,
+                "reply_to_display": msg.reply_to_display,
+                "reply_to_body": msg.reply_to_body,
             }
         )
         self._eval_js(f"window.onChatMessage({data})")
@@ -1290,6 +1323,7 @@ class TwitchXApi:
                 "platform": status.platform,
                 "channel_id": status.channel_id,
                 "error": status.error,
+                "authenticated": status.authenticated,
             }
         )
         self._eval_js(f"window.onChatStatus({data})")

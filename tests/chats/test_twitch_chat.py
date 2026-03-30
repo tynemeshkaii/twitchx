@@ -316,6 +316,7 @@ class TestTwitchChatClientSend:
     async def test_send_authenticated_returns_true(self) -> None:
         client = TwitchChatClient()
         client._authenticated = True
+        client._running = True
         client._ws = AsyncMock()
         client._channel = "test"
         result = await client.send_message("hello")
@@ -360,3 +361,67 @@ class TestTwitchChatClientMessageCallback:
         assert len(received) == 1
         assert received[0].text == "hello chat"
         assert received[0].author == "testuser"
+
+
+class TestTwitchChatClientLoginFailure:
+    async def test_login_failure_falls_back_to_anonymous(self) -> None:
+        """When Twitch rejects auth, client should reconnect as anonymous."""
+        statuses: list[dict[str, Any]] = []
+
+        def on_status(s: Any) -> None:
+            statuses.append({"connected": s.connected, "error": s.error})
+
+        # First connection: authenticated, gets login failure
+        ws1 = AsyncMock()
+        ws1.close = AsyncMock()
+        ws1.send = AsyncMock()
+        ws1_msgs = [":tmi.twitch.tv NOTICE * :Login unsuccessful"]
+
+        async def ws1_recv() -> str:
+            if not ws1_msgs:
+                raise websockets.exceptions.ConnectionClosedOK(None, None)
+            return ws1_msgs.pop(0)
+
+        ws1.recv = ws1_recv
+
+        # Second connection: anonymous, succeeds then closes
+        ws2 = AsyncMock()
+        ws2.close = AsyncMock()
+        ws2.send = AsyncMock()
+
+        async def ws2_recv() -> str:
+            raise websockets.exceptions.ConnectionClosedOK(None, None)
+
+        ws2.recv = ws2_recv
+
+        call_count = 0
+
+        @asynccontextmanager
+        async def fake_connect(*_a: Any, **_k: Any):  # type: ignore[type-arg]
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                yield ws1
+            elif call_count == 2:
+                yield ws2
+            else:
+                raise websockets.exceptions.ConnectionClosedOK(None, None)
+
+        client = TwitchChatClient()
+        client.on_status(on_status)
+
+        with patch("core.chats.twitch_chat.websockets.connect", fake_connect):
+            await client.connect("testchannel", token="badtoken", login="badlogin")
+
+        # Should have fallen back to anonymous
+        assert client._authenticated is False
+        assert client._login is None
+
+        # Second connection should use anonymous creds
+        ws2_calls = [c.args[0] for c in ws2.send.call_args_list]
+        assert "PASS SCHMOOPIIE" in ws2_calls
+        assert "NICK justinfan12345" in ws2_calls
+
+        # Status should include the "anonymous" error
+        anon_statuses = [s for s in statuses if s["error"] == "anonymous"]
+        assert len(anon_statuses) >= 1

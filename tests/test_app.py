@@ -37,7 +37,12 @@ class TestMigrateFavorites:
         """v1 string favorites are converted to v2 dict objects."""
         config = {
             "platforms": {"twitch": {}, "kick": {}, "youtube": {}},
-            "favorites": ["https://twitch.tv/xqc", "just_ns", "twitch.tv/xqc", "good123"],
+            "favorites": [
+                "https://twitch.tv/xqc",
+                "just_ns",
+                "twitch.tv/xqc",
+                "good123",
+            ],
             "settings": {},
         }
         monkeypatch.setattr("app.load_config", lambda: config)
@@ -61,7 +66,11 @@ class TestMigrateFavorites:
             "platforms": {"twitch": {}, "kick": {}, "youtube": {}},
             "favorites": [
                 {"platform": "twitch", "login": "xqc", "display_name": "xQc"},
-                {"platform": "kick", "login": "trainwreck", "display_name": "Trainwreck"},
+                {
+                    "platform": "kick",
+                    "login": "trainwreck",
+                    "display_name": "Trainwreck",
+                },
             ],
             "settings": {},
         }

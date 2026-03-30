@@ -19,7 +19,7 @@ VALID_USERNAME = re.compile(r"^[a-zA-Z0-9_]{1,25}$")
 TWITCH_AUTH_URL = "https://id.twitch.tv/oauth2/token"
 TWITCH_API_URL = "https://api.twitch.tv/helix"
 TWITCH_REDIRECT_URI = "http://localhost:3457/callback"
-OAUTH_SCOPE = "user:read:follows"
+OAUTH_SCOPE = "user:read:follows chat:read chat:edit"
 
 
 class TwitchClient:

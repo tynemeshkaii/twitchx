@@ -42,6 +42,10 @@ class ChatMessage:
     is_system: bool
     message_type: str  # "text" | "super_chat" | "sub" | "raid" | "donation"
     raw: dict[str, Any]
+    msg_id: str | None = None
+    reply_to_id: str | None = None
+    reply_to_display: str | None = None
+    reply_to_body: str | None = None
 
 
 @dataclass
@@ -52,6 +56,7 @@ class ChatStatus:
     platform: str
     channel_id: str
     error: str | None
+    authenticated: bool = False
 
 
 class ChatClient(ABC):
