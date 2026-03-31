@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
+from collections.abc import Callable
 from typing import Any
 
-from core.chat import Badge, ChatMessage, Emote
+import websockets
+
+from core.chat import Badge, ChatMessage, ChatStatus, Emote
 
 logger = logging.getLogger(__name__)
 
@@ -109,3 +113,145 @@ def parse_kick_event(event: dict[str, Any]) -> ChatMessage | None:
         raw=data,
         msg_id=data.get("id"),
     )
+
+
+# ── KickChatClient ─────────────────────────────────────────────────
+
+PUSHER_URL = (
+    "wss://ws-us2.pusher.com/app/eb1d5f283081a78b932c"
+    "?protocol=7&client=js&version=8.4.0-rc2&flash=false"
+)
+RECONNECT_DELAYS = [3, 6, 12, 24, 48]
+
+
+class KickChatClient:
+    """Pusher WebSocket client for Kick chat."""
+
+    platform = "kick"
+
+    def __init__(self) -> None:
+        self._ws: Any = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._message_callback: Callable[[ChatMessage], None] | None = None
+        self._status_callback: Callable[[ChatStatus], None] | None = None
+        self._channel: str | None = None
+        self._chatroom_id: int | None = None
+        self._running = False
+        self._authenticated = False
+        self._token: str | None = None
+
+    async def connect(
+        self,
+        channel_id: str,
+        token: str | None = None,
+        chatroom_id: int | None = None,
+    ) -> None:
+        """Connect to Kick chat via Pusher WebSocket."""
+        self._channel = channel_id
+        self._chatroom_id = chatroom_id
+        self._running = True
+        self._loop = asyncio.get_event_loop()
+        self._authenticated = token is not None
+        self._token = token
+
+        pusher_channel = f"chatrooms.{chatroom_id}.v2"
+        attempt = 0
+
+        while self._running:
+            try:
+                async with websockets.connect(PUSHER_URL) as ws:
+                    self._ws = ws
+
+                    # Wait for connection_established
+                    raw = await ws.recv()
+                    event = json.loads(raw)
+                    if event.get("event") != "pusher:connection_established":
+                        continue
+
+                    # Subscribe to chatroom
+                    await ws.send(json.dumps({
+                        "event": "pusher:subscribe",
+                        "data": {"channel": pusher_channel},
+                    }))
+
+                    attempt = 0
+                    self._emit_status(connected=True)
+
+                    while self._running:
+                        raw = await ws.recv()
+                        if isinstance(raw, bytes):
+                            raw = raw.decode("utf-8", errors="replace")
+                        event = json.loads(raw)
+                        ev_name = event.get("event", "")
+
+                        if ev_name == "pusher:ping":
+                            await ws.send(json.dumps({"event": "pusher:pong"}))
+                            continue
+
+                        if ev_name in (
+                            "pusher_internal:subscription_succeeded",
+                            "pusher:connection_established",
+                        ):
+                            continue
+
+                        msg = parse_kick_event(event)
+                        if msg and self._message_callback:
+                            self._message_callback(msg)
+
+            except websockets.exceptions.ConnectionClosedOK:
+                self._emit_status(connected=False)
+                break
+            except Exception:
+                if not self._running:
+                    break
+                delay = (
+                    RECONNECT_DELAYS[attempt]
+                    if attempt < len(RECONNECT_DELAYS)
+                    else RECONNECT_DELAYS[-1]
+                )
+                attempt += 1
+                if attempt >= len(RECONNECT_DELAYS):
+                    self._emit_status(
+                        connected=False, error="Max reconnect attempts reached"
+                    )
+                    break
+                logger.warning(
+                    "Kick chat disconnected, reconnecting in %ds (attempt %d)",
+                    delay,
+                    attempt,
+                )
+                self._emit_status(
+                    connected=False,
+                    error=f"Reconnecting in {delay}s (attempt {attempt})",
+                )
+                await asyncio.sleep(delay)
+
+        self._ws = None
+
+    async def disconnect(self) -> None:
+        """Disconnect from chat."""
+        self._running = False
+        if self._ws:
+            await self._ws.close()
+            self._ws = None
+        self._emit_status(connected=False)
+
+    def on_message(self, callback: Callable[[ChatMessage], None]) -> None:
+        """Register message callback."""
+        self._message_callback = callback
+
+    def on_status(self, callback: Callable[[ChatStatus], None]) -> None:
+        """Register status callback."""
+        self._status_callback = callback
+
+    def _emit_status(self, connected: bool, error: str | None = None) -> None:
+        if self._status_callback and self._channel:
+            self._status_callback(
+                ChatStatus(
+                    connected=connected,
+                    platform="kick",
+                    channel_id=self._channel,
+                    error=error,
+                    authenticated=self._authenticated,
+                )
+            )

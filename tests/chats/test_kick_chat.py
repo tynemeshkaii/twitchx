@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
-from core.chat import Emote
-from core.chats.kick_chat import parse_kick_emotes
+import json
+from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock, patch
+
+import websockets.exceptions
+
+from core.chat import ChatMessage, Emote
+from core.chats.kick_chat import KickChatClient, parse_kick_emotes
 
 
 class TestParseKickEmotes:
@@ -48,10 +54,7 @@ class TestParseKickEmotes:
         assert emotes[1].start == 1
         assert emotes[1].end == 1
 
-
-import json
-
-from core.chat import Badge, ChatMessage
+from core.chat import Badge
 from core.chats.kick_chat import parse_kick_event
 
 
@@ -233,3 +236,195 @@ class TestParseKickEvent:
         msg = parse_kick_event(self._make_event(data))
         assert msg is not None
         assert msg.author_color is None
+
+
+def _make_kick_ws_mock(recv_side_effect: list) -> AsyncMock:
+    """Create a mock websocket that yields messages then closes."""
+    mock_ws = AsyncMock()
+
+    async def _recv() -> str:
+        if not recv_side_effect:
+            raise websockets.exceptions.ConnectionClosedOK(None, None)
+        val = recv_side_effect.pop(0)
+        if isinstance(val, Exception):
+            raise val
+        return val
+
+    mock_ws.recv = _recv
+    mock_ws.close = AsyncMock()
+    mock_ws.send = AsyncMock()
+    return mock_ws
+
+
+@asynccontextmanager
+async def _patch_kick_ws(mock_ws: AsyncMock):
+    """Patch websockets.connect for Kick chat, one connection only."""
+    call_count = 0
+
+    @asynccontextmanager
+    async def _fake_connect(*_args, **_kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count > 1:
+            raise websockets.exceptions.ConnectionClosedOK(None, None)
+        yield mock_ws
+
+    with patch("core.chats.kick_chat.websockets.connect", _fake_connect):
+        yield
+
+
+class TestKickChatClientInit:
+    def test_initial_state(self) -> None:
+        client = KickChatClient()
+        assert client.platform == "kick"
+        assert client._ws is None
+        assert client._channel is None
+        assert client._running is False
+        assert client._authenticated is False
+
+
+class TestKickChatClientConnect:
+    async def test_connects_and_subscribes(self) -> None:
+        client = KickChatClient()
+        conn_msg = json.dumps({
+            "event": "pusher:connection_established",
+            "data": json.dumps({"socket_id": "123.456", "activity_timeout": 120}),
+        })
+        sub_ok = json.dumps({
+            "event": "pusher_internal:subscription_succeeded",
+            "channel": "chatrooms.99.v2",
+            "data": "{}",
+        })
+        mock_ws = _make_kick_ws_mock([conn_msg, sub_ok])
+
+        async with _patch_kick_ws(mock_ws):
+            await client.connect(channel_id="testslug", chatroom_id=99)
+
+        send_calls = [c.args[0] for c in mock_ws.send.call_args_list]
+        expected_sub = json.dumps({
+            "event": "pusher:subscribe",
+            "data": {"channel": "chatrooms.99.v2"},
+        })
+        assert expected_sub in send_calls
+
+    async def test_status_callback_on_connect(self) -> None:
+        client = KickChatClient()
+        statuses = []
+        client.on_status(lambda s: statuses.append(s.connected))
+
+        conn_msg = json.dumps({
+            "event": "pusher:connection_established",
+            "data": json.dumps({"socket_id": "1.2", "activity_timeout": 120}),
+        })
+        sub_ok = json.dumps({
+            "event": "pusher_internal:subscription_succeeded",
+            "channel": "chatrooms.1.v2",
+            "data": "{}",
+        })
+        mock_ws = _make_kick_ws_mock([conn_msg, sub_ok])
+
+        async with _patch_kick_ws(mock_ws):
+            await client.connect(channel_id="ch", chatroom_id=1)
+
+        assert True in statuses
+
+
+class TestKickChatClientDisconnect:
+    async def test_disconnect_sets_running_false(self) -> None:
+        client = KickChatClient()
+        client._running = True
+        client._ws = AsyncMock()
+        await client.disconnect()
+        assert client._running is False
+
+
+class TestKickChatClientPing:
+    async def test_pusher_ping_triggers_pong(self) -> None:
+        client = KickChatClient()
+        conn_msg = json.dumps({
+            "event": "pusher:connection_established",
+            "data": json.dumps({"socket_id": "1.2", "activity_timeout": 120}),
+        })
+        sub_ok = json.dumps({
+            "event": "pusher_internal:subscription_succeeded",
+            "channel": "chatrooms.1.v2",
+            "data": "{}",
+        })
+        ping = json.dumps({"event": "pusher:ping"})
+        mock_ws = _make_kick_ws_mock([conn_msg, sub_ok, ping])
+
+        async with _patch_kick_ws(mock_ws):
+            await client.connect(channel_id="ch", chatroom_id=1)
+
+        send_calls = [c.args[0] for c in mock_ws.send.call_args_list]
+        pong = json.dumps({"event": "pusher:pong"})
+        assert pong in send_calls
+
+
+class TestKickChatClientMessageCallback:
+    async def test_chat_message_triggers_callback(self) -> None:
+        client = KickChatClient()
+        received: list[ChatMessage] = []
+        client.on_message(lambda m: received.append(m))
+
+        conn_msg = json.dumps({
+            "event": "pusher:connection_established",
+            "data": json.dumps({"socket_id": "1.2", "activity_timeout": 120}),
+        })
+        sub_ok = json.dumps({
+            "event": "pusher_internal:subscription_succeeded",
+            "channel": "chatrooms.1.v2",
+            "data": "{}",
+        })
+        chat_data = {
+            "id": "msg-1",
+            "chatroom_id": 1,
+            "content": "hello kick chat",
+            "type": "message",
+            "created_at": "2024-01-01T00:00:00Z",
+            "sender": {
+                "id": 1,
+                "username": "Tester",
+                "slug": "tester",
+                "identity": {"color": "#FF0000", "badges": []},
+            },
+        }
+        chat_event = json.dumps({
+            "event": "App\\Events\\ChatMessageSentEvent",
+            "data": json.dumps(chat_data),
+            "channel": "chatrooms.1.v2",
+        })
+        mock_ws = _make_kick_ws_mock([conn_msg, sub_ok, chat_event])
+
+        async with _patch_kick_ws(mock_ws):
+            await client.connect(channel_id="ch", chatroom_id=1)
+
+        assert len(received) == 1
+        assert received[0].text == "hello kick chat"
+        assert received[0].author == "tester"
+
+
+class TestKickChatClientReconnect:
+    async def test_reconnects_on_error(self) -> None:
+        client = KickChatClient()
+        statuses: list[dict] = []
+        client.on_status(lambda s: statuses.append({"connected": s.connected, "error": s.error}))
+
+        call_count = 0
+
+        @asynccontextmanager
+        async def _fake_connect(*_a, **_k):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise ConnectionError("boom")
+            if call_count == 2:
+                raise ConnectionError("boom again")
+            raise ConnectionError("boom 3")
+
+        with patch("core.chats.kick_chat.websockets.connect", _fake_connect):
+            with patch("core.chats.kick_chat.asyncio.sleep", new_callable=AsyncMock):
+                await client.connect(channel_id="ch", chatroom_id=1)
+
+        reconnect_errors = [s for s in statuses if s["error"] and "Reconnecting" in s["error"]]
+        assert len(reconnect_errors) >= 1
