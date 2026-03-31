@@ -19,6 +19,7 @@ import httpx
 from PIL import Image
 
 from core.chat import ChatMessage, ChatStatus
+from core.chats.kick_chat import KickChatClient
 from core.chats.twitch_chat import TwitchChatClient
 from core.launcher import launch_stream
 from core.oauth_server import wait_for_oauth_code
@@ -66,7 +67,7 @@ class TwitchXApi:
         # User avatar URLs for lazy loading
         self._user_avatars: dict[str, str] = {}
         # Chat
-        self._chat_client: TwitchChatClient | None = None
+        self._chat_client: TwitchChatClient | KickChatClient | None = None
         self._chat_thread: threading.Thread | None = None
 
         # Restore user profile if logged in
@@ -1184,31 +1185,66 @@ class TwitchXApi:
         """Start chat for a channel. Called when entering player-view."""
         self.stop_chat()
 
-        if platform != "twitch":
-            return  # Only Twitch chat for now
+        if platform == "twitch":
+            twitch_conf = get_platform_config(self._config, "twitch")
+            token = twitch_conf.get("access_token") or None
+            login = twitch_conf.get("user_login") or None
 
-        twitch_conf = get_platform_config(self._config, "twitch")
-        token = twitch_conf.get("access_token") or None
-        login = twitch_conf.get("user_login") or None
+            self._chat_client = TwitchChatClient()
+            self._chat_client.on_message(self._on_chat_message)
+            self._chat_client.on_status(self._on_chat_status)
 
-        self._chat_client = TwitchChatClient()
-        self._chat_client.on_message(self._on_chat_message)
-        self._chat_client.on_status(self._on_chat_status)
+            def run_chat() -> None:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(
+                        self._chat_client.connect(channel, token=token, login=login)  # type: ignore[union-attr]
+                    )
+                except Exception:
+                    pass
+                finally:
+                    loop.close()
 
-        def run_chat() -> None:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                loop.run_until_complete(
-                    self._chat_client.connect(channel, token=token, login=login)  # type: ignore[union-attr]
-                )
-            except Exception:
-                pass
-            finally:
-                loop.close()
+            self._chat_thread = threading.Thread(target=run_chat, daemon=True)
+            self._chat_thread.start()
 
-        self._chat_thread = threading.Thread(target=run_chat, daemon=True)
-        self._chat_thread.start()
+        elif platform == "kick":
+            kick_conf = get_platform_config(self._config, "kick")
+            token = kick_conf.get("access_token") or None
+
+            self._chat_client = KickChatClient()
+            self._chat_client.on_message(self._on_chat_message)
+            self._chat_client.on_status(self._on_chat_status)
+
+            def run_kick_chat() -> None:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    # Fetch chatroom_id from channel info
+                    kick_client = self._platforms.get("kick")
+                    if not kick_client:
+                        return
+                    info = loop.run_until_complete(kick_client.get_channel_info(channel))
+                    chatroom_id = None
+                    if isinstance(info, dict):
+                        chatroom = info.get("chatroom", {})
+                        chatroom_id = chatroom.get("id") if isinstance(chatroom, dict) else info.get("chatroom_id")
+                    if chatroom_id is None:
+                        self._on_chat_status(
+                            ChatStatus(connected=False, platform="kick", channel_id=channel, error="No chatroom found")
+                        )
+                        return
+                    loop.run_until_complete(
+                        self._chat_client.connect(channel, token=token, chatroom_id=chatroom_id)  # type: ignore[union-attr]
+                    )
+                except Exception:
+                    pass
+                finally:
+                    loop.close()
+
+            self._chat_thread = threading.Thread(target=run_kick_chat, daemon=True)
+            self._chat_thread.start()
 
     def stop_chat(self) -> None:
         """Stop current chat connection."""
@@ -1233,7 +1269,8 @@ class TwitchXApi:
         """Send a chat message, optionally as a reply.
 
         After sending, pushes a local echo to JS because Twitch IRC
-        does not echo your own messages back.
+        does not echo your own messages back. Kick Pusher may echo back,
+        but we add local echo for consistency — JS deduplicates by msg_id.
         """
         if not self._chat_client or not text:
             return
@@ -1242,9 +1279,10 @@ class TwitchXApi:
         if not loop or loop.is_closed():
             return
 
-        twitch_conf = get_platform_config(self._config, "twitch")
-        login = twitch_conf.get("user_login", "")
-        display = twitch_conf.get("user_display_name", "") or login
+        platform = client.platform
+        conf = get_platform_config(self._config, platform)
+        login = conf.get("user_login", "")
+        display = conf.get("user_display_name", "") or login
 
         def _do_send() -> None:
             future = asyncio.run_coroutine_threadsafe(
@@ -1257,7 +1295,7 @@ class TwitchXApi:
             if ok:
                 echo = json.dumps(
                     {
-                        "platform": "twitch",
+                        "platform": platform,
                         "author": login,
                         "author_display": display,
                         "author_color": None,
