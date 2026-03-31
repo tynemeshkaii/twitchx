@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import json
 from contextlib import asynccontextmanager
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import websockets.exceptions
 
-from core.chat import ChatMessage, Emote
-from core.chats.kick_chat import KickChatClient, parse_kick_emotes
+from core.chat import Badge, ChatMessage, Emote
+from core.chats.kick_chat import KickChatClient, parse_kick_emotes, parse_kick_event
 
 
 class TestParseKickEmotes:
@@ -53,9 +54,6 @@ class TestParseKickEmotes:
         assert emotes[0].end == 0
         assert emotes[1].start == 1
         assert emotes[1].end == 1
-
-from core.chat import Badge
-from core.chats.kick_chat import parse_kick_event
 
 
 class TestParseKickEvent:
@@ -413,7 +411,7 @@ class TestKickChatClientReconnect:
         call_count = 0
 
         @asynccontextmanager
-        async def _fake_connect(*_a, **_k):
+        async def _fake_connect(*_a: Any, **_k: Any):  # type: ignore[type-arg]
             nonlocal call_count
             call_count += 1
             if call_count == 1:
@@ -421,9 +419,10 @@ class TestKickChatClientReconnect:
             if call_count == 2:
                 raise ConnectionError("boom again")
             raise ConnectionError("boom 3")
+            yield  # unreachable, but makes this a valid async generator
 
-        with patch("core.chats.kick_chat.websockets.connect", _fake_connect):
-            with patch("core.chats.kick_chat.asyncio.sleep", new_callable=AsyncMock):
+        with patch("core.chats.kick_chat.websockets.connect", _fake_connect), \
+             patch("core.chats.kick_chat.asyncio.sleep", new_callable=AsyncMock):
                 await client.connect(channel_id="ch", chatroom_id=1)
 
         reconnect_errors = [s for s in statuses if s["error"] and "Reconnecting" in s["error"]]
