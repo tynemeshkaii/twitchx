@@ -9,6 +9,7 @@ import re
 from collections.abc import Callable
 from typing import Any
 
+import httpx
 import websockets
 
 from core.chat import Badge, ChatMessage, ChatStatus, Emote
@@ -243,6 +244,34 @@ class KickChatClient:
     def on_status(self, callback: Callable[[ChatStatus], None]) -> None:
         """Register status callback."""
         self._status_callback = callback
+
+    async def send_message(self, text: str, reply_to: str | None = None) -> bool:
+        """Send a chat message via REST API. Returns False if not authenticated."""
+        if not self._authenticated or not self._running:
+            return False
+        if not self._token or not self._chatroom_id:
+            return False
+
+        body: dict[str, Any] = {
+            "content": text,
+            "chatroom_id": self._chatroom_id,
+            "type": "message",
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    "https://api.kick.com/public/v1/chat",
+                    headers={
+                        "Authorization": f"Bearer {self._token}",
+                        "Content-Type": "application/json",
+                    },
+                    json=body,
+                )
+                return resp.status_code == 200
+        except Exception:
+            logger.warning("Failed to send Kick chat message")
+            return False
 
     def _emit_status(self, connected: bool, error: str | None = None) -> None:
         if self._status_callback and self._channel:

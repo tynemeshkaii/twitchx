@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from contextlib import asynccontextmanager
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import websockets.exceptions
 
@@ -428,3 +428,48 @@ class TestKickChatClientReconnect:
 
         reconnect_errors = [s for s in statuses if s["error"] and "Reconnecting" in s["error"]]
         assert len(reconnect_errors) >= 1
+
+
+class TestKickChatClientSend:
+    async def test_send_without_token_returns_false(self) -> None:
+        client = KickChatClient()
+        client._authenticated = False
+        client._running = True
+        client._chatroom_id = 1
+        result = await client.send_message("hello")
+        assert result is False
+
+    async def test_send_with_token_posts_rest(self) -> None:
+        client = KickChatClient()
+        client._authenticated = True
+        client._running = True
+        client._token = "test-token"
+        client._chatroom_id = 99
+        client._channel = "testch"
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_resp)
+
+        with patch("core.chats.kick_chat.httpx.AsyncClient") as mock_cls:
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await client.send_message("hello kick")
+
+        assert result is True
+        mock_client.post.assert_called_once()
+        call_kwargs = mock_client.post.call_args
+        assert call_kwargs[1]["json"]["content"] == "hello kick"
+        assert call_kwargs[1]["json"]["chatroom_id"] == 99
+        assert "Bearer test-token" in call_kwargs[1]["headers"]["Authorization"]
+
+    async def test_send_no_chatroom_returns_false(self) -> None:
+        client = KickChatClient()
+        client._authenticated = True
+        client._running = True
+        client._token = "tok"
+        client._chatroom_id = None
+        result = await client.send_message("hello")
+        assert result is False
