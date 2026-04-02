@@ -32,6 +32,19 @@ class TestSanitizeUsername:
         assert TwitchXApp._sanitize_username("@#$%") == ""
 
 
+class TestSanitizeFavoriteLogin:
+    def test_kick_url(self) -> None:
+        assert (
+            TwitchXApp._sanitize_favorite_login(
+                "https://kick.com/train-wreck", "kick"
+            )
+            == "train-wreck"
+        )
+
+    def test_kick_hyphen(self) -> None:
+        assert TwitchXApp._sanitize_favorite_login("train-wreck", "kick") == "train-wreck"
+
+
 class TestMigrateFavorites:
     def test_cleans_v1_urls(self, tmp_path, monkeypatch) -> None:
         """v1 string favorites are converted to v2 dict objects."""
@@ -126,3 +139,49 @@ class TestMigrateFavorites:
 
         assert len(config["favorites"]) == 2
         assert save_called == []  # No change needed
+
+    def test_keeps_kick_slug_hyphen(self, tmp_path, monkeypatch) -> None:
+        config = {
+            "platforms": {"twitch": {}, "kick": {}, "youtube": {}},
+            "favorites": [
+                {
+                    "platform": "kick",
+                    "login": "train-wreck",
+                    "display_name": "Train Wreck",
+                },
+            ],
+            "settings": {},
+        }
+        monkeypatch.setattr("app.load_config", lambda: config)
+        save_called = []
+        monkeypatch.setattr("app.save_config", lambda c: save_called.append(True))
+
+        app = TwitchXApp.__new__(TwitchXApp)
+        app._api = type("FakeApi", (), {"set_window": lambda s, w: None})()  # type: ignore[assignment]
+        app._config = config
+        app._migrate_favorites()
+
+        assert config["favorites"][0]["login"] == "train-wreck"
+        assert save_called == []
+
+    def test_normalizes_kick_url_in_v2_favorites(self, tmp_path, monkeypatch) -> None:
+        config = {
+            "platforms": {"twitch": {}, "kick": {}, "youtube": {}},
+            "favorites": [
+                {
+                    "platform": "kick",
+                    "login": "https://kick.com/train-wreck",
+                    "display_name": "Train Wreck",
+                },
+            ],
+            "settings": {},
+        }
+        monkeypatch.setattr("app.load_config", lambda: config)
+        monkeypatch.setattr("app.save_config", lambda c: None)
+
+        app = TwitchXApp.__new__(TwitchXApp)
+        app._api = type("FakeApi", (), {"set_window": lambda s, w: None})()  # type: ignore[assignment]
+        app._config = config
+        app._migrate_favorites()
+
+        assert config["favorites"][0]["login"] == "train-wreck"

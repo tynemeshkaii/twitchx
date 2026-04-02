@@ -190,6 +190,40 @@ class TestSearchChannels:
         loop.run_until_complete(client.close())
         loop.close()
 
+    def test_uses_typesense_channel_search(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client = KickClient()
+
+        async def fake_typesense(query: str) -> list[dict[str, object]]:
+            assert query == "chessbrah"
+            return [
+                {
+                    "slug": "chessbrah",
+                    "username": "chessbrah",
+                    "is_live": True,
+                    "verified": True,
+                }
+            ]
+
+        monkeypatch.setattr(client, "_search_typesense_channels", fake_typesense)
+
+        loop = asyncio.new_event_loop()
+        try:
+            result = loop.run_until_complete(client.search_channels("chessbrah"))
+        finally:
+            loop.run_until_complete(client.close())
+            loop.close()
+
+        assert result == [
+            {
+                "slug": "chessbrah",
+                "username": "chessbrah",
+                "is_live": True,
+                "verified": True,
+            }
+        ]
+
 
 class TestGetFollowedChannels:
     def test_always_returns_empty_list(self) -> None:
@@ -199,6 +233,100 @@ class TestGetFollowedChannels:
         assert result == []
         loop.run_until_complete(client.close())
         loop.close()
+
+
+class TestGetCurrentUser:
+    def test_merges_user_profile_with_channel_slug(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client = KickClient()
+
+        async def fake_get(
+            url: str, params: object = None, auth_required: bool = False
+        ) -> dict[str, object]:
+            if url.endswith("/public/v1/users"):
+                return {
+                    "data": [
+                        {
+                            "user_id": 123,
+                            "name": "John Doe",
+                            "profile_picture": "https://kick.com/avatar.webp",
+                        }
+                    ]
+                }
+            if url.endswith("/public/v1/channels"):
+                return {
+                    "data": [
+                        {
+                            "slug": "john-doe",
+                            "broadcaster_user_id": 123,
+                        }
+                    ]
+                }
+            raise AssertionError(f"Unexpected URL: {url}")
+
+        monkeypatch.setattr(client, "_get", fake_get)
+
+        loop = asyncio.new_event_loop()
+        try:
+            user = loop.run_until_complete(client.get_current_user())
+        finally:
+            loop.run_until_complete(client.close())
+            loop.close()
+
+        assert user["user_id"] == 123
+        assert user["name"] == "John Doe"
+        assert user["slug"] == "john-doe"
+        assert user["channel"]["slug"] == "john-doe"
+
+
+class TestGetChannelInfo:
+    def test_merges_public_channel_with_legacy_chat_metadata(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client = KickClient()
+
+        async def fake_get(
+            url: str, params: object = None, auth_required: bool = False
+        ) -> dict[str, object]:
+            assert url.endswith("/public/v1/channels")
+            assert params == [("slug", "vitaly")]
+            return {
+                "data": [
+                    {
+                        "broadcaster_user_id": 21725177,
+                        "slug": "vitaly",
+                        "stream_title": "Public title",
+                    }
+                ]
+            }
+
+        async def fake_legacy(path: str) -> dict[str, object]:
+            if path == "/api/v1/channels/vitaly":
+                return {
+                    "id": 20736988,
+                    "user_id": 21725177,
+                    "slug": "vitaly",
+                }
+            if path == "/api/v2/channels/vitaly/chatroom":
+                return {"id": 20466645, "followers_mode": {"enabled": True}}
+            raise AssertionError(f"Unexpected path: {path}")
+
+        monkeypatch.setattr(client, "_get", fake_get)
+        monkeypatch.setattr(client, "_legacy_get_json", fake_legacy)
+
+        loop = asyncio.new_event_loop()
+        try:
+            info = loop.run_until_complete(client.get_channel_info("vitaly"))
+        finally:
+            loop.run_until_complete(client.close())
+            loop.close()
+
+        assert info["slug"] == "vitaly"
+        assert info["broadcaster_user_id"] == 21725177
+        assert info["channel_id"] == 20736988
+        assert info["chatroom_id"] == 20466645
+        assert info["chatroom"]["followers_mode"]["enabled"] is True
 
 
 # ── Per-event-loop client isolation ─────────────────────────────

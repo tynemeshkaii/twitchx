@@ -12,7 +12,7 @@ from typing import Any
 import httpx
 import websockets
 
-from core.chat import Badge, ChatMessage, ChatStatus, Emote
+from core.chat import Badge, ChatMessage, ChatSendResult, ChatStatus, Emote
 
 logger = logging.getLogger(__name__)
 
@@ -58,10 +58,14 @@ def parse_kick_emotes(text: str) -> tuple[str, list[Emote]]:
     return "".join(clean_parts), emotes
 
 
-_CHAT_EVENT = "App\\Events\\ChatMessageSentEvent"
+_CHAT_EVENTS = {
+    "App\\Events\\ChatMessageEvent",
+    "App\\Events\\ChatMessageSentEvent",
+}
 
 _MSG_TYPE_MAP = {
     "message": "text",
+    "reply": "text",
     "subscription": "sub",
     "gifted_subscription": "sub",
     "raid": "raid",
@@ -70,15 +74,20 @@ _MSG_TYPE_MAP = {
 
 def parse_kick_event(event: dict[str, Any]) -> ChatMessage | None:
     """Parse a Pusher event into ChatMessage. Returns None for non-chat events."""
-    if event.get("event") != _CHAT_EVENT:
+    if event.get("event") not in _CHAT_EVENTS:
         return None
 
     try:
-        data = json.loads(event["data"]) if isinstance(event["data"], str) else event["data"]
+        data = (
+            json.loads(event["data"])
+            if isinstance(event["data"], str)
+            else event["data"]
+        )
     except (json.JSONDecodeError, KeyError):
         return None
 
-    sender = data.get("sender")
+    payload = data.get("message") if isinstance(data.get("message"), dict) else data
+    sender = data.get("user") or payload.get("sender")
     if not sender:
         return None
 
@@ -92,35 +101,55 @@ def parse_kick_event(event: dict[str, Any]) -> ChatMessage | None:
         if "type" in b
     ]
 
-    raw_content = data.get("content", "")
+    raw_content = payload.get("content", payload.get("message", ""))
     text, emotes = parse_kick_emotes(raw_content)
 
-    msg_type_raw = data.get("type", "message")
+    msg_type_raw = payload.get("type", "message")
     message_type = _MSG_TYPE_MAP.get(msg_type_raw, "text")
-    is_system = msg_type_raw != "message"
+    is_system = msg_type_raw not in {"message", "reply"}
+
+    metadata = payload.get("metadata", {})
+    reply_to_id = None
+    reply_to_display = None
+    reply_to_body = None
+    if isinstance(metadata, dict):
+        original_sender = metadata.get("original_sender", {})
+        original_message = metadata.get("original_message", {})
+        if isinstance(original_sender, dict):
+            reply_to_display = original_sender.get("username")
+        if isinstance(original_message, dict):
+            reply_to_id = original_message.get("id")
+            reply_to_body = original_message.get("content")
+
+    author = sender.get("slug", "")
+    if not author and sender.get("username"):
+        author = str(sender["username"]).strip().lower()
 
     return ChatMessage(
         platform="kick",
-        author=sender.get("slug", ""),
+        author=author,
         author_display=sender.get("username", ""),
         author_color=color,
-        avatar_url=None,
+        avatar_url=sender.get("profile_thumb"),
         text=text,
-        timestamp=data.get("created_at", ""),
+        timestamp=payload.get("created_at", data.get("created_at", "")),
         badges=badges,
         emotes=emotes,
         is_system=is_system,
         message_type=message_type,
         raw=data,
-        msg_id=data.get("id"),
+        msg_id=payload.get("id"),
+        reply_to_id=reply_to_id,
+        reply_to_display=reply_to_display,
+        reply_to_body=reply_to_body,
     )
 
 
 # ── KickChatClient ─────────────────────────────────────────────────
 
 PUSHER_URL = (
-    "wss://ws-us2.pusher.com/app/eb1d5f283081a78b932c"
-    "?protocol=7&client=js&version=8.4.0-rc2&flash=false"
+    "wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679"
+    "?protocol=7&client=js&version=8.4.0&flash=false"
 )
 RECONNECT_DELAYS = [3, 6, 12, 24, 48]
 
@@ -137,6 +166,7 @@ class KickChatClient:
         self._status_callback: Callable[[ChatStatus], None] | None = None
         self._channel: str | None = None
         self._chatroom_id: int | None = None
+        self._broadcaster_user_id: int | None = None
         self._running = False
         self._authenticated = False
         self._token: str | None = None
@@ -146,16 +176,25 @@ class KickChatClient:
         channel_id: str,
         token: str | None = None,
         chatroom_id: int | None = None,
+        broadcaster_user_id: int | None = None,
+        can_send: bool | None = None,
     ) -> None:
         """Connect to Kick chat via Pusher WebSocket."""
         self._channel = channel_id
         self._chatroom_id = chatroom_id
+        self._broadcaster_user_id = broadcaster_user_id
         self._running = True
         self._loop = asyncio.get_event_loop()
-        self._authenticated = token is not None
+        self._authenticated = (
+            bool(token) if can_send is None else bool(token) and can_send
+        )
         self._token = token
 
-        pusher_channel = f"chatrooms.{chatroom_id}.v2"
+        pusher_channels = [
+            f"chatrooms.{chatroom_id}.v2",
+            f"chatrooms.{chatroom_id}",
+            f"chatroom_{chatroom_id}",
+        ]
         attempt = 0
 
         while self._running:
@@ -169,11 +208,17 @@ class KickChatClient:
                     if event.get("event") != "pusher:connection_established":
                         continue
 
-                    # Subscribe to chatroom
-                    await ws.send(json.dumps({
-                        "event": "pusher:subscribe",
-                        "data": {"channel": pusher_channel},
-                    }))
+                    # Kick currently acknowledges multiple channel aliases; subscribe
+                    # to all known variants so chat survives backend naming changes.
+                    for pusher_channel in pusher_channels:
+                        await ws.send(
+                            json.dumps(
+                                {
+                                    "event": "pusher:subscribe",
+                                    "data": {"channel": pusher_channel},
+                                }
+                            )
+                        )
 
                     attempt = 0
                     self._emit_status(connected=True)
@@ -245,18 +290,58 @@ class KickChatClient:
         """Register status callback."""
         self._status_callback = callback
 
-    async def send_message(self, text: str, reply_to: str | None = None) -> bool:
-        """Send a chat message via REST API. Returns False if not authenticated."""
+    @staticmethod
+    def _extract_send_error(
+        status_code: int, payload: dict[str, Any], reply_to: str | None
+    ) -> str:
+        message = str(payload.get("message", "")).strip()
+
+        if status_code == 400:
+            return "Kick rejected this message. Check the length and reply target."
+        if status_code == 401:
+            return "Kick chat token expired. Re-login to Kick."
+        if status_code == 403:
+            return (
+                "Kick blocked this message. The channel may be follower-only, "
+                "subscriber-only, or your account may not meet chat requirements."
+            )
+        if status_code == 404 and reply_to:
+            return "Kick could not find the message you're replying to."
+        if status_code == 404:
+            return "Kick could not find this chat channel."
+        if status_code == 429:
+            return "Kick chat rate limit hit. Wait a moment and try again."
+        if message and message.upper() != "OK":
+            return f"Kick chat error: {message}"
+        return "Kick did not accept the message."
+
+    async def send_message(
+        self, text: str, reply_to: str | None = None
+    ) -> ChatSendResult:
+        """Send a chat message via REST API."""
+        channel_id = self._channel or ""
         if not self._authenticated or not self._running:
-            return False
-        if not self._token or not self._chatroom_id:
-            return False
+            return ChatSendResult(
+                ok=False,
+                platform="kick",
+                channel_id=channel_id,
+                error="Kick chat is read-only. Re-login to send.",
+            )
+        if not self._token or not self._broadcaster_user_id:
+            return ChatSendResult(
+                ok=False,
+                platform="kick",
+                channel_id=channel_id,
+                error="Kick chat metadata is incomplete. Reload the stream and try again.",
+            )
 
         body: dict[str, Any] = {
             "content": text,
-            "chatroom_id": self._chatroom_id,
-            "type": "message",
+            "broadcaster_user_id": self._broadcaster_user_id,
+            "type": "user",
         }
+        if reply_to:
+            body["reply_to_message_id"] = reply_to
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
@@ -265,13 +350,52 @@ class KickChatClient:
                     headers={
                         "Authorization": f"Bearer {self._token}",
                         "Content-Type": "application/json",
+                        "Accept": "application/json",
                     },
                     json=body,
                 )
-                return resp.status_code == 200
         except Exception:
-            logger.warning("Failed to send Kick chat message")
-            return False
+            logger.warning("Failed to send Kick chat message", exc_info=True)
+            return ChatSendResult(
+                ok=False,
+                platform="kick",
+                channel_id=channel_id,
+                error="Could not reach the Kick chat API.",
+            )
+
+        try:
+            payload = resp.json()
+        except ValueError:
+            payload = {"message": resp.text[:200].strip()}
+
+        if not (200 <= resp.status_code < 300):
+            return ChatSendResult(
+                ok=False,
+                platform="kick",
+                channel_id=channel_id,
+                error=self._extract_send_error(resp.status_code, payload, reply_to),
+            )
+
+        data: dict[str, Any] = {}
+        if isinstance(payload, dict):
+            raw_data = payload.get("data", {})
+            if isinstance(raw_data, dict):
+                data = raw_data
+        is_sent = bool(data.get("is_sent"))
+        message_id = data.get("message_id")
+        if not is_sent:
+            return ChatSendResult(
+                ok=False,
+                platform="kick",
+                channel_id=channel_id,
+                error="Kick did not confirm that the message was sent.",
+            )
+        return ChatSendResult(
+            ok=True,
+            platform="kick",
+            channel_id=channel_id,
+            message_id=str(message_id) if message_id else None,
+        )
 
     def _emit_status(self, connected: bool, error: str | None = None) -> None:
         if self._status_callback and self._channel:

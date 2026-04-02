@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 
 import httpx
 
-from core.storage import load_config, save_config, token_is_valid
+from core.storage import load_config, token_is_valid, update_config
 
 logger = logging.getLogger(__name__)
 
@@ -108,9 +108,14 @@ class TwitchClient:
         data = resp.json()
         token = data["access_token"]
         expires_in = data.get("expires_in", 3600)
-        tc["access_token"] = token
-        tc["token_expires_at"] = int(time.time()) + expires_in
-        save_config(self._config)
+        expires_at = int(time.time()) + expires_in
+
+        def _apply(cfg: dict) -> None:
+            tc = cfg.get("platforms", {}).get("twitch", {})
+            tc["access_token"] = token
+            tc["token_expires_at"] = expires_at
+
+        self._config = update_config(_apply)
         return token
 
     # ── OAuth (user-level) ───────────────────────────────────────
@@ -158,22 +163,32 @@ class TwitchClient:
         )
         if resp.status_code in (400, 401):
             # Token revoked — clear user auth
-            tc["access_token"] = ""
-            tc["refresh_token"] = ""
-            tc["token_expires_at"] = 0
-            tc["token_type"] = "app"
-            tc["user_id"] = ""
-            tc["user_login"] = ""
-            tc["user_display_name"] = ""
-            save_config(self._config)
+            def _clear(cfg: dict) -> None:
+                tc = cfg.get("platforms", {}).get("twitch", {})
+                tc["access_token"] = ""
+                tc["refresh_token"] = ""
+                tc["token_expires_at"] = 0
+                tc["token_type"] = "app"
+                tc["user_id"] = ""
+                tc["user_login"] = ""
+                tc["user_display_name"] = ""
+
+            self._config = update_config(_clear)
             raise ValueError("User token expired. Please log in again.")
         resp.raise_for_status()
         data = resp.json()
-        tc["access_token"] = data["access_token"]
-        tc["refresh_token"] = data.get("refresh_token", tc["refresh_token"])
-        tc["token_expires_at"] = int(time.time()) + data.get("expires_in", 3600)
-        save_config(self._config)
-        return data["access_token"]
+        new_token = data["access_token"]
+        new_refresh = data.get("refresh_token", tc["refresh_token"])
+        new_expires = int(time.time()) + data.get("expires_in", 3600)
+
+        def _update(cfg: dict) -> None:
+            tc = cfg.get("platforms", {}).get("twitch", {})
+            tc["access_token"] = new_token
+            tc["refresh_token"] = new_refresh
+            tc["token_expires_at"] = new_expires
+
+        self._config = update_config(_update)
+        return new_token
 
     async def get_current_user(self) -> dict[str, Any]:
         data = await self._get("/users")
@@ -228,8 +243,11 @@ class TwitchClient:
             await asyncio.sleep(max(retry_after, 1))
             return await self._get(endpoint, params)
         if resp.status_code == 401:
-            tc["access_token"] = ""
-            save_config(self._config)
+
+            def _clear_token(cfg: dict) -> None:
+                cfg.get("platforms", {}).get("twitch", {})["access_token"] = ""
+
+            self._config = update_config(_clear_token)
             if tc.get("token_type") == "user" and tc.get("refresh_token"):
                 token = await self.refresh_user_token()
             else:

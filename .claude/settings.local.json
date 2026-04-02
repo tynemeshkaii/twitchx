@@ -29,7 +29,16 @@
       "Bash(grep -o ✅[^\"\"]* /Users/pesnya/.claude/projects/-Users-pesnya-Documents-streamdeck/0cb098da-1c0c-4e9d-bdbf-f706254d53e0/tool-results/bq97m8bw6.txt)",
       "Bash(grep -o ❌[^\"\"]* /Users/pesnya/.claude/projects/-Users-pesnya-Documents-streamdeck/0cb098da-1c0c-4e9d-bdbf-f706254d53e0/tool-results/bs1vct3k6.txt)",
       "Bash(grep -o Issue[^\"\"]* /Users/pesnya/.claude/projects/-Users-pesnya-Documents-streamdeck/0cb098da-1c0c-4e9d-bdbf-f706254d53e0/tool-results/bs1vct3k6.txt)",
-      "Bash(grep -o Assessment[^\"\"]* /Users/pesnya/.claude/projects/-Users-pesnya-Documents-streamdeck/0cb098da-1c0c-4e9d-bdbf-f706254d53e0/tool-results/bs1vct3k6.txt)"
+      "Bash(grep -o Assessment[^\"\"]* /Users/pesnya/.claude/projects/-Users-pesnya-Documents-streamdeck/0cb098da-1c0c-4e9d-bdbf-f706254d53e0/tool-results/bs1vct3k6.txt)",
+      "WebSearch",
+      "WebFetch(domain:docs.kick.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:kick.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:api.kick.com)",
+      "Bash(python3 -m ruff check .)",
+      "Bash(export PATH=\"$HOME/.local/bin:$PATH\")",
+      "Bash(git stash:*)"
     ]
   }
 }

@@ -18,11 +18,12 @@ from typing import Any
 import httpx
 from PIL import Image
 
-from core.chat import ChatMessage, ChatStatus
+from core.chat import ChatMessage, ChatSendResult, ChatStatus
 from core.chats.kick_chat import KickChatClient
 from core.chats.twitch_chat import TwitchChatClient
 from core.launcher import launch_stream
 from core.oauth_server import wait_for_oauth_code
+from core.platforms.kick import OAUTH_SCOPE as KICK_OAUTH_SCOPE
 from core.platforms.kick import KickClient
 from core.platforms.twitch import TwitchClient
 from core.storage import (
@@ -32,7 +33,7 @@ from core.storage import (
     get_settings,
     load_config,
     save_avatar,
-    save_config,
+    update_config,
 )
 from core.stream_resolver import resolve_hls_url
 from core.utils import format_viewers
@@ -121,6 +122,104 @@ class TwitchXApi:
             return match.group(1).lower()
         return re.sub(r"[^A-Za-z0-9_]", "", raw).lower()
 
+    @staticmethod
+    def _sanitize_channel_name(raw: str, platform: str = "twitch") -> str:
+        raw = raw.strip()
+        if platform == "kick":
+            match = re.search(r"(?:kick\.com/)([A-Za-z0-9_-]+)", raw, re.IGNORECASE)
+            if match:
+                return match.group(1).lower()
+            return re.sub(r"[^A-Za-z0-9_-]", "", raw).lower()
+        return TwitchXApi._sanitize_username(raw)
+
+    @staticmethod
+    def _parse_scopes(raw: str) -> set[str]:
+        return {part.strip() for part in raw.split() if part.strip()}
+
+    @staticmethod
+    def _normalize_twitch_search_result(result: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "login": result.get(
+                "broadcaster_login", result.get("display_name", "")
+            ).lower(),
+            "display_name": result.get("display_name", ""),
+            "is_live": result.get("is_live", False),
+            "game_name": result.get("game_name", ""),
+            "platform": "twitch",
+        }
+
+    @staticmethod
+    def _normalize_kick_search_result(result: dict[str, Any]) -> dict[str, Any]:
+        slug = result.get("slug", result.get("channel", {}).get("slug", "")).lower()
+        return {
+            "login": slug,
+            "display_name": result.get(
+                "username", result.get("user", {}).get("username", slug)
+            ),
+            "is_live": result.get("is_live", False),
+            "game_name": result.get("category", {}).get("name", "")
+            if isinstance(result.get("category"), dict)
+            else "",
+            "platform": "kick",
+        }
+
+    @staticmethod
+    def _build_kick_stream_item(stream: dict[str, Any]) -> dict[str, Any]:
+        slug = (
+            stream.get("slug", "") or stream.get("channel", {}).get("slug", "")
+        ).lower()
+        channel_info = (
+            stream.get("channel", {}) if isinstance(stream.get("channel"), dict) else {}
+        )
+        category = stream.get("category", {})
+        categories = stream.get("categories", [])
+        stream_meta = (
+            stream.get("stream", {}) if isinstance(stream.get("stream"), dict) else {}
+        )
+
+        game_name = ""
+        if isinstance(category, dict):
+            game_name = category.get("name", "")
+        if not game_name and isinstance(categories, list) and categories:
+            first_category = categories[0]
+            if isinstance(first_category, dict):
+                game_name = first_category.get("name", "")
+
+        thumbnail = stream.get("thumbnail")
+        if isinstance(thumbnail, dict):
+            thumbnail_url = thumbnail.get("url", "")
+        elif isinstance(thumbnail, str):
+            thumbnail_url = thumbnail
+        else:
+            thumbnail_url = stream.get("thumbnail_url", "") or stream_meta.get(
+                "thumbnail", ""
+            )
+
+        display_name = (
+            channel_info.get("username")
+            or channel_info.get("slug")
+            or stream.get("user_name")
+            or slug
+        )
+
+        return {
+            "login": slug,
+            "display_name": display_name,
+            "title": stream.get("stream_title")
+            or stream.get("session_title")
+            or stream.get("title", ""),
+            "game": game_name,
+            "viewers": stream.get("viewer_count", stream.get("viewers", 0)),
+            "started_at": stream.get("start_time")
+            or stream.get("created_at")
+            or stream.get("started_at", ""),
+            "thumbnail_url": thumbnail_url,
+            "viewer_trend": None,
+            "platform": "kick",
+            "broadcaster_user_id": stream.get("broadcaster_user_id"),
+            "channel_id": stream.get("channel_id"),
+        }
+
     # ── Config ──────────────────────────────────────────────────
 
     def get_config(self) -> dict[str, Any]:
@@ -144,11 +243,14 @@ class TwitchXApi:
         masked["kick_has_credentials"] = bool(
             kick_conf.get("client_id") and kick_conf.get("client_secret")
         )
-        if kick_conf.get("user_login"):
+        if kick_conf.get("user_login") or kick_conf.get("user_display_name"):
             masked["kick_user"] = {
-                "login": kick_conf["user_login"],
-                "display_name": kick_conf.get("user_display_name", ""),
+                "login": kick_conf.get("user_login", ""),
+                "display_name": kick_conf.get(
+                    "user_display_name", kick_conf.get("user_login", "")
+                ),
             }
+        masked["kick_scopes"] = kick_conf.get("oauth_scopes", "")
         return masked
 
     def get_full_config_for_settings(self) -> dict[str, Any]:
@@ -168,40 +270,47 @@ class TwitchXApi:
             "kick_client_secret": kick_conf.get("client_secret", ""),
             "chat_visible": settings.get("chat_visible", True),
             "chat_width": settings.get("chat_width", 340),
+            "kick_display_name": kick_conf.get("user_display_name", ""),
+            "kick_user_login": kick_conf.get("user_login", ""),
+            "kick_scopes": kick_conf.get("oauth_scopes", ""),
         }
 
     def save_settings(self, data: str) -> None:
         """Save settings from JS. data is JSON string."""
         parsed = json.loads(data) if isinstance(data, str) else data
-        twitch_conf = get_platform_config(self._config, "twitch")
-        settings = get_settings(self._config)
 
-        if "client_id" in parsed:
-            twitch_conf["client_id"] = parsed["client_id"].strip()
-        if "client_secret" in parsed:
-            twitch_conf["client_secret"] = parsed["client_secret"].strip()
-        if "quality" in parsed:
-            settings["quality"] = parsed["quality"]
-        if "refresh_interval" in parsed:
-            settings["refresh_interval"] = int(parsed["refresh_interval"])
-        if "streamlink_path" in parsed:
-            settings["streamlink_path"] = parsed["streamlink_path"].strip()
-        if "iina_path" in parsed:
-            settings["iina_path"] = parsed["iina_path"].strip()
+        def _apply(cfg: dict) -> None:
+            tc = cfg.get("platforms", {}).get("twitch", {})
+            st = cfg.get("settings", {})
+            if "client_id" in parsed:
+                new_client_id = parsed["client_id"].strip()
+                if new_client_id:
+                    tc["client_id"] = new_client_id
+            if "client_secret" in parsed:
+                new_client_secret = parsed["client_secret"].strip()
+                if new_client_secret:
+                    tc["client_secret"] = new_client_secret
+            if "quality" in parsed:
+                st["quality"] = parsed["quality"]
+            if "refresh_interval" in parsed:
+                st["refresh_interval"] = int(parsed["refresh_interval"])
+            if "streamlink_path" in parsed:
+                st["streamlink_path"] = parsed["streamlink_path"].strip()
+            if "iina_path" in parsed:
+                st["iina_path"] = parsed["iina_path"].strip()
+            kc = cfg.get("platforms", {}).get("kick", {})
+            if "kick_client_id" in parsed:
+                new_kick_client_id = parsed["kick_client_id"].strip()
+                if new_kick_client_id:
+                    kc["client_id"] = new_kick_client_id
+            if "kick_client_secret" in parsed:
+                new_kick_client_secret = parsed["kick_client_secret"].strip()
+                if new_kick_client_secret:
+                    kc["client_secret"] = new_kick_client_secret
 
-        self._config["platforms"]["twitch"] = twitch_conf
-        self._config["settings"] = settings
+        self._config = update_config(_apply)
 
-        kick_conf = get_platform_config(self._config, "kick")
-        if "kick_client_id" in parsed:
-            kick_conf["client_id"] = parsed["kick_client_id"].strip()
-        if "kick_client_secret" in parsed:
-            kick_conf["client_secret"] = parsed["kick_client_secret"].strip()
-        self._config["platforms"]["kick"] = kick_conf
-
-        save_config(self._config)
-
-        interval = settings.get("refresh_interval", 60)
+        interval = get_settings(self._config).get("refresh_interval", 60)
         self.start_polling(interval)
         self._eval_js("window.onSettingsSaved()")
 
@@ -273,6 +382,10 @@ class TwitchXApi:
             )
             return
         auth_url = self._twitch.get_auth_url()
+        # Pause polling to prevent concurrent config writes
+        if self._polling_timer:
+            self._polling_timer.cancel()
+            self._polling_timer = None
         self._eval_js(
             "window.onStatusUpdate({text: 'Waiting for Twitch login...', type: 'warn'})"
         )
@@ -284,27 +397,37 @@ class TwitchXApi:
                 return
             if code is None:
                 self._eval_js('window.onLoginError("Login timed out")')
+                self._restart_polling()
                 return
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
                 token_data = loop.run_until_complete(self._twitch.exchange_code(code))
-                twitch_conf = self._config["platforms"]["twitch"]
-                twitch_conf["access_token"] = token_data["access_token"]
-                twitch_conf["refresh_token"] = token_data.get("refresh_token", "")
-                twitch_conf["token_expires_at"] = int(time.time()) + token_data.get(
-                    "expires_in", 3600
-                )
-                twitch_conf["token_type"] = "user"
-                save_config(self._config)
+                access_token = token_data["access_token"]
+                refresh_token = token_data.get("refresh_token", "")
+                expires_at = int(time.time()) + token_data.get("expires_in", 3600)
+
+                def _save_tokens(cfg: dict) -> None:
+                    tc = cfg.get("platforms", {}).get("twitch", {})
+                    tc["access_token"] = access_token
+                    tc["refresh_token"] = refresh_token
+                    tc["token_expires_at"] = expires_at
+                    tc["token_type"] = "user"
+
+                self._config = update_config(_save_tokens)
 
                 user = loop.run_until_complete(self._twitch.get_current_user())
-                twitch_conf["user_id"] = user["id"]
-                twitch_conf["user_login"] = user["login"]
-                twitch_conf["user_display_name"] = user.get(
-                    "display_name", user["login"]
-                )
-                save_config(self._config)
+                uid = user["id"]
+                ulogin = user["login"]
+                udisplay = user.get("display_name", user["login"])
+
+                def _save_user(cfg: dict) -> None:
+                    tc = cfg.get("platforms", {}).get("twitch", {})
+                    tc["user_id"] = uid
+                    tc["user_login"] = ulogin
+                    tc["user_display_name"] = udisplay
+
+                self._config = update_config(_save_user)
 
                 self._current_user = user
                 avatar_url = user.get("profile_image_url", "")
@@ -325,32 +448,50 @@ class TwitchXApi:
                 msg = str(e)[:80] if str(e) else "Login failed"
                 safe_msg = json.dumps(msg)
                 self._eval_js(f"window.onLoginError({safe_msg})")
+                self._restart_polling()
             finally:
                 self._close_thread_loop(loop)
 
         self._run_in_thread(do_login)
 
     def logout(self) -> None:
-        twitch_conf = self._config["platforms"]["twitch"]
-        twitch_conf["access_token"] = ""
-        twitch_conf["refresh_token"] = ""
-        twitch_conf["token_expires_at"] = 0
-        twitch_conf["token_type"] = "app"
-        twitch_conf["user_id"] = ""
-        twitch_conf["user_login"] = ""
-        twitch_conf["user_display_name"] = ""
-        save_config(self._config)
+
+        def _clear(cfg: dict) -> None:
+            tc = cfg.get("platforms", {}).get("twitch", {})
+            tc["access_token"] = ""
+            tc["refresh_token"] = ""
+            tc["token_expires_at"] = 0
+            tc["token_type"] = "app"
+            tc["user_id"] = ""
+            tc["user_login"] = ""
+            tc["user_display_name"] = ""
+
+        self._config = update_config(_clear)
         self._current_user = None
         self._eval_js("window.onLogout()")
 
-    def kick_login(self) -> None:
+    def kick_login(self, client_id: str = "", client_secret: str = "") -> None:
         kick_conf = self._get_kick_config()
+        # If credentials passed from JS form, save them first
+        if client_id.strip() and client_secret.strip():
+            cid = client_id.strip()
+            csec = client_secret.strip()
+
+            def _save_creds(cfg: dict) -> None:
+                kc = cfg.get("platforms", {}).get("kick", {})
+                kc["client_id"] = cid
+                kc["client_secret"] = csec
+
+            self._config = update_config(_save_creds)
+            kick_conf = self._get_kick_config()
         if not kick_conf.get("client_id") or not kick_conf.get("client_secret"):
-            self._eval_js(
-                'window.onKickLoginError("Set Kick API credentials in Settings first")'
-            )
+            self._eval_js("window.onKickNeedsCredentials()")
             return
         auth_url = self._kick.get_auth_url()
+        # Pause polling to prevent concurrent config writes
+        if self._polling_timer:
+            self._polling_timer.cancel()
+            self._polling_timer = None
         self._eval_js(
             "window.onStatusUpdate({text: 'Waiting for Kick login...', type: 'warn'})"
         )
@@ -362,32 +503,45 @@ class TwitchXApi:
                 return
             if code is None:
                 self._eval_js('window.onKickLoginError("Login timed out")')
+                self._restart_polling()
                 return
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
                 token_data = loop.run_until_complete(self._kick.exchange_code(code))
-                kick_conf = self._config["platforms"]["kick"]
-                kick_conf["access_token"] = token_data["access_token"]
-                kick_conf["refresh_token"] = token_data.get("refresh_token", "")
-                kick_conf["token_expires_at"] = int(time.time()) + token_data.get(
-                    "expires_in", 3600
-                )
-                save_config(self._config)
+                access_token = token_data["access_token"]
+                refresh_token = token_data.get("refresh_token", "")
+                expires_at = int(time.time()) + token_data.get("expires_in", 3600)
+                oauth_scopes = token_data.get("scope", KICK_OAUTH_SCOPE)
+
+                def _save_kick_tokens(cfg: dict) -> None:
+                    kc = cfg.get("platforms", {}).get("kick", {})
+                    kc["access_token"] = access_token
+                    kc["refresh_token"] = refresh_token
+                    kc["token_expires_at"] = expires_at
+                    kc["oauth_scopes"] = oauth_scopes
+
+                self._config = update_config(_save_kick_tokens)
 
                 user = loop.run_until_complete(self._kick.get_current_user())
-                kick_conf["user_id"] = str(user.get("id", ""))
-                kick_conf["user_login"] = user.get("username", user.get("slug", ""))
-                kick_conf["user_display_name"] = user.get(
-                    "username", user.get("slug", kick_conf["user_login"])
-                )
-                save_config(self._config)
+                uid = str(user.get("user_id", user.get("id", "")))
+                ulogin = user.get("slug", user.get("username", ""))
+                udisplay = user.get("name", user.get("username", ulogin))
+
+                def _save_kick_user(cfg: dict) -> None:
+                    kc = cfg.get("platforms", {}).get("kick", {})
+                    kc["user_id"] = uid
+                    kc["user_login"] = ulogin
+                    kc["user_display_name"] = udisplay
+
+                self._config = update_config(_save_kick_user)
 
                 result = json.dumps(
                     {
                         "platform": "kick",
-                        "display_name": kick_conf["user_display_name"],
-                        "login": kick_conf["user_login"],
+                        "display_name": udisplay,
+                        "login": ulogin,
+                        "scopes": oauth_scopes,
                     }
                 )
                 self._eval_js(f"window.onKickLoginComplete({result})")
@@ -396,21 +550,27 @@ class TwitchXApi:
                 msg = str(e)[:80] if str(e) else "Kick login failed"
                 safe_msg = json.dumps(msg)
                 self._eval_js(f"window.onKickLoginError({safe_msg})")
+                self._restart_polling()
             finally:
                 self._close_thread_loop(loop)
 
         self._run_in_thread(do_login)
 
     def kick_logout(self) -> None:
-        kick_conf = self._config["platforms"]["kick"]
-        kick_conf["access_token"] = ""
-        kick_conf["refresh_token"] = ""
-        kick_conf["token_expires_at"] = 0
-        kick_conf["pkce_verifier"] = ""
-        kick_conf["user_id"] = ""
-        kick_conf["user_login"] = ""
-        kick_conf["user_display_name"] = ""
-        save_config(self._config)
+
+        def _clear(cfg: dict) -> None:
+            kc = cfg.get("platforms", {}).get("kick", {})
+            kc["access_token"] = ""
+            kc["refresh_token"] = ""
+            kc["token_expires_at"] = 0
+            kc["oauth_scopes"] = ""
+            kc["pkce_verifier"] = ""
+            kc["oauth_state"] = ""
+            kc["user_id"] = ""
+            kc["user_login"] = ""
+            kc["user_display_name"] = ""
+
+        self._config = update_config(_clear)
         self._eval_js("window.onKickLogout()")
 
     def import_follows(self) -> None:
@@ -433,24 +593,29 @@ class TwitchXApi:
                 logins = loop.run_until_complete(
                     self._twitch.get_followed_channels(user_id)
                 )
-                existing_logins = {
-                    f["login"]
-                    for f in self._config.get("favorites", [])
-                    if f.get("platform") == "twitch"
-                }
                 added = 0
-                for login in logins:
-                    if login.lower() not in existing_logins:
-                        self._config["favorites"].append(
-                            {
-                                "platform": "twitch",
-                                "login": login.lower(),
-                                "display_name": login,
-                            }
-                        )
-                        existing_logins.add(login.lower())
-                        added += 1
-                save_config(self._config)
+                new_logins = [name.lower() for name in logins]
+
+                def _apply(cfg: dict) -> None:
+                    nonlocal added
+                    existing = {
+                        f["login"]
+                        for f in cfg.get("favorites", [])
+                        if f.get("platform") == "twitch"
+                    }
+                    for login in new_logins:
+                        if login not in existing:
+                            cfg["favorites"].append(
+                                {
+                                    "platform": "twitch",
+                                    "login": login,
+                                    "display_name": login,
+                                }
+                            )
+                            existing.add(login)
+                            added += 1
+
+                self._config = update_config(_apply)
                 result = json.dumps({"added": added})
                 self._eval_js(f"window.onImportComplete({result})")
                 self.refresh()
@@ -466,27 +631,63 @@ class TwitchXApi:
     # ── Channels ────────────────────────────────────────────────
 
     def add_channel(self, username: str, platform: str = "twitch") -> None:
-        clean = self._sanitize_username(username)
+        clean = self._sanitize_channel_name(username, platform)
         if not clean:
             return
-        favorites = self._config.get("favorites", [])
-        if any(
-            f.get("login") == clean and f.get("platform") == platform for f in favorites
-        ):
-            return
-        favorites.append({"platform": platform, "login": clean, "display_name": clean})
-        self._config["favorites"] = favorites
-        save_config(self._config)
-        self.refresh()
+
+        added = False
+
+        def _apply(cfg: dict) -> None:
+            nonlocal added
+            favorites = cfg.get("favorites", [])
+            if any(
+                f.get("login") == clean and f.get("platform") == platform
+                for f in favorites
+            ):
+                return
+            favorites.append(
+                {"platform": platform, "login": clean, "display_name": clean}
+            )
+            cfg["favorites"] = favorites
+            added = True
+
+        self._config = update_config(_apply)
+        if added:
+            self.refresh()
+            self._eval_js(
+                "window.onStatusUpdate("
+                + json.dumps(
+                    {
+                        "text": f"Added {clean} from {platform.title()}",
+                        "type": "success",
+                    }
+                )
+                + ")"
+            )
+        else:
+            self._eval_js(
+                "window.onStatusUpdate("
+                + json.dumps(
+                    {
+                        "text": f"{clean} is already in {platform.title()} favorites",
+                        "type": "warn",
+                    }
+                )
+                + ")"
+            )
 
     def remove_channel(self, channel: str, platform: str = "twitch") -> None:
-        favorites = self._config.get("favorites", [])
-        self._config["favorites"] = [
-            f
-            for f in favorites
-            if not (f.get("login") == channel.lower() and f.get("platform") == platform)
-        ]
-        save_config(self._config)
+
+        def _apply(cfg: dict) -> None:
+            cfg["favorites"] = [
+                f
+                for f in cfg.get("favorites", [])
+                if not (
+                    f.get("login") == channel.lower() and f.get("platform") == platform
+                )
+            ]
+
+        self._config = update_config(_apply)
         self.refresh()
 
     def reorder_channels(self, new_order_json: str, platform: str = "twitch") -> None:
@@ -495,91 +696,75 @@ class TwitchXApi:
             if isinstance(new_order_json, str)
             else new_order_json
         )
-        old_favs = {
-            f["login"]: f
-            for f in self._config.get("favorites", [])
-            if f.get("platform") == platform
-        }
-        reordered = []
-        for login in new_order:
-            if login in old_favs:
-                reordered.append(old_favs[login])
-            else:
-                reordered.append(
-                    {"platform": platform, "login": login, "display_name": login}
-                )
-        other_platforms = [
-            f
-            for f in self._config.get("favorites", [])
-            if f.get("platform") != platform
-        ]
-        self._config["favorites"] = reordered + other_platforms
-        save_config(self._config)
+
+        def _apply(cfg: dict) -> None:
+            old_favs = {
+                f["login"]: f
+                for f in cfg.get("favorites", [])
+                if f.get("platform") == platform
+            }
+            reordered = []
+            for login in new_order:
+                if login in old_favs:
+                    reordered.append(old_favs[login])
+                else:
+                    reordered.append(
+                        {"platform": platform, "login": login, "display_name": login}
+                    )
+            other_platforms = [
+                f for f in cfg.get("favorites", []) if f.get("platform") != platform
+            ]
+            cfg["favorites"] = reordered + other_platforms
+
+        self._config = update_config(_apply)
 
     def search_channels(self, query: str, platform: str = "twitch") -> None:
-        if platform == "kick":
-            kick_conf = self._get_kick_config()
-            if not kick_conf.get("client_id") or not kick_conf.get("client_secret"):
-                self._eval_js("window.onSearchResults([])")
-                return
-
-            def do_kick_search() -> None:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    results = loop.run_until_complete(self._kick.search_channels(query))
-                    items = []
-                    for r in results:
-                        slug = r.get(
-                            "slug", r.get("channel", {}).get("slug", "")
-                        ).lower()
-                        items.append(
-                            {
-                                "login": slug,
-                                "display_name": r.get(
-                                    "username", r.get("user", {}).get("username", slug)
-                                ),
-                                "is_live": r.get("is_live", False),
-                                "game_name": r.get("category", {}).get("name", "")
-                                if isinstance(r.get("category"), dict)
-                                else "",
-                                "platform": "kick",
-                            }
-                        )
-                    self._eval_js(f"window.onSearchResults({json.dumps(items)})")
-                except Exception:
-                    self._eval_js("window.onSearchResults([])")
-                finally:
-                    self._close_thread_loop(loop)
-
-            self._run_in_thread(do_kick_search)
-            return
-
-        # Twitch search
-        twitch_conf = self._get_twitch_config()
-        if not twitch_conf.get("client_id") or not twitch_conf.get("client_secret"):
-            self._eval_js("window.onSearchResults([])")
-            return
-
         def do_search() -> None:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                results = loop.run_until_complete(self._twitch.search_channels(query))
-                items = []
-                for r in results:
-                    items.append(
-                        {
-                            "login": r.get(
-                                "broadcaster_login", r.get("display_name", "")
-                            ).lower(),
-                            "display_name": r.get("display_name", ""),
-                            "is_live": r.get("is_live", False),
-                            "game_name": r.get("game_name", ""),
-                            "platform": "twitch",
-                        }
+                items: list[dict[str, Any]] = []
+                if platform in {"kick", "all"}:
+                    kick_results = loop.run_until_complete(
+                        self._kick.search_channels(query)
                     )
-                self._eval_js(f"window.onSearchResults({json.dumps(items)})")
+                    items.extend(
+                        self._normalize_kick_search_result(result)
+                        for result in kick_results
+                    )
+
+                if platform in {"twitch", "all"}:
+                    twitch_conf = self._get_twitch_config()
+                    if twitch_conf.get("client_id") and twitch_conf.get(
+                        "client_secret"
+                    ):
+                        twitch_results = loop.run_until_complete(
+                            self._twitch.search_channels(query)
+                        )
+                        items.extend(
+                            self._normalize_twitch_search_result(result)
+                            for result in twitch_results
+                        )
+
+                deduped: list[dict[str, Any]] = []
+                seen: set[tuple[str, str]] = set()
+                exact_query = query.strip().lower()
+                for item in sorted(
+                    items,
+                    key=lambda item: (
+                        item["login"] != exact_query,
+                        not item["is_live"],
+                        item["platform"] != "kick",
+                        item["display_name"].lower(),
+                    ),
+                ):
+                    key = (item["platform"], item["login"])
+                    if key in seen or not item["login"]:
+                        continue
+                    seen.add(key)
+                    deduped.append(item)
+
+                self._eval_js(f"window.onSearchResults({json.dumps(deduped)})")
             except Exception:
                 self._eval_js("window.onSearchResults([])")
             finally:
@@ -594,7 +779,6 @@ class TwitchXApi:
         twitch_favorites = get_favorite_logins(self._config, "twitch")
         kick_favorites = get_favorite_logins(self._config, "kick")
         twitch_conf = get_platform_config(self._config, "twitch")
-        kick_conf = get_platform_config(self._config, "kick")
 
         all_favorites = twitch_favorites + kick_favorites
 
@@ -618,11 +802,10 @@ class TwitchXApi:
         twitch_has_creds = bool(
             twitch_conf.get("client_id") and twitch_conf.get("client_secret")
         )
-        kick_has_creds = bool(
-            kick_conf.get("client_id") and kick_conf.get("client_secret")
-        )
 
-        if not twitch_has_creds and not kick_has_creds:
+        # Kick public API doesn't require credentials, so we can fetch
+        # kick streams whenever there are kick favorites
+        if not twitch_has_creds and not kick_favorites:
             data = json.dumps(
                 {
                     "streams": [],
@@ -739,13 +922,8 @@ class TwitchXApi:
                 games = await self._twitch.get_games(game_ids)
                 self._games.update(games)
 
-        # Fetch Kick data if credentials exist and favorites are set
-        kick_conf = get_platform_config(self._config, "kick")
-        if (
-            kick_favorites
-            and kick_conf.get("client_id")
-            and kick_conf.get("client_secret")
-        ):
+        # Fetch Kick data if favorites are set (public API, no credentials needed)
+        if kick_favorites:
             try:
                 kick_streams = await self._kick.get_live_streams(kick_favorites)
             except Exception as e:
@@ -761,12 +939,11 @@ class TwitchXApi:
         twitch_users: list[dict],
         kick_streams: list[dict],
     ) -> None:
-        self._live_streams = twitch_streams + kick_streams
         self._last_successful_fetch = time.time()
 
         twitch_live_logins = {s["user_login"].lower() for s in twitch_streams}
         kick_live_slugs = {
-            (s.get("channel", {}).get("slug", "") or s.get("slug", "")).lower()
+            (s.get("slug", "") or s.get("channel", {}).get("slug", "")).lower()
             for s in kick_streams
         }
         live_logins = twitch_live_logins | kick_live_slugs
@@ -821,32 +998,9 @@ class TwitchXApi:
 
         # Build Kick stream items
         for s in kick_streams:
-            slug = (s.get("channel", {}).get("slug", "") or s.get("slug", "")).lower()
-            channel_info = s.get("channel", {})
-            display_name = channel_info.get("username", channel_info.get("slug", slug))
-            title = s.get("session_title", s.get("title", ""))
-            category = s.get("category", {})
-            game_name = category.get("name", "") if isinstance(category, dict) else ""
-            viewers = s.get("viewer_count", s.get("viewers", 0))
-            started_at = s.get("created_at", s.get("started_at", ""))
-            thumbnail_url = (
-                s.get("thumbnail", {}).get("url", "")
-                if isinstance(s.get("thumbnail"), dict)
-                else s.get("thumbnail_url", "")
-            )
-            stream_items.append(
-                {
-                    "login": slug,
-                    "display_name": display_name,
-                    "title": title,
-                    "game": game_name,
-                    "viewers": viewers,
-                    "started_at": started_at,
-                    "thumbnail_url": thumbnail_url,
-                    "viewer_trend": None,
-                    "platform": "kick",
-                }
-            )
+            stream_items.append(self._build_kick_stream_item(s))
+
+        self._live_streams = stream_items
 
         all_favorites = twitch_favorites + kick_favorites
         now = datetime.now().strftime("%H:%M:%S")
@@ -865,6 +1019,26 @@ class TwitchXApi:
             }
         )
         self._eval_js(f"window.onStreamsUpdate({data})")
+
+    @staticmethod
+    def _stream_login(stream: dict[str, Any]) -> str:
+        return (
+            stream.get("login")
+            or stream.get("user_login")
+            or stream.get("channel", {}).get("slug", "")
+            or stream.get("slug", "")
+        ).lower()
+
+    @staticmethod
+    def _stream_platform(stream: dict[str, Any]) -> str:
+        return str(stream.get("platform", "twitch"))
+
+    def _find_live_stream(self, channel: str) -> dict[str, Any] | None:
+        channel_lower = channel.lower()
+        for stream in self._live_streams:
+            if self._stream_login(stream) == channel_lower:
+                return stream
+        return None
 
     # ── Notifications ────────────────────────────────────────────
 
@@ -889,6 +1063,11 @@ class TwitchXApi:
         self._run_in_thread(do_notify)
 
     # ── Polling ──────────────────────────────────────────────────
+
+    def _restart_polling(self) -> None:
+        """Restart polling with the configured interval."""
+        interval = get_settings(self._config).get("refresh_interval", 60)
+        self.start_polling(interval)
 
     def start_polling(self, interval_seconds: int = 60) -> None:
         self.stop_polling()
@@ -929,27 +1108,11 @@ class TwitchXApi:
             )
             return
 
-        # Determine which platform owns this channel
-        platform = "twitch"
-        for s in self._live_streams:
-            stream_login = (
-                s.get("user_login")
-                or s.get("channel", {}).get("slug", "")
-                or s.get("slug", "")
-            ).lower()
-            if stream_login == channel.lower():
-                platform = s.get("platform", "twitch")
-                break
+        stream = self._find_live_stream(channel)
+        platform = self._stream_platform(stream) if stream else "twitch"
 
         # Check if channel is live
-        live_logins = {
-            (
-                s.get("user_login")
-                or s.get("channel", {}).get("slug", "")
-                or s.get("slug", "")
-            ).lower()
-            for s in self._live_streams
-        }
+        live_logins = {self._stream_login(s) for s in self._live_streams}
         if channel.lower() not in live_logins:
             safe_ch = json.dumps(channel)
             self._eval_js(
@@ -957,8 +1120,10 @@ class TwitchXApi:
             )
             return
 
-        self._config["settings"]["quality"] = quality
-        save_config(self._config)
+        def _save_quality(cfg: dict) -> None:
+            cfg.get("settings", {})["quality"] = quality
+
+        self._config = update_config(_save_quality)
         safe_ch = json.dumps(channel)
         self._eval_js(
             f"window.onStatusUpdate({{text: 'Loading ' + {safe_ch} + '...', type: 'warn'}})"
@@ -970,16 +1135,7 @@ class TwitchXApi:
         self._start_launch_timer()
 
         # Find stream title for player
-        title = ""
-        for s in self._live_streams:
-            stream_login = (
-                s.get("user_login")
-                or s.get("channel", {}).get("slug", "")
-                or s.get("slug", "")
-            ).lower()
-            if stream_login == channel.lower():
-                title = s.get("title", s.get("session_title", ""))
-                break
+        title = stream.get("title", "") if stream else ""
 
         def do_resolve() -> None:
             settings = get_settings(self._config)
@@ -1040,26 +1196,10 @@ class TwitchXApi:
         if not channel:
             return
 
-        # Determine which platform owns this channel
-        platform = "twitch"
-        for s in self._live_streams:
-            stream_login = (
-                s.get("user_login")
-                or s.get("channel", {}).get("slug", "")
-                or s.get("slug", "")
-            ).lower()
-            if stream_login == channel.lower():
-                platform = s.get("platform", "twitch")
-                break
+        stream = self._find_live_stream(channel)
+        platform = self._stream_platform(stream) if stream else "twitch"
 
-        live_logins = {
-            (
-                s.get("user_login")
-                or s.get("channel", {}).get("slug", "")
-                or s.get("slug", "")
-            ).lower()
-            for s in self._live_streams
-        }
+        live_logins = {self._stream_login(s) for s in self._live_streams}
         if channel.lower() not in live_logins:
             return
 
@@ -1212,34 +1352,72 @@ class TwitchXApi:
         elif platform == "kick":
             kick_conf = get_platform_config(self._config, "kick")
             token = kick_conf.get("access_token") or None
+            scopes = self._parse_scopes(kick_conf.get("oauth_scopes", ""))
 
             self._chat_client = KickChatClient()
             self._chat_client.on_message(self._on_chat_message)
             self._chat_client.on_status(self._on_chat_status)
+            kick_chat_client = self._chat_client
 
             def run_kick_chat() -> None:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 try:
-                    # Fetch chatroom_id from channel info
+                    if not isinstance(kick_chat_client, KickChatClient):
+                        return
                     kick_client = self._platforms.get("kick")
                     if not kick_client:
                         return
-                    info = loop.run_until_complete(kick_client.get_channel_info(channel))
+                    info = loop.run_until_complete(
+                        kick_client.get_channel_info(channel)
+                    )
                     chatroom_id = None
+                    broadcaster_user_id = None
                     if isinstance(info, dict):
                         chatroom = info.get("chatroom", {})
-                        chatroom_id = chatroom.get("id") if isinstance(chatroom, dict) else info.get("chatroom_id")
+                        chatroom_id = (
+                            chatroom.get("id")
+                            if isinstance(chatroom, dict)
+                            else info.get("chatroom_id")
+                        )
+                        broadcaster_user_id = (
+                            info.get("broadcaster_user_id")
+                            or info.get("user_id")
+                            or info.get("user", {}).get("id")
+                        )
                     if chatroom_id is None:
                         self._on_chat_status(
-                            ChatStatus(connected=False, platform="kick", channel_id=channel, error="No chatroom found")
+                            ChatStatus(
+                                connected=False,
+                                platform="kick",
+                                channel_id=channel,
+                                error="No chatroom found",
+                            )
                         )
                         return
-                    loop.run_until_complete(
-                        self._chat_client.connect(channel, token=token, chatroom_id=chatroom_id)  # type: ignore[union-attr]
+                    can_send = bool(
+                        token and broadcaster_user_id and "chat:write" in scopes
                     )
-                except Exception:
-                    pass
+                    loop.run_until_complete(
+                        kick_chat_client.connect(
+                            channel,
+                            token=token,
+                            chatroom_id=chatroom_id,
+                            broadcaster_user_id=int(broadcaster_user_id)
+                            if broadcaster_user_id
+                            else None,
+                            can_send=can_send,
+                        )
+                    )
+                except Exception as exc:
+                    self._on_chat_status(
+                        ChatStatus(
+                            connected=False,
+                            platform="kick",
+                            channel_id=channel,
+                            error=str(exc)[:120] or "Kick chat failed",
+                        )
+                    )
                 finally:
                     loop.close()
 
@@ -1265,12 +1443,13 @@ class TwitchXApi:
         reply_to: str | None = None,
         reply_display: str | None = None,
         reply_body: str | None = None,
+        request_id: str | None = None,
     ) -> None:
         """Send a chat message, optionally as a reply.
 
-        After sending, pushes a local echo to JS because Twitch IRC
-        does not echo your own messages back. Kick Pusher may echo back,
-        but we add local echo for consistency — JS deduplicates by msg_id.
+        Twitch IRC does not reliably echo your own messages, so we add a
+        local echo there. Kick chat does echo back over Pusher, so for Kick
+        we rely on the websocket event to avoid duplicate renders.
         """
         if not self._chat_client or not text:
             return
@@ -1283,16 +1462,23 @@ class TwitchXApi:
         conf = get_platform_config(self._config, platform)
         login = conf.get("user_login", "")
         display = conf.get("user_display_name", "") or login
+        channel_id = getattr(client, "_channel", "") or ""
 
         def _do_send() -> None:
             future = asyncio.run_coroutine_threadsafe(
                 client.send_message(text, reply_to=reply_to), loop
             )
             try:
-                ok = future.result(timeout=5)
+                result = future.result(timeout=5)
             except Exception:
-                ok = False
-            if ok:
+                result = ChatSendResult(
+                    ok=False,
+                    platform=platform,
+                    channel_id=channel_id,
+                    error="Timed out while sending the chat message.",
+                )
+
+            if result.ok and platform == "twitch":
                 echo = json.dumps(
                     {
                         "platform": platform,
@@ -1305,7 +1491,7 @@ class TwitchXApi:
                         "emotes": [],
                         "is_system": False,
                         "message_type": "text",
-                        "msg_id": None,
+                        "msg_id": result.message_id,
                         "reply_to_id": reply_to,
                         "reply_to_display": reply_display,
                         "reply_to_body": reply_body,
@@ -1313,21 +1499,46 @@ class TwitchXApi:
                     }
                 )
                 self._eval_js(f"window.onChatMessage({echo})")
+            send_result = json.dumps(
+                {
+                    "ok": result.ok,
+                    "platform": result.platform,
+                    "channel_id": result.channel_id,
+                    "message_id": result.message_id,
+                    "error": result.error,
+                    "request_id": request_id,
+                    "text": text,
+                    "reply_to_id": reply_to,
+                    "reply_to_display": reply_display,
+                    "reply_to_body": reply_body,
+                }
+            )
+            self._eval_js(f"window.onChatSendResult({send_result})")
 
         threading.Thread(target=_do_send, daemon=True).start()
 
     def save_chat_width(self, width: int) -> None:
         """Persist chat panel width."""
-        self._config["settings"]["chat_width"] = max(250, min(500, width))
-        save_config(self._config)
+        clamped = max(250, min(500, width))
+
+        def _apply(cfg: dict) -> None:
+            cfg.get("settings", {})["chat_width"] = clamped
+
+        self._config = update_config(_apply)
 
     def save_chat_visibility(self, visible: bool) -> None:
         """Persist chat panel visibility."""
-        self._config["settings"]["chat_visible"] = visible
-        save_config(self._config)
+
+        def _apply(cfg: dict) -> None:
+            cfg.get("settings", {})["chat_visible"] = visible
+
+        self._config = update_config(_apply)
 
     def _on_chat_message(self, msg: ChatMessage) -> None:
         """Callback from chat client — push to JS."""
+        platform_conf = get_platform_config(self._config, msg.platform)
+        self_login = str(platform_conf.get("user_login", "")).strip().lower()
+        is_self = bool(self_login and self_login == str(msg.author).strip().lower())
         data = json.dumps(
             {
                 "platform": msg.platform,
@@ -1349,6 +1560,7 @@ class TwitchXApi:
                 "reply_to_id": msg.reply_to_id,
                 "reply_to_display": msg.reply_to_display,
                 "reply_to_body": msg.reply_to_body,
+                "is_self": is_self,
             }
         )
         self._eval_js(f"window.onChatMessage({data})")

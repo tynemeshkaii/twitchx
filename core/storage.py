@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import shutil
+import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -33,7 +35,9 @@ DEFAULT_PLATFORM_KICK: dict[str, Any] = {
     "access_token": "",
     "refresh_token": "",
     "token_expires_at": 0,
+    "oauth_scopes": "",
     "pkce_verifier": "",
+    "oauth_state": "",
     "user_id": "",
     "user_login": "",
     "user_display_name": "",
@@ -193,6 +197,22 @@ def save_config(config: dict[str, Any]) -> None:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     with open(CONFIG_FILE, "w") as f:
         json.dump(config, f, indent=2)
+
+
+_config_lock = threading.Lock()
+
+
+def update_config(update_fn: Callable[[dict[str, Any]], None]) -> dict[str, Any]:
+    """Atomically load config, apply update_fn, save, and return the result.
+
+    This prevents race conditions where multiple threads load stale config
+    copies and overwrite each other's changes.
+    """
+    with _config_lock:
+        config = load_config()
+        update_fn(config)
+        save_config(config)
+        return config
 
 
 def token_is_valid(config: dict[str, Any]) -> bool:

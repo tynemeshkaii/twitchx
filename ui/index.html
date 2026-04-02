@@ -62,32 +62,43 @@ body {
   min-height: 52px;
 }
 
-#login-btn {
+.login-btn {
   width: 100%; padding: 8px 12px;
-  background: var(--accent); color: white;
+  color: white;
   border: none; border-radius: var(--radius-sm);
   font-size: 13px; font-weight: 600; cursor: pointer;
   font-family: inherit;
   transition: background 0.15s ease;
 }
+#login-btn { background: var(--accent); }
 #login-btn:hover { background: var(--accent-hover); }
+#kick-login-sidebar-btn { background: #53FC18; color: #0E0E1A; }
+#kick-login-sidebar-btn:hover { background: #45d914; }
 
-#user-info { display: flex; align-items: center; gap: 10px; }
-#user-avatar {
+.platform-user-info { display: flex; align-items: center; gap: 10px; }
+.platform-user-avatar {
   width: 36px; height: 36px; border-radius: 50%;
   background: var(--bg-elevated); object-fit: cover;
 }
-#user-details { flex: 1; min-width: 0; }
-#user-display-name {
+.platform-user-details { flex: 1; min-width: 0; }
+.platform-user-name {
   font-size: 13px; font-weight: 700; color: var(--text-primary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-#user-actions { display: flex; gap: 8px; margin-top: 2px; }
-#user-actions a {
+.platform-user-name .platform-label {
+  font-size: 10px; font-weight: 500; color: var(--text-muted);
+  margin-left: 4px;
+}
+.platform-user-actions { display: flex; gap: 8px; margin-top: 2px; }
+.platform-user-actions a {
   font-size: 11px; color: var(--text-muted); cursor: pointer;
   text-decoration: none; transition: color 0.15s ease;
 }
-#user-actions a:hover { color: var(--accent); }
+.platform-user-actions a:hover { color: var(--accent); }
+
+#kick-profile-area {
+  padding: 8px 12px; border-bottom: 1px solid var(--bg-border);
+}
 
 #platform-tabs {
   display: flex; gap: 0;
@@ -969,14 +980,25 @@ body {
     <!-- Sidebar -->
     <aside id="sidebar">
       <div id="profile-area">
-        <button id="login-btn">Login with Twitch</button>
-        <div id="user-info" style="display:none">
-          <img id="user-avatar" src="" alt="">
-          <div id="user-details">
-            <div id="user-display-name"></div>
-            <div id="user-actions">
+        <button id="login-btn" class="login-btn">Login with Twitch</button>
+        <div id="user-info" class="platform-user-info" style="display:none">
+          <img id="user-avatar" class="platform-user-avatar" src="" alt="">
+          <div class="platform-user-details">
+            <div id="user-display-name" class="platform-user-name"></div>
+            <div class="platform-user-actions">
               <a id="logout-link">Logout</a>
               <a id="import-link">Import follows</a>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="kick-profile-area">
+        <button id="kick-login-sidebar-btn" class="login-btn">Login with Kick</button>
+        <div id="kick-user-info" class="platform-user-info" style="display:none">
+          <div class="platform-user-details">
+            <div id="kick-user-name" class="platform-user-name"></div>
+            <div class="platform-user-actions">
+              <a id="kick-logout-link">Logout</a>
             </div>
           </div>
         </div>
@@ -1157,12 +1179,17 @@ body {
           <button class="eye-btn" id="kick-eye-toggle-btn">&#128065;</button>
         </div>
       </div>
+      <div class="oauth-note">
+        Kick OAuth uses the same callback URL:<br>
+        http://localhost:3457/callback<br><br>
+        Kick's API does not currently expose followed channels for import, so Kick favorites still need to be added manually via search or direct slug.
+      </div>
       <div id="kick-login-area" class="setting-group">
         <button id="kick-login-btn" style="width:100%;height:36px;background:var(--accent);color:white;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Login with Kick</button>
       </div>
       <div id="kick-user-area" class="setting-group" style="display:none;">
         <div id="kick-user-display" style="font-size:13px;color:var(--text-primary);margin-bottom:8px;"></div>
-        <a id="kick-logout-link" style="font-size:12px;color:var(--text-muted);cursor:pointer;text-decoration:none;">Logout from Kick</a>
+        <a id="kick-logout-settings-link" style="font-size:12px;color:var(--text-muted);cursor:pointer;text-decoration:none;">Logout from Kick</a>
       </div>
       <div class="settings-btns">
         <button id="kick-test-btn">Test Kick Connection</button>
@@ -1185,15 +1212,19 @@ const state = {
   liveSet: new Set(),
   selectedChannel: null,
   watchingChannel: null,
+  playerPlatform: null,
   prevViewers: {},
   config: {},
   sortKey: 'viewers',
   filterText: '',
   avatars: {},
   thumbnails: {},
+  searchResults: [],
   searchDebounce: null,
   hasCredentials: false,
   userAvatars: {},
+  kickUser: null,
+  kickScopes: '',
   playerState: 'idle',
   playerChannel: null,
   playerTitle: '',
@@ -1213,8 +1244,12 @@ window.addEventListener('pywebviewready', function() {
   setTimeout(function() {
     if (!api) return;
     const config = api.get_config();
+    state.kickScopes = (config && config.kick_scopes) || '';
     if (config && config.current_user) {
       showUserProfile(config.current_user);
+    }
+    if (config && config.kick_user) {
+      showKickProfile(config.kick_user);
     }
   }, 100);
 });
@@ -1236,6 +1271,8 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('login-btn').addEventListener('click', function() { if (api) api.login(); });
   document.getElementById('logout-link').addEventListener('click', doLogout);
   document.getElementById('import-link').addEventListener('click', function() { if (api) api.import_follows(); });
+  document.getElementById('kick-login-sidebar-btn').addEventListener('click', function() { if (api) api.kick_login(); });
+  document.getElementById('kick-logout-link').addEventListener('click', function() { if (api) api.kick_logout(); });
   document.getElementById('add-btn').addEventListener('click', addChannel);
   document.getElementById('watch-btn').addEventListener('click', doWatch);
   document.getElementById('stop-player-btn').addEventListener('click', function() { if (api) api.stop_player(); });
@@ -1281,9 +1318,9 @@ document.addEventListener('DOMContentLoaded', function() {
       fb.style.color = 'var(--error-red)';
       return;
     }
-    if (api) api.kick_login();
+    if (api) api.kick_login(cid, cs);
   });
-  document.getElementById('kick-logout-link').addEventListener('click', function() {
+  document.getElementById('kick-logout-settings-link').addEventListener('click', function() {
     if (api) api.kick_logout();
   });
 
@@ -1327,11 +1364,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const query = e.target.value.trim();
     clearTimeout(state.searchDebounce);
     if (!query) {
+      state.searchResults = [];
       document.getElementById('search-dropdown').style.display = 'none';
       return;
     }
     state.searchDebounce = setTimeout(function() {
-      var searchPlatform = state.activePlatformFilter === 'all' ? 'twitch' : state.activePlatformFilter;
+      var searchPlatform = state.activePlatformFilter === 'all' ? 'all' : state.activePlatformFilter;
       if (api) api.search_channels(query, searchPlatform);
     }, 400);
   });
@@ -1390,10 +1428,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // Chat input
   document.getElementById('chat-input').addEventListener('keydown', function(e) {
     if (e.key === 'Enter' && this.value.trim()) {
-      var r = chatReplyTo;
-      pywebview.api.send_chat(this.value.trim(), r ? r.id : null, r ? r.display : null, r ? r.body : null);
-      this.value = '';
-      clearChatReply();
+      submitChatMessage();
     }
     if (e.key === 'Escape') {
       if (chatReplyTo) clearChatReply();
@@ -1402,13 +1437,7 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   document.getElementById('chat-send-btn').addEventListener('click', function() {
-    var input = document.getElementById('chat-input');
-    if (input.value.trim()) {
-      var r = chatReplyTo;
-      pywebview.api.send_chat(input.value.trim(), r ? r.id : null, r ? r.display : null, r ? r.body : null);
-      input.value = '';
-      clearChatReply();
-    }
+    submitChatMessage();
   });
 
   document.getElementById('chat-reply-close').addEventListener('click', function() {
@@ -1511,6 +1540,7 @@ window.onStreamsUpdate = function(data) {
 };
 
 window.onSearchResults = function(results) {
+  state.searchResults = results || [];
   const dd = document.getElementById('search-dropdown');
   if (!results || results.length === 0) {
     dd.style.display = 'none';
@@ -1530,6 +1560,13 @@ window.onSearchResults = function(results) {
     const name = document.createElement('div');
     name.className = 'sr-name';
     name.textContent = r.display_name;
+    if (r.platform) {
+      const badge = document.createElement('span');
+      badge.className = 'platform-badge ' + r.platform;
+      badge.textContent = r.platform === 'kick' ? 'Kick' : 'Twitch';
+      name.appendChild(document.createTextNode(' '));
+      name.appendChild(badge);
+    }
     info.appendChild(name);
 
     const game = document.createElement('div');
@@ -1551,6 +1588,7 @@ window.onSearchResults = function(results) {
     addBtn.addEventListener('click', function(e) {
       e.stopPropagation();
       addChannelDirect(r.login, r.platform || 'twitch');
+      state.searchResults = [];
     });
 
     row.appendChild(info);
@@ -1558,6 +1596,7 @@ window.onSearchResults = function(results) {
     row.addEventListener('click', function() {
       addChannelDirect(r.login, r.platform || 'twitch');
       dd.style.display = 'none';
+      state.searchResults = [];
       document.getElementById('search-input').value = '';
     });
     dd.appendChild(row);
@@ -1608,6 +1647,7 @@ window.onStreamReady = function(data) {
   var video = document.getElementById('stream-video');
   video.src = data.url;
   video.play();
+  state.playerPlatform = data.platform || 'twitch';
   document.getElementById('player-channel-name').textContent = data.channel;
   document.getElementById('player-stream-title').textContent = data.title || '';
   showPlayerView();
@@ -1628,7 +1668,10 @@ window.onPlayerState = function(data) {
 
 var chatAutoScroll = true;
 var chatAuthenticated = false;
+var chatPlatform = null;
 var chatReplyTo = null; // { id, display, body }
+var chatPendingSends = Object.create(null);
+var chatSendCounter = 0;
 
 function setChatReply(id, display, body) {
   chatReplyTo = { id: id, display: display, body: body };
@@ -1645,9 +1688,35 @@ function clearChatReply() {
   document.getElementById('chat-reply-bar').classList.remove('active');
 }
 
+function submitChatMessage() {
+  var input = document.getElementById('chat-input');
+  if (!input) return;
+  var text = input.value.trim();
+  if (!text) return;
+  var r = chatReplyTo;
+  var requestId = 'chat-send-' + Date.now() + '-' + (++chatSendCounter);
+  chatPendingSends[requestId] = {
+    text: text,
+    reply: r ? { id: r.id, display: r.display, body: r.body } : null
+  };
+  pywebview.api.send_chat(
+    text,
+    r ? r.id : null,
+    r ? r.display : null,
+    r ? r.body : null,
+    requestId
+  );
+  input.value = '';
+  clearChatReply();
+}
+
 window.onChatMessage = function(msg) {
   var container = document.getElementById('chat-messages');
   if (!container) return;
+  if (msg.msg_id) {
+    var existing = container.querySelector('.chat-msg[data-msg-id="' + String(msg.msg_id).replace(/"/g, '\\"') + '"]');
+    if (existing) return;
+  }
 
   var el = document.createElement('div');
   var cls = 'chat-msg';
@@ -1720,6 +1789,23 @@ window.onChatMessage = function(msg) {
   }
 };
 
+window.onChatSendResult = function(result) {
+  if (!result) return;
+  var pending = result.request_id ? chatPendingSends[result.request_id] : null;
+  if (result.request_id) delete chatPendingSends[result.request_id];
+  if (result.ok) return;
+
+  setStatus(result.error || 'Failed to send chat message', 'error');
+  var input = document.getElementById('chat-input');
+  if (input && !input.value && pending && pending.text) {
+    input.value = pending.text;
+  }
+  if (pending && pending.reply && !chatReplyTo) {
+    setChatReply(pending.reply.id, pending.reply.display, pending.reply.body);
+  }
+  if (input && !input.disabled) input.focus();
+};
+
 function renderChatEmotes(parent, text, emotes) {
   if (!emotes || emotes.length === 0) {
     parent.appendChild(document.createTextNode(text));
@@ -1756,6 +1842,7 @@ function clearChatMessages() {
 
 window.onChatStatus = function(status) {
   chatAuthenticated = !!(status.authenticated);
+  chatPlatform = status.platform || state.playerPlatform || 'twitch';
   var dot = document.getElementById('chat-status-dot');
   if (dot) {
     if (status.connected) {
@@ -1778,13 +1865,22 @@ function updateChatInput() {
   var input = document.getElementById('chat-input');
   var btn = document.getElementById('chat-send-btn');
   if (!input || !btn) return;
-  var canSend = !!(state.currentUser) && chatAuthenticated;
+  var platform = chatPlatform || state.playerPlatform || 'twitch';
+  var chatUser = platform === 'kick' ? state.kickUser : state.currentUser;
+  var kickHasChatWrite = (state.kickScopes || '').split(/\s+/).indexOf('chat:write') !== -1;
+  var canSend = !!chatUser && chatAuthenticated;
   input.disabled = !canSend;
   btn.disabled = !canSend;
-  if (!state.currentUser) {
-    input.placeholder = 'Log in to chat';
+  if (!chatUser) {
+    input.placeholder = platform === 'kick' ? 'Log in to Kick to chat' : 'Log in to chat';
   } else if (!chatAuthenticated) {
-    input.placeholder = 'Chat is read-only (re-login to send)';
+    if (platform === 'kick' && !kickHasChatWrite) {
+      input.placeholder = 'Kick token is missing chat:write (enable it for the app and re-login)';
+    } else {
+      input.placeholder = platform === 'kick'
+        ? 'Kick chat is read-only (re-login to grant chat access)'
+        : 'Chat is read-only (re-login to send)';
+    }
   } else {
     input.placeholder = 'Send a message...';
   }
@@ -1840,6 +1936,9 @@ function hidePlayerView() {
   document.getElementById('stream-grid').style.display = '';
 
   state.watchingChannel = null;
+  state.playerPlatform = null;
+  chatPlatform = null;
+  chatAuthenticated = false;
   state.playerState = 'idle';
   document.getElementById('watch-btn').classList.remove('active');
   document.getElementById('stop-player-btn').style.display = 'none';
@@ -1886,28 +1985,49 @@ window.onSettingsSaved = function() {
 };
 
 window.onKickLoginComplete = function(data) {
+  state.kickScopes = data.scopes || state.kickScopes || '';
   document.getElementById('kick-login-area').style.display = 'none';
   document.getElementById('kick-user-area').style.display = 'block';
   document.getElementById('kick-user-display').textContent = 'Logged in as ' + (data.display_name || data.login);
   var fb = document.getElementById('settings-feedback');
-  fb.textContent = '\u2713 Kick login successful';
-  fb.style.color = 'var(--live-green)';
-  setStatus('Logged in to Kick as ' + (data.display_name || data.login), 'success');
+  if ((state.kickScopes || '').split(/\s+/).indexOf('chat:write') === -1) {
+    fb.textContent = 'Kick login succeeded, but granted scopes are: ' + (state.kickScopes || 'user:read channel:read');
+    fb.style.color = 'var(--warn-yellow)';
+    setStatus('Kick login is missing chat:write, so chat stays read-only', 'warn');
+  } else {
+    fb.textContent = '\u2713 Kick login successful';
+    fb.style.color = 'var(--live-green)';
+    setStatus('Logged in to Kick as ' + (data.display_name || data.login), 'success');
+  }
+  showKickProfile(data);
+  updateChatInput();
 };
 
 window.onKickLoginError = function(msg) {
   var fb = document.getElementById('settings-feedback');
   fb.textContent = '\u2717 Kick login failed: ' + msg;
   fb.style.color = 'var(--error-red)';
+  setStatus('Kick login: ' + msg, 'error');
+};
+
+window.onKickNeedsCredentials = function() {
+  openSettingsToTab('kick');
+  var fb = document.getElementById('settings-feedback');
+  fb.textContent = 'Enter Kick Client ID and Secret, then click Login';
+  fb.style.color = 'var(--warn-yellow)';
+  setStatus('Kick credentials required — opening Settings', 'warn');
 };
 
 window.onKickLogout = function() {
+  state.kickScopes = '';
   document.getElementById('kick-login-area').style.display = 'block';
   document.getElementById('kick-user-area').style.display = 'none';
   document.getElementById('kick-user-display').textContent = '';
   var fb = document.getElementById('settings-feedback');
   fb.textContent = 'Logged out from Kick';
   fb.style.color = 'var(--text-muted)';
+  hideKickProfile();
+  updateChatInput();
 };
 
 window.onKickTestResult = function(data) {
@@ -2540,9 +2660,29 @@ function addChannel() {
   var input = document.getElementById('search-input');
   var val = input.value.trim();
   if (val && api) {
-    var platform = state.activePlatformFilter === 'all' ? 'twitch' : state.activePlatformFilter;
-    api.add_channel(val, platform);
+    var platform = state.activePlatformFilter;
+    var lower = val.toLowerCase();
+    var choice = null;
+    if (platform === 'all') {
+      if (lower.indexOf('kick.com/') !== -1) {
+        choice = { login: val, platform: 'kick' };
+      } else if (lower.indexOf('twitch.tv/') !== -1) {
+        choice = { login: val, platform: 'twitch' };
+      } else {
+        var matches = state.searchResults.filter(function(result) {
+          return result.login === lower || (result.display_name || '').toLowerCase() === lower;
+        });
+        if (matches.length === 1) {
+          choice = matches[0];
+        } else if (state.searchResults.length > 0) {
+          choice = state.searchResults[0];
+        }
+      }
+    }
+    var targetPlatform = (choice && choice.platform) || (platform === 'all' ? 'twitch' : platform) || 'twitch';
+    api.add_channel(val, targetPlatform);
     input.value = '';
+    state.searchResults = [];
     document.getElementById('search-dropdown').style.display = 'none';
   }
 }
@@ -2559,7 +2699,8 @@ function doWatch() {
 
 function doBrowser() {
   if (!state.selectedChannel || !api) return;
-  api.open_browser(state.selectedChannel);
+  var selectedStream = state.streams.find(function(s) { return s.login === state.selectedChannel; });
+  api.open_browser(state.selectedChannel, (selectedStream && selectedStream.platform) || 'twitch');
 }
 
 function doRefresh() {
@@ -2591,6 +2732,20 @@ function hideUserProfile() {
   document.getElementById('user-info').style.display = 'none';
 }
 
+function showKickProfile(user) {
+  state.kickUser = user;
+  document.getElementById('kick-login-sidebar-btn').style.display = 'none';
+  var info = document.getElementById('kick-user-info');
+  info.style.display = 'flex';
+  document.getElementById('kick-user-name').textContent = user.display_name || user.login;
+}
+
+function hideKickProfile() {
+  state.kickUser = null;
+  document.getElementById('kick-login-sidebar-btn').style.display = 'block';
+  document.getElementById('kick-user-info').style.display = 'none';
+}
+
 /* ── Settings ───────────────────────────────────────────── */
 
 function openSettings() {
@@ -2619,6 +2774,16 @@ function openSettings() {
   document.getElementById('settings-panel-general').classList.add('active');
   document.getElementById('settings-feedback').textContent = '';
   document.getElementById('settings-overlay').classList.add('visible');
+}
+
+function openSettingsToTab(tab) {
+  openSettings();
+  document.querySelectorAll('.settings-tab').forEach(function(b) { b.classList.remove('active'); });
+  document.querySelectorAll('.settings-panel').forEach(function(p) { p.classList.remove('active'); });
+  var tabBtn = document.querySelector('.settings-tab[data-tab="' + tab + '"]');
+  var panel = document.getElementById('settings-panel-' + tab);
+  if (tabBtn) tabBtn.classList.add('active');
+  if (panel) panel.classList.add('active');
 }
 
 function closeSettings() {

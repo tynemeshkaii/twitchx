@@ -311,7 +311,8 @@ class TestTwitchChatClientSend:
         client._ws = AsyncMock()
         client._channel = "test"
         result = await client.send_message("hello")
-        assert result is False
+        assert result.ok is False
+        assert result.error == "Twitch chat is read-only. Re-login to send."
 
     async def test_send_authenticated_returns_true(self) -> None:
         client = TwitchChatClient()
@@ -320,7 +321,8 @@ class TestTwitchChatClientSend:
         client._ws = AsyncMock()
         client._channel = "test"
         result = await client.send_message("hello")
-        assert result is True
+        assert result.ok is True
+        assert result.channel_id == "test"
         client._ws.send.assert_called_once_with("PRIVMSG #test :hello")
 
 

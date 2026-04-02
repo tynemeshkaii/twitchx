@@ -10,7 +10,7 @@ from typing import Any
 
 import websockets
 
-from core.chat import Badge, ChatMessage, ChatStatus, Emote
+from core.chat import Badge, ChatMessage, ChatSendResult, ChatStatus, Emote
 
 logger = logging.getLogger(__name__)
 
@@ -248,7 +248,10 @@ class TwitchChatClient:
                                 await ws.send(line.replace("PING", "PONG", 1))
                                 continue
                             # Detect login failure and fall back to anonymous
-                            if "Login unsuccessful" in line or "Login authentication failed" in line:
+                            if (
+                                "Login unsuccessful" in line
+                                or "Login authentication failed" in line
+                            ):
                                 logger.warning(
                                     "Twitch IRC login failed, falling back to anonymous"
                                 )
@@ -259,13 +262,13 @@ class TwitchChatClient:
                                 self._message_callback(msg)
 
                 if login_failed:
-                        # Switch to anonymous credentials and reconnect immediately
-                        self._authenticated = False
-                        self._login = None
-                        nick = "justinfan12345"
-                        password = "SCHMOOPIIE"
-                        self._emit_status(connected=False, error="anonymous")
-                        continue
+                    # Switch to anonymous credentials and reconnect immediately
+                    self._authenticated = False
+                    self._login = None
+                    nick = "justinfan12345"
+                    password = "SCHMOOPIIE"
+                    self._emit_status(connected=False, error="anonymous")
+                    continue
 
             except websockets.exceptions.ConnectionClosedOK:
                 self._emit_status(connected=False)
@@ -305,24 +308,45 @@ class TwitchChatClient:
             self._ws = None
         self._emit_status(connected=False)
 
-    async def send_message(self, text: str, reply_to: str | None = None) -> bool:
-        """Send a chat message. Returns False if not authenticated.
+    async def send_message(
+        self, text: str, reply_to: str | None = None
+    ) -> ChatSendResult:
+        """Send a chat message.
 
         Args:
             text: Message text to send.
             reply_to: Optional message ID to reply to (threaded reply).
         """
+        channel_id = self._channel or ""
         if not self._authenticated or not self._running:
-            return False
-        if not self._ws or not self._channel:
-            return False
-        if reply_to:
-            await self._ws.send(
-                f"@reply-parent-msg-id={reply_to} PRIVMSG #{self._channel} :{text}"
+            return ChatSendResult(
+                ok=False,
+                platform="twitch",
+                channel_id=channel_id,
+                error="Twitch chat is read-only. Re-login to send.",
             )
-        else:
-            await self._ws.send(f"PRIVMSG #{self._channel} :{text}")
-        return True
+        if not self._ws or not self._channel:
+            return ChatSendResult(
+                ok=False,
+                platform="twitch",
+                channel_id=channel_id,
+                error="Twitch chat is not connected yet.",
+            )
+        try:
+            if reply_to:
+                await self._ws.send(
+                    f"@reply-parent-msg-id={reply_to} PRIVMSG #{self._channel} :{text}"
+                )
+            else:
+                await self._ws.send(f"PRIVMSG #{self._channel} :{text}")
+        except Exception:
+            return ChatSendResult(
+                ok=False,
+                platform="twitch",
+                channel_id=channel_id,
+                error="Failed to send Twitch chat message.",
+            )
+        return ChatSendResult(ok=True, platform="twitch", channel_id=channel_id)
 
     def on_message(self, callback: Callable[[ChatMessage], None]) -> None:
         """Register message callback."""

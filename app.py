@@ -26,6 +26,16 @@ class TwitchXApp:
             return match.group(1).lower()
         return re.sub(r"[^A-Za-z0-9_]", "", raw).lower()
 
+    @staticmethod
+    def _sanitize_favorite_login(raw: str, platform: str = "twitch") -> str:
+        raw = raw.strip()
+        if platform == "kick":
+            match = re.search(r"(?:kick\.com/)([A-Za-z0-9_-]+)", raw, re.IGNORECASE)
+            if match:
+                return match.group(1).lower()
+            return re.sub(r"[^A-Za-z0-9_-]", "", raw).lower()
+        return TwitchXApp._sanitize_username(raw)
+
     def _migrate_favorites(self) -> None:
         raw = self._config.get("favorites", [])
         cleaned: list[dict[str, str]] = []
@@ -34,7 +44,7 @@ class TwitchXApp:
         for entry in raw:
             if isinstance(entry, str):
                 # v1 legacy string — convert to v2 object
-                name = self._sanitize_username(entry)
+                name = self._sanitize_favorite_login(entry, "twitch")
                 if not name:
                     changed = True
                     continue
@@ -50,7 +60,9 @@ class TwitchXApp:
             elif isinstance(entry, dict):
                 login = entry.get("login", "")
                 platform = entry.get("platform", "twitch")
-                name = self._sanitize_username(login) if login else ""
+                name = (
+                    self._sanitize_favorite_login(login, platform) if login else ""
+                )
                 if not name:
                     changed = True
                     continue

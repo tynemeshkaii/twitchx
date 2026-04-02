@@ -59,6 +59,17 @@ class ChatStatus:
     authenticated: bool = False
 
 
+@dataclass
+class ChatSendResult:
+    """Outcome of a chat send attempt."""
+
+    ok: bool
+    platform: str
+    channel_id: str
+    message_id: str | None = None
+    error: str | None = None
+
+
 class ChatClient(ABC):
     """Abstract interface for a platform chat client."""
 
@@ -71,7 +82,9 @@ class ChatClient(ABC):
     async def disconnect(self) -> None: ...
 
     @abstractmethod
-    async def send_message(self, text: str) -> bool: ...
+    async def send_message(
+        self, text: str, reply_to: str | None = None
+    ) -> ChatSendResult: ...
 
     @abstractmethod
     def on_message(self, callback: Callable[[ChatMessage], None]) -> None: ...

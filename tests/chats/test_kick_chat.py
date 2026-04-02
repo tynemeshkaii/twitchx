@@ -32,8 +32,12 @@ class TestParseKickEmotes:
         clean, emotes = parse_kick_emotes(text)
         assert clean == "A and B"
         assert len(emotes) == 2
-        assert emotes[0] == Emote(code="A", url="https://files.kick.com/emotes/111/fullsize", start=0, end=0)
-        assert emotes[1] == Emote(code="B", url="https://files.kick.com/emotes/222/fullsize", start=6, end=6)
+        assert emotes[0] == Emote(
+            code="A", url="https://files.kick.com/emotes/111/fullsize", start=0, end=0
+        )
+        assert emotes[1] == Emote(
+            code="B", url="https://files.kick.com/emotes/222/fullsize", start=6, end=6
+        )
 
     def test_no_emotes(self) -> None:
         text = "hello world"
@@ -89,6 +93,71 @@ class TestParseKickEvent:
         assert msg.message_type == "text"
         assert msg.is_system is False
         assert msg.msg_id == "uuid-1"
+
+    def test_current_chat_message_event_shape(self) -> None:
+        event = {
+            "event": "App\\Events\\ChatMessageEvent",
+            "data": json.dumps(
+                {
+                    "id": "uuid-9",
+                    "chatroom_id": 123,
+                    "content": "hello from 2026",
+                    "type": "message",
+                    "created_at": "2026-04-02T07:02:06+00:00",
+                    "sender": {
+                        "id": 42,
+                        "username": "CurrentUser",
+                        "slug": "current-user",
+                        "profile_thumb": "https://files.kick.com/avatar.webp",
+                        "identity": {"color": "#BC66FF", "badges": []},
+                    },
+                }
+            ),
+            "channel": "chatrooms.123.v2",
+        }
+
+        msg = parse_kick_event(event)
+
+        assert msg is not None
+        assert msg.author == "current-user"
+        assert msg.author_display == "CurrentUser"
+        assert msg.avatar_url == "https://files.kick.com/avatar.webp"
+        assert msg.text == "hello from 2026"
+
+    def test_reply_event_populates_reply_metadata(self) -> None:
+        event = {
+            "event": "App\\Events\\ChatMessageEvent",
+            "data": json.dumps(
+                {
+                    "id": "uuid-10",
+                    "chatroom_id": 123,
+                    "content": "reply text",
+                    "type": "reply",
+                    "created_at": "2026-04-02T07:02:06+00:00",
+                    "sender": {
+                        "id": 42,
+                        "username": "CurrentUser",
+                        "slug": "current-user",
+                        "identity": {"color": "#BC66FF", "badges": []},
+                    },
+                    "metadata": {
+                        "original_sender": {"username": "Streamer"},
+                        "original_message": {
+                            "id": "parent-1",
+                            "content": "parent text",
+                        },
+                    },
+                }
+            ),
+            "channel": "chatrooms.123.v2",
+        }
+
+        msg = parse_kick_event(event)
+
+        assert msg is not None
+        assert msg.reply_to_id == "parent-1"
+        assert msg.reply_to_display == "Streamer"
+        assert msg.reply_to_body == "parent text"
 
     def test_message_with_emotes(self) -> None:
         data = {
@@ -284,41 +353,65 @@ class TestKickChatClientInit:
 class TestKickChatClientConnect:
     async def test_connects_and_subscribes(self) -> None:
         client = KickChatClient()
-        conn_msg = json.dumps({
-            "event": "pusher:connection_established",
-            "data": json.dumps({"socket_id": "123.456", "activity_timeout": 120}),
-        })
-        sub_ok = json.dumps({
-            "event": "pusher_internal:subscription_succeeded",
-            "channel": "chatrooms.99.v2",
-            "data": "{}",
-        })
+        conn_msg = json.dumps(
+            {
+                "event": "pusher:connection_established",
+                "data": json.dumps({"socket_id": "123.456", "activity_timeout": 120}),
+            }
+        )
+        sub_ok = json.dumps(
+            {
+                "event": "pusher_internal:subscription_succeeded",
+                "channel": "chatrooms.99.v2",
+                "data": "{}",
+            }
+        )
         mock_ws = _make_kick_ws_mock([conn_msg, sub_ok])
 
         async with _patch_kick_ws(mock_ws):
             await client.connect(channel_id="testslug", chatroom_id=99)
 
         send_calls = [c.args[0] for c in mock_ws.send.call_args_list]
-        expected_sub = json.dumps({
-            "event": "pusher:subscribe",
-            "data": {"channel": "chatrooms.99.v2"},
-        })
-        assert expected_sub in send_calls
+        expected_subs = {
+            json.dumps(
+                {
+                    "event": "pusher:subscribe",
+                    "data": {"channel": "chatrooms.99.v2"},
+                }
+            ),
+            json.dumps(
+                {
+                    "event": "pusher:subscribe",
+                    "data": {"channel": "chatrooms.99"},
+                }
+            ),
+            json.dumps(
+                {
+                    "event": "pusher:subscribe",
+                    "data": {"channel": "chatroom_99"},
+                }
+            ),
+        }
+        assert expected_subs.issubset(set(send_calls))
 
     async def test_status_callback_on_connect(self) -> None:
         client = KickChatClient()
         statuses = []
         client.on_status(lambda s: statuses.append(s.connected))
 
-        conn_msg = json.dumps({
-            "event": "pusher:connection_established",
-            "data": json.dumps({"socket_id": "1.2", "activity_timeout": 120}),
-        })
-        sub_ok = json.dumps({
-            "event": "pusher_internal:subscription_succeeded",
-            "channel": "chatrooms.1.v2",
-            "data": "{}",
-        })
+        conn_msg = json.dumps(
+            {
+                "event": "pusher:connection_established",
+                "data": json.dumps({"socket_id": "1.2", "activity_timeout": 120}),
+            }
+        )
+        sub_ok = json.dumps(
+            {
+                "event": "pusher_internal:subscription_succeeded",
+                "channel": "chatrooms.1.v2",
+                "data": "{}",
+            }
+        )
         mock_ws = _make_kick_ws_mock([conn_msg, sub_ok])
 
         async with _patch_kick_ws(mock_ws):
@@ -339,15 +432,19 @@ class TestKickChatClientDisconnect:
 class TestKickChatClientPing:
     async def test_pusher_ping_triggers_pong(self) -> None:
         client = KickChatClient()
-        conn_msg = json.dumps({
-            "event": "pusher:connection_established",
-            "data": json.dumps({"socket_id": "1.2", "activity_timeout": 120}),
-        })
-        sub_ok = json.dumps({
-            "event": "pusher_internal:subscription_succeeded",
-            "channel": "chatrooms.1.v2",
-            "data": "{}",
-        })
+        conn_msg = json.dumps(
+            {
+                "event": "pusher:connection_established",
+                "data": json.dumps({"socket_id": "1.2", "activity_timeout": 120}),
+            }
+        )
+        sub_ok = json.dumps(
+            {
+                "event": "pusher_internal:subscription_succeeded",
+                "channel": "chatrooms.1.v2",
+                "data": "{}",
+            }
+        )
         ping = json.dumps({"event": "pusher:ping"})
         mock_ws = _make_kick_ws_mock([conn_msg, sub_ok, ping])
 
@@ -365,15 +462,19 @@ class TestKickChatClientMessageCallback:
         received: list[ChatMessage] = []
         client.on_message(lambda m: received.append(m))
 
-        conn_msg = json.dumps({
-            "event": "pusher:connection_established",
-            "data": json.dumps({"socket_id": "1.2", "activity_timeout": 120}),
-        })
-        sub_ok = json.dumps({
-            "event": "pusher_internal:subscription_succeeded",
-            "channel": "chatrooms.1.v2",
-            "data": "{}",
-        })
+        conn_msg = json.dumps(
+            {
+                "event": "pusher:connection_established",
+                "data": json.dumps({"socket_id": "1.2", "activity_timeout": 120}),
+            }
+        )
+        sub_ok = json.dumps(
+            {
+                "event": "pusher_internal:subscription_succeeded",
+                "channel": "chatrooms.1.v2",
+                "data": "{}",
+            }
+        )
         chat_data = {
             "id": "msg-1",
             "chatroom_id": 1,
@@ -387,11 +488,13 @@ class TestKickChatClientMessageCallback:
                 "identity": {"color": "#FF0000", "badges": []},
             },
         }
-        chat_event = json.dumps({
-            "event": "App\\Events\\ChatMessageSentEvent",
-            "data": json.dumps(chat_data),
-            "channel": "chatrooms.1.v2",
-        })
+        chat_event = json.dumps(
+            {
+                "event": "App\\Events\\ChatMessageSentEvent",
+                "data": json.dumps(chat_data),
+                "channel": "chatrooms.1.v2",
+            }
+        )
         mock_ws = _make_kick_ws_mock([conn_msg, sub_ok, chat_event])
 
         async with _patch_kick_ws(mock_ws):
@@ -406,7 +509,9 @@ class TestKickChatClientReconnect:
     async def test_reconnects_on_error(self) -> None:
         client = KickChatClient()
         statuses: list[dict] = []
-        client.on_status(lambda s: statuses.append({"connected": s.connected, "error": s.error}))
+        client.on_status(
+            lambda s: statuses.append({"connected": s.connected, "error": s.error})
+        )
 
         call_count = 0
 
@@ -421,11 +526,15 @@ class TestKickChatClientReconnect:
             raise ConnectionError("boom 3")
             yield  # unreachable, but makes this a valid async generator
 
-        with patch("core.chats.kick_chat.websockets.connect", _fake_connect), \
-             patch("core.chats.kick_chat.asyncio.sleep", new_callable=AsyncMock):
-                await client.connect(channel_id="ch", chatroom_id=1)
+        with (
+            patch("core.chats.kick_chat.websockets.connect", _fake_connect),
+            patch("core.chats.kick_chat.asyncio.sleep", new_callable=AsyncMock),
+        ):
+            await client.connect(channel_id="ch", chatroom_id=1)
 
-        reconnect_errors = [s for s in statuses if s["error"] and "Reconnecting" in s["error"]]
+        reconnect_errors = [
+            s for s in statuses if s["error"] and "Reconnecting" in s["error"]
+        ]
         assert len(reconnect_errors) >= 1
 
 
@@ -436,7 +545,8 @@ class TestKickChatClientSend:
         client._running = True
         client._chatroom_id = 1
         result = await client.send_message("hello")
-        assert result is False
+        assert result.ok is False
+        assert result.error == "Kick chat is read-only. Re-login to send."
 
     async def test_send_with_token_posts_rest(self) -> None:
         client = KickChatClient()
@@ -444,10 +554,15 @@ class TestKickChatClientSend:
         client._running = True
         client._token = "test-token"
         client._chatroom_id = 99
+        client._broadcaster_user_id = 777
         client._channel = "testch"
 
         mock_resp = MagicMock()
         mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "data": {"message_id": "msg-1", "is_sent": True},
+            "message": "OK",
+        }
 
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_resp)
@@ -457,18 +572,77 @@ class TestKickChatClientSend:
             mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
             result = await client.send_message("hello kick")
 
-        assert result is True
+        assert result.ok is True
+        assert result.message_id == "msg-1"
         mock_client.post.assert_called_once()
         call_kwargs = mock_client.post.call_args
         assert call_kwargs[1]["json"]["content"] == "hello kick"
-        assert call_kwargs[1]["json"]["chatroom_id"] == 99
+        assert call_kwargs[1]["json"]["broadcaster_user_id"] == 777
+        assert call_kwargs[1]["json"]["type"] == "user"
         assert "Bearer test-token" in call_kwargs[1]["headers"]["Authorization"]
+        assert call_kwargs[1]["headers"]["Accept"] == "application/json"
+
+    async def test_send_reply_includes_reply_to_message_id(self) -> None:
+        client = KickChatClient()
+        client._authenticated = True
+        client._running = True
+        client._token = "test-token"
+        client._chatroom_id = 99
+        client._broadcaster_user_id = 777
+        client._channel = "testch"
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "data": {"message_id": "reply-1", "is_sent": True},
+            "message": "OK",
+        }
+
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_resp)
+
+        with patch("core.chats.kick_chat.httpx.AsyncClient") as mock_cls:
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await client.send_message("hello kick", reply_to="parent-1")
+
+        assert result.ok is True
+        assert (
+            mock_client.post.call_args[1]["json"]["reply_to_message_id"] == "parent-1"
+        )
+
+    async def test_send_forbidden_returns_descriptive_error(self) -> None:
+        client = KickChatClient()
+        client._authenticated = True
+        client._running = True
+        client._token = "test-token"
+        client._chatroom_id = 99
+        client._broadcaster_user_id = 777
+        client._channel = "testch"
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 403
+        mock_resp.json.return_value = {"data": {}, "message": "Forbidden"}
+
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_resp)
+
+        with patch("core.chats.kick_chat.httpx.AsyncClient") as mock_cls:
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await client.send_message("hello kick")
+
+        assert result.ok is False
+        assert result.error is not None
+        assert "follower-only" in result.error
 
     async def test_send_no_chatroom_returns_false(self) -> None:
         client = KickChatClient()
         client._authenticated = True
         client._running = True
         client._token = "tok"
-        client._chatroom_id = None
+        client._broadcaster_user_id = None
         result = await client.send_message("hello")
-        assert result is False
+        assert result.ok is False
+        assert result.error is not None
+        assert "metadata is incomplete" in result.error
