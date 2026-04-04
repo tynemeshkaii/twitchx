@@ -1394,12 +1394,13 @@ document.addEventListener('DOMContentLoaded', function() {
     var cid = document.getElementById('yt-client-id').value.trim();
     var cs = document.getElementById('yt-client-secret').value.trim();
     if (!cid || !cs) {
-      var fb = document.getElementById('settings-feedback');
-      fb.textContent = 'YouTube Client ID and Secret are required';
+      var fb = document.getElementById('yt-test-result');
+      fb.style.display = 'block';
       fb.style.color = 'var(--error-red)';
+      fb.textContent = 'YouTube Client ID and Secret are required';
       return;
     }
-    if (api) api.youtube_login();
+    if (api) api.youtube_login(cid, cs);
   });
   document.getElementById('yt-logout-btn').addEventListener('click', function() {
     if (api) api.youtube_logout();
@@ -1410,12 +1411,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // YouTube test connection
   document.getElementById('yt-test-btn').addEventListener('click', function() {
+    if (!api) return;
     var tr = document.getElementById('yt-test-result');
     tr.style.display = 'block';
     tr.textContent = 'Testing...';
     tr.style.color = 'var(--text-muted)';
     document.getElementById('yt-test-btn').disabled = true;
-    if (api) api.youtube_test_connection();
+    api.youtube_test_connection();
   });
 
   document.getElementById('sort-select').addEventListener('change', function(e) {

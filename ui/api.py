@@ -655,8 +655,20 @@ class TwitchXApi:
         self._config = update_config(_clear)
         self._eval_js("window.onKickLogout()")
 
-    def youtube_login(self) -> None:
+    def youtube_login(self, client_id: str = "", client_secret: str = "") -> None:
         yt_conf = self._get_youtube_config()
+        # If credentials passed from JS form, save them first
+        if client_id.strip() and client_secret.strip():
+            cid = client_id.strip()
+            csec = client_secret.strip()
+
+            def _save_creds(cfg: dict) -> None:
+                yc = cfg.get("platforms", {}).get("youtube", {})
+                yc["client_id"] = cid
+                yc["client_secret"] = csec
+
+            self._config = update_config(_save_creds)
+            yt_conf = self._get_youtube_config()
         if not yt_conf.get("client_id") or not yt_conf.get("client_secret"):
             self._eval_js("window.onYouTubeNeedsCredentials()")
             return
