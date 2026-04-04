@@ -107,6 +107,19 @@ class TestQuotaTracker:
         qt = QuotaTracker(lambda: _yt_conf(tmp_path), _make_update_fn(tmp_path))
         assert qt.can_use(100)
 
+    def test_remaining_reflects_use_without_config_reload(self, tmp_path: Path) -> None:
+        """remaining() must see the updated value immediately after use(), even if
+        the caller's config copy is never reloaded from disk."""
+        _setup_config(tmp_path, {})
+        from core.platforms.youtube import QuotaTracker
+
+        # Provide a get_yt_config that always returns the INITIAL stale config —
+        # simulating the bug where self._config is never reloaded in another client.
+        stale_conf = _yt_conf(tmp_path)  # snapshot at init time
+        qt = QuotaTracker(lambda: stale_conf, _make_update_fn(tmp_path))
+        qt.use(500)
+        assert qt.remaining() == 9_500  # must reflect in-memory counter, not stale conf
+
 
 # ── RSS Parsing ───────────────────────────────────────────────
 

@@ -31,7 +31,9 @@ DAILY_QUOTA_LIMIT = 10_000
 class QuotaTracker:
     """Track YouTube Data API daily quota usage.
 
-    Persists usage to config. Auto-resets on date change.
+    Maintains authoritative in-memory counters seeded from config at init.
+    Writes to disk for persistence across restarts, but never reads from disk
+    after construction — eliminating stale-config reads on every remaining() call.
     """
 
     def __init__(
@@ -39,9 +41,16 @@ class QuotaTracker:
         get_yt_config: Any,
         update_fn: Any | None = None,
     ) -> None:
-        self._get_yt = get_yt_config
         self._update_fn = update_fn or self._default_update
         self._lock = threading.Lock()
+        # Seed in-memory state from persisted config once at construction.
+        yc = get_yt_config()
+        today = date.today().isoformat()
+        if yc.get("quota_reset_date") == today:
+            self._used: int = yc.get("daily_quota_used", 0)
+        else:
+            self._used = 0
+        self._date: str = today
 
     @staticmethod
     def _default_update(used: int, date_str: str) -> None:
@@ -52,30 +61,26 @@ class QuotaTracker:
 
         update_config(_apply)
 
-    def _today(self) -> str:
-        return date.today().isoformat()
+    def _maybe_reset(self) -> None:
+        """Reset counter if the calendar day has changed. Must be called under lock."""
+        today = date.today().isoformat()
+        if self._date != today:
+            self._used = 0
+            self._date = today
 
     def remaining(self) -> int:
         with self._lock:
-            yt = self._get_yt()
-            today = self._today()
-            if yt.get("quota_reset_date") != today:
-                return DAILY_QUOTA_LIMIT
-            return max(0, DAILY_QUOTA_LIMIT - yt.get("daily_quota_used", 0))
+            self._maybe_reset()
+            return max(0, DAILY_QUOTA_LIMIT - self._used)
 
     def can_use(self, units: int) -> bool:
         return self.remaining() >= units
 
     def use(self, units: int) -> None:
         with self._lock:
-            yt = self._get_yt()
-            today = self._today()
-            if yt.get("quota_reset_date") != today:
-                current = 0
-            else:
-                current = yt.get("daily_quota_used", 0)
-            new_used = current + units
-            self._update_fn(new_used, today)
+            self._maybe_reset()
+            self._used += units
+            self._update_fn(self._used, self._date)
 
 
 # ── RSS feed parsing ─────────────────────────────────────────
