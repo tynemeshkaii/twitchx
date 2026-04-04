@@ -156,3 +156,70 @@ class TestRSSParsing:
   </entry>
 </feed>"""
         assert parse_rss_video_ids(xml_data) == ["validId12345"]
+
+
+# ── YouTubeClient ─────────────────────────────────────────────
+
+
+import asyncio
+import httpx
+
+
+class TestValidChannelId:
+    @pytest.mark.parametrize(
+        "cid",
+        [
+            "UCX6OQ3DkcsbYNE6H8uQQuVA",
+            "UC-lHJZR3Gqxm24_Vd_AJ5Yw",
+            "UCVHFbqXqoYvEWM1Ddxl0QDg",
+        ],
+    )
+    def test_accepts_valid(self, cid: str) -> None:
+        from core.platforms.youtube import VALID_CHANNEL_ID
+
+        assert VALID_CHANNEL_ID.match(cid)
+
+    @pytest.mark.parametrize(
+        "cid",
+        [
+            "",
+            "not-a-channel-id",
+            "UC",
+            "UCtooshort",
+            "@MrBeast",
+            "https://youtube.com/channel/UCX6OQ3DkcsbYNE6H8uQQuVA",
+        ],
+    )
+    def test_rejects_invalid(self, cid: str) -> None:
+        from core.platforms.youtube import VALID_CHANNEL_ID
+
+        assert not VALID_CHANNEL_ID.match(cid)
+
+
+class TestYouTubeClientInit:
+    def test_creates_client(self) -> None:
+        from core.platforms.youtube import YouTubeClient
+
+        client = YouTubeClient()
+        assert client is not None
+
+    def test_per_loop_client_isolation(self) -> None:
+        """Different event loops get different httpx clients."""
+        from core.platforms.youtube import YouTubeClient
+
+        client = YouTubeClient()
+        http_clients: list[httpx.AsyncClient] = []
+
+        async def get_http_client() -> httpx.AsyncClient:
+            return client._get_client()
+
+        for _ in range(2):
+            loop = asyncio.new_event_loop()
+            try:
+                hc = loop.run_until_complete(get_http_client())
+                http_clients.append(hc)
+                loop.run_until_complete(client.close_loop_resources())
+            finally:
+                loop.close()
+
+        assert http_clients[0] is not http_clients[1]

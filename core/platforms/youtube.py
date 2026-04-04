@@ -96,3 +96,125 @@ def parse_rss_video_ids(xml_text: str) -> list[str]:
         if vid_el is not None and vid_el.text:
             ids.append(vid_el.text.strip())
     return ids
+
+
+# ── YouTubeClient ─────────────────────────────────────────────
+
+
+class YouTubeClient:
+    """YouTube Data API v3 client with per-event-loop HTTP pooling."""
+
+    def __init__(self) -> None:
+        self._config = load_config()
+        self._loop_clients: dict[asyncio.AbstractEventLoop, httpx.AsyncClient] = {}
+        self._token_locks: dict[asyncio.AbstractEventLoop, asyncio.Lock] = {}
+        self._loop_state_lock = threading.Lock()
+        self._quota = QuotaTracker(
+            self._yconf,
+        )
+        self._live_video_ids: dict[str, str] = {}
+
+    def _yconf(self) -> dict[str, Any]:
+        """Shortcut to the YouTube platform config section."""
+        return self._config.get("platforms", {}).get("youtube", {})
+
+    def _get_client(self) -> httpx.AsyncClient:
+        loop = asyncio.get_running_loop()
+        with self._loop_state_lock:
+            client = self._loop_clients.get(loop)
+            if client is None:
+                client = httpx.AsyncClient(timeout=15.0)
+                self._loop_clients[loop] = client
+            return client
+
+    def _get_token_lock(self) -> asyncio.Lock:
+        loop = asyncio.get_running_loop()
+        with self._loop_state_lock:
+            lock = self._token_locks.get(loop)
+            if lock is None:
+                lock = asyncio.Lock()
+                self._token_locks[loop] = lock
+            return lock
+
+    async def close(self) -> None:
+        await self.close_loop_resources()
+
+    async def close_loop_resources(self) -> None:
+        loop = asyncio.get_running_loop()
+        with self._loop_state_lock:
+            client = self._loop_clients.pop(loop, None)
+            self._token_locks.pop(loop, None)
+        if client is not None:
+            await client.aclose()
+
+    def reset_client(self) -> None:
+        """Compatibility no-op — clients are per-event-loop."""
+
+    def _reload_config(self) -> None:
+        self._config = load_config()
+
+    # ── Token management ─────────────────────────────────────
+
+    async def _ensure_token(self) -> str | None:
+        """Return a valid OAuth token, refreshing if needed. None if unavailable."""
+        async with self._get_token_lock():
+            self._reload_config()
+            yc = self._yconf()
+            if token_is_valid(yc):
+                return yc["access_token"]
+            if yc.get("refresh_token"):
+                try:
+                    return await self.refresh_user_token()
+                except ValueError:
+                    return None
+            return None
+
+    # ── Generic GET ──────────────────────────────────────────
+
+    async def _yt_get(
+        self,
+        endpoint: str,
+        params: dict[str, str] | None = None,
+        auth_required: bool = False,
+    ) -> dict[str, Any]:
+        """Make a GET request to the YouTube Data API."""
+        token = await self._ensure_token()
+        headers: dict[str, str] = {}
+        query: dict[str, str] = dict(params or {})
+
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        elif auth_required:
+            raise ValueError("YouTube authentication required but no valid token.")
+        else:
+            api_key = self._yconf().get("api_key", "")
+            if not api_key:
+                raise ValueError("YouTube API key required. Set it in Settings.")
+            query["key"] = api_key
+
+        url = f"{YOUTUBE_API_URL}/{endpoint}"
+        logger.debug("YT GET %s params=%s", url, query)
+        client = self._get_client()
+        resp = await client.get(url, headers=headers, params=query)
+        logger.debug("YT Response: %d", resp.status_code)
+
+        if resp.status_code == 403:
+            body = resp.json()
+            errors = body.get("error", {}).get("errors", [])
+            for err in errors:
+                if err.get("reason") == "quotaExceeded":
+                    raise ValueError("YouTube API daily quota exceeded.")
+            resp.raise_for_status()
+        if resp.status_code == 401 and token:
+            new_token = await self._ensure_token()
+            if new_token:
+                headers["Authorization"] = f"Bearer {new_token}"
+                resp = await client.get(url, headers=headers, params=query)
+            else:
+                resp.raise_for_status()
+        resp.raise_for_status()
+        return resp.json()
+
+    async def refresh_user_token(self) -> str:
+        """Stub — implemented in Task 7."""
+        raise NotImplementedError
