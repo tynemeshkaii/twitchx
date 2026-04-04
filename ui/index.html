@@ -1057,6 +1057,12 @@ body {
         </div>
         <div id="player-content">
           <video id="stream-video" autoplay controls playsinline></video>
+          <iframe id="youtube-embed"
+            src="about:blank"
+            frameborder="0"
+            allow="autoplay; encrypted-media"
+            allowfullscreen
+            style="display:none;width:100%;height:100%;border:0;flex:1;min-width:0;background:#000;"></iframe>
           <div id="chat-resize-handle"></div>
           <div id="chat-panel">
             <div id="chat-header">
@@ -1726,12 +1732,35 @@ window.onLaunchProgress = function(data) {
 /* ── HTML <video> player view ────────────────────────── */
 
 window.onStreamReady = function(data) {
+  state.playerPlatform = data.platform || 'twitch';
+  document.getElementById('player-channel-name').textContent = data.channel || '';
+  document.getElementById('player-stream-title').textContent = data.title || '';
+
+  if (data.playback_type === 'youtube_embed') {
+    // Hide native video, show YouTube iframe
+    var video = document.getElementById('stream-video');
+    video.pause();
+    video.removeAttribute('src');
+    video.style.display = 'none';
+    var embed = document.getElementById('youtube-embed');
+    if (embed) {
+      embed.src = 'https://www.youtube.com/embed/' + data.url + '?autoplay=1&modestbranding=1';
+      embed.style.display = '';
+    }
+    // Disable IINA button — not applicable for YouTube
+    var iinaBtn = document.getElementById('watch-external-btn');
+    if (iinaBtn) { iinaBtn.disabled = true; iinaBtn.style.opacity = '0.4'; }
+    showPlayerView();
+    return;
+  }
+
+  // HLS / native video path
   var video = document.getElementById('stream-video');
+  video.style.display = '';
   video.src = data.url;
   video.play();
-  state.playerPlatform = data.platform || 'twitch';
-  document.getElementById('player-channel-name').textContent = data.channel;
-  document.getElementById('player-stream-title').textContent = data.title || '';
+  var iinaBtn = document.getElementById('watch-external-btn');
+  if (iinaBtn) { iinaBtn.disabled = false; iinaBtn.style.opacity = ''; }
   showPlayerView();
 };
 
@@ -2009,6 +2038,18 @@ function hidePlayerView() {
   video.pause();
   video.removeAttribute('src');
   video.load();
+  video.style.display = '';
+
+  // Clear YouTube iframe
+  var embed = document.getElementById('youtube-embed');
+  if (embed) {
+    embed.src = 'about:blank';
+    embed.style.display = 'none';
+  }
+
+  // Restore IINA button
+  var iinaBtn = document.getElementById('watch-external-btn');
+  if (iinaBtn) { iinaBtn.disabled = false; iinaBtn.style.opacity = ''; }
 
   // Clear chat
   clearChatMessages();
