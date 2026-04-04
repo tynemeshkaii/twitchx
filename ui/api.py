@@ -155,9 +155,9 @@ class TwitchXApi:
             )
             if match:
                 return match.group(1).lower()
-            # Raw UC channel ID
+            # Raw UC channel ID — accept any casing; migration will canonicalize
             clean = re.sub(r"[^A-Za-z0-9_-]", "", raw)
-            if re.match(r"^UC[\w-]{22}$", clean):
+            if re.match(r"^UC[\w-]{22}$", clean, re.IGNORECASE):
                 return clean
             # Plain username (3–30 word chars) — treat as @handle for resolution
             if re.match(r"^[A-Za-z0-9][A-Za-z0-9_.-]{2,29}$", clean):
@@ -964,8 +964,10 @@ class TwitchXApi:
                     def _apply(cfg: dict) -> None:
                         nonlocal added
                         favorites = cfg.get("favorites", [])
+                        # Case-insensitive dedup: UCxxxx IDs must preserve case but
+                        # we don't want lowercase duplicates to slip in again.
                         if any(
-                            f.get("login") == channel_id
+                            f.get("login", "").lower() == channel_id.lower()
                             and f.get("platform") == "youtube"
                             for f in favorites
                         ):
@@ -1034,10 +1036,19 @@ class TwitchXApi:
         def _apply(cfg: dict) -> None:
             nonlocal added
             favorites = cfg.get("favorites", [])
-            if any(
-                f.get("login") == clean and f.get("platform") == platform
-                for f in favorites
-            ):
+            # YouTube channel IDs: case-insensitive dedup to prevent lowercase dupes
+            if platform == "youtube":
+                already = any(
+                    f.get("login", "").lower() == clean.lower()
+                    and f.get("platform") == "youtube"
+                    for f in favorites
+                )
+            else:
+                already = any(
+                    f.get("login") == clean and f.get("platform") == platform
+                    for f in favorites
+                )
+            if already:
                 return
             favorites.append(
                 {
