@@ -73,7 +73,25 @@
       "Bash(/opt/homebrew/bin/uv --version)",
       "Bash(ruff check:*)",
       "Bash(python3 -m pytest tests/ -v)",
-      "Bash(pip3 show:*)"
+      "Bash(pip3 show:*)",
+      "Bash(python -m pytest tests/ -v)",
+      "Bash(.venv/bin/python -m pytest tests/platforms/test_youtube.py::TestQuotaTracker::test_remaining_reflects_use_without_config_reload -v)",
+      "Bash(.venv/bin/python -m pytest tests/platforms/test_youtube.py::TestQuotaTracker -v)",
+      "Bash(python3 -m pytest /Users/pesnya/Documents/streamdeck/tests/platforms/test_youtube.py::TestQuotaTracker -v)",
+      "Bash(/Users/pesnya/Documents/streamdeck/.venv/bin/pytest tests/platforms/test_youtube.py::TestQuotaTracker -v)",
+      "Bash(.venv/bin/python -m pytest tests/platforms/test_youtube.py::TestLiveVideoIds -v)",
+      "Bash(.venv/bin/python -m pytest tests/platforms/test_youtube.py -v)",
+      "Bash(python -m pytest tests/platforms/test_youtube.py::TestLiveVideoIds -v)",
+      "Bash(python3 -m pytest tests/platforms/test_youtube.py::TestLiveVideoIds -v)",
+      "Bash(/Users/pesnya/Documents/streamdeck/.venv/bin/pytest tests/platforms/test_youtube.py::TestLiveVideoIds -v)",
+      "Bash(/Users/pesnya/Documents/streamdeck/.venv/bin/pytest tests/ -v)",
+      "Bash(.venv/bin/python -m pytest tests/test_api.py::TestAsyncFetchIsolation -v)",
+      "Bash(.venv/bin/python -m pytest tests/ -v)",
+      "Bash(.venv/bin/python -m pytest tests/test_stream_resolver.py -v)",
+      "Bash(.venv/bin/python -m pytest tests/test_api.py::TestAsyncFetchIsolation tests/test_api.py -v)",
+      "Bash(python -m pytest tests/test_api.py::TestAsyncFetchIsolation -v)",
+      "Bash(python3 -m pytest tests/test_api.py::TestAsyncFetchIsolation -v)",
+      "Bash(git checkout:*)"
     ]
   }
 }
