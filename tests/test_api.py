@@ -698,6 +698,8 @@ class TestAsyncFetchIsolation:
             await asyncio.sleep(999)
 
         async def run():
+            # side_effect on an async method: mock calls slow_token() and awaits the coroutine.
+            # asyncio.wait_for with _twitch_timeout=0.05 cancels it, raising asyncio.TimeoutError.
             with patch.object(api._twitch, "_ensure_token", side_effect=slow_token):
                 with patch.object(
                     api._kick,

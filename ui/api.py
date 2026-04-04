@@ -1363,6 +1363,10 @@ class TwitchXApi:
                 twitch_streams, twitch_users = await asyncio.wait_for(
                     _do_twitch(), timeout=_twitch_timeout
                 )
+            except asyncio.TimeoutError:
+                logger.warning("Twitch fetch timed out after %.1fs", _twitch_timeout)
+            except (httpx.ConnectError, httpx.HTTPStatusError, ValueError):
+                raise  # let _fetch_data handle retries and user-facing messages
             except Exception as e:
                 logger.warning("Twitch fetch failed: %s", e)
 
