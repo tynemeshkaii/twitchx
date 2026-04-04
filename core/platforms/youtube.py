@@ -76,3 +76,23 @@ class QuotaTracker:
                 current = yt.get("daily_quota_used", 0)
             new_used = current + units
             self._update_fn(new_used, today)
+
+
+# ── RSS feed parsing ─────────────────────────────────────────
+
+_YT_NS = "http://www.youtube.com/xml/schemas/2015"
+_ATOM_NS = "http://www.w3.org/2005/Atom"
+
+
+def parse_rss_video_ids(xml_text: str) -> list[str]:
+    """Extract video IDs from a YouTube channel RSS feed."""
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return []
+    ids: list[str] = []
+    for entry in root.findall(f"{{{_ATOM_NS}}}entry"):
+        vid_el = entry.find(f"{{{_YT_NS}}}videoId")
+        if vid_el is not None and vid_el.text:
+            ids.append(vid_el.text.strip())
+    return ids

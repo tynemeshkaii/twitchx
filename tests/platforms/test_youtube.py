@@ -102,3 +102,57 @@ class TestQuotaTracker:
 
         qt = QuotaTracker(lambda: _yt_conf(tmp_path), _make_update_fn(tmp_path))
         assert qt.can_use(100)
+
+
+# ── RSS Parsing ───────────────────────────────────────────────
+
+
+class TestRSSParsing:
+    def test_parses_video_ids_from_feed(self) -> None:
+        from core.platforms.youtube import parse_rss_video_ids
+
+        xml_data = """<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015"
+      xmlns:media="http://search.yahoo.com/mrss/"
+      xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <yt:videoId>abc123def45</yt:videoId>
+    <title>Stream Title</title>
+  </entry>
+  <entry>
+    <yt:videoId>xyz789ghi01</yt:videoId>
+    <title>Another Video</title>
+  </entry>
+</feed>"""
+        ids = parse_rss_video_ids(xml_data)
+        assert ids == ["abc123def45", "xyz789ghi01"]
+
+    def test_returns_empty_for_malformed_xml(self) -> None:
+        from core.platforms.youtube import parse_rss_video_ids
+
+        assert parse_rss_video_ids("not xml at all") == []
+
+    def test_returns_empty_for_feed_with_no_entries(self) -> None:
+        from core.platforms.youtube import parse_rss_video_ids
+
+        xml_data = """<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015"
+      xmlns="http://www.w3.org/2005/Atom">
+</feed>"""
+        assert parse_rss_video_ids(xml_data) == []
+
+    def test_skips_entries_without_video_id(self) -> None:
+        from core.platforms.youtube import parse_rss_video_ids
+
+        xml_data = """<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015"
+      xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <title>No video ID here</title>
+  </entry>
+  <entry>
+    <yt:videoId>validId12345</yt:videoId>
+    <title>Has ID</title>
+  </entry>
+</feed>"""
+        assert parse_rss_video_ids(xml_data) == ["validId12345"]
