@@ -120,6 +120,40 @@ class TestQuotaTracker:
         qt.use(500)
         assert qt.remaining() == 9_500  # must reflect in-memory counter, not stale conf
 
+    def test_check_and_use_succeeds_and_decrements(self, tmp_path: Path) -> None:
+        _setup_config(tmp_path, {})
+        from core.platforms.youtube import QuotaTracker
+
+        qt = QuotaTracker(lambda: _yt_conf(tmp_path), _make_update_fn(tmp_path))
+        result = qt.check_and_use(100)
+        assert result is True
+        assert qt.remaining() == 9_900
+
+    def test_check_and_use_fails_when_insufficient_budget(self, tmp_path: Path) -> None:
+        today = date.today().isoformat()
+        _setup_config(
+            tmp_path, {"daily_quota_used": 9_950, "quota_reset_date": today}
+        )
+        from core.platforms.youtube import QuotaTracker
+
+        qt = QuotaTracker(lambda: _yt_conf(tmp_path), _make_update_fn(tmp_path))
+        result = qt.check_and_use(100)  # only 50 units left
+        assert result is False
+        assert qt.remaining() == 50  # counter must not have changed
+
+    def test_check_and_use_does_not_overshoot_quota(self, tmp_path: Path) -> None:
+        today = date.today().isoformat()
+        _setup_config(
+            tmp_path, {"daily_quota_used": 9_999, "quota_reset_date": today}
+        )
+        from core.platforms.youtube import QuotaTracker
+
+        qt = QuotaTracker(lambda: _yt_conf(tmp_path), _make_update_fn(tmp_path))
+        assert qt.check_and_use(1) is True
+        assert qt.remaining() == 0
+        assert qt.check_and_use(1) is False  # 0 units left — must not go negative
+        assert qt.remaining() == 0
+
 
 # ── RSS Parsing ───────────────────────────────────────────────
 
@@ -458,8 +492,7 @@ class TestGetFollowedChannels:
             }
 
         monkeypatch.setattr(client, "_yt_get", fake_yt_get)
-        monkeypatch.setattr(client._quota, "use", lambda n: None)
-        monkeypatch.setattr(client._quota, "can_use", lambda n: True)
+        monkeypatch.setattr(client._quota, "check_and_use", lambda n: True)
 
         loop = asyncio.new_event_loop()
         try:
@@ -577,6 +610,51 @@ class TestLiveVideoIds:
             asyncio.run(client.get_live_streams([self._LIVE_CID]))
 
         assert client._live_video_ids.get(self._LIVE_CID) == "liveVideoId"
+
+    def test_empty_channel_id_not_cached(self, tmp_path: Path) -> None:
+        """API response with empty channelId must not write '' into _live_video_ids."""
+        import asyncio
+        from unittest.mock import patch
+
+        _setup_config(tmp_path, {"api_key": "fakekey"})
+
+        import core.storage as storage
+
+        storage.CONFIG_DIR = tmp_path / ".config" / "twitchx"
+        storage.CONFIG_FILE = storage.CONFIG_DIR / "config.json"
+
+        from core.platforms.youtube import YouTubeClient
+
+        client = YouTubeClient()
+
+        async def mock_rss(cid: str) -> list[str]:
+            return ["someVideoId"]
+
+        async def mock_yt_get(endpoint: str, params=None, auth_required=False) -> dict:
+            return {
+                "items": [
+                    {
+                        "id": "someVideoId",
+                        "snippet": {
+                            "channelId": "",  # empty — guard must reject this
+                            "channelTitle": "Unknown",
+                            "title": "Broken stream",
+                            "thumbnails": {},
+                        },
+                        "liveStreamingDetails": {
+                            "actualStartTime": "2026-04-04T10:00:00Z",
+                        },
+                    }
+                ]
+            }
+
+        with (
+            patch.object(client, "_fetch_rss_video_ids", side_effect=mock_rss),
+            patch.object(client, "_yt_get", side_effect=mock_yt_get),
+        ):
+            asyncio.run(client.get_live_streams([self._STALE_CID]))
+
+        assert "" not in client._live_video_ids
 
     def test_unpolled_channel_video_id_preserved(self, tmp_path: Path) -> None:
         """Channels NOT in the poll batch must keep their cached video IDs."""

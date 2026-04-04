@@ -82,6 +82,21 @@ class QuotaTracker:
             self._used += units
             self._update_fn(self._used, self._date)
 
+    def check_and_use(self, units: int) -> bool:
+        """Atomically check quota and consume it if available.
+
+        Returns True and decrements the counter if units are available,
+        False without side effects otherwise. Prefer this over calling
+        can_use() + use() separately to avoid a TOCTOU race.
+        """
+        with self._lock:
+            self._maybe_reset()
+            if DAILY_QUOTA_LIMIT - self._used < units:
+                return False
+            self._used += units
+            self._update_fn(self._used, self._date)
+            return True
+
 
 # ── RSS feed parsing ─────────────────────────────────────────
 
@@ -314,7 +329,7 @@ class YouTubeClient:
         live_streams: list[dict[str, Any]] = []
         for i in range(0, len(unique_ids), 50):
             batch = unique_ids[i : i + 50]
-            if not self._quota.can_use(1):
+            if not self._quota.check_and_use(1):
                 logger.warning("YouTube quota exhausted, skipping live check")
                 break
             try:
@@ -325,13 +340,14 @@ class YouTubeClient:
                         "id": ",".join(batch),
                     },
                 )
-                self._quota.use(1)
                 for item in data.get("items", []):
                     if self._is_video_live(item):
                         stream = self._build_stream_from_video(item)
                         live_streams.append(stream)
-                        # Cache video_id for playback
-                        self._live_video_ids[stream["login"]] = stream["video_id"]
+                        # Cache video_id for playback — guard against empty channelId
+                        channel_id = stream["login"]
+                        if channel_id and VALID_CHANNEL_ID.match(channel_id):
+                            self._live_video_ids[channel_id] = stream["video_id"]
             except Exception as e:
                 logger.warning("YouTube videos.list failed: %s", e)
 
@@ -359,7 +375,7 @@ class YouTubeClient:
         query = query.strip()
         if not query:
             return []
-        if not self._quota.can_use(100):
+        if not self._quota.check_and_use(100):
             logger.warning("YouTube quota too low for search (need 100 units)")
             return []
         try:
@@ -372,7 +388,6 @@ class YouTubeClient:
                     "maxResults": "10",
                 },
             )
-            self._quota.use(100)
             return [
                 self._normalize_channel_search_result(item)
                 for item in data.get("items", [])
@@ -541,7 +556,7 @@ class YouTubeClient:
         page_token: str | None = None
 
         while True:
-            if not self._quota.can_use(1):
+            if not self._quota.check_and_use(1):
                 logger.warning("YouTube quota too low for subscriptions fetch")
                 break
             params: dict[str, str] = {
@@ -554,7 +569,6 @@ class YouTubeClient:
             data = await self._yt_get(
                 "subscriptions", params=params, auth_required=True
             )
-            self._quota.use(1)
 
             for item in data.get("items", []):
                 snippet = item.get("snippet", {})
