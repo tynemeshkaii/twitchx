@@ -219,13 +219,14 @@ class YouTubeClient:
 
     @staticmethod
     def _is_video_live(item: dict[str, Any]) -> bool:
-        """Check if a video item from videos.list is currently live."""
+        """Check if a video item from videos.list is currently live.
+
+        A stream is live when actualStartTime is set and actualEndTime is absent.
+        concurrentViewers is intentionally not required — YouTube omits it for
+        some streams (new streams, hidden counts, API propagation lag).
+        """
         details = item.get("liveStreamingDetails", {})
-        return bool(
-            details.get("actualStartTime")
-            and not details.get("actualEndTime")
-            and details.get("concurrentViewers")
-        )
+        return bool(details.get("actualStartTime") and not details.get("actualEndTime"))
 
     @staticmethod
     def _build_stream_from_video(item: dict[str, Any]) -> dict[str, Any]:

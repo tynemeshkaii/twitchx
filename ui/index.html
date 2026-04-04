@@ -1653,7 +1653,7 @@ window.onSearchResults = function(results) {
     if (r.platform) {
       const badge = document.createElement('span');
       badge.className = 'platform-badge ' + r.platform;
-      badge.textContent = r.platform === 'kick' ? 'Kick' : 'Twitch';
+      badge.textContent = r.platform === 'kick' ? 'Kick' : r.platform === 'youtube' ? 'YouTube' : 'Twitch';
       name.appendChild(document.createTextNode(' '));
       name.appendChild(badge);
     }
@@ -1677,14 +1677,14 @@ window.onSearchResults = function(results) {
     addBtn.title = 'Add to favorites';
     addBtn.addEventListener('click', function(e) {
       e.stopPropagation();
-      addChannelDirect(r.login, r.platform || 'twitch');
+      addChannelDirect(r.login, r.platform || 'twitch', r.display_name);
       state.searchResults = [];
     });
 
     row.appendChild(info);
     row.appendChild(addBtn);
     row.addEventListener('click', function() {
-      addChannelDirect(r.login, r.platform || 'twitch');
+      addChannelDirect(r.login, r.platform || 'twitch', r.display_name);
       dd.style.display = 'none';
       state.searchResults = [];
       document.getElementById('search-input').value = '';
@@ -2871,15 +2871,17 @@ function addChannel() {
       }
     }
     var targetPlatform = (choice && choice.platform) || (platform === 'all' ? 'twitch' : platform) || 'twitch';
-    api.add_channel(val, targetPlatform);
+    var loginToAdd = (choice && choice.login) || val;
+    var displayToAdd = (choice && choice.display_name) || '';
+    api.add_channel(loginToAdd, targetPlatform, displayToAdd);
     input.value = '';
     state.searchResults = [];
     document.getElementById('search-dropdown').style.display = 'none';
   }
 }
 
-function addChannelDirect(login, platform) {
-  if (api) api.add_channel(login, platform || 'twitch');
+function addChannelDirect(login, platform, displayName) {
+  if (api) api.add_channel(login, platform || 'twitch', displayName || '');
 }
 
 function doWatch() {

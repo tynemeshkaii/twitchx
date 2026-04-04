@@ -73,6 +73,7 @@ class TwitchXApi:
         self._launch_channel: str | None = None
         self._last_successful_fetch: float = 0
         self._last_youtube_fetch: float = 0
+        self._last_youtube_streams: list[dict[str, Any]] = []
         # User avatar URLs for lazy loading
         self._user_avatars: dict[str, str] = {}
         # Chat
@@ -148,7 +149,9 @@ class TwitchXApi:
                 return "v:" + match.group(1)
             # youtube.com/@handle or bare @handle
             match = re.search(
-                r"(?:youtube\.com/)?(@[A-Za-z0-9][A-Za-z0-9_.-]{2,29})", raw, re.IGNORECASE
+                r"(?:youtube\.com/)?(@[A-Za-z0-9][A-Za-z0-9_.-]{2,29})",
+                raw,
+                re.IGNORECASE,
             )
             if match:
                 return match.group(1).lower()
@@ -763,8 +766,17 @@ class TwitchXApi:
         self._config = update_config(_clear)
         self._eval_js("window.onYouTubeLogout()")
 
-    def youtube_test_connection(self, api_key: str) -> None:
+    def youtube_test_connection(self, api_key: str = "") -> None:
         """Test YouTube API key by fetching a known video."""
+        if not api_key:
+            api_key = get_platform_config(self._config, "youtube").get("api_key", "")
+        if not api_key:
+            self._eval_js(
+                "window.onYouTubeTestResult("
+                + json.dumps({"success": False, "message": "No API key configured"})
+                + ")"
+            )
+            return
 
         def do_test() -> None:
             try:
@@ -910,7 +922,9 @@ class TwitchXApi:
 
     # ── Channels ────────────────────────────────────────────────
 
-    def add_channel(self, username: str, platform: str = "twitch") -> None:
+    def add_channel(
+        self, username: str, platform: str = "twitch", display_name: str = ""
+    ) -> None:
         clean = self._sanitize_channel_name(username, platform)
         if not clean:
             self._eval_js(
@@ -951,7 +965,8 @@ class TwitchXApi:
                         nonlocal added
                         favorites = cfg.get("favorites", [])
                         if any(
-                            f.get("login") == channel_id and f.get("platform") == "youtube"
+                            f.get("login") == channel_id
+                            and f.get("platform") == "youtube"
                             for f in favorites
                         ):
                             return
@@ -992,7 +1007,9 @@ class TwitchXApi:
                 except ValueError as e:
                     msg = str(e)[:120]
                     self._eval_js(
-                        "window.onStatusUpdate(" + json.dumps({"text": msg, "type": "error"}) + ")"
+                        "window.onStatusUpdate("
+                        + json.dumps({"text": msg, "type": "error"})
+                        + ")"
                     )
                 except Exception:
                     logger.warning("YouTube channel resolve failed", exc_info=True)
@@ -1023,7 +1040,11 @@ class TwitchXApi:
             ):
                 return
             favorites.append(
-                {"platform": platform, "login": clean, "display_name": clean}
+                {
+                    "platform": platform,
+                    "login": clean,
+                    "display_name": display_name or clean,
+                }
             )
             cfg["favorites"] = favorites
             added = True
@@ -1331,7 +1352,9 @@ class TwitchXApi:
             except Exception as e:
                 logger.warning("Kick fetch failed: %s", e)
 
-        # Fetch YouTube data respecting the 5-minute minimum polling interval
+        # Fetch YouTube data respecting the 5-minute minimum polling interval.
+        # When not yet due, serve the cached result so Twitch/Kick poll cycles
+        # don't wipe YouTube streams from the UI.
         if youtube_favorites:
             yt_conf = get_platform_config(self._config, "youtube")
             settings = get_settings(self._config)
@@ -1343,8 +1366,23 @@ class TwitchXApi:
                         youtube_favorites
                     )
                     self._last_youtube_fetch = time.time()
+                    self._last_youtube_streams = youtube_streams
+                except ValueError as e:
+                    # Configuration error (missing API key, quota exceeded)
+                    msg = str(e)[:120]
+                    logger.warning("YouTube config error: %s", msg)
+                    self._eval_js(
+                        "window.onStatusUpdate("
+                        + json.dumps({"text": f"YouTube: {msg}", "type": "error"})
+                        + ")"
+                    )
+                    youtube_streams = list(self._last_youtube_streams)
                 except Exception as e:
                     logger.warning("YouTube fetch failed: %s", e)
+                    youtube_streams = list(self._last_youtube_streams)
+            else:
+                # Not yet due — reuse last result to keep streams visible
+                youtube_streams = list(self._last_youtube_streams)
 
         return twitch_streams, twitch_users, kick_streams, youtube_streams
 
