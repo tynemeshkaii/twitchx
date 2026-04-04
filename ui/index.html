@@ -537,6 +537,7 @@ body {
 }
 .platform-badge.twitch { background: rgba(145, 70, 255, 0.85); }
 .platform-badge.kick { background: rgba(83, 252, 24, 0.85); color: #000; }
+.platform-badge.youtube { background: rgba(255, 0, 0, 0.85); }
 
 .card-info { padding: 8px 10px; }
 .card-meta {
@@ -1008,6 +1009,7 @@ body {
         <button class="platform-tab active" data-platform="all">All</button>
         <button class="platform-tab" data-platform="twitch">Twitch</button>
         <button class="platform-tab" data-platform="kick">Kick</button>
+        <button class="platform-tab" data-platform="youtube">YouTube</button>
       </div>
 
       <div id="favorites-header">
@@ -2365,7 +2367,7 @@ function createStreamCard(s) {
 
   var platformBadge = document.createElement('span');
   platformBadge.className = 'platform-badge ' + (s.platform || 'twitch');
-  platformBadge.textContent = s.platform === 'kick' ? 'K' : 'T';
+  platformBadge.textContent = s.platform === 'kick' ? 'K' : s.platform === 'youtube' ? 'YT' : 'T';
   thumb.appendChild(platformBadge);
 
   var watchBadge = document.createElement('span');
