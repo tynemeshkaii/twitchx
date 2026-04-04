@@ -45,6 +45,7 @@ DEFAULT_PLATFORM_KICK: dict[str, Any] = {
 
 DEFAULT_PLATFORM_YOUTUBE: dict[str, Any] = {
     "enabled": True,
+    "api_key": "",
     "client_id": "",
     "client_secret": "",
     "access_token": "",
