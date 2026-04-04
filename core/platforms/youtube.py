@@ -399,6 +399,151 @@ class YouTubeClient:
             "followers": int(stats.get("subscriberCount", 0)),
         }
 
+    # ── OAuth ────────────────────────────────────────────────
+
+    def get_auth_url(self) -> str:
+        """Generate Google OAuth authorization URL."""
+        yc = self._yconf()
+        params = {
+            "client_id": yc.get("client_id", ""),
+            "redirect_uri": YOUTUBE_REDIRECT_URI,
+            "response_type": "code",
+            "scope": OAUTH_SCOPE,
+            "access_type": "offline",
+            "prompt": "consent",
+        }
+        return f"{YOUTUBE_AUTH_URL}?{urlencode(params)}"
+
+    async def exchange_code(self, code: str) -> dict[str, Any]:
+        """Exchange authorization code for tokens."""
+        self._reload_config()
+        yc = self._yconf()
+        client = self._get_client()
+        resp = await client.post(
+            YOUTUBE_TOKEN_URL,
+            data={
+                "client_id": yc.get("client_id", ""),
+                "client_secret": yc.get("client_secret", ""),
+                "code": code,
+                "grant_type": "authorization_code",
+                "redirect_uri": YOUTUBE_REDIRECT_URI,
+            },
+        )
+        resp.raise_for_status()
+        return resp.json()
+
     async def refresh_user_token(self) -> str:
-        """Stub — implemented in Task 7."""
-        raise NotImplementedError
+        """Refresh the OAuth token. Clears auth state on failure."""
+        yc = self._yconf()
+        client = self._get_client()
+        resp = await client.post(
+            YOUTUBE_TOKEN_URL,
+            data={
+                "client_id": yc.get("client_id", ""),
+                "client_secret": yc.get("client_secret", ""),
+                "refresh_token": yc.get("refresh_token", ""),
+                "grant_type": "refresh_token",
+            },
+        )
+        if resp.status_code in (400, 401):
+
+            def _clear(cfg: dict) -> None:
+                yc = cfg.get("platforms", {}).get("youtube", {})
+                yc["access_token"] = ""
+                yc["refresh_token"] = ""
+                yc["token_expires_at"] = 0
+                yc["user_id"] = ""
+                yc["user_login"] = ""
+                yc["user_display_name"] = ""
+
+            self._config = update_config(_clear)
+            raise ValueError("YouTube token expired. Please log in again.")
+        resp.raise_for_status()
+        data = resp.json()
+        new_token = data["access_token"]
+        new_expires = int(time.time()) + data.get("expires_in", 3600)
+
+        def _update(cfg: dict) -> None:
+            yc = cfg.get("platforms", {}).get("youtube", {})
+            yc["access_token"] = new_token
+            yc["token_expires_at"] = new_expires
+
+        self._config = update_config(_update)
+        return new_token
+
+    async def get_current_user(self) -> dict[str, Any]:
+        """Get the authenticated user's YouTube channel info."""
+        data = await self._yt_get(
+            "channels",
+            params={"part": "snippet", "mine": "true"},
+            auth_required=True,
+        )
+        self._quota.use(1)
+        items = data.get("items", [])
+        if not items:
+            raise ValueError("No YouTube channel found for this account.")
+        item = items[0]
+        snippet = item.get("snippet", {})
+        thumbs = snippet.get("thumbnails", {})
+        return {
+            "id": item.get("id", ""),
+            "login": snippet.get("customUrl", item.get("id", "")),
+            "display_name": snippet.get("title", ""),
+            "profile_image_url": thumbs.get("default", {}).get("url", ""),
+        }
+
+    # ── Subscriptions ────────────────────────────────────────
+
+    async def get_followed_channels(self, user_id: str) -> list[dict[str, str]]:
+        """Get user's YouTube subscriptions. Returns list of {channel_id, display_name}.
+
+        Costs 1 unit per page (50 subscriptions/page).
+        """
+        channels: list[dict[str, str]] = []
+        page_token: str | None = None
+
+        while True:
+            if not self._quota.can_use(1):
+                logger.warning("YouTube quota too low for subscriptions fetch")
+                break
+            params: dict[str, str] = {
+                "part": "snippet",
+                "mine": "true",
+                "maxResults": "50",
+            }
+            if page_token:
+                params["pageToken"] = page_token
+            data = await self._yt_get("subscriptions", params=params, auth_required=True)
+            self._quota.use(1)
+
+            for item in data.get("items", []):
+                snippet = item.get("snippet", {})
+                resource = snippet.get("resourceId", {})
+                cid = resource.get("channelId", "")
+                name = snippet.get("title", cid)
+                if cid:
+                    channels.append({"channel_id": cid, "display_name": name})
+
+            page_token = data.get("nextPageToken")
+            if not page_token:
+                break
+
+        return channels
+
+    # ── Playback ─────────────────────────────────────────────
+
+    async def resolve_stream_url(
+        self, channel_id: str, quality: str
+    ) -> dict[str, Any]:
+        """Return playback info for YouTube iframe embed.
+
+        YouTube ToS prohibits custom playback — must use iframe embed.
+        """
+        video_id = self._live_video_ids.get(channel_id, "")
+        if not video_id:
+            raise ValueError(f"No live video found for channel {channel_id}")
+        return {
+            "url": video_id,
+            "playback_type": "youtube_embed",
+            "quality": quality,
+        }

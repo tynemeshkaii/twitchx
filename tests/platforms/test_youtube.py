@@ -377,3 +377,104 @@ class TestGetChannelInfo:
         assert info["channel_id"] == "UCX6OQ3DkcsbYNE6H8uQQuVA"
         assert info["display_name"] == "MrBeast"
         assert info["followers"] == 100_000_000
+
+
+# ── OAuth + user + subscriptions ──────────────────────────────
+
+
+class TestOAuth:
+    def test_get_auth_url_contains_required_params(self) -> None:
+        from core.platforms.youtube import YouTubeClient
+
+        client = YouTubeClient()
+        client._config = {
+            "platforms": {
+                "youtube": {"client_id": "test-client-id", "client_secret": "secret", "api_key": ""}
+            }
+        }
+        url = client.get_auth_url()
+        assert "accounts.google.com" in url
+        assert "test-client-id" in url
+        assert "localhost" in url
+        assert "youtube.readonly" in url
+
+
+class TestGetFollowedChannels:
+    def test_returns_channel_ids_from_subscriptions(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from core.platforms.youtube import YouTubeClient
+
+        client = YouTubeClient()
+        call_count = 0
+
+        async def fake_yt_get(
+            endpoint: str, params: dict | None = None, auth_required: bool = False
+        ) -> dict[str, Any]:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return {
+                    "items": [
+                        {
+                            "snippet": {
+                                "resourceId": {"channelId": "UC111"},
+                                "title": "Channel One",
+                            }
+                        },
+                        {
+                            "snippet": {
+                                "resourceId": {"channelId": "UC222"},
+                                "title": "Channel Two",
+                            }
+                        },
+                    ],
+                    "nextPageToken": "page2",
+                }
+            return {
+                "items": [
+                    {
+                        "snippet": {
+                            "resourceId": {"channelId": "UC333"},
+                            "title": "Channel Three",
+                        }
+                    }
+                ],
+            }
+
+        monkeypatch.setattr(client, "_yt_get", fake_yt_get)
+        monkeypatch.setattr(client._quota, "use", lambda n: None)
+        monkeypatch.setattr(client._quota, "can_use", lambda n: True)
+
+        loop = asyncio.new_event_loop()
+        try:
+            result = loop.run_until_complete(client.get_followed_channels("me"))
+        finally:
+            loop.run_until_complete(client.close())
+            loop.close()
+
+        assert result == [
+            {"channel_id": "UC111", "display_name": "Channel One"},
+            {"channel_id": "UC222", "display_name": "Channel Two"},
+            {"channel_id": "UC333", "display_name": "Channel Three"},
+        ]
+
+
+class TestResolveStreamUrl:
+    def test_returns_youtube_embed_playback_info(self) -> None:
+        from core.platforms.youtube import YouTubeClient
+
+        client = YouTubeClient()
+        client._live_video_ids = {"UCtest123456789012345": "dQw4w9WgXcQ"}
+
+        loop = asyncio.new_event_loop()
+        try:
+            result = loop.run_until_complete(
+                client.resolve_stream_url("UCtest123456789012345", "best")
+            )
+        finally:
+            loop.run_until_complete(client.close())
+            loop.close()
+
+        assert result["url"] == "dQw4w9WgXcQ"
+        assert result["playback_type"] == "youtube_embed"
