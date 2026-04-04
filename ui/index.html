@@ -1277,6 +1277,7 @@ const state = {
   playerTitle: '',
   playerError: '',
   sidebarSections: loadSidebarSections(),
+  favoritesMeta: {},
   activePlatformFilter: 'all',
 };
 
@@ -1470,7 +1471,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const action = e.target.dataset.action;
     if (!action || !ctxChannel) return;
     var ctxStream = state.streams.find(function(s) { return s.login === ctxChannel; });
-    var ctxPlat = (ctxStream && ctxStream.platform) || 'twitch';
+    var ctxPlat = (ctxStream && ctxStream.platform) || (state.favoritesMeta[ctxChannel] && state.favoritesMeta[ctxChannel].platform) || 'twitch';
     if (action === 'watch') { selectChannel(ctxChannel); doWatch(); }
     else if (action === 'watch-external') {
       selectChannel(ctxChannel);
@@ -1575,6 +1576,7 @@ document.addEventListener('DOMContentLoaded', function() {
 window.onStreamsUpdate = function(data) {
   state.hasCredentials = data.has_credentials !== false;
   state.favorites = data.favorites || [];
+  state.favoritesMeta = data.favorites_meta || {};
   state.liveSet = new Set(data.live_set || []);
   state.userAvatars = data.user_avatars || {};
 
@@ -2663,7 +2665,8 @@ function createSidebarItem(login, streamMap) {
 
   var name = document.createElement('span');
   name.className = 'name';
-  name.textContent = login;
+  var favMeta = state.favoritesMeta[login] || {};
+  name.textContent = (stream && stream.display_name) || favMeta.display_name || login;
   copy.appendChild(name);
 
   var meta = document.createElement('span');
@@ -2888,7 +2891,8 @@ function doWatch() {
 function doBrowser() {
   if (!state.selectedChannel || !api) return;
   var selectedStream = state.streams.find(function(s) { return s.login === state.selectedChannel; });
-  api.open_browser(state.selectedChannel, (selectedStream && selectedStream.platform) || 'twitch');
+  var platform = (selectedStream && selectedStream.platform) || (state.favoritesMeta[state.selectedChannel] && state.favoritesMeta[state.selectedChannel].platform) || 'twitch';
+  api.open_browser(state.selectedChannel, platform);
 }
 
 function doRefresh() {

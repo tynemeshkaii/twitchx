@@ -30,6 +30,7 @@ from core.platforms.youtube import YOUTUBE_API_URL, YouTubeClient
 from core.storage import (
     get_cached_avatar,
     get_favorite_logins,
+    get_favorites,
     get_platform_config,
     get_settings,
     load_config,
@@ -1431,10 +1432,19 @@ class TwitchXApi:
         now = datetime.now().strftime("%H:%M:%S")
         total = sum(item.get("viewers", 0) for item in stream_items)
 
+        favorites_meta = {
+            f["login"]: {
+                "display_name": f.get("display_name", f["login"]),
+                "platform": f.get("platform", "twitch"),
+            }
+            for f in get_favorites(self._config)
+        }
+
         data = json.dumps(
             {
                 "streams": stream_items,
                 "favorites": all_favorites,
+                "favorites_meta": favorites_meta,
                 "live_set": list(live_logins),
                 "updated_time": now,
                 "total_viewers": total,
