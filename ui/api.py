@@ -1237,12 +1237,16 @@ class TwitchXApi:
 
         if not self._fetch_lock.acquire(blocking=False):
             return
-        self._eval_js("window.onStatusUpdate({text: 'Refreshing...', type: 'info'})")
-        self._run_in_thread(
-            lambda tf=list(twitch_favorites), kf=list(kick_favorites), yf=list(youtube_favorites): (
-                self._fetch_data(tf, kf, yf)
+        try:
+            self._eval_js("window.onStatusUpdate({text: 'Refreshing...', type: 'info'})")
+            self._run_in_thread(
+                lambda tf=list(twitch_favorites), kf=list(kick_favorites), yf=list(youtube_favorites): (
+                    self._fetch_data(tf, kf, yf)
+                )
             )
-        )
+        except Exception:
+            self._fetch_lock.release()
+            raise
 
     def _fetch_data(
         self,
@@ -1565,13 +1569,6 @@ class TwitchXApi:
         self.start_polling(interval)
 
     def start_polling(self, interval_seconds: int = 60) -> None:
-        with self._poll_lock:
-            if self._polling_timer:
-                self._polling_timer.cancel()
-                self._polling_timer = None
-
-        self.refresh()
-
         def tick() -> None:
             if not self._shutdown.is_set():
                 self.refresh()
@@ -1590,9 +1587,14 @@ class TwitchXApi:
                         self._polling_timer.start()
 
         with self._poll_lock:
+            if self._polling_timer:
+                self._polling_timer.cancel()
+                self._polling_timer = None
             self._polling_timer = threading.Timer(interval_seconds, tick)
             self._polling_timer.daemon = True
             self._polling_timer.start()
+
+        self.refresh()
 
     def stop_polling(self) -> None:
         with self._poll_lock:

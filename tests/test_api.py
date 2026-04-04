@@ -662,7 +662,7 @@ class TestFetchLock:
 
         t = threading.Thread(target=api.refresh)
         t.start()
-        fetch_started.wait(timeout=2)
+        assert fetch_started.wait(timeout=2), "slow_fetch did not start in time"
 
         # Second refresh while first is in progress — must be a no-op
         api.refresh()
@@ -677,7 +677,7 @@ class TestPollLock:
     def test_concurrent_start_polling_creates_one_timer(
         self, tmp_path, monkeypatch
     ) -> None:
-        """Concurrent start_polling calls must result in exactly one active timer."""
+        """Concurrent start_polling calls must result in exactly one active timer chain."""
         import core.storage as storage
         monkeypatch.setattr(storage, "CONFIG_DIR", tmp_path)
         monkeypatch.setattr(storage, "CONFIG_FILE", tmp_path / "config.json")
@@ -687,6 +687,16 @@ class TestPollLock:
         api = TwitchXApi()
         api._window = None
         monkeypatch.setattr(api, "refresh", lambda: None)
+
+        timer_starts: list[threading.Timer] = []
+        original_timer = threading.Timer
+
+        def tracking_timer(interval, fn, *args, **kwargs):
+            t = original_timer(interval, fn, *args, **kwargs)
+            timer_starts.append(t)
+            return t
+
+        monkeypatch.setattr(threading, "Timer", tracking_timer)
 
         barrier = threading.Barrier(3)
 
@@ -700,7 +710,9 @@ class TestPollLock:
         for t in threads:
             t.join(timeout=5)
 
-        assert api._polling_timer is not None
+        # Only one Timer must have been created and started
+        started = [t for t in timer_starts if t.is_alive()]
+        assert len(started) == 1, f"Expected 1 active timer, got {len(started)}: {started}"
         api.stop_polling()
 
 
