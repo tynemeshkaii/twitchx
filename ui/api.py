@@ -138,9 +138,7 @@ class TwitchXApi:
         raw = raw.strip()
         if platform == "youtube":
             # youtube.com/channel/UCxxxx
-            match = re.search(
-                r"youtube\.com/channel/(UC[\w-]{22})", raw, re.IGNORECASE
-            )
+            match = re.search(r"youtube\.com/channel/(UC[\w-]{22})", raw, re.IGNORECASE)
             if match:
                 return match.group(1)
             # Raw channel ID
@@ -692,9 +690,7 @@ class TwitchXApi:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                token_data = loop.run_until_complete(
-                    self._youtube.exchange_code(code)
-                )
+                token_data = loop.run_until_complete(self._youtube.exchange_code(code))
                 access_token = token_data["access_token"]
                 refresh_token = token_data.get("refresh_token", "")
                 expires_at = int(time.time()) + token_data.get("expires_in", 3600)
@@ -771,7 +767,10 @@ class TwitchXApi:
                     result = json.dumps({"success": True, "message": "Connected"})
                 elif resp.status_code == 403:
                     result = json.dumps(
-                        {"success": False, "message": "API key invalid or quota exceeded"}
+                        {
+                            "success": False,
+                            "message": "API key invalid or quota exceeded",
+                        }
                     )
                 else:
                     result = json.dumps(
@@ -1103,8 +1102,8 @@ class TwitchXApi:
         self._fetching = True
         self._eval_js("window.onStatusUpdate({text: 'Refreshing...', type: 'info'})")
         self._run_in_thread(
-            lambda tf=list(twitch_favorites), kf=list(kick_favorites), yf=list(youtube_favorites): self._fetch_data(
-                tf, kf, yf
+            lambda tf=list(twitch_favorites), kf=list(kick_favorites), yf=list(youtube_favorites): (
+                self._fetch_data(tf, kf, yf)
             )
         )
 
@@ -1128,7 +1127,9 @@ class TwitchXApi:
                 try:
                     twitch_streams, twitch_users, kick_streams, youtube_streams = (
                         loop.run_until_complete(
-                            self._async_fetch(twitch_favorites, kick_favorites, youtube_favorites)
+                            self._async_fetch(
+                                twitch_favorites, kick_favorites, youtube_favorites
+                            )
                         )
                     )
                     self._on_data_fetched(
@@ -1227,7 +1228,9 @@ class TwitchXApi:
             yt_due = time.time() - self._last_youtube_fetch >= yt_interval
             if yt_due and (yt_conf.get("api_key") or yt_conf.get("access_token")):
                 try:
-                    youtube_streams = await self._youtube.get_live_streams(youtube_favorites)
+                    youtube_streams = await self._youtube.get_live_streams(
+                        youtube_favorites
+                    )
                     self._last_youtube_fetch = time.time()
                 except Exception as e:
                     logger.warning("YouTube fetch failed: %s", e)
@@ -1251,7 +1254,9 @@ class TwitchXApi:
             (s.get("slug", "") or s.get("channel", {}).get("slug", "")).lower()
             for s in kick_streams
         }
-        youtube_live_ids = {s.get("login", "") for s in youtube_streams if s.get("login")}
+        youtube_live_ids = {
+            s.get("login", "") for s in youtube_streams if s.get("login")
+        }
         live_logins = twitch_live_logins | kick_live_slugs | youtube_live_ids
 
         # Notifications

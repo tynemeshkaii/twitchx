@@ -35,14 +35,14 @@ class TestSanitizeUsername:
 class TestSanitizeFavoriteLogin:
     def test_kick_url(self) -> None:
         assert (
-            TwitchXApp._sanitize_favorite_login(
-                "https://kick.com/train-wreck", "kick"
-            )
+            TwitchXApp._sanitize_favorite_login("https://kick.com/train-wreck", "kick")
             == "train-wreck"
         )
 
     def test_kick_hyphen(self) -> None:
-        assert TwitchXApp._sanitize_favorite_login("train-wreck", "kick") == "train-wreck"
+        assert (
+            TwitchXApp._sanitize_favorite_login("train-wreck", "kick") == "train-wreck"
+        )
 
 
 class TestMigrateFavorites:

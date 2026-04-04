@@ -260,7 +260,9 @@ class YouTubeClient:
             client = self._get_client()
             resp = await client.get(url, timeout=10.0)
             if resp.status_code != 200:
-                logger.debug("RSS feed returned %d for %s", resp.status_code, channel_id)
+                logger.debug(
+                    "RSS feed returned %d for %s", resp.status_code, channel_id
+                )
                 return []
             return parse_rss_video_ids(resp.text)
         except Exception as e:
@@ -513,7 +515,9 @@ class YouTubeClient:
             }
             if page_token:
                 params["pageToken"] = page_token
-            data = await self._yt_get("subscriptions", params=params, auth_required=True)
+            data = await self._yt_get(
+                "subscriptions", params=params, auth_required=True
+            )
             self._quota.use(1)
 
             for item in data.get("items", []):
@@ -532,9 +536,7 @@ class YouTubeClient:
 
     # ── Playback ─────────────────────────────────────────────
 
-    async def resolve_stream_url(
-        self, channel_id: str, quality: str
-    ) -> dict[str, Any]:
+    async def resolve_stream_url(self, channel_id: str, quality: str) -> dict[str, Any]:
         """Return playback info for YouTube iframe embed.
 
         YouTube ToS prohibits custom playback — must use iframe embed.

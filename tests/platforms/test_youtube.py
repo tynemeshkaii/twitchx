@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import json
-import threading
 from datetime import date
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
-
 
 # ── Helpers ───────────────────────────────────────────────────
 
@@ -17,7 +17,11 @@ def _setup_config(tmp_path: Path, yt_overrides: dict[str, Any]) -> None:
     from core.storage import DEFAULT_PLATFORM_YOUTUBE
 
     yt = {**DEFAULT_PLATFORM_YOUTUBE, **yt_overrides}
-    config = {"platforms": {"twitch": {}, "kick": {}, "youtube": yt}, "favorites": [], "settings": {}}
+    config = {
+        "platforms": {"twitch": {}, "kick": {}, "youtube": yt},
+        "favorites": [],
+        "settings": {},
+    }
     config_dir = tmp_path / ".config" / "twitchx"
     config_dir.mkdir(parents=True, exist_ok=True)
     (config_dir / "config.json").write_text(json.dumps(config))
@@ -159,10 +163,6 @@ class TestRSSParsing:
 
 
 # ── YouTubeClient ─────────────────────────────────────────────
-
-
-import asyncio
-import httpx
 
 
 class TestValidChannelId:
@@ -322,9 +322,7 @@ class TestSearchChannels:
             "snippet": {
                 "channelTitle": "MrBeast",
                 "description": "YouTube creator",
-                "thumbnails": {
-                    "default": {"url": "https://yt3.ggpht.com/thumb.jpg"}
-                },
+                "thumbnails": {"default": {"url": "https://yt3.ggpht.com/thumb.jpg"}},
             },
         }
         result = YouTubeClient._normalize_channel_search_result(item)
@@ -389,7 +387,11 @@ class TestOAuth:
         client = YouTubeClient()
         client._config = {
             "platforms": {
-                "youtube": {"client_id": "test-client-id", "client_secret": "secret", "api_key": ""}
+                "youtube": {
+                    "client_id": "test-client-id",
+                    "client_secret": "secret",
+                    "api_key": "",
+                }
             }
         }
         url = client.get_auth_url()

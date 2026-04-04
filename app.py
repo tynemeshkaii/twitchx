@@ -60,9 +60,7 @@ class TwitchXApp:
             elif isinstance(entry, dict):
                 login = entry.get("login", "")
                 platform = entry.get("platform", "twitch")
-                name = (
-                    self._sanitize_favorite_login(login, platform) if login else ""
-                )
+                name = self._sanitize_favorite_login(login, platform) if login else ""
                 if not name:
                     changed = True
                     continue
