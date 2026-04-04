@@ -1122,6 +1122,7 @@ body {
       <button class="settings-tab active" data-tab="general">General</button>
       <button class="settings-tab" data-tab="twitch">Twitch</button>
       <button class="settings-tab" data-tab="kick">Kick</button>
+      <button class="settings-tab" data-tab="youtube">YouTube</button>
     </div>
 
     <!-- General panel -->
@@ -1194,6 +1195,44 @@ body {
       <div class="settings-btns">
         <button id="kick-test-btn">Test Kick Connection</button>
       </div>
+    </div>
+
+    <!-- YouTube panel -->
+    <div class="settings-panel" id="settings-panel-youtube">
+      <div class="setting-group">
+        <label>YouTube API Key</label>
+        <div class="secret-row">
+          <input id="yt-api-key" type="password" autocomplete="off">
+          <button class="eye-btn" id="yt-api-key-eye-btn">&#128065;</button>
+        </div>
+      </div>
+      <div class="setting-group">
+        <label>Client ID</label>
+        <input id="yt-client-id" type="text" autocomplete="off">
+      </div>
+      <div class="setting-group">
+        <label>Client Secret</label>
+        <div class="secret-row">
+          <input id="yt-client-secret" type="password" autocomplete="off">
+          <button class="eye-btn" id="yt-client-secret-eye-btn">&#128065;</button>
+        </div>
+      </div>
+      <div class="oauth-note">
+        Client ID + Secret required for login and subscription import
+      </div>
+      <div id="yt-login-area" class="setting-group">
+        <button id="yt-login-btn" style="width:100%;height:36px;background:var(--accent);color:white;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Connect YouTube Account</button>
+      </div>
+      <div id="yt-user-area" class="setting-group" style="display:none;">
+        <div id="yt-display-name" style="font-size:13px;color:var(--text-primary);margin-bottom:4px;"></div>
+        <div id="yt-quota-display" style="font-size:12px;color:var(--text-muted);margin-bottom:8px;"></div>
+        <button id="yt-import-btn" style="width:100%;height:32px;background:var(--bg-elevated);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:6px;">Import Subscriptions</button>
+        <a id="yt-logout-btn" style="font-size:12px;color:var(--text-muted);cursor:pointer;text-decoration:none;">Logout from YouTube</a>
+      </div>
+      <div class="settings-btns">
+        <button id="yt-test-btn">Test YouTube Connection</button>
+      </div>
+      <div id="yt-test-result" style="display:none;font-size:12px;margin-top:8px;text-align:center;"></div>
     </div>
 
     <div id="settings-feedback"></div>
@@ -1338,6 +1377,45 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('settings-feedback').textContent = 'Testing Kick...';
     document.getElementById('settings-feedback').style.color = 'var(--text-muted)';
     api.kick_test_connection(cid, cs);
+  });
+
+  // YouTube eye toggles
+  document.getElementById('yt-api-key-eye-btn').addEventListener('click', function() {
+    var input = document.getElementById('yt-api-key');
+    input.type = input.type === 'password' ? 'text' : 'password';
+  });
+  document.getElementById('yt-client-secret-eye-btn').addEventListener('click', function() {
+    var input = document.getElementById('yt-client-secret');
+    input.type = input.type === 'password' ? 'text' : 'password';
+  });
+
+  // YouTube login/logout/import
+  document.getElementById('yt-login-btn').addEventListener('click', function() {
+    var cid = document.getElementById('yt-client-id').value.trim();
+    var cs = document.getElementById('yt-client-secret').value.trim();
+    if (!cid || !cs) {
+      var fb = document.getElementById('settings-feedback');
+      fb.textContent = 'YouTube Client ID and Secret are required';
+      fb.style.color = 'var(--error-red)';
+      return;
+    }
+    if (api) api.youtube_login();
+  });
+  document.getElementById('yt-logout-btn').addEventListener('click', function() {
+    if (api) api.youtube_logout();
+  });
+  document.getElementById('yt-import-btn').addEventListener('click', function() {
+    if (api) api.youtube_import_follows();
+  });
+
+  // YouTube test connection
+  document.getElementById('yt-test-btn').addEventListener('click', function() {
+    var tr = document.getElementById('yt-test-result');
+    tr.style.display = 'block';
+    tr.textContent = 'Testing...';
+    tr.style.color = 'var(--text-muted)';
+    document.getElementById('yt-test-btn').disabled = true;
+    if (api) api.youtube_test_connection();
   });
 
   document.getElementById('sort-select').addEventListener('change', function(e) {
@@ -2040,6 +2118,69 @@ window.onKickTestResult = function(data) {
     fb.style.color = 'var(--error-red)';
   }
   document.getElementById('kick-test-btn').disabled = false;
+};
+
+window.onYouTubeLoginComplete = function(data) {
+  document.getElementById('yt-login-area').style.display = 'none';
+  document.getElementById('yt-user-area').style.display = 'block';
+  document.getElementById('yt-display-name').textContent = 'Logged in as ' + (data.display_name || data.login);
+  document.getElementById('yt-quota-display').textContent = 'Quota remaining: ' + (data.youtube_quota_remaining != null ? data.youtube_quota_remaining : '?');
+  var fb = document.getElementById('settings-feedback');
+  fb.textContent = '\u2713 YouTube login successful';
+  fb.style.color = 'var(--live-green)';
+  setStatus('Logged in to YouTube as ' + (data.display_name || data.login), 'success');
+};
+
+window.onYouTubeLoginError = function(msg) {
+  var fb = document.getElementById('settings-feedback');
+  fb.textContent = '\u2717 YouTube login failed: ' + msg;
+  fb.style.color = 'var(--error-red)';
+  setStatus('YouTube login: ' + msg, 'error');
+};
+
+window.onYouTubeNeedsCredentials = function() {
+  openSettingsToTab('youtube');
+  var fb = document.getElementById('settings-feedback');
+  fb.textContent = 'Enter YouTube Client ID and Secret, then click Connect';
+  fb.style.color = 'var(--warn-yellow)';
+  setStatus('YouTube credentials required \u2014 opening Settings', 'warn');
+};
+
+window.onYouTubeLogout = function() {
+  document.getElementById('yt-login-area').style.display = 'block';
+  document.getElementById('yt-user-area').style.display = 'none';
+  document.getElementById('yt-display-name').textContent = '';
+  document.getElementById('yt-quota-display').textContent = '';
+  var fb = document.getElementById('settings-feedback');
+  fb.textContent = 'Logged out from YouTube';
+  fb.style.color = 'var(--text-muted)';
+};
+
+window.onYouTubeTestResult = function(result) {
+  var tr = document.getElementById('yt-test-result');
+  tr.style.display = 'block';
+  if (result.ok) {
+    tr.textContent = '\u2713 ' + result.message;
+    tr.style.color = 'var(--live-green)';
+  } else {
+    tr.textContent = '\u2717 ' + result.message;
+    tr.style.color = 'var(--error-red)';
+  }
+  document.getElementById('yt-test-btn').disabled = false;
+};
+
+window.onYouTubeImportComplete = function(count) {
+  var tr = document.getElementById('yt-test-result');
+  tr.style.display = 'block';
+  tr.textContent = '\u2713 Imported ' + count + ' subscriptions';
+  tr.style.color = 'var(--live-green)';
+};
+
+window.onYouTubeImportError = function(msg) {
+  var tr = document.getElementById('yt-test-result');
+  tr.style.display = 'block';
+  tr.textContent = '\u2717 Import failed: ' + msg;
+  tr.style.color = 'var(--error-red)';
 };
 
 window.onAvatar = function(data) {
@@ -2767,6 +2908,20 @@ function openSettings() {
     document.getElementById('kick-login-area').style.display = 'block';
     document.getElementById('kick-user-area').style.display = 'none';
   }
+  document.getElementById('yt-api-key').value = config.youtube_api_key || '';
+  document.getElementById('yt-client-id').value = config.youtube_client_id || '';
+  document.getElementById('yt-client-secret').value = config.youtube_client_secret || '';
+  // Show/hide YouTube login/user area
+  if (config.youtube_display_name) {
+    document.getElementById('yt-login-area').style.display = 'none';
+    document.getElementById('yt-user-area').style.display = 'block';
+    document.getElementById('yt-display-name').textContent = 'Logged in as ' + config.youtube_display_name;
+    document.getElementById('yt-quota-display').textContent = 'Quota remaining: ' + (config.youtube_quota_remaining != null ? config.youtube_quota_remaining : '?');
+  } else {
+    document.getElementById('yt-login-area').style.display = 'block';
+    document.getElementById('yt-user-area').style.display = 'none';
+  }
+  document.getElementById('yt-test-result').style.display = 'none';
   // Reset to General tab
   document.querySelectorAll('.settings-tab').forEach(function(b) { b.classList.remove('active'); });
   document.querySelectorAll('.settings-panel').forEach(function(p) { p.classList.remove('active'); });
@@ -2819,6 +2974,9 @@ function saveSettings() {
     refresh_interval: parseInt(document.getElementById('s-interval').value, 10),
     kick_client_id: document.getElementById('s-kick-client-id').value.trim(),
     kick_client_secret: document.getElementById('s-kick-client-secret').value.trim(),
+    youtube_api_key: document.getElementById('yt-api-key').value.trim(),
+    youtube_client_id: document.getElementById('yt-client-id').value.trim(),
+    youtube_client_secret: document.getElementById('yt-client-secret').value.trim(),
   };
   if (api) api.save_settings(JSON.stringify(data));
 }
