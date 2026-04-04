@@ -476,51 +476,131 @@ class TestGetFollowedChannels:
 
 
 class TestLiveVideoIds:
-    def test_stale_video_id_cleared_when_channel_goes_offline(self) -> None:
-        """get_live_streams must evict _live_video_ids for channels it polls,
-        so that an offline channel doesn't serve a stale video ID."""
+    # Channel IDs must match VALID_CHANNEL_ID = r"^UC[\w-]{22}$" (24 chars total)
+    _STALE_CID = "UCstaleChannel1234567890"  # UC + 22 chars
+    _LIVE_CID = "UCliveChannel12345678901"  # UC + 22 chars
+    _POLLED_CID = "UCpolledChannel123456789"  # UC + 22 chars
+    _OTHER_CID = "UCotherChannel123456789a"  # UC + 22 chars
+
+    def test_stale_video_id_cleared_for_offline_channel(self, tmp_path: Path) -> None:
+        """After get_live_streams, a channel that is no longer live must have
+        its video ID evicted from _live_video_ids."""
+        import asyncio
+        from unittest.mock import patch
+
+        _setup_config(tmp_path, {"api_key": "fakekey"})
+
+        import core.storage as storage
+        storage.CONFIG_DIR = tmp_path / ".config" / "twitchx"
+        storage.CONFIG_FILE = storage.CONFIG_DIR / "config.json"
+
         from core.platforms.youtube import YouTubeClient
 
-        client = YouTubeClient.__new__(YouTubeClient)
-        # Manually pre-populate the cache with a stale entry
-        client._live_video_ids = {"UCstaleChannel": "oldVideoId"}
+        client = YouTubeClient()
+        # Pre-populate with a stale entry for a channel we're about to poll
+        client._live_video_ids[self._STALE_CID] = "oldVideoId"
 
-        # Simulate get_live_streams for that channel finding nothing live.
-        # We only need to verify the eviction — mock out everything else.
-        valid_ids = ["UCstaleChannel"]
-        for cid in valid_ids:
-            client._live_video_ids.pop(cid, None)
+        # Mock: RSS returns a video ID for the channel
+        async def mock_rss(cid: str) -> list[str]:
+            return ["videoId123"]
 
-        assert "UCstaleChannel" not in client._live_video_ids
+        # Mock: videos.list returns the video as NOT live (no actualStartTime)
+        async def mock_yt_get(endpoint: str, params=None, auth_required=False) -> dict:
+            return {
+                "items": [
+                    {
+                        "id": "videoId123",
+                        "snippet": {
+                            "channelId": self._STALE_CID,
+                            "channelTitle": "StaleChannel",
+                            "title": "Old stream",
+                            "thumbnails": {},
+                        },
+                        "liveStreamingDetails": {
+                            # No actualStartTime → not live
+                        },
+                    }
+                ]
+            }
 
-    def test_video_id_populated_for_live_channel(self) -> None:
-        """A channel that IS live after polling must have its video_id in the cache."""
+        with patch.object(client, "_fetch_rss_video_ids", side_effect=mock_rss):
+            with patch.object(client, "_yt_get", side_effect=mock_yt_get):
+                asyncio.run(client.get_live_streams([self._STALE_CID]))
+
+        assert self._STALE_CID not in client._live_video_ids
+
+    def test_live_channel_video_id_populated(self, tmp_path: Path) -> None:
+        """After get_live_streams, a channel that IS live must have its video ID cached."""
+        import asyncio
+        from unittest.mock import patch
+
+        _setup_config(tmp_path, {"api_key": "fakekey"})
+
+        import core.storage as storage
+        storage.CONFIG_DIR = tmp_path / ".config" / "twitchx"
+        storage.CONFIG_FILE = storage.CONFIG_DIR / "config.json"
+
         from core.platforms.youtube import YouTubeClient
 
-        client = YouTubeClient.__new__(YouTubeClient)
-        client._live_video_ids = {}
+        client = YouTubeClient()
 
-        # Simulate the populate step done after videos.list
-        client._live_video_ids["UCliveChannel"] = "liveVideoId"
+        async def mock_rss(cid: str) -> list[str]:
+            return ["liveVideoId"]
 
-        assert client._live_video_ids.get("UCliveChannel") == "liveVideoId"
+        async def mock_yt_get(endpoint: str, params=None, auth_required=False) -> dict:
+            return {
+                "items": [
+                    {
+                        "id": "liveVideoId",
+                        "snippet": {
+                            "channelId": self._LIVE_CID,
+                            "channelTitle": "LiveChannel",
+                            "title": "Live now",
+                            "thumbnails": {},
+                        },
+                        "liveStreamingDetails": {
+                            "actualStartTime": "2026-04-04T10:00:00Z",
+                            # No actualEndTime → is live
+                        },
+                    }
+                ]
+            }
 
-    def test_unpolled_channels_unaffected(self) -> None:
-        """Channels NOT in the current poll batch must keep their cached video IDs."""
+        with patch.object(client, "_fetch_rss_video_ids", side_effect=mock_rss):
+            with patch.object(client, "_yt_get", side_effect=mock_yt_get):
+                asyncio.run(client.get_live_streams([self._LIVE_CID]))
+
+        assert client._live_video_ids.get(self._LIVE_CID) == "liveVideoId"
+
+    def test_unpolled_channel_video_id_preserved(self, tmp_path: Path) -> None:
+        """Channels NOT in the poll batch must keep their cached video IDs."""
+        import asyncio
+        from unittest.mock import patch
+
+        _setup_config(tmp_path, {"api_key": "fakekey"})
+
+        import core.storage as storage
+        storage.CONFIG_DIR = tmp_path / ".config" / "twitchx"
+        storage.CONFIG_FILE = storage.CONFIG_DIR / "config.json"
+
         from core.platforms.youtube import YouTubeClient
 
-        client = YouTubeClient.__new__(YouTubeClient)
-        client._live_video_ids = {
-            "UCpolled": "polledVideoId",
-            "UCother": "otherVideoId",
-        }
+        client = YouTubeClient()
+        # Pre-populate an unpolled channel
+        client._live_video_ids[self._OTHER_CID] = "otherVideoId"
 
-        # Only evict channels in valid_ids
-        for cid in ["UCpolled"]:
-            client._live_video_ids.pop(cid, None)
+        async def mock_rss(cid: str) -> list[str]:
+            return []
 
-        assert "UCother" in client._live_video_ids
-        assert "UCpolled" not in client._live_video_ids
+        async def mock_yt_get(endpoint: str, params=None, auth_required=False) -> dict:
+            return {"items": []}
+
+        # Only poll _POLLED_CID — _OTHER_CID must be untouched
+        with patch.object(client, "_fetch_rss_video_ids", side_effect=mock_rss):
+            with patch.object(client, "_yt_get", side_effect=mock_yt_get):
+                asyncio.run(client.get_live_streams([self._POLLED_CID]))
+
+        assert client._live_video_ids.get(self._OTHER_CID) == "otherVideoId"
 
 
 class TestResolveStreamUrl:
