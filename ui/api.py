@@ -141,11 +141,24 @@ class TwitchXApi:
             match = re.search(r"youtube\.com/channel/(UC[\w-]{22})", raw, re.IGNORECASE)
             if match:
                 return match.group(1)
-            # Raw channel ID
+            # youtube.com/watch?v=VIDEO_ID
+            match = re.search(r"[?&]v=([A-Za-z0-9_-]{11})", raw)
+            if match:
+                return "v:" + match.group(1)
+            # youtube.com/@handle or bare @handle
+            match = re.search(
+                r"(?:youtube\.com/)?(@[A-Za-z0-9][A-Za-z0-9_.-]{2,29})", raw, re.IGNORECASE
+            )
+            if match:
+                return match.group(1).lower()
+            # Raw UC channel ID
             clean = re.sub(r"[^A-Za-z0-9_-]", "", raw)
             if re.match(r"^UC[\w-]{22}$", clean):
                 return clean
-            return ""  # Invalid — use search to add YouTube channels
+            # Plain username (3–30 word chars) — treat as @handle for resolution
+            if re.match(r"^[A-Za-z0-9][A-Za-z0-9_.-]{2,29}$", clean):
+                return "@" + clean.lower()
+            return ""
         if platform == "kick":
             match = re.search(r"(?:kick\.com/)([A-Za-z0-9_-]+)", raw, re.IGNORECASE)
             if match:
@@ -899,6 +912,103 @@ class TwitchXApi:
     def add_channel(self, username: str, platform: str = "twitch") -> None:
         clean = self._sanitize_channel_name(username, platform)
         if not clean:
+            self._eval_js(
+                "window.onStatusUpdate("
+                + json.dumps({"text": "Invalid channel name or URL", "type": "error"})
+                + ")"
+            )
+            return
+
+        # YouTube @handles and video URLs need async API resolution to get the channel ID
+        if platform == "youtube" and (clean.startswith("@") or clean.startswith("v:")):
+            resolve_input = clean[2:] if clean.startswith("v:") else clean
+
+            def do_resolve() -> None:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    info = loop.run_until_complete(
+                        self._youtube.get_channel_info(resolve_input)
+                    )
+                    channel_id = info.get("channel_id", "")
+                    if not channel_id:
+                        self._eval_js(
+                            "window.onStatusUpdate("
+                            + json.dumps(
+                                {
+                                    "text": "YouTube channel not found. Check the URL or username.",
+                                    "type": "error",
+                                }
+                            )
+                            + ")"
+                        )
+                        return
+                    display_name = info.get("display_name", channel_id)
+                    added = False
+
+                    def _apply(cfg: dict) -> None:
+                        nonlocal added
+                        favorites = cfg.get("favorites", [])
+                        if any(
+                            f.get("login") == channel_id and f.get("platform") == "youtube"
+                            for f in favorites
+                        ):
+                            return
+                        favorites.append(
+                            {
+                                "platform": "youtube",
+                                "login": channel_id,
+                                "display_name": display_name,
+                            }
+                        )
+                        cfg["favorites"] = favorites
+                        added = True
+
+                    self._config = update_config(_apply)
+                    if added:
+                        self.refresh()
+                        self._eval_js(
+                            "window.onStatusUpdate("
+                            + json.dumps(
+                                {
+                                    "text": f"Added {display_name} to YouTube favorites",
+                                    "type": "success",
+                                }
+                            )
+                            + ")"
+                        )
+                    else:
+                        self._eval_js(
+                            "window.onStatusUpdate("
+                            + json.dumps(
+                                {
+                                    "text": f"{display_name} is already in YouTube favorites",
+                                    "type": "info",
+                                }
+                            )
+                            + ")"
+                        )
+                except ValueError as e:
+                    msg = str(e)[:120]
+                    self._eval_js(
+                        "window.onStatusUpdate(" + json.dumps({"text": msg, "type": "error"}) + ")"
+                    )
+                except Exception:
+                    logger.warning("YouTube channel resolve failed", exc_info=True)
+                    self._eval_js(
+                        "window.onStatusUpdate("
+                        + json.dumps(
+                            {
+                                "text": "Could not resolve YouTube channel. Check your API key in Settings.",
+                                "type": "error",
+                            }
+                        )
+                        + ")"
+                    )
+                finally:
+                    self._close_thread_loop(loop)
+
+            self._run_in_thread(do_resolve)
             return
 
         added = False

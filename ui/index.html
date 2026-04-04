@@ -2850,7 +2850,9 @@ function addChannel() {
     var lower = val.toLowerCase();
     var choice = null;
     if (platform === 'all') {
-      if (lower.indexOf('kick.com/') !== -1) {
+      if (lower.indexOf('youtube.com/') !== -1 || lower.charAt(0) === '@') {
+        choice = { login: val, platform: 'youtube' };
+      } else if (lower.indexOf('kick.com/') !== -1) {
         choice = { login: val, platform: 'kick' };
       } else if (lower.indexOf('twitch.tv/') !== -1) {
         choice = { login: val, platform: 'twitch' };

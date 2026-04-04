@@ -373,20 +373,45 @@ class YouTubeClient:
 
     # ── Channel info ─────────────────────────────────────────
 
-    async def get_channel_info(self, channel_id: str) -> dict[str, Any]:
-        """Get channel details. Costs 1 quota unit."""
-        channel_id = channel_id.strip()
-        if not channel_id:
+    async def get_channel_info(self, channel_id_or_handle: str) -> dict[str, Any]:
+        """Get channel details. Costs 1–2 quota units.
+
+        Accepts:
+        - UC channel ID (UCxxxxxxxxxxxxxxxxxxxxxxxx)
+        - @handle  (@windpress)
+        - YouTube video ID (11 chars) — resolves to the channel that owns it
+        """
+        raw = channel_id_or_handle.strip()
+        if not raw:
             return {}
-        data = await self._yt_get(
-            "channels",
-            params={
-                "part": "snippet,statistics",
-                "id": channel_id,
-            },
-        )
+
+        # If given a video ID (11 printable chars, not a UC ID), resolve to channel first
+        _VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
+        if _VIDEO_ID_RE.match(raw) and not raw.startswith("UC"):
+            video_data = await self._yt_get(
+                "videos",
+                params={"part": "snippet", "id": raw},
+            )
+            self._quota.use(1)
+            vitems = video_data.get("items", []) if isinstance(video_data, dict) else []
+            if not vitems:
+                return {}
+            raw = vitems[0].get("snippet", {}).get("channelId", "")
+            if not raw:
+                return {}
+
+        # Resolve by @handle or by channel ID
+        if raw.startswith("@"):
+            params: dict[str, Any] = {
+                "part": "id,snippet,statistics",
+                "forHandle": raw,
+            }
+        else:
+            params = {"part": "snippet,statistics", "id": raw}
+
+        data = await self._yt_get("channels", params=params)
         self._quota.use(1)
-        items = data.get("items", [])
+        items = data.get("items", []) if isinstance(data, dict) else []
         if not items:
             return {}
         item = items[0]
@@ -394,7 +419,7 @@ class YouTubeClient:
         stats = item.get("statistics", {})
         thumbs = snippet.get("thumbnails", {})
         return {
-            "channel_id": item.get("id", channel_id),
+            "channel_id": item.get("id", raw),
             "display_name": snippet.get("title", ""),
             "description": snippet.get("description", ""),
             "avatar_url": thumbs.get("default", {}).get("url", ""),
