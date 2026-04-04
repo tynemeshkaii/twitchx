@@ -26,6 +26,7 @@ from core.oauth_server import wait_for_oauth_code
 from core.platforms.kick import OAUTH_SCOPE as KICK_OAUTH_SCOPE
 from core.platforms.kick import KickClient
 from core.platforms.twitch import TwitchClient
+from core.platforms.youtube import YOUTUBE_API_URL, YouTubeClient
 from core.storage import (
     get_cached_avatar,
     get_favorite_logins,
@@ -49,7 +50,12 @@ class TwitchXApi:
         self._config = load_config()
         self._twitch = TwitchClient()
         self._kick = KickClient()
-        self._platforms: dict[str, Any] = {"twitch": self._twitch, "kick": self._kick}
+        self._youtube = YouTubeClient()
+        self._platforms: dict[str, Any] = {
+            "twitch": self._twitch,
+            "kick": self._kick,
+            "youtube": self._youtube,
+        }
         self._active_platform: str = "twitch"
         self._shutdown = threading.Event()
         self._fetching = False
@@ -65,6 +71,7 @@ class TwitchXApi:
         self._launch_elapsed = 0
         self._launch_channel: str | None = None
         self._last_successful_fetch: float = 0
+        self._last_youtube_fetch: float = 0
         # User avatar URLs for lazy loading
         self._user_avatars: dict[str, str] = {}
         # Chat
@@ -104,6 +111,10 @@ class TwitchXApi:
     def _get_kick_config(self) -> dict[str, Any]:
         """Get Kick platform config section."""
         return get_platform_config(self._config, "kick")
+
+    def _get_youtube_config(self) -> dict[str, Any]:
+        """Get YouTube platform config section."""
+        return get_platform_config(self._config, "youtube")
 
     def _close_thread_loop(self, loop: asyncio.AbstractEventLoop) -> None:
         try:
@@ -251,6 +262,19 @@ class TwitchXApi:
                 ),
             }
         masked["kick_scopes"] = kick_conf.get("oauth_scopes", "")
+        yt_conf = get_platform_config(self._config, "youtube")
+        masked["youtube_has_credentials"] = bool(yt_conf.get("api_key"))
+        masked["youtube_has_oauth"] = bool(
+            yt_conf.get("client_id") and yt_conf.get("client_secret")
+        )
+        if yt_conf.get("user_login") or yt_conf.get("user_display_name"):
+            masked["youtube_user"] = {
+                "login": yt_conf.get("user_login", ""),
+                "display_name": yt_conf.get(
+                    "user_display_name", yt_conf.get("user_login", "")
+                ),
+            }
+        masked["youtube_quota_remaining"] = self._youtube._quota.remaining()
         return masked
 
     def get_full_config_for_settings(self) -> dict[str, Any]:
@@ -258,6 +282,7 @@ class TwitchXApi:
         self._config = load_config()
         twitch_conf = get_platform_config(self._config, "twitch")
         kick_conf = get_platform_config(self._config, "kick")
+        yt_conf = get_platform_config(self._config, "youtube")
         settings = get_settings(self._config)
         return {
             "client_id": twitch_conf.get("client_id", ""),
@@ -273,6 +298,12 @@ class TwitchXApi:
             "kick_display_name": kick_conf.get("user_display_name", ""),
             "kick_user_login": kick_conf.get("user_login", ""),
             "kick_scopes": kick_conf.get("oauth_scopes", ""),
+            "youtube_api_key": yt_conf.get("api_key", ""),
+            "youtube_client_id": yt_conf.get("client_id", ""),
+            "youtube_client_secret": yt_conf.get("client_secret", ""),
+            "youtube_display_name": yt_conf.get("user_display_name", ""),
+            "youtube_user_login": yt_conf.get("user_login", ""),
+            "youtube_quota_remaining": self._youtube._quota.remaining(),
         }
 
     def save_settings(self, data: str) -> None:
@@ -307,6 +338,19 @@ class TwitchXApi:
                 new_kick_client_secret = parsed["kick_client_secret"].strip()
                 if new_kick_client_secret:
                     kc["client_secret"] = new_kick_client_secret
+            yc = cfg.get("platforms", {}).get("youtube", {})
+            if "youtube_api_key" in parsed:
+                new_yt_key = parsed["youtube_api_key"].strip()
+                if new_yt_key:
+                    yc["api_key"] = new_yt_key
+            if "youtube_client_id" in parsed:
+                new_yt_cid = parsed["youtube_client_id"].strip()
+                if new_yt_cid:
+                    yc["client_id"] = new_yt_cid
+            if "youtube_client_secret" in parsed:
+                new_yt_cs = parsed["youtube_client_secret"].strip()
+                if new_yt_cs:
+                    yc["client_secret"] = new_yt_cs
 
         self._config = update_config(_apply)
 
@@ -572,6 +616,127 @@ class TwitchXApi:
 
         self._config = update_config(_clear)
         self._eval_js("window.onKickLogout()")
+
+    def youtube_login(self) -> None:
+        yt_conf = self._get_youtube_config()
+        if not yt_conf.get("client_id") or not yt_conf.get("client_secret"):
+            self._eval_js("window.onYouTubeNeedsCredentials()")
+            return
+        auth_url = self._youtube.get_auth_url()
+        if self._polling_timer:
+            self._polling_timer.cancel()
+            self._polling_timer = None
+        self._eval_js(
+            "window.onStatusUpdate({text: 'Waiting for YouTube login...', type: 'warn'})"
+        )
+
+        def do_login() -> None:
+            webbrowser.open(auth_url)
+            code = wait_for_oauth_code()
+            if self._shutdown.is_set():
+                return
+            if code is None:
+                self._eval_js('window.onYouTubeLoginError("Login timed out")')
+                self._restart_polling()
+                return
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                token_data = loop.run_until_complete(
+                    self._youtube.exchange_code(code)
+                )
+                access_token = token_data["access_token"]
+                refresh_token = token_data.get("refresh_token", "")
+                expires_at = int(time.time()) + token_data.get("expires_in", 3600)
+
+                def _save_tokens(cfg: dict) -> None:
+                    yc = cfg.get("platforms", {}).get("youtube", {})
+                    yc["access_token"] = access_token
+                    yc["refresh_token"] = refresh_token
+                    yc["token_expires_at"] = expires_at
+
+                self._config = update_config(_save_tokens)
+
+                user = loop.run_until_complete(self._youtube.get_current_user())
+                uid = user.get("id", "")
+                ulogin = user.get("login", "")
+                udisplay = user.get("display_name", ulogin)
+
+                def _save_user(cfg: dict) -> None:
+                    yc = cfg.get("platforms", {}).get("youtube", {})
+                    yc["user_id"] = uid
+                    yc["user_login"] = ulogin
+                    yc["user_display_name"] = udisplay
+
+                self._config = update_config(_save_user)
+
+                result = json.dumps(
+                    {
+                        "platform": "youtube",
+                        "display_name": udisplay,
+                        "login": ulogin,
+                    }
+                )
+                self._eval_js(f"window.onYouTubeLoginComplete({result})")
+                self.refresh()
+            except Exception as e:
+                msg = str(e)[:80] if str(e) else "YouTube login failed"
+                safe_msg = json.dumps(msg)
+                self._eval_js(f"window.onYouTubeLoginError({safe_msg})")
+                self._restart_polling()
+            finally:
+                self._close_thread_loop(loop)
+
+        self._run_in_thread(do_login)
+
+    def youtube_logout(self) -> None:
+
+        def _clear(cfg: dict) -> None:
+            yc = cfg.get("platforms", {}).get("youtube", {})
+            yc["access_token"] = ""
+            yc["refresh_token"] = ""
+            yc["token_expires_at"] = 0
+            yc["user_id"] = ""
+            yc["user_login"] = ""
+            yc["user_display_name"] = ""
+
+        self._config = update_config(_clear)
+        self._eval_js("window.onYouTubeLogout()")
+
+    def youtube_test_connection(self, api_key: str) -> None:
+        """Test YouTube API key by fetching a known video."""
+
+        def do_test() -> None:
+            try:
+                resp = httpx.get(
+                    f"{YOUTUBE_API_URL}/videos",
+                    params={
+                        "part": "snippet",
+                        "id": "dQw4w9WgXcQ",
+                        "key": api_key.strip(),
+                    },
+                    timeout=10,
+                )
+                if resp.status_code == 200:
+                    result = json.dumps({"success": True, "message": "Connected"})
+                elif resp.status_code == 403:
+                    result = json.dumps(
+                        {"success": False, "message": "API key invalid or quota exceeded"}
+                    )
+                else:
+                    result = json.dumps(
+                        {"success": False, "message": f"HTTP {resp.status_code}"}
+                    )
+            except httpx.ConnectError:
+                result = json.dumps(
+                    {"success": False, "message": "No internet connection"}
+                )
+            except Exception as exc:
+                msg = str(exc)[:60]
+                result = json.dumps({"success": False, "message": msg})
+            self._eval_js(f"window.onYouTubeTestResult({result})")
+
+        self._run_in_thread(do_test)
 
     def import_follows(self) -> None:
         if not self._current_user:
