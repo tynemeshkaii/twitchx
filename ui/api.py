@@ -1238,7 +1238,9 @@ class TwitchXApi:
         if not self._fetch_lock.acquire(blocking=False):
             return
         try:
-            self._eval_js("window.onStatusUpdate({text: 'Refreshing...', type: 'info'})")
+            self._eval_js(
+                "window.onStatusUpdate({text: 'Refreshing...', type: 'info'})"
+            )
             self._run_in_thread(
                 lambda tf=list(twitch_favorites), kf=list(kick_favorites), yf=list(youtube_favorites): (
                     self._fetch_data(tf, kf, yf)
@@ -1345,6 +1347,7 @@ class TwitchXApi:
             and twitch_conf.get("client_id")
             and twitch_conf.get("client_secret")
         ):
+
             async def _do_twitch() -> tuple[list[dict], list[dict]]:
                 await self._twitch._ensure_token()
                 streams, users = await asyncio.gather(
@@ -1361,7 +1364,7 @@ class TwitchXApi:
                 twitch_streams, twitch_users = await asyncio.wait_for(
                     _do_twitch(), timeout=_twitch_timeout
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning("Twitch fetch timed out after %.1fs", _twitch_timeout)
             except (httpx.ConnectError, httpx.HTTPStatusError, ValueError):
                 raise  # let _fetch_data handle retries and user-facing messages

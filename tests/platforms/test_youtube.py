@@ -491,6 +491,7 @@ class TestLiveVideoIds:
         _setup_config(tmp_path, {"api_key": "fakekey"})
 
         import core.storage as storage
+
         storage.CONFIG_DIR = tmp_path / ".config" / "twitchx"
         storage.CONFIG_FILE = storage.CONFIG_DIR / "config.json"
 
@@ -523,9 +524,11 @@ class TestLiveVideoIds:
                 ]
             }
 
-        with patch.object(client, "_fetch_rss_video_ids", side_effect=mock_rss):
-            with patch.object(client, "_yt_get", side_effect=mock_yt_get):
-                asyncio.run(client.get_live_streams([self._STALE_CID]))
+        with (
+            patch.object(client, "_fetch_rss_video_ids", side_effect=mock_rss),
+            patch.object(client, "_yt_get", side_effect=mock_yt_get),
+        ):
+            asyncio.run(client.get_live_streams([self._STALE_CID]))
 
         assert self._STALE_CID not in client._live_video_ids
 
@@ -537,6 +540,7 @@ class TestLiveVideoIds:
         _setup_config(tmp_path, {"api_key": "fakekey"})
 
         import core.storage as storage
+
         storage.CONFIG_DIR = tmp_path / ".config" / "twitchx"
         storage.CONFIG_FILE = storage.CONFIG_DIR / "config.json"
 
@@ -566,9 +570,11 @@ class TestLiveVideoIds:
                 ]
             }
 
-        with patch.object(client, "_fetch_rss_video_ids", side_effect=mock_rss):
-            with patch.object(client, "_yt_get", side_effect=mock_yt_get):
-                asyncio.run(client.get_live_streams([self._LIVE_CID]))
+        with (
+            patch.object(client, "_fetch_rss_video_ids", side_effect=mock_rss),
+            patch.object(client, "_yt_get", side_effect=mock_yt_get),
+        ):
+            asyncio.run(client.get_live_streams([self._LIVE_CID]))
 
         assert client._live_video_ids.get(self._LIVE_CID) == "liveVideoId"
 
@@ -580,6 +586,7 @@ class TestLiveVideoIds:
         _setup_config(tmp_path, {"api_key": "fakekey"})
 
         import core.storage as storage
+
         storage.CONFIG_DIR = tmp_path / ".config" / "twitchx"
         storage.CONFIG_FILE = storage.CONFIG_DIR / "config.json"
 
@@ -596,9 +603,11 @@ class TestLiveVideoIds:
             return {"items": []}
 
         # Only poll _POLLED_CID — _OTHER_CID must be untouched
-        with patch.object(client, "_fetch_rss_video_ids", side_effect=mock_rss):
-            with patch.object(client, "_yt_get", side_effect=mock_yt_get):
-                asyncio.run(client.get_live_streams([self._POLLED_CID]))
+        with (
+            patch.object(client, "_fetch_rss_video_ids", side_effect=mock_rss),
+            patch.object(client, "_yt_get", side_effect=mock_yt_get),
+        ):
+            asyncio.run(client.get_live_streams([self._POLLED_CID]))
 
         assert client._live_video_ids.get(self._OTHER_CID) == "otherVideoId"
 

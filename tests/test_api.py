@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -612,24 +614,22 @@ def test_on_chat_message_marks_own_kick_messages_as_self(
     assert '"is_self": true' in emitted[-1]
 
 
-import threading
-from unittest.mock import patch
-
-
 class TestFetchLock:
-    def test_concurrent_refresh_is_no_op(
-        self, tmp_path, monkeypatch
-    ) -> None:
+    def test_concurrent_refresh_is_no_op(self, tmp_path, monkeypatch) -> None:
         """A second refresh() while one is in progress must be a no-op."""
         import core.storage as storage
+
         monkeypatch.setattr(storage, "CONFIG_DIR", tmp_path)
         monkeypatch.setattr(storage, "CONFIG_FILE", tmp_path / "config.json")
         monkeypatch.setattr(storage, "_OLD_CONFIG_DIR", tmp_path / "old")
 
         from core.storage import DEFAULT_CONFIG, save_config
+
         cfg = {
             **DEFAULT_CONFIG,
-            "favorites": [{"platform": "twitch", "login": "somestreamer", "display_name": "some"}],
+            "favorites": [
+                {"platform": "twitch", "login": "somestreamer", "display_name": "some"}
+            ],
             "platforms": {
                 **DEFAULT_CONFIG["platforms"],
                 "twitch": {
@@ -642,6 +642,7 @@ class TestFetchLock:
         save_config(cfg)
 
         from ui.api import TwitchXApi
+
         api = TwitchXApi()
         api._window = None  # suppress eval_js
 
@@ -679,11 +680,13 @@ class TestPollLock:
     ) -> None:
         """Concurrent start_polling calls must result in exactly one active timer chain."""
         import core.storage as storage
+
         monkeypatch.setattr(storage, "CONFIG_DIR", tmp_path)
         monkeypatch.setattr(storage, "CONFIG_FILE", tmp_path / "config.json")
         monkeypatch.setattr(storage, "_OLD_CONFIG_DIR", tmp_path / "old")
 
         from ui.api import TwitchXApi
+
         api = TwitchXApi()
         api._window = None
         monkeypatch.setattr(api, "refresh", lambda: None)
@@ -712,7 +715,9 @@ class TestPollLock:
 
         # Only one Timer must have been created and started
         started = [t for t in timer_starts if t.is_alive()]
-        assert len(started) == 1, f"Expected 1 active timer, got {len(started)}: {started}"
+        assert len(started) == 1, (
+            f"Expected 1 active timer, got {len(started)}: {started}"
+        )
         api.stop_polling()
 
 
@@ -722,11 +727,13 @@ class TestAsyncFetchIsolation:
     ) -> None:
         """If Twitch raises, Kick results must still be returned."""
         import core.storage as storage
+
         monkeypatch.setattr(storage, "CONFIG_DIR", tmp_path)
         monkeypatch.setattr(storage, "CONFIG_FILE", tmp_path / "config.json")
         monkeypatch.setattr(storage, "_OLD_CONFIG_DIR", tmp_path / "old")
 
         from core.storage import DEFAULT_CONFIG, save_config
+
         cfg = {
             **DEFAULT_CONFIG,
             "platforms": {
@@ -741,23 +748,26 @@ class TestAsyncFetchIsolation:
         save_config(cfg)
 
         from ui.api import TwitchXApi
+
         api = TwitchXApi()
 
         fake_kick_stream = {"slug": "streamer", "viewer_count": 100}
 
         async def run():
-            with patch.object(
-                api._twitch, "_ensure_token", side_effect=Exception("Twitch down")
-            ):
-                with patch.object(
+            with (
+                patch.object(
+                    api._twitch, "_ensure_token", side_effect=Exception("Twitch down")
+                ),
+                patch.object(
                     api._kick,
                     "get_live_streams",
                     return_value=[fake_kick_stream],
-                ):
-                    _, _, kick, _ = await api._async_fetch(
-                        twitch_favorites=["somestreamer"],
-                        kick_favorites=["streamer"],
-                    )
+                ),
+            ):
+                _, _, kick, _ = await api._async_fetch(
+                    twitch_favorites=["somestreamer"],
+                    kick_favorites=["streamer"],
+                )
             return kick
 
         loop = asyncio.new_event_loop()
@@ -771,11 +781,13 @@ class TestAsyncFetchIsolation:
     ) -> None:
         """If Twitch times out, Kick results must still be returned."""
         import core.storage as storage
+
         monkeypatch.setattr(storage, "CONFIG_DIR", tmp_path)
         monkeypatch.setattr(storage, "CONFIG_FILE", tmp_path / "config.json")
         monkeypatch.setattr(storage, "_OLD_CONFIG_DIR", tmp_path / "old")
 
         from core.storage import DEFAULT_CONFIG, save_config
+
         cfg = {
             **DEFAULT_CONFIG,
             "platforms": {
@@ -790,6 +802,7 @@ class TestAsyncFetchIsolation:
         save_config(cfg)
 
         from ui.api import TwitchXApi
+
         api = TwitchXApi()
 
         fake_kick_stream = {"slug": "streamer", "viewer_count": 50}
@@ -800,17 +813,19 @@ class TestAsyncFetchIsolation:
         async def run():
             # side_effect on an async method: mock calls slow_token() and awaits the coroutine.
             # asyncio.wait_for with _twitch_timeout=0.05 cancels it, raising asyncio.TimeoutError.
-            with patch.object(api._twitch, "_ensure_token", side_effect=slow_token):
-                with patch.object(
+            with (
+                patch.object(api._twitch, "_ensure_token", side_effect=slow_token),
+                patch.object(
                     api._kick,
                     "get_live_streams",
                     return_value=[fake_kick_stream],
-                ):
-                    _, _, kick, _ = await api._async_fetch(
-                        twitch_favorites=["somestreamer"],
-                        kick_favorites=["streamer"],
-                        _twitch_timeout=0.05,
-                    )
+                ),
+            ):
+                _, _, kick, _ = await api._async_fetch(
+                    twitch_favorites=["somestreamer"],
+                    kick_favorites=["streamer"],
+                    _twitch_timeout=0.05,
+                )
             return kick
 
         loop = asyncio.new_event_loop()
