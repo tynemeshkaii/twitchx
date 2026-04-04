@@ -136,6 +136,18 @@ class TwitchXApi:
     @staticmethod
     def _sanitize_channel_name(raw: str, platform: str = "twitch") -> str:
         raw = raw.strip()
+        if platform == "youtube":
+            # youtube.com/channel/UCxxxx
+            match = re.search(
+                r"youtube\.com/channel/(UC[\w-]{22})", raw, re.IGNORECASE
+            )
+            if match:
+                return match.group(1)
+            # Raw channel ID
+            clean = re.sub(r"[^A-Za-z0-9_-]", "", raw)
+            if re.match(r"^UC[\w-]{22}$", clean):
+                return clean
+            return ""  # Invalid — use search to add YouTube channels
         if platform == "kick":
             match = re.search(r"(?:kick\.com/)([A-Za-z0-9_-]+)", raw, re.IGNORECASE)
             if match:
@@ -172,6 +184,32 @@ class TwitchXApi:
             if isinstance(result.get("category"), dict)
             else "",
             "platform": "kick",
+        }
+
+    @staticmethod
+    def _normalize_youtube_search_result(result: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "login": result.get("login", ""),
+            "display_name": result.get("display_name", ""),
+            "is_live": result.get("is_live", False),
+            "game_name": "",
+            "platform": "youtube",
+        }
+
+    @staticmethod
+    def _build_youtube_stream_item(stream: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "login": stream.get("login", ""),
+            "display_name": stream.get("display_name", ""),
+            "title": stream.get("title", ""),
+            "game": stream.get("game", ""),
+            "viewers": stream.get("viewers", 0),
+            "started_at": stream.get("started_at", ""),
+            "thumbnail_url": stream.get("thumbnail_url", ""),
+            "viewer_trend": None,
+            "platform": "youtube",
+            "video_id": stream.get("video_id", ""),
+            "channel_id": stream.get("channel_id", ""),
         }
 
     @staticmethod
@@ -793,6 +831,58 @@ class TwitchXApi:
 
         self._run_in_thread(do_import)
 
+    def youtube_import_follows(self) -> None:
+        """Import user's YouTube subscriptions into favorites."""
+        yt_conf = self._get_youtube_config()
+        if not yt_conf.get("access_token"):
+            self._eval_js('window.onYouTubeImportError("Not logged in to YouTube")')
+            return
+        self._eval_js(
+            "window.onStatusUpdate({text: 'Importing YouTube subscriptions...', type: 'warn'})"
+        )
+
+        def do_import() -> None:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                subs = loop.run_until_complete(
+                    self._youtube.get_followed_channels("me")
+                )
+                added = 0
+
+                def _apply(cfg: dict) -> None:
+                    nonlocal added
+                    existing = {
+                        f["login"]
+                        for f in cfg.get("favorites", [])
+                        if f.get("platform") == "youtube"
+                    }
+                    for sub in subs:
+                        cid = sub["channel_id"]
+                        if cid not in existing:
+                            cfg["favorites"].append(
+                                {
+                                    "platform": "youtube",
+                                    "login": cid,
+                                    "display_name": sub["display_name"],
+                                }
+                            )
+                            existing.add(cid)
+                            added += 1
+
+                self._config = update_config(_apply)
+                result = json.dumps({"added": added})
+                self._eval_js(f"window.onYouTubeImportComplete({result})")
+                self.refresh()
+            except Exception as e:
+                msg = str(e)[:80] if str(e) else "YouTube import failed"
+                safe_msg = json.dumps(msg)
+                self._eval_js(f"window.onYouTubeImportError({safe_msg})")
+            finally:
+                self._close_thread_loop(loop)
+
+        self._run_in_thread(do_import)
+
     # ── Channels ────────────────────────────────────────────────
 
     def add_channel(self, username: str, platform: str = "twitch") -> None:
@@ -911,6 +1001,17 @@ class TwitchXApi:
                             for result in twitch_results
                         )
 
+                if platform in {"youtube", "all"}:
+                    yt_conf = get_platform_config(self._config, "youtube")
+                    if yt_conf.get("api_key") or yt_conf.get("access_token"):
+                        yt_results = loop.run_until_complete(
+                            self._youtube.search_channels(query)
+                        )
+                        items.extend(
+                            self._normalize_youtube_search_result(result)
+                            for result in yt_results
+                        )
+
                 deduped: list[dict[str, Any]] = []
                 seen: set[tuple[str, str]] = set()
                 exact_query = query.strip().lower()
@@ -943,9 +1044,10 @@ class TwitchXApi:
         self._config = load_config()
         twitch_favorites = get_favorite_logins(self._config, "twitch")
         kick_favorites = get_favorite_logins(self._config, "kick")
+        youtube_favorites = get_favorite_logins(self._config, "youtube")
         twitch_conf = get_platform_config(self._config, "twitch")
 
-        all_favorites = twitch_favorites + kick_favorites
+        all_favorites = twitch_favorites + kick_favorites + youtube_favorites
 
         if not all_favorites:
             has_creds = bool(
@@ -970,7 +1072,7 @@ class TwitchXApi:
 
         # Kick public API doesn't require credentials, so we can fetch
         # kick streams whenever there are kick favorites
-        if not twitch_has_creds and not kick_favorites:
+        if not twitch_has_creds and not kick_favorites and not youtube_favorites:
             data = json.dumps(
                 {
                     "streams": [],
@@ -989,14 +1091,19 @@ class TwitchXApi:
         self._fetching = True
         self._eval_js("window.onStatusUpdate({text: 'Refreshing...', type: 'info'})")
         self._run_in_thread(
-            lambda tf=list(twitch_favorites), kf=list(kick_favorites): self._fetch_data(
-                tf, kf
+            lambda tf=list(twitch_favorites), kf=list(kick_favorites), yf=list(youtube_favorites): self._fetch_data(
+                tf, kf, yf
             )
         )
 
     def _fetch_data(
-        self, twitch_favorites: list[str], kick_favorites: list[str]
+        self,
+        twitch_favorites: list[str],
+        kick_favorites: list[str],
+        youtube_favorites: list[str] | None = None,
     ) -> None:
+        if youtube_favorites is None:
+            youtube_favorites = []
         retry_delays = [5, 15, 30]
         max_attempts = len(retry_delays) + 1
 
@@ -1007,17 +1114,19 @@ class TwitchXApi:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 try:
-                    twitch_streams, twitch_users, kick_streams = (
+                    twitch_streams, twitch_users, kick_streams, youtube_streams = (
                         loop.run_until_complete(
-                            self._async_fetch(twitch_favorites, kick_favorites)
+                            self._async_fetch(twitch_favorites, kick_favorites, youtube_favorites)
                         )
                     )
                     self._on_data_fetched(
                         twitch_favorites,
                         kick_favorites,
+                        youtube_favorites,
                         twitch_streams,
                         twitch_users,
                         kick_streams,
+                        youtube_streams,
                     )
                     return
                 except httpx.ConnectError:
@@ -1062,11 +1171,15 @@ class TwitchXApi:
             self._fetching = False
 
     async def _async_fetch(
-        self, twitch_favorites: list[str], kick_favorites: list[str]
-    ) -> tuple[list[dict], list[dict], list[dict]]:
+        self,
+        twitch_favorites: list[str],
+        kick_favorites: list[str],
+        youtube_favorites: list[str] | None = None,
+    ) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
         twitch_streams: list[dict] = []
         twitch_users: list[dict] = []
         kick_streams: list[dict] = []
+        youtube_streams: list[dict] = []
 
         # Fetch Twitch data if credentials exist and favorites are set
         twitch_conf = get_platform_config(self._config, "twitch")
@@ -1094,15 +1207,30 @@ class TwitchXApi:
             except Exception as e:
                 logger.warning("Kick fetch failed: %s", e)
 
-        return twitch_streams, twitch_users, kick_streams
+        # Fetch YouTube data respecting the 5-minute minimum polling interval
+        if youtube_favorites:
+            yt_conf = get_platform_config(self._config, "youtube")
+            settings = get_settings(self._config)
+            yt_interval = settings.get("youtube_refresh_interval", 300)
+            yt_due = time.time() - self._last_youtube_fetch >= yt_interval
+            if yt_due and (yt_conf.get("api_key") or yt_conf.get("access_token")):
+                try:
+                    youtube_streams = await self._youtube.get_live_streams(youtube_favorites)
+                    self._last_youtube_fetch = time.time()
+                except Exception as e:
+                    logger.warning("YouTube fetch failed: %s", e)
+
+        return twitch_streams, twitch_users, kick_streams, youtube_streams
 
     def _on_data_fetched(
         self,
         twitch_favorites: list[str],
         kick_favorites: list[str],
+        youtube_favorites: list[str],
         twitch_streams: list[dict],
         twitch_users: list[dict],
         kick_streams: list[dict],
+        youtube_streams: list[dict],
     ) -> None:
         self._last_successful_fetch = time.time()
 
@@ -1111,7 +1239,8 @@ class TwitchXApi:
             (s.get("slug", "") or s.get("channel", {}).get("slug", "")).lower()
             for s in kick_streams
         }
-        live_logins = twitch_live_logins | kick_live_slugs
+        youtube_live_ids = {s.get("login", "") for s in youtube_streams if s.get("login")}
+        live_logins = twitch_live_logins | kick_live_slugs | youtube_live_ids
 
         # Notifications
         if self._first_fetch_done:
@@ -1165,9 +1294,13 @@ class TwitchXApi:
         for s in kick_streams:
             stream_items.append(self._build_kick_stream_item(s))
 
+        # Build YouTube stream items
+        for s in youtube_streams:
+            stream_items.append(self._build_youtube_stream_item(s))
+
         self._live_streams = stream_items
 
-        all_favorites = twitch_favorites + kick_favorites
+        all_favorites = twitch_favorites + kick_favorites + youtube_favorites
         now = datetime.now().strftime("%H:%M:%S")
         total = sum(item.get("viewers", 0) for item in stream_items)
 
@@ -1294,13 +1427,47 @@ class TwitchXApi:
             f"window.onStatusUpdate({{text: 'Loading ' + {safe_ch} + '...', type: 'warn'}})"
         )
 
+        # Find stream title for player
+        title = stream.get("title", "") if stream else ""
+
+        # YouTube uses iframe embed, not streamlink
+        if platform == "youtube":
+            video_id = stream.get("video_id", "") if stream else ""
+            if not video_id:
+                r = json.dumps(
+                    {
+                        "success": False,
+                        "message": "No live video found for this channel",
+                        "channel": channel,
+                    }
+                )
+                self._eval_js(f"window.onLaunchResult({r})")
+                return
+            self._watching_channel = channel
+            stream_data = json.dumps(
+                {
+                    "url": video_id,
+                    "channel": channel,
+                    "title": title,
+                    "platform": "youtube",
+                    "playback_type": "youtube_embed",
+                }
+            )
+            self._eval_js(f"window.onStreamReady({stream_data})")
+            r = json.dumps(
+                {
+                    "success": True,
+                    "message": f"Playing {channel}",
+                    "channel": channel,
+                }
+            )
+            self._eval_js(f"window.onLaunchResult({r})")
+            return
+
         # Start launch progress timer
         self._launch_channel = channel
         self._launch_elapsed = 0
         self._start_launch_timer()
-
-        # Find stream title for player
-        title = stream.get("title", "") if stream else ""
 
         def do_resolve() -> None:
             settings = get_settings(self._config)
@@ -1417,6 +1584,8 @@ class TwitchXApi:
         if channel:
             if platform == "kick":
                 webbrowser.open(f"https://kick.com/{channel}")
+            elif platform == "youtube":
+                webbrowser.open(f"https://youtube.com/channel/{channel}")
             else:
                 webbrowser.open(f"https://twitch.tv/{channel}")
 
