@@ -59,7 +59,8 @@ class TwitchXApi:
         }
         self._active_platform: str = "twitch"
         self._shutdown = threading.Event()
-        self._fetching = False
+        self._fetch_lock = threading.Lock()
+        self._poll_lock = threading.Lock()
         self._polling_timer: threading.Timer | None = None
         self._live_streams: list[dict[str, Any]] = []
         self._games: dict[str, str] = {}
@@ -480,9 +481,7 @@ class TwitchXApi:
             return
         auth_url = self._twitch.get_auth_url()
         # Pause polling to prevent concurrent config writes
-        if self._polling_timer:
-            self._polling_timer.cancel()
-            self._polling_timer = None
+        self.stop_polling()
         self._eval_js(
             "window.onStatusUpdate({text: 'Waiting for Twitch login...', type: 'warn'})"
         )
@@ -586,9 +585,7 @@ class TwitchXApi:
             return
         auth_url = self._kick.get_auth_url()
         # Pause polling to prevent concurrent config writes
-        if self._polling_timer:
-            self._polling_timer.cancel()
-            self._polling_timer = None
+        self.stop_polling()
         self._eval_js(
             "window.onStatusUpdate({text: 'Waiting for Kick login...', type: 'warn'})"
         )
@@ -688,9 +685,7 @@ class TwitchXApi:
             self._eval_js("window.onYouTubeNeedsCredentials()")
             return
         auth_url = self._youtube.get_auth_url()
-        if self._polling_timer:
-            self._polling_timer.cancel()
-            self._polling_timer = None
+        self.stop_polling()
         self._eval_js(
             "window.onStatusUpdate({text: 'Waiting for YouTube login...', type: 'warn'})"
         )
@@ -1240,9 +1235,8 @@ class TwitchXApi:
             self._eval_js(f"window.onStreamsUpdate({data})")
             return
 
-        if self._fetching:
+        if not self._fetch_lock.acquire(blocking=False):
             return
-        self._fetching = True
         self._eval_js("window.onStatusUpdate({text: 'Refreshing...', type: 'info'})")
         self._run_in_thread(
             lambda tf=list(twitch_favorites), kf=list(kick_favorites), yf=list(youtube_favorites): (
@@ -1324,7 +1318,7 @@ class TwitchXApi:
                 finally:
                     self._close_thread_loop(loop)
         finally:
-            self._fetching = False
+            self._fetch_lock.release()
 
     async def _async_fetch(
         self,
@@ -1571,13 +1565,16 @@ class TwitchXApi:
         self.start_polling(interval)
 
     def start_polling(self, interval_seconds: int = 60) -> None:
-        self.stop_polling()
+        with self._poll_lock:
+            if self._polling_timer:
+                self._polling_timer.cancel()
+                self._polling_timer = None
+
         self.refresh()
 
         def tick() -> None:
             if not self._shutdown.is_set():
                 self.refresh()
-                # Check for stale data
                 if self._last_successful_fetch > 0:
                     stale = (
                         time.time() - self._last_successful_fetch > 2 * interval_seconds
@@ -1586,18 +1583,22 @@ class TwitchXApi:
                         self._eval_js(
                             "window.onStatusUpdate({text: 'Data may be stale', type: 'warn', stale: true})"
                         )
-                self._polling_timer = threading.Timer(interval_seconds, tick)
-                self._polling_timer.daemon = True
-                self._polling_timer.start()
+                with self._poll_lock:
+                    if not self._shutdown.is_set():
+                        self._polling_timer = threading.Timer(interval_seconds, tick)
+                        self._polling_timer.daemon = True
+                        self._polling_timer.start()
 
-        self._polling_timer = threading.Timer(interval_seconds, tick)
-        self._polling_timer.daemon = True
-        self._polling_timer.start()
+        with self._poll_lock:
+            self._polling_timer = threading.Timer(interval_seconds, tick)
+            self._polling_timer.daemon = True
+            self._polling_timer.start()
 
     def stop_polling(self) -> None:
-        if self._polling_timer:
-            self._polling_timer.cancel()
-            self._polling_timer = None
+        with self._poll_lock:
+            if self._polling_timer:
+                self._polling_timer.cancel()
+                self._polling_timer = None
 
     # ── Watch ────────────────────────────────────────────────────
 

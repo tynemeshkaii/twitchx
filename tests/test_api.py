@@ -616,6 +616,94 @@ import threading
 from unittest.mock import patch
 
 
+class TestFetchLock:
+    def test_concurrent_refresh_is_no_op(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """A second refresh() while one is in progress must be a no-op."""
+        import core.storage as storage
+        monkeypatch.setattr(storage, "CONFIG_DIR", tmp_path)
+        monkeypatch.setattr(storage, "CONFIG_FILE", tmp_path / "config.json")
+        monkeypatch.setattr(storage, "_OLD_CONFIG_DIR", tmp_path / "old")
+
+        from core.storage import DEFAULT_CONFIG, save_config
+        cfg = {
+            **DEFAULT_CONFIG,
+            "favorites": [{"platform": "twitch", "login": "somestreamer", "display_name": "some"}],
+            "platforms": {
+                **DEFAULT_CONFIG["platforms"],
+                "twitch": {
+                    **DEFAULT_CONFIG["platforms"]["twitch"],
+                    "client_id": "x",
+                    "client_secret": "y",
+                },
+            },
+        }
+        save_config(cfg)
+
+        from ui.api import TwitchXApi
+        api = TwitchXApi()
+        api._window = None  # suppress eval_js
+
+        call_count = 0
+        fetch_started = threading.Event()
+        fetch_proceed = threading.Event()
+
+        original_fetch = api._fetch_data
+
+        def slow_fetch(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            fetch_started.set()
+            fetch_proceed.wait(timeout=2)
+            original_fetch(*args, **kwargs)
+
+        monkeypatch.setattr(api, "_fetch_data", slow_fetch)
+
+        t = threading.Thread(target=api.refresh)
+        t.start()
+        fetch_started.wait(timeout=2)
+
+        # Second refresh while first is in progress — must be a no-op
+        api.refresh()
+
+        fetch_proceed.set()
+        t.join(timeout=5)
+
+        assert call_count == 1, f"Expected 1 fetch, got {call_count}"
+
+
+class TestPollLock:
+    def test_concurrent_start_polling_creates_one_timer(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Concurrent start_polling calls must result in exactly one active timer."""
+        import core.storage as storage
+        monkeypatch.setattr(storage, "CONFIG_DIR", tmp_path)
+        monkeypatch.setattr(storage, "CONFIG_FILE", tmp_path / "config.json")
+        monkeypatch.setattr(storage, "_OLD_CONFIG_DIR", tmp_path / "old")
+
+        from ui.api import TwitchXApi
+        api = TwitchXApi()
+        api._window = None
+        monkeypatch.setattr(api, "refresh", lambda: None)
+
+        barrier = threading.Barrier(3)
+
+        def call_start():
+            barrier.wait()
+            api.start_polling(interval_seconds=9999)
+
+        threads = [threading.Thread(target=call_start) for _ in range(3)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=5)
+
+        assert api._polling_timer is not None
+        api.stop_polling()
+
+
 class TestAsyncFetchIsolation:
     def test_twitch_error_does_not_discard_kick_streams(
         self, tmp_path, monkeypatch
