@@ -223,3 +223,78 @@ class TestYouTubeClientInit:
                 loop.close()
 
         assert http_clients[0] is not http_clients[1]
+
+
+# ── get_live_streams ──────────────────────────────────────────
+
+
+class TestGetLiveStreams:
+    def test_empty_channel_list_returns_empty(self) -> None:
+        from core.platforms.youtube import YouTubeClient
+
+        client = YouTubeClient()
+        loop = asyncio.new_event_loop()
+        result = loop.run_until_complete(client.get_live_streams([]))
+        assert result == []
+        loop.run_until_complete(client.close())
+        loop.close()
+
+    def test_invalid_channel_ids_filtered(self) -> None:
+        from core.platforms.youtube import YouTubeClient
+
+        client = YouTubeClient()
+        loop = asyncio.new_event_loop()
+        result = loop.run_until_complete(
+            client.get_live_streams(["not-valid", "", "@handle"])
+        )
+        assert result == []
+        loop.run_until_complete(client.close())
+        loop.close()
+
+    def test_builds_stream_info_from_api_response(self) -> None:
+        from core.platforms.youtube import YouTubeClient
+
+        video_item = {
+            "id": "dQw4w9WgXcQ",
+            "snippet": {
+                "channelId": "UCuAXFkgsw1L7xaCfnd5JJOw",
+                "channelTitle": "Rick Astley",
+                "title": "Live Concert Stream",
+                "categoryId": "10",
+                "thumbnails": {
+                    "high": {"url": "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg"}
+                },
+            },
+            "liveStreamingDetails": {
+                "actualStartTime": "2026-04-02T10:00:00Z",
+                "concurrentViewers": "12345",
+            },
+        }
+        stream = YouTubeClient._build_stream_from_video(video_item)
+        assert stream["login"] == "UCuAXFkgsw1L7xaCfnd5JJOw"
+        assert stream["display_name"] == "Rick Astley"
+        assert stream["title"] == "Live Concert Stream"
+        assert stream["viewers"] == 12345
+        assert stream["platform"] == "youtube"
+        assert stream["video_id"] == "dQw4w9WgXcQ"
+
+    def test_is_live_check(self) -> None:
+        from core.platforms.youtube import YouTubeClient
+
+        assert YouTubeClient._is_video_live(
+            {
+                "liveStreamingDetails": {
+                    "actualStartTime": "2026-04-02T10:00:00Z",
+                    "concurrentViewers": "100",
+                }
+            }
+        )
+        assert not YouTubeClient._is_video_live(
+            {
+                "liveStreamingDetails": {
+                    "actualStartTime": "2026-04-02T10:00:00Z",
+                    "actualEndTime": "2026-04-02T12:00:00Z",
+                }
+            }
+        )
+        assert not YouTubeClient._is_video_live({"snippet": {"title": "normal video"}})
