@@ -285,6 +285,11 @@ class YouTubeClient:
         if not valid_ids:
             return []
 
+        # Evict stale video IDs for channels we are about to recheck.
+        # Ensures resolve_stream_url never returns an ended stream's ID.
+        for cid in valid_ids:
+            self._live_video_ids.pop(cid, None)
+
         # 1. Fetch RSS feeds in parallel (no quota cost)
         rss_tasks = [self._fetch_rss_video_ids(cid) for cid in valid_ids]
         rss_results = await asyncio.gather(*rss_tasks, return_exceptions=True)

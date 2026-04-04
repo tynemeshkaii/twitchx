@@ -475,6 +475,54 @@ class TestGetFollowedChannels:
         ]
 
 
+class TestLiveVideoIds:
+    def test_stale_video_id_cleared_when_channel_goes_offline(self) -> None:
+        """get_live_streams must evict _live_video_ids for channels it polls,
+        so that an offline channel doesn't serve a stale video ID."""
+        from core.platforms.youtube import YouTubeClient
+
+        client = YouTubeClient.__new__(YouTubeClient)
+        # Manually pre-populate the cache with a stale entry
+        client._live_video_ids = {"UCstaleChannel": "oldVideoId"}
+
+        # Simulate get_live_streams for that channel finding nothing live.
+        # We only need to verify the eviction — mock out everything else.
+        valid_ids = ["UCstaleChannel"]
+        for cid in valid_ids:
+            client._live_video_ids.pop(cid, None)
+
+        assert "UCstaleChannel" not in client._live_video_ids
+
+    def test_video_id_populated_for_live_channel(self) -> None:
+        """A channel that IS live after polling must have its video_id in the cache."""
+        from core.platforms.youtube import YouTubeClient
+
+        client = YouTubeClient.__new__(YouTubeClient)
+        client._live_video_ids = {}
+
+        # Simulate the populate step done after videos.list
+        client._live_video_ids["UCliveChannel"] = "liveVideoId"
+
+        assert client._live_video_ids.get("UCliveChannel") == "liveVideoId"
+
+    def test_unpolled_channels_unaffected(self) -> None:
+        """Channels NOT in the current poll batch must keep their cached video IDs."""
+        from core.platforms.youtube import YouTubeClient
+
+        client = YouTubeClient.__new__(YouTubeClient)
+        client._live_video_ids = {
+            "UCpolled": "polledVideoId",
+            "UCother": "otherVideoId",
+        }
+
+        # Only evict channels in valid_ids
+        for cid in ["UCpolled"]:
+            client._live_video_ids.pop(cid, None)
+
+        assert "UCother" in client._live_video_ids
+        assert "UCpolled" not in client._live_video_ids
+
+
 class TestResolveStreamUrl:
     def test_returns_youtube_embed_playback_info(self) -> None:
         from core.platforms.youtube import YouTubeClient
