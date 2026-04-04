@@ -1331,41 +1331,55 @@ class TwitchXApi:
         twitch_favorites: list[str],
         kick_favorites: list[str],
         youtube_favorites: list[str] | None = None,
+        _twitch_timeout: float = 12.0,
+        _kick_timeout: float = 12.0,
+        _youtube_timeout: float = 20.0,
     ) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
         twitch_streams: list[dict] = []
         twitch_users: list[dict] = []
         kick_streams: list[dict] = []
         youtube_streams: list[dict] = []
 
-        # Fetch Twitch data if credentials exist and favorites are set
+        # ── Twitch ─────────────────────────────────────────────────
         twitch_conf = get_platform_config(self._config, "twitch")
         if (
             twitch_favorites
             and twitch_conf.get("client_id")
             and twitch_conf.get("client_secret")
         ):
-            await self._twitch._ensure_token()
-            twitch_streams, twitch_users = await asyncio.gather(
-                self._twitch.get_live_streams(twitch_favorites),
-                self._twitch.get_users(twitch_favorites),
-            )
-            game_ids = [
-                s.get("game_id", "") for s in twitch_streams if s.get("game_id")
-            ]
-            if game_ids:
-                games = await self._twitch.get_games(game_ids)
-                self._games.update(games)
+            async def _do_twitch() -> tuple[list[dict], list[dict]]:
+                await self._twitch._ensure_token()
+                streams, users = await asyncio.gather(
+                    self._twitch.get_live_streams(twitch_favorites),
+                    self._twitch.get_users(twitch_favorites),
+                )
+                game_ids = [s.get("game_id", "") for s in streams if s.get("game_id")]
+                if game_ids:
+                    games = await self._twitch.get_games(game_ids)
+                    self._games.update(games)
+                return streams, users
 
-        # Fetch Kick data if favorites are set (public API, no credentials needed)
+            try:
+                twitch_streams, twitch_users = await asyncio.wait_for(
+                    _do_twitch(), timeout=_twitch_timeout
+                )
+            except Exception as e:
+                logger.warning("Twitch fetch failed: %s", e)
+
+        # ── Kick ────────────────────────────────────────────────────
         if kick_favorites:
             try:
-                kick_streams = await self._kick.get_live_streams(kick_favorites)
+                kick_streams = await asyncio.wait_for(
+                    self._kick.get_live_streams(kick_favorites),
+                    timeout=_kick_timeout,
+                )
             except Exception as e:
                 logger.warning("Kick fetch failed: %s", e)
 
-        # Fetch YouTube data respecting the 5-minute minimum polling interval.
-        # When not yet due, serve the cached result so Twitch/Kick poll cycles
-        # don't wipe YouTube streams from the UI.
+        # ── YouTube ─────────────────────────────────────────────────
+        # Respect the 5-minute minimum polling interval. When not yet due,
+        # serve the cached result so Twitch/Kick poll cycles don't wipe
+        # YouTube streams from the UI.
         if youtube_favorites:
             yt_conf = get_platform_config(self._config, "youtube")
             settings = get_settings(self._config)
@@ -1373,13 +1387,13 @@ class TwitchXApi:
             yt_due = time.time() - self._last_youtube_fetch >= yt_interval
             if yt_due and (yt_conf.get("api_key") or yt_conf.get("access_token")):
                 try:
-                    youtube_streams = await self._youtube.get_live_streams(
-                        youtube_favorites
+                    youtube_streams = await asyncio.wait_for(
+                        self._youtube.get_live_streams(youtube_favorites),
+                        timeout=_youtube_timeout,
                     )
                     self._last_youtube_fetch = time.time()
                     self._last_youtube_streams = youtube_streams
                 except ValueError as e:
-                    # Configuration error (missing API key, quota exceeded)
                     msg = str(e)[:120]
                     logger.warning("YouTube config error: %s", msg)
                     self._eval_js(
@@ -1392,7 +1406,6 @@ class TwitchXApi:
                     logger.warning("YouTube fetch failed: %s", e)
                     youtube_streams = list(self._last_youtube_streams)
             else:
-                # Not yet due — reuse last result to keep streams visible
                 youtube_streams = list(self._last_youtube_streams)
 
         return twitch_streams, twitch_users, kick_streams, youtube_streams

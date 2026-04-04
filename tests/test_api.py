@@ -610,3 +610,109 @@ def test_on_chat_message_marks_own_kick_messages_as_self(
 
     assert emitted
     assert '"is_self": true' in emitted[-1]
+
+
+import threading
+from unittest.mock import patch
+
+
+class TestAsyncFetchIsolation:
+    def test_twitch_error_does_not_discard_kick_streams(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """If Twitch raises, Kick results must still be returned."""
+        import core.storage as storage
+        monkeypatch.setattr(storage, "CONFIG_DIR", tmp_path)
+        monkeypatch.setattr(storage, "CONFIG_FILE", tmp_path / "config.json")
+        monkeypatch.setattr(storage, "_OLD_CONFIG_DIR", tmp_path / "old")
+
+        from core.storage import DEFAULT_CONFIG, save_config
+        cfg = {
+            **DEFAULT_CONFIG,
+            "platforms": {
+                **DEFAULT_CONFIG["platforms"],
+                "twitch": {
+                    **DEFAULT_CONFIG["platforms"]["twitch"],
+                    "client_id": "fakeid",
+                    "client_secret": "fakesecret",
+                },
+            },
+        }
+        save_config(cfg)
+
+        from ui.api import TwitchXApi
+        api = TwitchXApi()
+
+        fake_kick_stream = {"slug": "streamer", "viewer_count": 100}
+
+        async def run():
+            with patch.object(
+                api._twitch, "_ensure_token", side_effect=Exception("Twitch down")
+            ):
+                with patch.object(
+                    api._kick,
+                    "get_live_streams",
+                    return_value=[fake_kick_stream],
+                ):
+                    _, _, kick, _ = await api._async_fetch(
+                        twitch_favorites=["somestreamer"],
+                        kick_favorites=["streamer"],
+                    )
+            return kick
+
+        loop = asyncio.new_event_loop()
+        kick_results = loop.run_until_complete(run())
+        loop.close()
+
+        assert kick_results == [fake_kick_stream]
+
+    def test_twitch_timeout_does_not_discard_kick_streams(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """If Twitch times out, Kick results must still be returned."""
+        import core.storage as storage
+        monkeypatch.setattr(storage, "CONFIG_DIR", tmp_path)
+        monkeypatch.setattr(storage, "CONFIG_FILE", tmp_path / "config.json")
+        monkeypatch.setattr(storage, "_OLD_CONFIG_DIR", tmp_path / "old")
+
+        from core.storage import DEFAULT_CONFIG, save_config
+        cfg = {
+            **DEFAULT_CONFIG,
+            "platforms": {
+                **DEFAULT_CONFIG["platforms"],
+                "twitch": {
+                    **DEFAULT_CONFIG["platforms"]["twitch"],
+                    "client_id": "fakeid",
+                    "client_secret": "fakesecret",
+                },
+            },
+        }
+        save_config(cfg)
+
+        from ui.api import TwitchXApi
+        api = TwitchXApi()
+
+        fake_kick_stream = {"slug": "streamer", "viewer_count": 50}
+
+        async def slow_token():
+            await asyncio.sleep(999)
+
+        async def run():
+            with patch.object(api._twitch, "_ensure_token", side_effect=slow_token):
+                with patch.object(
+                    api._kick,
+                    "get_live_streams",
+                    return_value=[fake_kick_stream],
+                ):
+                    _, _, kick, _ = await api._async_fetch(
+                        twitch_favorites=["somestreamer"],
+                        kick_favorites=["streamer"],
+                        _twitch_timeout=0.05,
+                    )
+            return kick
+
+        loop = asyncio.new_event_loop()
+        kick_results = loop.run_until_complete(run())
+        loop.close()
+
+        assert kick_results == [fake_kick_stream]
