@@ -298,3 +298,82 @@ class TestGetLiveStreams:
             }
         )
         assert not YouTubeClient._is_video_live({"snippet": {"title": "normal video"}})
+
+
+# ── search + channel info ─────────────────────────────────────
+
+
+class TestSearchChannels:
+    def test_empty_query_returns_empty(self) -> None:
+        from core.platforms.youtube import YouTubeClient
+
+        client = YouTubeClient()
+        loop = asyncio.new_event_loop()
+        result = loop.run_until_complete(client.search_channels(""))
+        assert result == []
+        loop.run_until_complete(client.close())
+        loop.close()
+
+    def test_normalizes_search_result(self) -> None:
+        from core.platforms.youtube import YouTubeClient
+
+        item = {
+            "id": {"channelId": "UCX6OQ3DkcsbYNE6H8uQQuVA"},
+            "snippet": {
+                "channelTitle": "MrBeast",
+                "description": "YouTube creator",
+                "thumbnails": {
+                    "default": {"url": "https://yt3.ggpht.com/thumb.jpg"}
+                },
+            },
+        }
+        result = YouTubeClient._normalize_channel_search_result(item)
+        assert result["login"] == "UCX6OQ3DkcsbYNE6H8uQQuVA"
+        assert result["display_name"] == "MrBeast"
+        assert result["platform"] == "youtube"
+
+
+class TestGetChannelInfo:
+    def test_builds_channel_info_from_response(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from core.platforms.youtube import YouTubeClient
+
+        client = YouTubeClient()
+
+        async def fake_yt_get(
+            endpoint: str, params: dict | None = None, auth_required: bool = False
+        ) -> dict[str, Any]:
+            return {
+                "items": [
+                    {
+                        "id": "UCX6OQ3DkcsbYNE6H8uQQuVA",
+                        "snippet": {
+                            "title": "MrBeast",
+                            "description": "YouTube creator",
+                            "thumbnails": {
+                                "default": {"url": "https://yt3.ggpht.com/thumb.jpg"}
+                            },
+                        },
+                        "statistics": {
+                            "subscriberCount": "100000000",
+                        },
+                    }
+                ]
+            }
+
+        monkeypatch.setattr(client, "_yt_get", fake_yt_get)
+        monkeypatch.setattr(client._quota, "use", lambda n: None)
+
+        loop = asyncio.new_event_loop()
+        try:
+            info = loop.run_until_complete(
+                client.get_channel_info("UCX6OQ3DkcsbYNE6H8uQQuVA")
+            )
+        finally:
+            loop.run_until_complete(client.close())
+            loop.close()
+
+        assert info["channel_id"] == "UCX6OQ3DkcsbYNE6H8uQQuVA"
+        assert info["display_name"] == "MrBeast"
+        assert info["followers"] == 100_000_000

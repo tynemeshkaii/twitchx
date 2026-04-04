@@ -324,6 +324,81 @@ class YouTubeClient:
 
         return live_streams
 
+    # ── Search ───────────────────────────────────────────────
+
+    @staticmethod
+    def _normalize_channel_search_result(item: dict[str, Any]) -> dict[str, Any]:
+        """Normalize a search.list channel result for the UI."""
+        snippet = item.get("snippet", {})
+        channel_id = item.get("id", {}).get("channelId", "")
+        thumbs = snippet.get("thumbnails", {})
+        return {
+            "login": channel_id,
+            "display_name": snippet.get("channelTitle", ""),
+            "is_live": False,
+            "game_name": "",
+            "platform": "youtube",
+            "avatar_url": thumbs.get("default", {}).get("url", ""),
+        }
+
+    async def search_channels(self, query: str) -> list[dict[str, Any]]:
+        """Search for YouTube channels. Costs 100 quota units."""
+        query = query.strip()
+        if not query:
+            return []
+        if not self._quota.can_use(100):
+            logger.warning("YouTube quota too low for search (need 100 units)")
+            return []
+        try:
+            data = await self._yt_get(
+                "search",
+                params={
+                    "part": "snippet",
+                    "type": "channel",
+                    "q": query,
+                    "maxResults": "10",
+                },
+            )
+            self._quota.use(100)
+            return [
+                self._normalize_channel_search_result(item)
+                for item in data.get("items", [])
+                if item.get("id", {}).get("channelId")
+            ]
+        except Exception as e:
+            logger.warning("YouTube search failed: %s", e)
+            return []
+
+    # ── Channel info ─────────────────────────────────────────
+
+    async def get_channel_info(self, channel_id: str) -> dict[str, Any]:
+        """Get channel details. Costs 1 quota unit."""
+        channel_id = channel_id.strip()
+        if not channel_id:
+            return {}
+        data = await self._yt_get(
+            "channels",
+            params={
+                "part": "snippet,statistics",
+                "id": channel_id,
+            },
+        )
+        self._quota.use(1)
+        items = data.get("items", [])
+        if not items:
+            return {}
+        item = items[0]
+        snippet = item.get("snippet", {})
+        stats = item.get("statistics", {})
+        thumbs = snippet.get("thumbnails", {})
+        return {
+            "channel_id": item.get("id", channel_id),
+            "display_name": snippet.get("title", ""),
+            "description": snippet.get("description", ""),
+            "avatar_url": thumbs.get("default", {}).get("url", ""),
+            "followers": int(stats.get("subscriberCount", 0)),
+        }
+
     async def refresh_user_token(self) -> str:
         """Stub — implemented in Task 7."""
         raise NotImplementedError
