@@ -1616,7 +1616,7 @@ class TwitchXApi:
         # Find stream title for player
         title = stream.get("title", "") if stream else ""
 
-        # YouTube uses iframe embed, not streamlink
+        # YouTube: resolve HLS URL via streamlink (avoids iframe Error 153 in WKWebView)
         if platform == "youtube":
             video_id = stream.get("video_id", "") if stream else ""
             if not video_id:
@@ -1629,25 +1629,55 @@ class TwitchXApi:
                 )
                 self._eval_js(f"window.onLaunchResult({r})")
                 return
-            self._watching_channel = channel
-            stream_data = json.dumps(
-                {
-                    "url": video_id,
-                    "channel": channel,
-                    "title": title,
-                    "platform": "youtube",
-                    "playback_type": "youtube_embed",
-                }
-            )
-            self._eval_js(f"window.onStreamReady({stream_data})")
-            r = json.dumps(
-                {
-                    "success": True,
-                    "message": f"Playing {channel}",
-                    "channel": channel,
-                }
-            )
-            self._eval_js(f"window.onLaunchResult({r})")
+
+            self._launch_channel = channel
+            self._launch_elapsed = 0
+            self._start_launch_timer()
+
+            def do_resolve_yt() -> None:
+                settings = get_settings(self._config)
+                hls_url, err = resolve_hls_url(
+                    video_id,
+                    quality,
+                    settings.get("streamlink_path", "streamlink"),
+                    platform="youtube",
+                )
+                self._cancel_launch_timer()
+                self._launch_channel = None
+
+                if not hls_url:
+                    r = json.dumps(
+                        {
+                            "success": False,
+                            "message": f"streamlink error: {err}"
+                            if err
+                            else "Could not resolve YouTube stream URL",
+                            "channel": channel,
+                        }
+                    )
+                    self._eval_js(f"window.onLaunchResult({r})")
+                    return
+
+                self._watching_channel = channel
+                stream_data = json.dumps(
+                    {
+                        "url": hls_url,
+                        "channel": channel,
+                        "title": title,
+                        "platform": "youtube",
+                    }
+                )
+                self._eval_js(f"window.onStreamReady({stream_data})")
+                r = json.dumps(
+                    {
+                        "success": True,
+                        "message": f"Playing {channel}",
+                        "channel": channel,
+                    }
+                )
+                self._eval_js(f"window.onLaunchResult({r})")
+
+            self._run_in_thread(do_resolve_yt)
             return
 
         # Start launch progress timer
@@ -1723,8 +1753,14 @@ class TwitchXApi:
 
         def do_launch() -> None:
             settings = get_settings(self._config)
+            # For YouTube, IINA/streamlink needs the video ID, not the channel ID
+            stream_channel = (
+                stream.get("video_id", channel)
+                if platform == "youtube" and stream
+                else channel
+            )
             result = launch_stream(
-                channel,
+                stream_channel,
                 quality,
                 settings.get("streamlink_path", "streamlink"),
                 settings.get(
@@ -1832,7 +1868,7 @@ class TwitchXApi:
                 img.save(buf, format="JPEG", quality=85)
                 b64 = base64.b64encode(buf.getvalue()).decode()
                 data_url = f"data:image/jpeg;base64,{b64}"
-                result = json.dumps({"login": login.lower(), "data": data_url})
+                result = json.dumps({"login": login, "data": data_url})
                 self._eval_js(f"window.onThumbnail({result})")
             except Exception:
                 pass

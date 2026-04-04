@@ -68,7 +68,9 @@ def launch_stream(
         return LaunchResult(success=False, message=iina_err)
 
     resolved_sl = shutil.which(streamlink_path) or streamlink_path
-    if platform == "kick":
+    if platform == "youtube":
+        stream_url = f"https://www.youtube.com/watch?v={channel}"
+    elif platform == "kick":
         stream_url = f"https://kick.com/{channel}"
     else:
         stream_url = f"https://twitch.tv/{channel}"
