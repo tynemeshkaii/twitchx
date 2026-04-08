@@ -75,6 +75,8 @@ class TwitchXApi:
         self._last_successful_fetch: float = 0
         self._last_youtube_fetch: float = 0
         self._last_youtube_streams: list[dict[str, Any]] = []
+        self._last_twitch_streams: list[dict[str, Any]] = []
+        self._last_twitch_users: list[dict[str, Any]] = []
         # User avatar URLs for lazy loading
         self._user_avatars: dict[str, str] = {}
         # Chat
@@ -1268,13 +1270,19 @@ class TwitchXApi:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 try:
-                    twitch_streams, twitch_users, kick_streams, youtube_streams = (
-                        loop.run_until_complete(
-                            self._async_fetch(
-                                twitch_favorites, kick_favorites, youtube_favorites
-                            )
+                    (
+                        twitch_streams,
+                        twitch_users,
+                        kick_streams,
+                        youtube_streams,
+                        twitch_error,
+                    ) = loop.run_until_complete(
+                        self._async_fetch(
+                            twitch_favorites, kick_favorites, youtube_favorites
                         )
                     )
+                    # Variant B: always update UI so Kick/YouTube reflect fresh data
+                    # even while Twitch is retrying. Twitch shows its last known state.
                     self._on_data_fetched(
                         twitch_favorites,
                         kick_favorites,
@@ -1284,35 +1292,36 @@ class TwitchXApi:
                         kick_streams,
                         youtube_streams,
                     )
-                    return
-                except httpx.ConnectError:
-                    if attempt < max_attempts:
-                        delay = retry_delays[attempt - 1]
-                        att = attempt + 1
+                    if twitch_error is None:
+                        return
+                    if isinstance(twitch_error, httpx.ConnectError):
+                        if attempt < max_attempts:
+                            delay = retry_delays[attempt - 1]
+                            att = attempt + 1
+                            self._eval_js(
+                                f"window.onStatusUpdate({{text: 'Reconnecting... (attempt {att}/{max_attempts})', type: 'warn'}})"
+                            )
+                            time.sleep(delay)
+                        else:
+                            self._eval_js(
+                                "window.onStatusUpdate({text: 'No internet connection', type: 'error'})"
+                            )
+                    elif isinstance(twitch_error, httpx.HTTPStatusError):
+                        status_code = twitch_error.response.status_code
+                        if status_code in (401, 403):
+                            self._eval_js(
+                                "window.onStatusUpdate({text: 'Check your API credentials in Settings', type: 'error'})"
+                            )
+                        else:
+                            self._eval_js(
+                                f"window.onStatusUpdate({{text: 'API error: {status_code}', type: 'error'}})"
+                            )
+                        return
+                    elif isinstance(twitch_error, ValueError):
                         self._eval_js(
-                            f"window.onStatusUpdate({{text: 'Reconnecting... (attempt {att}/{max_attempts})', type: 'warn'}})"
+                            "window.onStatusUpdate({text: 'Set API credentials in Settings', type: 'error'})"
                         )
-                        time.sleep(delay)
-                    else:
-                        self._eval_js(
-                            "window.onStatusUpdate({text: 'No internet connection', type: 'error'})"
-                        )
-                except httpx.HTTPStatusError as e:
-                    status_code = e.response.status_code
-                    if status_code in (401, 403):
-                        self._eval_js(
-                            "window.onStatusUpdate({text: 'Check your API credentials in Settings', type: 'error'})"
-                        )
-                    else:
-                        self._eval_js(
-                            f"window.onStatusUpdate({{text: 'API error: {status_code}', type: 'error'}})"
-                        )
-                    return
-                except ValueError:
-                    self._eval_js(
-                        "window.onStatusUpdate({text: 'Set API credentials in Settings', type: 'error'})"
-                    )
-                    return
+                        return
                 except Exception as e:
                     traceback.print_exc()
                     msg = str(e)[:80] if str(e) else "Unknown error"
@@ -1334,86 +1343,100 @@ class TwitchXApi:
         _twitch_timeout: float = 12.0,
         _kick_timeout: float = 12.0,
         _youtube_timeout: float = 20.0,
-    ) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
-        twitch_streams: list[dict] = []
-        twitch_users: list[dict] = []
-        kick_streams: list[dict] = []
-        youtube_streams: list[dict] = []
+    ) -> tuple[list[dict], list[dict], list[dict], list[dict], BaseException | None]:
+        youtube_favorites = youtube_favorites or []
 
-        # ── Twitch ─────────────────────────────────────────────────
-        twitch_conf = get_platform_config(self._config, "twitch")
-        if (
-            twitch_favorites
-            and twitch_conf.get("client_id")
-            and twitch_conf.get("client_secret")
-        ):
+        async def _do_twitch() -> tuple[list[dict], list[dict]]:
+            twitch_conf = get_platform_config(self._config, "twitch")
+            if not (
+                twitch_favorites
+                and twitch_conf.get("client_id")
+                and twitch_conf.get("client_secret")
+            ):
+                return [], []
+            await self._twitch._ensure_token()
+            streams, users = await asyncio.gather(
+                self._twitch.get_live_streams(twitch_favorites),
+                self._twitch.get_users(twitch_favorites),
+            )
+            game_ids = [s.get("game_id", "") for s in streams if s.get("game_id")]
+            if game_ids:
+                games = await self._twitch.get_games(game_ids)
+                self._games.update(games)
+            return streams, users
 
-            async def _do_twitch() -> tuple[list[dict], list[dict]]:
-                await self._twitch._ensure_token()
-                streams, users = await asyncio.gather(
-                    self._twitch.get_live_streams(twitch_favorites),
-                    self._twitch.get_users(twitch_favorites),
-                )
-                game_ids = [s.get("game_id", "") for s in streams if s.get("game_id")]
-                if game_ids:
-                    games = await self._twitch.get_games(game_ids)
-                    self._games.update(games)
-                return streams, users
-
+        async def _do_kick() -> list[dict]:
+            if not kick_favorites:
+                return []
             try:
-                twitch_streams, twitch_users = await asyncio.wait_for(
-                    _do_twitch(), timeout=_twitch_timeout
-                )
-            except TimeoutError:
-                logger.warning("Twitch fetch timed out after %.1fs", _twitch_timeout)
-            except (httpx.ConnectError, httpx.HTTPStatusError, ValueError):
-                raise  # let _fetch_data handle retries and user-facing messages
-            except Exception as e:
-                logger.warning("Twitch fetch failed: %s", e)
-
-        # ── Kick ────────────────────────────────────────────────────
-        if kick_favorites:
-            try:
-                kick_streams = await asyncio.wait_for(
+                return await asyncio.wait_for(
                     self._kick.get_live_streams(kick_favorites),
                     timeout=_kick_timeout,
                 )
             except Exception as e:
                 logger.warning("Kick fetch failed: %s", e)
+                return []
 
-        # ── YouTube ─────────────────────────────────────────────────
-        # Respect the 5-minute minimum polling interval. When not yet due,
-        # serve the cached result so Twitch/Kick poll cycles don't wipe
-        # YouTube streams from the UI.
-        if youtube_favorites:
+        async def _do_youtube() -> list[dict]:
+            if not youtube_favorites:
+                return []
             yt_conf = get_platform_config(self._config, "youtube")
             settings = get_settings(self._config)
             yt_interval = settings.get("youtube_refresh_interval", 300)
             yt_due = time.time() - self._last_youtube_fetch >= yt_interval
-            if yt_due and (yt_conf.get("api_key") or yt_conf.get("access_token")):
-                try:
-                    youtube_streams = await asyncio.wait_for(
-                        self._youtube.get_live_streams(youtube_favorites),
-                        timeout=_youtube_timeout,
-                    )
-                    self._last_youtube_fetch = time.time()
-                    self._last_youtube_streams = youtube_streams
-                except ValueError as e:
-                    msg = str(e)[:120]
-                    logger.warning("YouTube config error: %s", msg)
-                    self._eval_js(
-                        "window.onStatusUpdate("
-                        + json.dumps({"text": f"YouTube: {msg}", "type": "error"})
-                        + ")"
-                    )
-                    youtube_streams = list(self._last_youtube_streams)
-                except Exception as e:
-                    logger.warning("YouTube fetch failed: %s", e)
-                    youtube_streams = list(self._last_youtube_streams)
-            else:
-                youtube_streams = list(self._last_youtube_streams)
+            if not yt_due or not (yt_conf.get("api_key") or yt_conf.get("access_token")):
+                return list(self._last_youtube_streams)
+            try:
+                youtube_streams = await asyncio.wait_for(
+                    self._youtube.get_live_streams(youtube_favorites),
+                    timeout=_youtube_timeout,
+                )
+                self._last_youtube_fetch = time.time()
+                self._last_youtube_streams = youtube_streams
+                return youtube_streams
+            except ValueError as e:
+                msg = str(e)[:120]
+                logger.warning("YouTube config error: %s", msg)
+                self._eval_js(
+                    "window.onStatusUpdate("
+                    + json.dumps({"text": f"YouTube: {msg}", "type": "error"})
+                    + ")"
+                )
+                return list(self._last_youtube_streams)
+            except Exception as e:
+                logger.warning("YouTube fetch failed: %s", e)
+                return list(self._last_youtube_streams)
 
-        return twitch_streams, twitch_users, kick_streams, youtube_streams
+        twitch_result, kick_result, yt_result = await asyncio.gather(
+            asyncio.wait_for(_do_twitch(), timeout=_twitch_timeout),
+            _do_kick(),
+            _do_youtube(),
+            return_exceptions=True,
+        )
+
+        # Handle Twitch — ConnectError/HTTPStatusError/ValueError are retriable
+        twitch_error: BaseException | None = None
+        if isinstance(twitch_result, BaseException):
+            if isinstance(twitch_result, TimeoutError):
+                logger.warning("Twitch fetch timed out after %.1fs", _twitch_timeout)
+            elif isinstance(
+                twitch_result, (httpx.ConnectError, httpx.HTTPStatusError, ValueError)
+            ):
+                twitch_error = twitch_result
+            else:
+                logger.warning("Twitch fetch failed: %s", twitch_result)
+            twitch_streams: list[dict] = list(self._last_twitch_streams)
+            twitch_users: list[dict] = list(self._last_twitch_users)
+        else:
+            twitch_streams, twitch_users = twitch_result
+            self._last_twitch_streams = twitch_streams
+            self._last_twitch_users = twitch_users
+
+        # _do_kick/_do_youtube never raise; isinstance guards against programming errors
+        kick_streams: list[dict] = kick_result if isinstance(kick_result, list) else []
+        youtube_streams: list[dict] = yt_result if isinstance(yt_result, list) else []
+
+        return twitch_streams, twitch_users, kick_streams, youtube_streams, twitch_error
 
     def _on_data_fetched(
         self,

@@ -764,7 +764,7 @@ class TestAsyncFetchIsolation:
                     return_value=[fake_kick_stream],
                 ),
             ):
-                _, _, kick, _ = await api._async_fetch(
+                _, _, kick, _, _ = await api._async_fetch(
                     twitch_favorites=["somestreamer"],
                     kick_favorites=["streamer"],
                 )
@@ -821,7 +821,7 @@ class TestAsyncFetchIsolation:
                     return_value=[fake_kick_stream],
                 ),
             ):
-                _, _, kick, _ = await api._async_fetch(
+                _, _, kick, _, _ = await api._async_fetch(
                     twitch_favorites=["somestreamer"],
                     kick_favorites=["streamer"],
                     _twitch_timeout=0.05,
@@ -833,3 +833,146 @@ class TestAsyncFetchIsolation:
         loop.close()
 
         assert kick_results == [fake_kick_stream]
+
+
+class TestParallelFetch:
+    """Verify asyncio.gather parallel fetch: independent errors per platform."""
+
+    def _setup(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        import core.storage as storage
+
+        monkeypatch.setattr(storage, "CONFIG_DIR", tmp_path)
+        monkeypatch.setattr(storage, "CONFIG_FILE", tmp_path / "config.json")
+        monkeypatch.setattr(storage, "_OLD_CONFIG_DIR", tmp_path / "old")
+        from core.storage import DEFAULT_CONFIG, save_config
+
+        cfg = {
+            **DEFAULT_CONFIG,
+            "platforms": {
+                **DEFAULT_CONFIG["platforms"],
+                "twitch": {
+                    **DEFAULT_CONFIG["platforms"]["twitch"],
+                    "client_id": "fakeid",
+                    "client_secret": "fakesecret",
+                },
+            },
+        }
+        save_config(cfg)
+
+    def test_twitch_cache_used_on_connect_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """ConnectError → _last_twitch_streams returned, twitch_error set."""
+        self._setup(tmp_path, monkeypatch)
+        import httpx
+        from ui.api import TwitchXApi
+
+        api = TwitchXApi()
+        cached = [{"user_login": "cached_streamer", "platform": "twitch"}]
+        api._last_twitch_streams = list(cached)
+
+        async def run():
+            with patch.object(
+                api._twitch, "_ensure_token", side_effect=httpx.ConnectError("down")
+            ):
+                return await api._async_fetch(
+                    twitch_favorites=["cached_streamer"],
+                    kick_favorites=[],
+                )
+
+        loop = asyncio.new_event_loop()
+        result = loop.run_until_complete(run())
+        loop.close()
+
+        twitch_streams, _, _, _, twitch_error = result
+        assert twitch_streams == cached
+        assert isinstance(twitch_error, httpx.ConnectError)
+
+    def test_twitch_cache_updated_on_success(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Successful Twitch fetch updates _last_twitch_streams; twitch_error is None."""
+        self._setup(tmp_path, monkeypatch)
+        from ui.api import TwitchXApi
+
+        api = TwitchXApi()
+        fresh = [{"user_login": "live_streamer", "platform": "twitch"}]
+
+        async def run():
+            with (
+                patch.object(api._twitch, "_ensure_token", return_value=None),
+                patch.object(api._twitch, "get_live_streams", return_value=fresh),
+                patch.object(api._twitch, "get_users", return_value=[]),
+            ):
+                return await api._async_fetch(
+                    twitch_favorites=["live_streamer"],
+                    kick_favorites=[],
+                )
+
+        loop = asyncio.new_event_loop()
+        result = loop.run_until_complete(run())
+        loop.close()
+
+        twitch_streams, _, _, _, twitch_error = result
+        assert twitch_streams == fresh
+        assert twitch_error is None
+        assert api._last_twitch_streams == fresh
+
+    def test_twitch_timeout_sets_error_to_none(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Twitch TimeoutError → twitch_error=None (timeout is non-retriable)."""
+        self._setup(tmp_path, monkeypatch)
+        from ui.api import TwitchXApi
+
+        api = TwitchXApi()
+
+        async def slow_token():
+            await asyncio.sleep(999)
+
+        async def run():
+            with patch.object(api._twitch, "_ensure_token", side_effect=slow_token):
+                return await api._async_fetch(
+                    twitch_favorites=["somestreamer"],
+                    kick_favorites=[],
+                    _twitch_timeout=0.05,
+                )
+
+        loop = asyncio.new_event_loop()
+        result = loop.run_until_complete(run())
+        loop.close()
+
+        _, _, _, _, twitch_error = result
+        assert twitch_error is None
+
+    def test_youtube_cache_served_when_twitch_fails(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """YouTube _last_youtube_streams served even when Twitch raises ConnectError."""
+        self._setup(tmp_path, monkeypatch)
+        import httpx
+        import time
+        from ui.api import TwitchXApi
+
+        api = TwitchXApi()
+        fake_yt = [{"login": "UCfakechannel1234567890", "platform": "youtube"}]
+        api._last_youtube_streams = list(fake_yt)
+        api._last_youtube_fetch = time.time()  # just fetched → cache hit, no API call
+
+        async def run():
+            with patch.object(
+                api._twitch, "_ensure_token", side_effect=httpx.ConnectError("down")
+            ):
+                return await api._async_fetch(
+                    twitch_favorites=["somestreamer"],
+                    kick_favorites=[],
+                    youtube_favorites=["UCfakechannel1234567890"],
+                )
+
+        loop = asyncio.new_event_loop()
+        result = loop.run_until_complete(run())
+        loop.close()
+
+        _, _, _, youtube_streams, twitch_error = result
+        assert youtube_streams == fake_yt
+        assert isinstance(twitch_error, httpx.ConnectError)
