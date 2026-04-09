@@ -12,6 +12,7 @@ import threading
 import time
 import traceback
 import webbrowser
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Any
 
@@ -79,6 +80,17 @@ class TwitchXApi:
         self._last_twitch_users: list[dict[str, Any]] = []
         # User avatar URLs for lazy loading
         self._user_avatars: dict[str, str] = {}
+        # Image fetch dedup: tracks in-flight requests to avoid duplicate threads
+        self._fetching_avatars: set[str] = set()
+        self._fetching_thumbnails: set[str] = set()
+        # Shared HTTP client for image downloads (connection-pooled, reused across threads)
+        self._http = httpx.Client(
+            timeout=10, limits=httpx.Limits(max_connections=20)
+        )
+        # Bounded thread pool for avatar/thumbnail fetches (caps OS thread count)
+        self._image_pool = ThreadPoolExecutor(
+            max_workers=8, thread_name_prefix="twitchx-img"
+        )
         # Chat
         self._chat_client: TwitchChatClient | KickChatClient | None = None
         self._chat_thread: threading.Thread | None = None
@@ -1860,52 +1872,63 @@ class TwitchXApi:
     # ── Avatars + Thumbnails ────────────────────────────────────
 
     def get_avatar(self, login: str) -> None:
+        login_lower = login.lower()
+        # P1: skip if already in-flight
+        if login_lower in self._fetching_avatars:
+            return
+        self._fetching_avatars.add(login_lower)
+
         def do_fetch() -> None:
-            login_lower = login.lower()
-            # Try disk cache first
-            cached_bytes = get_cached_avatar(login_lower)
-            if cached_bytes:
-                try:
-                    img = Image.open(io.BytesIO(cached_bytes)).resize(
-                        (56, 56), Image.Resampling.LANCZOS
-                    )
-                    buf = io.BytesIO()
-                    img.save(buf, format="PNG")
-                    b64 = base64.b64encode(buf.getvalue()).decode()
-                    data_url = f"data:image/png;base64,{b64}"
-                    result = json.dumps({"login": login_lower, "data": data_url})
-                    self._eval_js(f"window.onAvatar({result})")
-                    return
-                except Exception:
-                    pass
-
-            # Need URL — check stored URLs
-            url = self._user_avatars.get(login_lower, "")
-            if not url:
-                return
-
             try:
-                resp = httpx.get(url, timeout=10)
+                # P2 cache hit: disk stores pre-resized PNG — no Pillow needed
+                cached_bytes = get_cached_avatar(login_lower)
+                if cached_bytes:
+                    try:
+                        b64 = base64.b64encode(cached_bytes).decode()
+                        data_url = f"data:image/png;base64,{b64}"
+                        result = json.dumps({"login": login_lower, "data": data_url})
+                        self._eval_js(f"window.onAvatar({result})")
+                        return
+                    except Exception:
+                        pass
+
+                url = self._user_avatars.get(login_lower, "")
+                if not url:
+                    return
+
+                # P3: shared connection-pooled client
+                resp = self._http.get(url)
                 raw_bytes = resp.content
                 img = Image.open(io.BytesIO(raw_bytes)).resize(
                     (56, 56), Image.Resampling.LANCZOS
                 )
                 buf = io.BytesIO()
                 img.save(buf, format="PNG")
-                b64 = base64.b64encode(buf.getvalue()).decode()
+                resized_bytes = buf.getvalue()
+                b64 = base64.b64encode(resized_bytes).decode()
                 data_url = f"data:image/png;base64,{b64}"
                 result = json.dumps({"login": login_lower, "data": data_url})
                 self._eval_js(f"window.onAvatar({result})")
-                save_avatar(login_lower, raw_bytes)
+                # P2: persist pre-resized bytes so future cache hits skip Pillow
+                save_avatar(login_lower, resized_bytes)
             except Exception:
                 pass
+            finally:
+                self._fetching_avatars.discard(login_lower)
 
-        self._run_in_thread(do_fetch)
+        # P4: bounded image thread pool instead of a new OS thread per call
+        self._image_pool.submit(do_fetch)
 
     def get_thumbnail(self, login: str, url: str) -> None:
+        # P1: skip if already in-flight
+        if login in self._fetching_thumbnails:
+            return
+        self._fetching_thumbnails.add(login)
+
         def do_fetch() -> None:
             try:
-                resp = httpx.get(url, timeout=10)
+                # P3: shared connection-pooled client
+                resp = self._http.get(url)
                 raw_bytes = resp.content
                 img = Image.open(io.BytesIO(raw_bytes)).resize(
                     (440, 248), Image.Resampling.LANCZOS
@@ -1918,8 +1941,11 @@ class TwitchXApi:
                 self._eval_js(f"window.onThumbnail({result})")
             except Exception:
                 pass
+            finally:
+                self._fetching_thumbnails.discard(login)
 
-        self._run_in_thread(do_fetch)
+        # P4: bounded image thread pool
+        self._image_pool.submit(do_fetch)
 
     # ── Chat ──────────────────────────────────────────────────
 
@@ -2187,6 +2213,8 @@ class TwitchXApi:
         self._shutdown.set()
         self.stop_polling()
         self._cancel_launch_timer()
+        self._image_pool.shutdown(wait=False)
+        self._http.close()
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
