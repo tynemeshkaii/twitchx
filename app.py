@@ -7,7 +7,7 @@ from typing import Any
 
 import webview
 
-from core.storage import load_config, save_config
+from core.storage import get_settings, load_config, save_config
 from ui.api import TwitchXApi
 
 
@@ -157,7 +157,7 @@ class TwitchXApp:
         from PyObjCTools import AppHelper
 
         AppHelper.callAfter(self._enable_video_fullscreen)
-        interval = self._config.get("refresh_interval", 60)
+        interval = get_settings(self._config).get("refresh_interval", 60)
         self._api.start_polling(interval)
 
     @staticmethod

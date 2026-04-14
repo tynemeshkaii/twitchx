@@ -342,7 +342,7 @@ class TwitchXApi:
                     "user_display_name", yt_conf.get("user_login", "")
                 ),
             }
-        masked["youtube_quota_remaining"] = self._youtube._quota.remaining()
+        masked["youtube_quota_remaining"] = self._youtube.quota_remaining()
         return masked
 
     def get_full_config_for_settings(self) -> dict[str, Any]:
@@ -371,7 +371,7 @@ class TwitchXApi:
             "youtube_client_secret": yt_conf.get("client_secret", ""),
             "youtube_display_name": yt_conf.get("user_display_name", ""),
             "youtube_user_login": yt_conf.get("user_login", ""),
-            "youtube_quota_remaining": self._youtube._quota.remaining(),
+            "youtube_quota_remaining": self._youtube.quota_remaining(),
         }
 
     def save_settings(self, data: str) -> None:
@@ -1275,6 +1275,9 @@ class TwitchXApi:
         retry_delays = [5, 15, 30]
         max_attempts = len(retry_delays) + 1
 
+        # Track whether this call still holds _fetch_lock so the finally
+        # block doesn't try to release a lock we yielded during retry sleep.
+        lock_held = True
         try:
             for attempt in range(1, max_attempts + 1):
                 if self._shutdown.is_set():
@@ -1313,7 +1316,17 @@ class TwitchXApi:
                             self._eval_js(
                                 f"window.onStatusUpdate({{text: 'Reconnecting... (attempt {att}/{max_attempts})', type: 'warn'}})"
                             )
+                            # Release the lock during the backoff sleep so that
+                            # a manual refresh (or the polling timer) can proceed
+                            # immediately rather than blocking for up to 30 s.
+                            lock_held = False
+                            self._fetch_lock.release()
                             time.sleep(delay)
+                            # Re-acquire after sleep; if another fetch already
+                            # started while we slept, defer to it and bail out.
+                            if not self._fetch_lock.acquire(blocking=False):
+                                return
+                            lock_held = True
                         else:
                             self._eval_js(
                                 "window.onStatusUpdate({text: 'No internet connection', type: 'error'})"
@@ -1345,7 +1358,8 @@ class TwitchXApi:
                 finally:
                     self._close_thread_loop(loop)
         finally:
-            self._fetch_lock.release()
+            if lock_held:
+                self._fetch_lock.release()
 
     async def _async_fetch(
         self,
@@ -1472,18 +1486,42 @@ class TwitchXApi:
         }
         live_logins = twitch_live_logins | kick_live_slugs | youtube_live_ids
 
-        # Notifications
+        # Notifications — unified map across all platforms
         if self._first_fetch_done:
             newly_live = live_logins - self._prev_live_logins
             if newly_live:
-                stream_map = {s["user_login"].lower(): s for s in twitch_streams}
+                unified_map: dict[str, dict] = {}
+                for s in twitch_streams:
+                    unified_map[s["user_login"].lower()] = {
+                        "name": s.get("user_name", s["user_login"]),
+                        "title": s.get("title", ""),
+                        "game": s.get("game_name", ""),
+                    }
+                for s in kick_streams:
+                    slug = (
+                        s.get("slug", "") or s.get("channel", {}).get("slug", "")
+                    ).lower()
+                    if slug:
+                        unified_map[slug] = {
+                            "name": s.get("channel", {}).get("username") or slug,
+                            "title": s.get("stream_title") or s.get("session_title") or s.get("title", ""),
+                            "game": s.get("category", {}).get("name", "") if isinstance(s.get("category"), dict) else "",
+                        }
+                for s in youtube_streams:
+                    cid = s.get("login", "")
+                    if cid:
+                        unified_map[cid] = {
+                            "name": s.get("display_name", cid),
+                            "title": s.get("title", ""),
+                            "game": s.get("game", ""),
+                        }
                 for login in newly_live:
-                    s = stream_map.get(login)
-                    if s:
+                    info = unified_map.get(login)
+                    if info:
                         self._send_notification(
-                            s.get("user_name", login),
-                            s.get("title", ""),
-                            s.get("game_name", ""),
+                            info["name"],
+                            info["title"],
+                            info["game"],
                         )
         self._prev_live_logins = set(live_logins)
         self._first_fetch_done = True
@@ -1580,9 +1618,14 @@ class TwitchXApi:
     # ── Notifications ────────────────────────────────────────────
 
     def _send_notification(self, name: str, title: str, game: str) -> None:
-        safe_name = name.replace('"', '\\"')
-        safe_title = title.replace('"', '\\"')[:80]
-        safe_game = game.replace('"', '\\"')
+        # Escape backslash first, then double-quote, so that existing backslashes
+        # in streamer/game names don't produce broken AppleScript string literals.
+        def _esc(s: str) -> str:
+            return s.replace("\\", "\\\\").replace('"', '\\"')
+
+        safe_name = _esc(name)
+        safe_title = _esc(title[:80])
+        safe_game = _esc(game)
 
         script = (
             f'display notification "{safe_name} is now live: {safe_title}" '
@@ -1917,7 +1960,12 @@ class TwitchXApi:
                 self._fetching_avatars.discard(login_lower)
 
         # P4: bounded image thread pool instead of a new OS thread per call
-        self._image_pool.submit(do_fetch)
+        try:
+            self._image_pool.submit(do_fetch)
+        except RuntimeError:
+            # Pool is shut down (app closing); clean up the sentinel so the
+            # entry doesn't stick around permanently.
+            self._fetching_avatars.discard(login_lower)
 
     def get_thumbnail(self, login: str, url: str) -> None:
         # P1: skip if already in-flight
@@ -1945,7 +1993,10 @@ class TwitchXApi:
                 self._fetching_thumbnails.discard(login)
 
         # P4: bounded image thread pool
-        self._image_pool.submit(do_fetch)
+        try:
+            self._image_pool.submit(do_fetch)
+        except RuntimeError:
+            self._fetching_thumbnails.discard(login)
 
     # ── Chat ──────────────────────────────────────────────────
 

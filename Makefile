@@ -20,5 +20,5 @@ check: lint test
 
 push:
 	git add .
-	git commit -m "update $$(date '+%Y-%m-%d %H:%M')"
+	git commit -m "update $$(date '+%Y-%m-%d %H:%M')" || true
 	git push

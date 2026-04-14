@@ -3,50 +3,53 @@ from __future__ import annotations
 import subprocess
 from unittest.mock import MagicMock, patch
 
-from core.launcher import _get_stream_url, launch_stream
+from core.launcher import launch_stream
+from core.stream_resolver import _run_streamlink
 
 
-class TestGetStreamUrl:
-    @patch("core.launcher.subprocess.run")
+class TestRunStreamlink:
+    """Tests for the shared _run_streamlink helper in stream_resolver."""
+
+    @patch("core.stream_resolver.subprocess.run")
     def test_success(self, mock_run: MagicMock) -> None:
         mock_run.return_value = MagicMock(
             returncode=0,
             stdout=b"https://example.com/stream.m3u8\n",
         )
-        url, err = _get_stream_url(
+        url, err = _run_streamlink(
             "/usr/bin/streamlink", "https://twitch.tv/xqc", "best"
         )
         assert url == "https://example.com/stream.m3u8"
         assert err == ""
 
-    @patch("core.launcher.subprocess.run")
+    @patch("core.stream_resolver.subprocess.run")
     def test_nonzero(self, mock_run: MagicMock) -> None:
         mock_run.return_value = MagicMock(
             returncode=1,
             stderr=b"error: No streams found",
         )
-        url, err = _get_stream_url(
+        url, err = _run_streamlink(
             "/usr/bin/streamlink", "https://twitch.tv/xqc", "best"
         )
         assert url is None
         assert "No streams found" in err
 
-    @patch("core.launcher.subprocess.run")
+    @patch("core.stream_resolver.subprocess.run")
     def test_timeout(self, mock_run: MagicMock) -> None:
         mock_run.side_effect = subprocess.TimeoutExpired(cmd="streamlink", timeout=15)
-        url, err = _get_stream_url(
+        url, err = _run_streamlink(
             "/usr/bin/streamlink", "https://twitch.tv/xqc", "best"
         )
         assert url is None
         assert "timed out" in err.lower()
 
-    @patch("core.launcher.subprocess.run")
+    @patch("core.stream_resolver.subprocess.run")
     def test_empty_output(self, mock_run: MagicMock) -> None:
         mock_run.return_value = MagicMock(
             returncode=0,
             stdout=b"",
         )
-        url, err = _get_stream_url(
+        url, err = _run_streamlink(
             "/usr/bin/streamlink", "https://twitch.tv/xqc", "best"
         )
         assert url is None
@@ -56,24 +59,20 @@ class TestGetStreamUrl:
 class TestLaunchStream:
     @patch("core.launcher.check_iina", return_value=None)
     @patch("core.launcher.check_streamlink", return_value=None)
-    @patch("core.launcher.shutil.which", return_value="/usr/bin/streamlink")
-    @patch("core.launcher._get_stream_url")
+    @patch("core.launcher.resolve_hls_url")
     @patch("core.launcher.subprocess.Popen")
     def test_quality_fallback(
         self,
         mock_popen: MagicMock,
-        mock_get_url: MagicMock,
-        mock_which: MagicMock,
+        mock_resolve: MagicMock,
         mock_check_sl: MagicMock,
         mock_check_iina: MagicMock,
     ) -> None:
-        mock_get_url.side_effect = [
-            (None, "quality not available"),
-            ("https://example.com/best.m3u8", ""),
-        ]
+        # resolve_hls_url already handles fallback internally; simulate success
+        mock_resolve.return_value = ("https://example.com/best.m3u8", "")
         result = launch_stream("xqc", "720p60")
         assert result.success is True
-        assert mock_get_url.call_count == 2
+        mock_resolve.assert_called_once_with("xqc", "720p60", "streamlink", platform="twitch")
 
     @patch("core.launcher.check_iina", return_value=None)
     @patch("core.launcher.check_streamlink", return_value="streamlink not found")

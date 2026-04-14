@@ -170,6 +170,10 @@ class YouTubeClient:
     def reset_client(self) -> None:
         """Compatibility no-op — clients are per-event-loop."""
 
+    def quota_remaining(self) -> int:
+        """Return the number of remaining YouTube Data API quota units for today."""
+        return self._quota.remaining()
+
     def _reload_config(self) -> None:
         self._config = load_config()
 
