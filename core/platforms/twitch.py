@@ -303,3 +303,62 @@ class TwitchClient:
         params = [("query", query), ("live_only", "false"), ("first", "8")]
         data = await self._get("/search/channels", params=params)
         return data.get("data", [])
+
+    async def get_categories(
+        self, query: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Return top games from Helix, normalized to cross-platform format.
+
+        With query: searches /games by name. Without: fetches /games/top?first=50.
+        """
+        if query:
+            params: Any = {"name": query.strip()}
+            data = await self._get("/games", params)
+        else:
+            params = {"first": "50"}
+            data = await self._get("/games/top", params)
+        return [
+            {
+                "platform": "twitch",
+                "category_id": g["id"],
+                "name": g["name"],
+                "box_art_url": g["box_art_url"]
+                    .replace("{width}", "285")
+                    .replace("{height}", "380"),
+                "viewers": 0,
+            }
+            for g in data.get("data", [])
+        ]
+
+    async def get_top_streams(
+        self,
+        category_id: str | None = None,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """Return top live Twitch streams, optionally filtered by game_id.
+
+        Normalized to the cross-platform stream dict format.
+        avatar_url is always empty — Helix /streams omits profile images.
+        """
+        params: Any = [("first", str(min(limit, 100)))]
+        if category_id:
+            params.append(("game_id", category_id))
+        data = await self._get("/streams", params)
+        return [
+            {
+                "platform": "twitch",
+                "channel_id": s["user_id"],
+                "channel_login": s["user_login"],
+                "display_name": s["user_name"],
+                "title": s["title"],
+                "category": s["game_name"],
+                "category_id": s["game_id"],
+                "viewers": s["viewer_count"],
+                "started_at": s["started_at"],
+                "thumbnail_url": s["thumbnail_url"]
+                    .replace("{width}", "440")
+                    .replace("{height}", "248"),
+                "avatar_url": "",
+            }
+            for s in data.get("data", [])
+        ]
