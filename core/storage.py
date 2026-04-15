@@ -272,3 +272,31 @@ def save_avatar(login: str, data: bytes, platform: str = "twitch") -> None:
     platform_dir = AVATAR_DIR / platform
     platform_dir.mkdir(parents=True, exist_ok=True)
     (platform_dir / f"{login}.png").write_bytes(data)
+
+
+# ── Browse cache ──────────────────────────────────────────────
+
+BROWSE_CACHE_TTL = 600  # 10 minutes
+
+
+def load_browse_cache() -> dict[str, Any]:
+    """Load browse cache from disk. Returns {} on cache miss or parse error."""
+    try:
+        path = CONFIG_DIR / "cache" / "browse_cache.json"
+        return json.loads(path.read_text()) if path.exists() else {}
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_browse_cache(data: dict[str, Any]) -> None:
+    """Persist browse cache to disk, creating directories as needed."""
+    path = CONFIG_DIR / "cache" / "browse_cache.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data))
+
+
+def is_browse_slot_fresh(
+    cache: dict[str, Any], slot_key: str, ttl: int = BROWSE_CACHE_TTL
+) -> bool:
+    """Return True if the named cache slot exists and is within ttl seconds old."""
+    return time.time() - cache.get(slot_key, {}).get("fetched_at", 0) < ttl
