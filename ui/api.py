@@ -63,6 +63,7 @@ class TwitchXApi:
         self._fetch_lock = threading.Lock()
         self._poll_lock = threading.Lock()
         self._polling_timer: threading.Timer | None = None
+        self._poll_generation = 0
         self._live_streams: list[dict[str, Any]] = []
         self._games: dict[str, str] = {}
         self._prev_live_logins: set[str] = set()
@@ -1650,30 +1651,36 @@ class TwitchXApi:
         self.start_polling(interval)
 
     def start_polling(self, interval_seconds: int = 60) -> None:
-        def tick() -> None:
-            if not self._shutdown.is_set():
-                self.refresh()
-                if self._last_successful_fetch > 0:
-                    stale = (
-                        time.time() - self._last_successful_fetch > 2 * interval_seconds
-                    )
-                    if stale:
-                        self._eval_js(
-                            "window.onStatusUpdate({text: 'Data may be stale', type: 'warn', stale: true})"
-                        )
-                with self._poll_lock:
-                    if not self._shutdown.is_set():
-                        self._polling_timer = threading.Timer(interval_seconds, tick)
-                        self._polling_timer.daemon = True
-                        self._polling_timer.start()
-
         with self._poll_lock:
+            self._poll_generation += 1
+            my_gen = self._poll_generation
             if self._polling_timer:
                 self._polling_timer.cancel()
                 self._polling_timer = None
-            self._polling_timer = threading.Timer(interval_seconds, tick)
-            self._polling_timer.daemon = True
-            self._polling_timer.start()
+
+        def tick() -> None:
+            if self._shutdown.is_set():
+                return
+            self.refresh()
+            if self._last_successful_fetch > 0:
+                stale = (
+                    time.time() - self._last_successful_fetch > 2 * interval_seconds
+                )
+                if stale:
+                    self._eval_js(
+                        "window.onStatusUpdate({text: 'Data may be stale', type: 'warn', stale: true})"
+                    )
+            with self._poll_lock:
+                if not self._shutdown.is_set() and self._poll_generation == my_gen:
+                    self._polling_timer = threading.Timer(interval_seconds, tick)
+                    self._polling_timer.daemon = True
+                    self._polling_timer.start()
+
+        with self._poll_lock:
+            if self._poll_generation == my_gen:
+                self._polling_timer = threading.Timer(interval_seconds, tick)
+                self._polling_timer.daemon = True
+                self._polling_timer.start()
 
         self.refresh()
 
@@ -1882,10 +1889,10 @@ class TwitchXApi:
 
     def _start_launch_timer(self) -> None:
         self._cancel_launch_timer()
-        self._launch_elapsed += 3
 
         def tick() -> None:
             if not self._shutdown.is_set() and self._launch_channel:
+                self._launch_elapsed += 3
                 ch = self._launch_channel
                 elapsed = self._launch_elapsed
                 safe_ch = json.dumps(ch)
@@ -1914,17 +1921,18 @@ class TwitchXApi:
 
     # ── Avatars + Thumbnails ────────────────────────────────────
 
-    def get_avatar(self, login: str) -> None:
+    def get_avatar(self, login: str, platform: str = "twitch") -> None:
         login_lower = login.lower()
+        dedup_key = f"{platform}:{login_lower}"
         # P1: skip if already in-flight
-        if login_lower in self._fetching_avatars:
+        if dedup_key in self._fetching_avatars:
             return
-        self._fetching_avatars.add(login_lower)
+        self._fetching_avatars.add(dedup_key)
 
         def do_fetch() -> None:
             try:
                 # P2 cache hit: disk stores pre-resized PNG — no Pillow needed
-                cached_bytes = get_cached_avatar(login_lower)
+                cached_bytes = get_cached_avatar(login_lower, platform)
                 if cached_bytes:
                     try:
                         b64 = base64.b64encode(cached_bytes).decode()
@@ -1953,11 +1961,11 @@ class TwitchXApi:
                 result = json.dumps({"login": login_lower, "data": data_url})
                 self._eval_js(f"window.onAvatar({result})")
                 # P2: persist pre-resized bytes so future cache hits skip Pillow
-                save_avatar(login_lower, resized_bytes)
+                save_avatar(login_lower, resized_bytes, platform)
             except Exception:
                 pass
             finally:
-                self._fetching_avatars.discard(login_lower)
+                self._fetching_avatars.discard(dedup_key)
 
         # P4: bounded image thread pool instead of a new OS thread per call
         try:
@@ -1965,7 +1973,7 @@ class TwitchXApi:
         except RuntimeError:
             # Pool is shut down (app closing); clean up the sentinel so the
             # entry doesn't stick around permanently.
-            self._fetching_avatars.discard(login_lower)
+            self._fetching_avatars.discard(dedup_key)
 
     def get_thumbnail(self, login: str, url: str) -> None:
         # P1: skip if already in-flight
@@ -2009,20 +2017,23 @@ class TwitchXApi:
             token = twitch_conf.get("access_token") or None
             login = twitch_conf.get("user_login") or None
 
-            self._chat_client = TwitchChatClient()
-            self._chat_client.on_message(self._on_chat_message)
-            self._chat_client.on_status(self._on_chat_status)
+            twitch_client = TwitchChatClient()
+            twitch_client.on_message(self._on_chat_message)
+            twitch_client.on_status(self._on_chat_status)
+            self._chat_client = twitch_client
 
             def run_chat() -> None:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
+                twitch_client._loop = loop
                 try:
                     loop.run_until_complete(
-                        self._chat_client.connect(channel, token=token, login=login)  # type: ignore[union-attr]
+                        twitch_client.connect(channel, token=token, login=login)
                     )
                 except Exception:
                     pass
                 finally:
+                    twitch_client._loop = None
                     loop.close()
 
             self._chat_thread = threading.Thread(target=run_chat, daemon=True)
@@ -2033,17 +2044,16 @@ class TwitchXApi:
             token = kick_conf.get("access_token") or None
             scopes = self._parse_scopes(kick_conf.get("oauth_scopes", ""))
 
-            self._chat_client = KickChatClient()
-            self._chat_client.on_message(self._on_chat_message)
-            self._chat_client.on_status(self._on_chat_status)
-            kick_chat_client = self._chat_client
+            kick_chat_client = KickChatClient()
+            kick_chat_client.on_message(self._on_chat_message)
+            kick_chat_client.on_status(self._on_chat_status)
+            self._chat_client = kick_chat_client
 
             def run_kick_chat() -> None:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
+                kick_chat_client._loop = loop
                 try:
-                    if not isinstance(kick_chat_client, KickChatClient):
-                        return
                     kick_client = self._platforms.get("kick")
                     if not kick_client:
                         return
@@ -2077,14 +2087,16 @@ class TwitchXApi:
                     can_send = bool(
                         token and broadcaster_user_id and "chat:write" in scopes
                     )
+                    try:
+                        bid = int(broadcaster_user_id) if broadcaster_user_id else None
+                    except (ValueError, TypeError):
+                        bid = None
                     loop.run_until_complete(
                         kick_chat_client.connect(
                             channel,
                             token=token,
                             chatroom_id=chatroom_id,
-                            broadcaster_user_id=int(broadcaster_user_id)
-                            if broadcaster_user_id
-                            else None,
+                            broadcaster_user_id=bid,
                             can_send=can_send,
                         )
                     )
@@ -2098,6 +2110,7 @@ class TwitchXApi:
                         )
                     )
                 finally:
+                    kick_chat_client._loop = None
                     loop.close()
 
             self._chat_thread = threading.Thread(target=run_kick_chat, daemon=True)

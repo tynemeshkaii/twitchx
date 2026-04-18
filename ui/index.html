@@ -1611,7 +1611,8 @@ window.onStreamsUpdate = function(data) {
   // Request avatars for sidebar
   for (const fav of state.favorites) {
     if (!state.avatars[fav]) {
-      api.get_avatar(fav);
+      const platform = state.favoritesMeta[fav]?.platform || 'twitch';
+      api.get_avatar(fav, platform);
     }
   }
 
