@@ -1931,10 +1931,10 @@ class TwitchXApi:
             if platform_filter == "all"
             else [platform_filter]
         )
-        self._config = load_config()
+        config = load_config()
         enabled = [
             p for p in platforms
-            if self._config.get("platforms", {}).get(p, {}).get("enabled", False)
+            if config.get("platforms", {}).get(p, {}).get("enabled", False)
         ]
         cache = load_browse_cache()
         now = time.time()
@@ -2004,8 +2004,8 @@ class TwitchXApi:
         to_fetch: list[str] = []
         for platform in platforms_to_query:
             cat_id = platform_ids[platform]
-            slot = f"top_streams_youtube_{cat_id}"
-            if platform == "youtube" and is_browse_slot_fresh(cache, slot):
+            slot = f"top_streams_{platform}_{cat_id}"
+            if is_browse_slot_fresh(cache, slot):
                 all_streams.extend(cache[slot]["data"])
             else:
                 to_fetch.append(platform)
@@ -2021,9 +2021,8 @@ class TwitchXApi:
                             client.get_top_streams(category_id=cat_id, limit=20)
                         )
                         all_streams.extend(streams)
-                        if platform == "youtube":
-                            slot = f"top_streams_youtube_{cat_id}"
-                            cache[slot] = {"data": streams, "fetched_at": now}
+                        slot = f"top_streams_{platform}_{cat_id}"
+                        cache[slot] = {"data": streams, "fetched_at": now}
                     except Exception as e:
                         logger.warning("browse top streams failed for %s: %s", platform, e)
             finally:
@@ -2080,6 +2079,7 @@ class TwitchXApi:
                 {"url": hls_url, "channel": channel, "title": "", "platform": platform}
             )
             self._eval_js(f"window.onStreamReady({stream_data})")
+            self.start_chat(channel, platform)
             r = json.dumps(
                 {"success": True, "message": f"Playing {channel}", "channel": channel}
             )
