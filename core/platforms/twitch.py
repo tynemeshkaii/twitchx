@@ -362,3 +362,32 @@ class TwitchClient:
             }
             for s in data.get("data", [])
         ]
+
+    async def get_channel_info(self, login: str) -> dict[str, Any]:
+        """Return normalized channel profile dict. Costs 2 API calls (/users + /streams).
+
+        followers is always -1 — /channels/followers requires broadcaster-level auth.
+        """
+        login = login.strip().lower()
+        if not login:
+            return {}
+        users_data, streams_data = await asyncio.gather(
+            self._get("/users", [("login", login)]),
+            self._get("/streams", [("user_login", login)]),
+        )
+        users = users_data.get("data", [])
+        if not users:
+            return {}
+        u = users[0]
+        is_live = bool(streams_data.get("data", []))
+        return {
+            "platform": "twitch",
+            "channel_id": u.get("id", ""),
+            "login": u.get("login", login),
+            "display_name": u.get("display_name", ""),
+            "bio": u.get("description", ""),
+            "avatar_url": u.get("profile_image_url", ""),
+            "followers": -1,
+            "is_live": is_live,
+            "can_follow_via_api": False,
+        }

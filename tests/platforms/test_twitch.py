@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from typing import Any
 
 import httpx
 import pytest
@@ -120,3 +121,80 @@ class TestLoopLocalHttpClient:
         # Keep strong references to both clients before comparing identity so
         # CPython cannot reuse the first client's memory address for the second.
         assert http_clients[0] is not http_clients[1]
+
+
+class TestGetChannelInfo:
+    def test_returns_normalized_profile_for_live_user(self) -> None:
+        client = TwitchClient()
+
+        async def fake_get(endpoint: str, params: Any = None) -> Any:
+            if endpoint == "/users":
+                return {
+                    "data": [{
+                        "id": "44322889",
+                        "login": "xqc",
+                        "display_name": "xQc",
+                        "profile_image_url": "https://img.jpg",
+                        "description": "lulw",
+                    }]
+                }
+            return {"data": [{"user_login": "xqc"}]}  # /streams
+
+        loop = asyncio.new_event_loop()
+        client._get = fake_get  # type: ignore[method-assign]
+        result = loop.run_until_complete(client.get_channel_info("xQc"))
+        loop.close()
+
+        assert result["platform"] == "twitch"
+        assert result["login"] == "xqc"
+        assert result["display_name"] == "xQc"
+        assert result["bio"] == "lulw"
+        assert result["avatar_url"] == "https://img.jpg"
+        assert result["is_live"] is True
+        assert result["followers"] == -1
+        assert result["can_follow_via_api"] is False
+
+    def test_returns_empty_dict_for_unknown_user(self) -> None:
+        client = TwitchClient()
+
+        async def fake_get(endpoint: str, params: Any = None) -> Any:
+            return {"data": []}
+
+        loop = asyncio.new_event_loop()
+        client._get = fake_get  # type: ignore[method-assign]
+        result = loop.run_until_complete(client.get_channel_info("nobody"))
+        loop.close()
+
+        assert result == {}
+
+    def test_empty_login_returns_empty_dict_without_http(self) -> None:
+        client = TwitchClient()
+        loop = asyncio.new_event_loop()
+        result = loop.run_until_complete(client.get_channel_info(""))
+        loop.run_until_complete(client.close_loop_resources())
+        loop.close()
+
+        assert result == {}
+
+    def test_offline_user_sets_is_live_false(self) -> None:
+        client = TwitchClient()
+
+        async def fake_get(endpoint: str, params: Any = None) -> Any:
+            if endpoint == "/users":
+                return {
+                    "data": [{
+                        "id": "999",
+                        "login": "streamerfoo",
+                        "display_name": "StreamerFoo",
+                        "profile_image_url": "",
+                        "description": "",
+                    }]
+                }
+            return {"data": []}  # /streams — not live
+
+        loop = asyncio.new_event_loop()
+        client._get = fake_get  # type: ignore[method-assign]
+        result = loop.run_until_complete(client.get_channel_info("streamerfoo"))
+        loop.close()
+
+        assert result["is_live"] is False
