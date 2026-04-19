@@ -973,6 +973,166 @@ body {
 }
 .settings-panel { display: none; }
 .settings-panel.active { display: block; }
+
+/* ── Browse view ────────────────────────────────────────── */
+#browse-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-base);
+}
+#browse-view.hidden { display: none; }
+
+#browse-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+#browse-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+}
+.browse-back-btn {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.12);
+  color: var(--text-secondary);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 12px;
+}
+.browse-back-btn:hover { background: var(--bg-elevated); color: var(--text-primary); }
+.browse-back-btn.hidden { display: none; }
+
+#browse-platform-tabs { display: flex; gap: 4px; }
+.browse-platform-tab {
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+}
+.browse-platform-tab.active { background: var(--accent); color: #fff; }
+.browse-platform-tab:hover:not(.active) {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+#browse-body { flex: 1; overflow-y: auto; padding: 14px; }
+
+.browse-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+.browse-grid.hidden { display: none; }
+.browse-streams-grid {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.browse-category-card {
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.04);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.browse-category-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+}
+.browse-category-art {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  display: block;
+  background: var(--bg-surface);
+}
+.browse-category-info { padding: 7px 8px 8px; }
+.browse-category-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.browse-category-platforms { display: flex; gap: 3px; margin-top: 4px; }
+
+.browse-stream-card {
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.04);
+  transition: transform 0.12s ease;
+}
+.browse-stream-card:hover { transform: translateY(-2px); }
+.browse-stream-thumb {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  display: block;
+  background: var(--bg-surface);
+}
+.browse-stream-info { padding: 7px 8px 8px; }
+.browse-stream-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.browse-stream-title {
+  font-size: 11px;
+  color: var(--text-secondary);
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+.browse-stream-viewers {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  display: block;
+}
+
+.browse-loading, .browse-empty {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 40px;
+  font-size: 13px;
+}
+.browse-loading.hidden, .browse-empty.hidden { display: none; }
+
+#browse-nav-btn {
+  display: block;
+  width: 100%;
+  padding: 7px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+#browse-nav-btn:hover { background: var(--bg-overlay); color: var(--text-primary); }
+#browse-nav-wrapper { padding: 0 8px 6px; }
 </style>
 </head>
 <body>
@@ -1026,6 +1186,9 @@ body {
           <button id="add-btn">+</button>
         </div>
       </div>
+      <div id="browse-nav-wrapper">
+        <button id="browse-nav-btn" onclick="showBrowseView()">Browse</button>
+      </div>
     </aside>
 
     <!-- Content -->
@@ -1043,6 +1206,24 @@ body {
         <div class="empty-icon"></div>
         <div class="empty-title"></div>
         <div class="empty-subtitle"></div>
+      </div>
+      <div id="browse-view" class="hidden">
+        <div id="browse-header">
+          <button id="browse-back-btn" class="browse-back-btn hidden" onclick="browseGoBack()">&#8592; Back</button>
+          <span id="browse-title">Browse</span>
+          <div id="browse-platform-tabs">
+            <button class="browse-platform-tab active" data-platform="all" onclick="setBrowsePlatform(this,'all')">All</button>
+            <button class="browse-platform-tab" data-platform="twitch" onclick="setBrowsePlatform(this,'twitch')">Twitch</button>
+            <button class="browse-platform-tab" data-platform="kick" onclick="setBrowsePlatform(this,'kick')">Kick</button>
+            <button class="browse-platform-tab" data-platform="youtube" onclick="setBrowsePlatform(this,'youtube')">YouTube</button>
+          </div>
+        </div>
+        <div id="browse-body">
+          <div id="browse-categories-grid" class="browse-grid"></div>
+          <div id="browse-streams-grid" class="browse-grid browse-streams-grid hidden"></div>
+          <div id="browse-loading" class="browse-loading hidden">Loading...</div>
+          <div id="browse-empty" class="browse-empty hidden">No results found.</div>
+        </div>
       </div>
       <!-- Player view (replaces grid when a stream is playing) -->
       <div id="player-view">
