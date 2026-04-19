@@ -645,25 +645,29 @@ class YouTubeClient:
         if category_id:
             params["videoCategoryId"] = category_id
         data = await self._yt_get("search", params)
-        return [
-            {
-                "platform": "youtube",
-                "channel_id": item["snippet"]["channelId"],
-                "channel_login": item["snippet"]["channelId"],
-                "display_name": item["snippet"]["channelTitle"],
-                "title": item["snippet"]["title"],
-                "category": "",
-                "category_id": category_id or "",
-                "viewers": 0,
-                "started_at": item["snippet"].get("publishedAt", ""),
-                "thumbnail_url": item["snippet"]
-                    .get("thumbnails", {})
-                    .get("medium", {})
-                    .get("url", ""),
-                "avatar_url": "",
-            }
-            for item in data.get("items", [])
-        ]
+        results: list[dict[str, Any]] = []
+        for item in data.get("items", []):
+            snippet = item.get("snippet")
+            if not snippet:
+                continue
+            results.append(
+                {
+                    "platform": "youtube",
+                    "channel_id": snippet.get("channelId", ""),
+                    "channel_login": snippet.get("channelId", ""),
+                    "display_name": snippet.get("channelTitle", ""),
+                    "title": snippet.get("title", ""),
+                    "category": "",
+                    "category_id": category_id or "",
+                    "viewers": 0,
+                    "started_at": snippet.get("publishedAt", ""),
+                    "thumbnail_url": snippet.get("thumbnails", {})
+                        .get("medium", {})
+                        .get("url", ""),
+                    "avatar_url": "",
+                }
+            )
+        return results
 
     # ── Playback ─────────────────────────────────────────────
 

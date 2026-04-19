@@ -98,3 +98,29 @@ def test_get_top_streams_normalizes_format() -> None:
     assert s["display_name"] == "SomeChannel"
     assert s["viewers"] == 0
     assert s["category_id"] == "20"
+    assert s["title"] == "Live stream title"
+    assert s["thumbnail_url"] == "https://img.youtube.com/vi/abc/mqdefault.jpg"
+    assert s["channel_login"] == "UCxyz"
+
+
+def test_get_top_streams_skips_items_without_snippet() -> None:
+    client = YouTubeClient()
+    mock_items = [
+        {"id": "vid1"},  # no snippet key
+        {
+            "snippet": {
+                "channelId": "UCabc",
+                "channelTitle": "Chan",
+                "title": "Live",
+                "thumbnails": {},
+            }
+        },
+    ]
+    with (
+        patch.object(client, "_ensure_token", return_value="tok"),
+        patch.object(client._quota, "check_and_use", return_value=True),
+        patch.object(client, "_yt_get", return_value={"items": mock_items}),
+    ):
+        result = _run(client.get_top_streams())
+    assert len(result) == 1
+    assert result[0]["channel_id"] == "UCabc"
