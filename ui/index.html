@@ -2286,6 +2286,7 @@ function loadBrowseCategories() {
 }
 
 function _triggerBrowseTopStreams(category) {
+  if (!category || !category.name) return;
   state.browseMode = 'streams';
   state.browseCategory = category;
   document.getElementById('browse-title').textContent = category.name;
@@ -2535,6 +2536,11 @@ window.onBrowseCategories = function(categories) {
 
 window.onBrowseTopStreams = function(payload) {
   document.getElementById('browse-loading').classList.add('hidden');
+  // Discard if browse view is closed or user navigated away
+  var browseView = document.getElementById('browse-view');
+  if (!browseView || browseView.classList.contains('hidden')) return;
+  if (state.browseMode !== 'streams') return;
+  if (!payload || !payload.category || payload.category !== (state.browseCategory && state.browseCategory.name)) return;
   var grid = document.getElementById('browse-streams-grid');
   grid.replaceChildren();
   if (!payload || !payload.streams || !payload.streams.length) {
@@ -2614,6 +2620,9 @@ function getFilteredSortedStreams() {
 function renderGrid() {
   // Skip rendering when player view is active — grid is hidden
   if (document.getElementById('player-view').classList.contains('active')) return;
+  // Skip rendering when browse view is open — avoids restoring grid inline style
+  if (document.getElementById('browse-view') &&
+      !document.getElementById('browse-view').classList.contains('hidden')) return;
 
   var grid = document.getElementById('stream-grid');
   var empty = document.getElementById('empty-state');
