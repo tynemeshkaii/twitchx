@@ -973,6 +973,168 @@ body {
 }
 .settings-panel { display: none; }
 .settings-panel.active { display: block; }
+
+/* ── Browse view ────────────────────────────────────────── */
+#browse-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-base);
+}
+#browse-view.hidden { display: none; }
+
+#browse-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+#browse-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+}
+.browse-back-btn {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.12);
+  color: var(--text-secondary);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 12px;
+}
+.browse-back-btn:hover { background: var(--bg-elevated); color: var(--text-primary); }
+.browse-back-btn.hidden { display: none; }
+
+#browse-platform-tabs { display: flex; gap: 4px; }
+.browse-platform-tab {
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+}
+.browse-platform-tab.active { background: var(--accent); color: #fff; }
+.browse-platform-tab:hover:not(.active) {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+#browse-body { flex: 1; overflow-y: auto; padding: 14px; }
+
+.browse-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+.browse-grid.hidden { display: none; }
+.browse-streams-grid {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.browse-category-card {
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.04);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.browse-category-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+}
+.browse-category-art {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  display: block;
+  background: var(--bg-surface);
+}
+.browse-category-info { padding: 7px 8px 8px; }
+.browse-category-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.browse-category-platforms { display: flex; gap: 3px; margin-top: 4px; }
+
+.browse-stream-card {
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.04);
+  transition: transform 0.12s ease;
+}
+.browse-stream-card:hover { transform: translateY(-2px); }
+.browse-stream-thumb {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  display: block;
+  background: var(--bg-surface);
+}
+.browse-stream-info { padding: 7px 8px 8px; }
+.browse-stream-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.browse-stream-title {
+  font-size: 11px;
+  color: var(--text-secondary);
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+.browse-stream-viewers {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  display: block;
+}
+
+.browse-loading, .browse-empty {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 40px;
+  font-size: 13px;
+}
+.browse-loading.hidden, .browse-empty.hidden { display: none; }
+
+#browse-nav-btn {
+  display: block;
+  width: 100%;
+  padding: 7px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+#browse-nav-btn:hover { background: var(--bg-overlay); color: var(--text-primary); }
+#browse-nav-wrapper { padding: 0 8px 6px; }
+#toolbar.hidden { display: none; }
+#stream-grid.hidden { display: none; }
 </style>
 </head>
 <body>
@@ -1026,6 +1188,9 @@ body {
           <button id="add-btn">+</button>
         </div>
       </div>
+      <div id="browse-nav-wrapper">
+        <button id="browse-nav-btn" onclick="showBrowseView()">Browse</button>
+      </div>
     </aside>
 
     <!-- Content -->
@@ -1043,6 +1208,24 @@ body {
         <div class="empty-icon"></div>
         <div class="empty-title"></div>
         <div class="empty-subtitle"></div>
+      </div>
+      <div id="browse-view" class="hidden">
+        <div id="browse-header">
+          <button id="browse-back-btn" class="browse-back-btn hidden" onclick="browseGoBack()">&#8592; Back</button>
+          <span id="browse-title">Browse</span>
+          <div id="browse-platform-tabs">
+            <button class="browse-platform-tab active" data-platform="all" onclick="setBrowsePlatform(this,'all')">All</button>
+            <button class="browse-platform-tab" data-platform="twitch" onclick="setBrowsePlatform(this,'twitch')">Twitch</button>
+            <button class="browse-platform-tab" data-platform="kick" onclick="setBrowsePlatform(this,'kick')">Kick</button>
+            <button class="browse-platform-tab" data-platform="youtube" onclick="setBrowsePlatform(this,'youtube')">YouTube</button>
+          </div>
+        </div>
+        <div id="browse-body">
+          <div id="browse-categories-grid" class="browse-grid"></div>
+          <div id="browse-streams-grid" class="browse-grid browse-streams-grid hidden"></div>
+          <div id="browse-loading" class="browse-loading hidden">Loading...</div>
+          <div id="browse-empty" class="browse-empty hidden">No results found.</div>
+        </div>
       </div>
       <!-- Player view (replaces grid when a stream is playing) -->
       <div id="player-view">
@@ -1273,6 +1456,9 @@ const state = {
   sidebarSections: loadSidebarSections(),
   favoritesMeta: {},
   activePlatformFilter: 'all',
+  browseMode: 'categories',
+  browseCategory: null,
+  browsePlatformFilter: 'all',
 };
 
 let api = null;
@@ -2043,6 +2229,83 @@ function hidePlayerView() {
   renderSidebar();
 }
 
+function showBrowseView() {
+  document.getElementById('toolbar').classList.add('hidden');
+  document.getElementById('stream-grid').classList.add('hidden');
+  document.getElementById('browse-view').classList.remove('hidden');
+  state.browseMode = 'categories';
+  state.browseCategory = null;
+  state.browsePlatformFilter = 'all';
+  document.querySelectorAll('.browse-platform-tab').forEach(function(t) {
+    t.classList.toggle('active', t.dataset.platform === 'all');
+  });
+  document.getElementById('browse-back-btn').classList.add('hidden');
+  document.getElementById('browse-title').textContent = 'Browse';
+  document.getElementById('browse-categories-grid').classList.remove('hidden');
+  document.getElementById('browse-streams-grid').classList.add('hidden');
+  loadBrowseCategories();
+}
+
+function hideBrowseView() {
+  document.getElementById('browse-view').classList.add('hidden');
+  document.getElementById('toolbar').classList.remove('hidden');
+  document.getElementById('stream-grid').classList.remove('hidden');
+}
+
+function browseGoBack() {
+  if (state.browseMode === 'streams') {
+    state.browseMode = 'categories';
+    state.browseCategory = null;
+    document.getElementById('browse-back-btn').classList.add('hidden');
+    document.getElementById('browse-title').textContent = 'Browse';
+    document.getElementById('browse-categories-grid').classList.remove('hidden');
+    document.getElementById('browse-streams-grid').classList.add('hidden');
+    document.getElementById('browse-empty').classList.add('hidden');
+  } else {
+    hideBrowseView();
+  }
+}
+
+function setBrowsePlatform(btn, platform) {
+  document.querySelectorAll('.browse-platform-tab').forEach(function(t) {
+    t.classList.remove('active');
+  });
+  btn.classList.add('active');
+  state.browsePlatformFilter = platform;
+  if (state.browseMode === 'categories') {
+    loadBrowseCategories();
+  } else if (state.browseCategory) {
+    _triggerBrowseTopStreams(state.browseCategory);
+  }
+}
+
+function loadBrowseCategories() {
+  document.getElementById('browse-categories-grid').replaceChildren();
+  document.getElementById('browse-loading').classList.remove('hidden');
+  document.getElementById('browse-empty').classList.add('hidden');
+  if (api) api.get_browse_categories(state.browsePlatformFilter);
+}
+
+function _triggerBrowseTopStreams(category) {
+  if (!category || !category.name) return;
+  state.browseMode = 'streams';
+  state.browseCategory = category;
+  document.getElementById('browse-title').textContent = category.name;
+  document.getElementById('browse-back-btn').classList.remove('hidden');
+  document.getElementById('browse-categories-grid').classList.add('hidden');
+  document.getElementById('browse-streams-grid').replaceChildren();
+  document.getElementById('browse-streams-grid').classList.remove('hidden');
+  document.getElementById('browse-loading').classList.remove('hidden');
+  document.getElementById('browse-empty').classList.add('hidden');
+  if (api) {
+    api.get_browse_top_streams(
+      category.name,
+      category.platform_ids,
+      state.browsePlatformFilter
+    );
+  }
+}
+
 function toggleVideoFullscreen() {
   var video = document.getElementById('stream-video');
 
@@ -2229,6 +2492,111 @@ window.onStatusUpdate = function(data) {
   }
 };
 
+window.onBrowseCategories = function(categories) {
+  document.getElementById('browse-loading').classList.add('hidden');
+  var grid = document.getElementById('browse-categories-grid');
+  grid.replaceChildren();
+  if (!categories || !categories.length) {
+    document.getElementById('browse-empty').classList.remove('hidden');
+    return;
+  }
+  categories.forEach(function(cat) {
+    var card = document.createElement('div');
+    card.className = 'browse-category-card';
+    card.onclick = function() { _triggerBrowseTopStreams(cat); };
+
+    var img = document.createElement('img');
+    img.className = 'browse-category-art';
+    img.alt = '';
+    if (cat.box_art_url) img.src = cat.box_art_url;
+    img.onerror = function() { img.style.display = 'none'; };
+
+    var info = document.createElement('div');
+    info.className = 'browse-category-info';
+
+    var nameEl = document.createElement('span');
+    nameEl.className = 'browse-category-name';
+    nameEl.textContent = cat.name;
+
+    var badges = document.createElement('div');
+    badges.className = 'browse-category-platforms';
+    (cat.platforms || []).forEach(function(p) {
+      var badge = document.createElement('span');
+      badge.className = 'platform-badge ' + p;
+      badge.textContent = p.charAt(0).toUpperCase();
+      badges.appendChild(badge);
+    });
+
+    info.appendChild(nameEl);
+    info.appendChild(badges);
+    card.appendChild(img);
+    card.appendChild(info);
+    grid.appendChild(card);
+  });
+};
+
+window.onBrowseTopStreams = function(payload) {
+  document.getElementById('browse-loading').classList.add('hidden');
+  // Discard if browse view is closed or user navigated away
+  var browseView = document.getElementById('browse-view');
+  if (!browseView || browseView.classList.contains('hidden')) return;
+  if (state.browseMode !== 'streams') return;
+  if (!payload || !payload.category || payload.category !== (state.browseCategory && state.browseCategory.name)) return;
+  var grid = document.getElementById('browse-streams-grid');
+  grid.replaceChildren();
+  if (!payload || !payload.streams || !payload.streams.length) {
+    document.getElementById('browse-empty').classList.remove('hidden');
+    return;
+  }
+  payload.streams.forEach(function(stream) {
+    var card = document.createElement('div');
+    card.className = 'browse-stream-card';
+
+    if (stream.platform !== 'youtube') {
+      card.onclick = function() {
+        hideBrowseView();
+        var quality = document.getElementById('quality-select')
+          ? document.getElementById('quality-select').value
+          : 'best';
+        if (api) api.watch_direct(stream.channel_login, stream.platform, quality);
+      };
+    }
+
+    var thumb = document.createElement('img');
+    thumb.className = 'browse-stream-thumb';
+    thumb.alt = '';
+    if (stream.thumbnail_url) thumb.src = stream.thumbnail_url;
+    thumb.onerror = function() { thumb.style.display = 'none'; };
+
+    var info = document.createElement('div');
+    info.className = 'browse-stream-info';
+
+    var badge = document.createElement('span');
+    badge.className = 'platform-badge ' + stream.platform;
+    badge.textContent = stream.platform.charAt(0).toUpperCase();
+
+    var nameEl = document.createElement('span');
+    nameEl.className = 'browse-stream-name';
+    nameEl.textContent = stream.display_name;
+
+    var titleEl = document.createElement('span');
+    titleEl.className = 'browse-stream-title';
+    titleEl.textContent = stream.title;
+
+    var viewersEl = document.createElement('span');
+    viewersEl.className = 'browse-stream-viewers';
+    if (stream.viewers) viewersEl.textContent = formatViewers(stream.viewers);
+
+    info.appendChild(badge);
+    info.appendChild(nameEl);
+    info.appendChild(titleEl);
+    info.appendChild(viewersEl);
+    card.appendChild(thumb);
+    card.appendChild(info);
+    grid.appendChild(card);
+  });
+};
+
 /* ── Rendering ──────────────────────────────────────────── */
 
 function getFilteredSortedStreams() {
@@ -2253,6 +2621,9 @@ function getFilteredSortedStreams() {
 function renderGrid() {
   // Skip rendering when player view is active — grid is hidden
   if (document.getElementById('player-view').classList.contains('active')) return;
+  // Skip rendering when browse view is open — avoids restoring grid inline style
+  if (document.getElementById('browse-view') &&
+      !document.getElementById('browse-view').classList.contains('hidden')) return;
 
   var grid = document.getElementById('stream-grid');
   var empty = document.getElementById('empty-state');

@@ -441,9 +441,62 @@ class KickClient:
         """Kick doesn't support fetching followed channels via API — returns []."""
         return []
 
-    async def get_categories(self, query: str) -> list[dict[str, Any]]:
-        """GET /public/v2/categories."""
+    async def get_categories(self, query: str = "") -> list[dict[str, Any]]:
+        """GET /public/v2/categories, normalized to cross-platform format."""
         query = query.strip()
         params = [("search", query)] if query else None
         data = await self._get(f"{KICK_API_URL}/public/v2/categories", params=params)
-        return data.get("data", data) if isinstance(data, dict) else data
+        items: list[Any] = data.get("data", data) if isinstance(data, dict) else data
+        if not isinstance(items, list):
+            return []
+        return [
+            {
+                "platform": "kick",
+                "category_id": str(item.get("id", "")),
+                "name": item.get("name", ""),
+                "box_art_url": item.get("banner", ""),
+                "viewers": item.get("viewers_count", 0),
+            }
+            for item in items
+            if item.get("name")
+        ]
+
+    async def get_top_streams(
+        self,
+        category_id: str | None = None,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """GET /public/v1/livestreams sorted by viewers (desc).
+
+        Normalized to the cross-platform stream dict format.
+        """
+        params: list[tuple[str, str]] = [
+            ("limit", str(min(limit, 100))),
+            ("sort", "desc"),
+        ]
+        if category_id:
+            params.append(("category_id", category_id))
+        data = await self._get(f"{KICK_API_URL}/public/v1/livestreams", params=params)
+        items: list[Any] = data.get("data", []) if isinstance(data, dict) else []
+        results: list[dict[str, Any]] = []
+        for s in items:
+            channel = s.get("channel", {})
+            user = channel.get("user", {})
+            categories = s.get("categories", [])
+            cat = categories[0] if categories else {}
+            results.append(
+                {
+                    "platform": "kick",
+                    "channel_id": str(channel.get("id", "")),
+                    "channel_login": channel.get("slug", ""),
+                    "display_name": user.get("username", channel.get("slug", "")),
+                    "title": s.get("session_title", ""),
+                    "category": cat.get("name", ""),
+                    "category_id": str(cat.get("id", "")),
+                    "viewers": s.get("viewer_count", 0),
+                    "started_at": s.get("created_at", ""),
+                    "thumbnail_url": (s.get("thumbnail") or {}).get("src", ""),
+                    "avatar_url": user.get("profile_pic", ""),
+                }
+            )
+        return results

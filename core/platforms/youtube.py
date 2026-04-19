@@ -588,6 +588,87 @@ class YouTubeClient:
 
         return channels
 
+    # ── Browse ───────────────────────────────────────────────
+
+    async def get_categories(
+        self, query: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Return assignable YouTube video categories for US region.
+
+        query is ignored — YouTube categories are a fixed regional list.
+        Costs 1 quota unit. Returns [] if unauthenticated or quota exhausted.
+        """
+        token = await self._ensure_token()
+        if not token:
+            return []
+        if not self._quota.check_and_use(1):
+            return []
+        data = await self._yt_get(
+            "videoCategories",
+            {"part": "snippet", "regionCode": "US"},
+        )
+        return [
+            {
+                "platform": "youtube",
+                "category_id": item["id"],
+                "name": item["snippet"]["title"],
+                "box_art_url": "",
+                "viewers": 0,
+            }
+            for item in data.get("items", [])
+            if item.get("snippet", {}).get("assignable", False)
+        ]
+
+    async def get_top_streams(
+        self,
+        category_id: str | None = None,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        """Search for live YouTube streams using search.list.
+
+        Costs 100 quota units per call. Returns [] if unauthenticated or quota
+        exhausted. viewer counts are 0 (search.list does not return them).
+        avatar_url is empty (requires a separate channels.list call).
+        """
+        token = await self._ensure_token()
+        if not token:
+            return []
+        if not self._quota.check_and_use(100):
+            return []
+        params: dict[str, str] = {
+            "part": "snippet",
+            "type": "video",
+            "eventType": "live",
+            "maxResults": str(min(limit, 50)),
+            "order": "viewCount",
+        }
+        if category_id:
+            params["videoCategoryId"] = category_id
+        data = await self._yt_get("search", params)
+        results: list[dict[str, Any]] = []
+        for item in data.get("items", []):
+            snippet = item.get("snippet")
+            if not snippet:
+                continue
+            results.append(
+                {
+                    "platform": "youtube",
+                    "channel_id": snippet.get("channelId", ""),
+                    "channel_login": snippet.get("channelId", ""),
+                    "display_name": snippet.get("channelTitle", ""),
+                    "title": snippet.get("title", ""),
+                    "category": "",
+                    "category_id": category_id or "",
+                    "viewers": 0,
+                    "started_at": snippet.get("publishedAt", ""),
+                    "thumbnail_url": snippet.get("thumbnails", {})
+                        .get("medium", {})
+                        .get("url", ""),
+                    "avatar_url": "",
+                }
+            )
+        return results
+
     # ── Playback ─────────────────────────────────────────────
 
     async def resolve_stream_url(self, channel_id: str, quality: str) -> dict[str, Any]:
