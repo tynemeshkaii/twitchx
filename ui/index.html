@@ -1138,6 +1138,17 @@ body {
 }
 #channel-view.hidden { display: none; }
 
+#channel-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
 #channel-body {
   flex: 1;
   overflow-y: auto;
@@ -1392,6 +1403,7 @@ body {
           <span id="channel-header-title"></span>
         </div>
         <div id="channel-body">
+          <div id="channel-loading" class="browse-loading hidden">Loading...</div>
           <div id="channel-profile-card">
             <img id="channel-avatar" class="channel-avatar hidden" src="" alt="">
             <div id="channel-meta">
@@ -1420,7 +1432,6 @@ body {
           <div id="channel-tab-clips" class="channel-tab-panel hidden">
             <div class="channel-empty">Clips coming in a future update.</div>
           </div>
-          <div id="channel-loading" class="browse-loading hidden">Loading...</div>
         </div>
       </div>
 
@@ -2526,7 +2537,6 @@ function toggleChannelFollow() {
 function watchChannelStream() {
   if (!channelProfile || !api) return;
   var p = channelProfile;
-  if (p.platform === 'youtube') return;
   hideChannelView();
   var quality = document.getElementById('quality-select')
     ? document.getElementById('quality-select').value
