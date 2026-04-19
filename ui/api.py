@@ -34,14 +34,49 @@ from core.storage import (
     get_favorites,
     get_platform_config,
     get_settings,
+    is_browse_slot_fresh,
+    load_browse_cache,
     load_config,
     save_avatar,
+    save_browse_cache,
     update_config,
 )
 from core.stream_resolver import resolve_hls_url
 from core.utils import format_viewers
 
 logger = logging.getLogger(__name__)
+
+
+def _aggregate_categories(
+    by_platform: dict[str, list[dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    """Merge category lists from multiple platforms by normalized name.
+
+    Categories with the same lowercased name are merged. Viewer counts are
+    summed. The first non-empty box_art_url encountered is kept.
+    Result is sorted by total viewers descending.
+    """
+    merged: dict[str, dict[str, Any]] = {}
+    for platform, categories in by_platform.items():
+        for cat in categories:
+            key = cat["name"].lower().strip()
+            if not key:
+                continue
+            if key not in merged:
+                merged[key] = {
+                    "name": cat["name"],
+                    "platforms": [],
+                    "platform_ids": {},
+                    "box_art_url": "",
+                    "viewers": 0,
+                }
+            entry = merged[key]
+            entry["platforms"].append(platform)
+            entry["platform_ids"][platform] = cat["category_id"]
+            entry["viewers"] += cat.get("viewers", 0)
+            if not entry["box_art_url"] and cat.get("box_art_url"):
+                entry["box_art_url"] = cat["box_art_url"]
+    return sorted(merged.values(), key=lambda x: x["viewers"], reverse=True)
 
 
 class TwitchXApi:
@@ -1879,6 +1914,178 @@ class TwitchXApi:
             self._eval_js(f"window.onLaunchResult({r})")
 
         self._run_in_thread(do_launch)
+
+    # ── Browse ─────────────────────────────────────────────────
+
+    def get_browse_categories(self, platform_filter: str = "all") -> None:
+        """Fetch and aggregate browse categories from enabled platforms.
+
+        Called from JS. Fires window.onBrowseCategories(categories) when done.
+        platform_filter: "all" | "twitch" | "kick" | "youtube"
+        """
+        self._run_in_thread(lambda: self._fetch_browse_categories(platform_filter))
+
+    def _fetch_browse_categories(self, platform_filter: str) -> None:
+        platforms = (
+            ["twitch", "kick", "youtube"]
+            if platform_filter == "all"
+            else [platform_filter]
+        )
+        self._config = load_config()
+        enabled = [
+            p for p in platforms
+            if self._config.get("platforms", {}).get(p, {}).get("enabled", False)
+        ]
+        cache = load_browse_cache()
+        now = time.time()
+        results: dict[str, list[dict[str, Any]]] = {}
+        to_fetch: list[str] = []
+        for platform in enabled:
+            slot = f"categories_{platform}"
+            if is_browse_slot_fresh(cache, slot):
+                results[platform] = cache[slot]["data"]
+            else:
+                to_fetch.append(platform)
+        if to_fetch:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                for platform in to_fetch:
+                    client = self._get_platform(platform)
+                    try:
+                        categories = loop.run_until_complete(client.get_categories())
+                        results[platform] = categories
+                        cache[f"categories_{platform}"] = {
+                            "data": categories,
+                            "fetched_at": now,
+                        }
+                    except Exception as e:
+                        logger.warning("browse categories failed for %s: %s", platform, e)
+                        results[platform] = []
+                save_browse_cache(cache)
+            finally:
+                self._close_thread_loop(loop)
+        merged = _aggregate_categories(results)
+        self._eval_js(f"window.onBrowseCategories({json.dumps(merged)})")
+
+    def get_browse_top_streams(
+        self,
+        category_name: str,
+        platform_ids: dict[str, str],
+        platform_filter: str = "all",
+    ) -> None:
+        """Fetch top streams for a category from relevant platforms.
+
+        Called from JS. Fires window.onBrowseTopStreams({"category": name,
+        "streams": [...]}) when done.
+        platform_ids: {"twitch": "33214", "kick": "42", "youtube": "20"}
+        """
+        self._run_in_thread(
+            lambda: self._fetch_browse_top_streams(
+                category_name, platform_ids, platform_filter
+            )
+        )
+
+    def _fetch_browse_top_streams(
+        self,
+        category_name: str,
+        platform_ids: dict[str, str],
+        platform_filter: str,
+    ) -> None:
+        in_filter = (
+            list(platform_ids.keys())
+            if platform_filter == "all"
+            else [platform_filter]
+        )
+        platforms_to_query = [p for p in in_filter if p in platform_ids]
+        cache = load_browse_cache()
+        now = time.time()
+        all_streams: list[dict[str, Any]] = []
+        to_fetch: list[str] = []
+        for platform in platforms_to_query:
+            cat_id = platform_ids[platform]
+            slot = f"top_streams_youtube_{cat_id}"
+            if platform == "youtube" and is_browse_slot_fresh(cache, slot):
+                all_streams.extend(cache[slot]["data"])
+            else:
+                to_fetch.append(platform)
+        if to_fetch:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                for platform in to_fetch:
+                    cat_id = platform_ids[platform]
+                    client = self._get_platform(platform)
+                    try:
+                        streams = loop.run_until_complete(
+                            client.get_top_streams(category_id=cat_id, limit=20)
+                        )
+                        all_streams.extend(streams)
+                        if platform == "youtube":
+                            slot = f"top_streams_youtube_{cat_id}"
+                            cache[slot] = {"data": streams, "fetched_at": now}
+                    except Exception as e:
+                        logger.warning("browse top streams failed for %s: %s", platform, e)
+            finally:
+                self._close_thread_loop(loop)
+            save_browse_cache(cache)
+        all_streams.sort(key=lambda s: s.get("viewers", 0), reverse=True)
+        payload = {"category": category_name, "streams": all_streams[:40]}
+        self._eval_js(f"window.onBrowseTopStreams({json.dumps(payload)})")
+
+    def watch_direct(self, channel: str, platform: str, quality: str) -> None:
+        """Watch a Twitch or Kick stream opened from browse.
+
+        Unlike watch(), does not require the channel to be in the live cache.
+        YouTube is not supported — video_id is unavailable from browse search
+        results; YouTube stream cards in browse are display-only.
+        """
+        if not channel or platform not in ("twitch", "kick"):
+            return
+
+        def _save_quality(cfg: dict[str, Any]) -> None:
+            cfg.get("settings", {})["quality"] = quality
+
+        self._config = update_config(_save_quality)
+        safe_ch = json.dumps(channel)
+        self._eval_js(
+            f"window.onStatusUpdate({{text: 'Loading ' + {safe_ch} + '...', type: 'warn'}})"
+        )
+        self._launch_channel = channel
+        self._launch_elapsed = 0
+        self._start_launch_timer()
+
+        def do_resolve() -> None:
+            settings = get_settings(self._config)
+            hls_url, err = resolve_hls_url(
+                channel,
+                quality,
+                settings.get("streamlink_path", "streamlink"),
+                platform=platform,
+            )
+            self._cancel_launch_timer()
+            self._launch_channel = None
+            if not hls_url:
+                r = json.dumps(
+                    {
+                        "success": False,
+                        "message": err or "Could not resolve stream URL",
+                        "channel": channel,
+                    }
+                )
+                self._eval_js(f"window.onLaunchResult({r})")
+                return
+            self._watching_channel = channel
+            stream_data = json.dumps(
+                {"url": hls_url, "channel": channel, "title": "", "platform": platform}
+            )
+            self._eval_js(f"window.onStreamReady({stream_data})")
+            r = json.dumps(
+                {"success": True, "message": f"Playing {channel}", "channel": channel}
+            )
+            self._eval_js(f"window.onLaunchResult({r})")
+
+        self._run_in_thread(do_resolve)
 
     def _start_launch_timer(self) -> None:
         self._cancel_launch_timer()
