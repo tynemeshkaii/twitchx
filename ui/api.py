@@ -2132,6 +2132,87 @@ class TwitchXApi:
             else:
                 webbrowser.open(f"https://twitch.tv/{channel}")
 
+    # ── Channel profile ─────────────────────────────────────────
+
+    @staticmethod
+    def _normalize_channel_info_to_profile(
+        raw: dict[str, Any], login: str, platform: str
+    ) -> dict[str, Any]:
+        if platform == "twitch":
+            return {
+                "platform": "twitch",
+                "channel_id": raw.get("channel_id", ""),
+                "login": raw.get("login", login),
+                "display_name": raw.get("display_name", login),
+                "bio": raw.get("bio", ""),
+                "avatar_url": raw.get("avatar_url", ""),
+                "followers": raw.get("followers", -1),
+                "is_live": bool(raw.get("is_live", False)),
+                "can_follow_via_api": False,
+            }
+        if platform == "kick":
+            user = raw.get("user") or {}
+            return {
+                "platform": "kick",
+                "channel_id": str(raw.get("channel_id") or raw.get("id", "")),
+                "login": raw.get("slug", login),
+                "display_name": (
+                    user.get("username")
+                    or raw.get("username")
+                    or raw.get("slug", login)
+                ),
+                "bio": raw.get("description") or raw.get("bio", ""),
+                "avatar_url": user.get("profile_pic") or raw.get("profile_picture", ""),
+                "followers": raw.get("followers_count", 0),
+                "is_live": bool(raw.get("is_live", False)) or bool(raw.get("stream")),
+                "can_follow_via_api": False,
+            }
+        if platform == "youtube":
+            channel_id = raw.get("channel_id", login)
+            return {
+                "platform": "youtube",
+                "channel_id": channel_id,
+                "login": channel_id,
+                "display_name": raw.get("display_name", login),
+                "bio": raw.get("description", ""),
+                "avatar_url": raw.get("avatar_url", ""),
+                "followers": raw.get("followers", 0),
+                "is_live": False,
+                "can_follow_via_api": False,
+            }
+        return {}
+
+    def get_channel_profile(self, login: str, platform: str = "twitch") -> None:
+        client = self._get_platform(platform)
+        if client is None:
+            return
+
+        def do_fetch() -> None:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                raw = loop.run_until_complete(client.get_channel_info(login))
+                if not raw:
+                    self._eval_js("window.onChannelProfile(null)")
+                    return
+                profile = self._normalize_channel_info_to_profile(raw, login, platform)
+                if not profile:
+                    self._eval_js("window.onChannelProfile(null)")
+                    return
+                favs = get_favorites(self._config)
+                profile["is_favorited"] = any(
+                    f.get("login") == profile["login"] and f.get("platform") == platform
+                    for f in favs
+                )
+                self._eval_js(f"window.onChannelProfile({json.dumps(profile)})")
+            except Exception as e:
+                logger.warning("get_channel_profile failed: %s", e)
+                self._eval_js("window.onChannelProfile(null)")
+            finally:
+                self._close_thread_loop(loop)
+
+        self._run_in_thread(do_fetch)
+
     # ── Avatars + Thumbnails ────────────────────────────────────
 
     def get_avatar(self, login: str, platform: str = "twitch") -> None:
