@@ -1651,6 +1651,8 @@ const state = {
 
 let api = null;
 let ctxChannel = null;
+let channelViewSource = 'grid';
+let channelProfile = null;
 let sidebarResizeFrame = null;
 
 /* ── pywebview ready ────────────────────────────────────── */
@@ -2440,6 +2442,87 @@ function hideBrowseView() {
   document.getElementById('stream-grid').classList.remove('hidden');
 }
 
+function showChannelView(login, platform, source) {
+  channelViewSource = source || 'grid';
+  channelProfile = null;
+
+  if (channelViewSource === 'browse') {
+    document.getElementById('browse-view').classList.add('hidden');
+  } else {
+    document.getElementById('toolbar').classList.add('hidden');
+    document.getElementById('stream-grid').classList.add('hidden');
+  }
+
+  document.getElementById('channel-view').classList.remove('hidden');
+  document.getElementById('channel-loading').classList.remove('hidden');
+  document.getElementById('channel-profile-card').style.opacity = '0';
+  document.getElementById('channel-header-title').textContent = login;
+  document.getElementById('channel-display-name').textContent = '';
+  document.getElementById('channel-login-text').textContent = '';
+  document.getElementById('channel-followers').textContent = '';
+  document.getElementById('channel-bio').textContent = '';
+  document.getElementById('channel-avatar').classList.add('hidden');
+  document.getElementById('channel-live-badge').classList.add('hidden');
+  document.getElementById('channel-watch-btn').classList.add('hidden');
+  document.getElementById('channel-follow-btn').textContent = 'Follow';
+  document.getElementById('channel-follow-btn').classList.remove('following');
+  document.getElementById('channel-live-empty').classList.add('hidden');
+  document.querySelectorAll('.channel-tab').forEach(function(t) {
+    t.classList.toggle('active', t.dataset.tab === 'live');
+  });
+  document.querySelectorAll('.channel-tab-panel').forEach(function(p) {
+    p.classList.toggle('hidden', p.id !== 'channel-tab-live');
+  });
+
+  if (api) api.get_channel_profile(login, platform);
+}
+
+function hideChannelView() {
+  document.getElementById('channel-view').classList.add('hidden');
+  if (channelViewSource === 'browse') {
+    document.getElementById('browse-view').classList.remove('hidden');
+  } else {
+    document.getElementById('toolbar').classList.remove('hidden');
+    document.getElementById('stream-grid').classList.remove('hidden');
+  }
+}
+
+function switchChannelTab(btn, tab) {
+  document.querySelectorAll('.channel-tab').forEach(function(t) {
+    t.classList.toggle('active', t === btn);
+  });
+  document.querySelectorAll('.channel-tab-panel').forEach(function(p) {
+    p.classList.toggle('hidden', p.id !== 'channel-tab-' + tab);
+  });
+}
+
+function toggleChannelFollow() {
+  if (!channelProfile || !api) return;
+  var p = channelProfile;
+  if (p.is_favorited) {
+    api.remove_channel(p.login, p.platform);
+    p.is_favorited = false;
+    document.getElementById('channel-follow-btn').textContent = 'Follow';
+    document.getElementById('channel-follow-btn').classList.remove('following');
+  } else {
+    api.add_channel(p.login, p.platform, p.display_name);
+    p.is_favorited = true;
+    document.getElementById('channel-follow-btn').textContent = 'Following';
+    document.getElementById('channel-follow-btn').classList.add('following');
+  }
+}
+
+function watchChannelStream() {
+  if (!channelProfile || !api) return;
+  var p = channelProfile;
+  if (p.platform === 'youtube') return;
+  hideChannelView();
+  var quality = document.getElementById('quality-select')
+    ? document.getElementById('quality-select').value
+    : 'best';
+  api.watch_direct(p.login, p.platform, quality);
+}
+
 function browseGoBack() {
   if (state.browseMode === 'streams') {
     state.browseMode = 'categories';
@@ -2783,6 +2866,47 @@ window.onBrowseTopStreams = function(payload) {
     card.appendChild(info);
     grid.appendChild(card);
   });
+};
+
+window.onChannelProfile = function(profile) {
+  document.getElementById('channel-loading').classList.add('hidden');
+
+  if (!profile) {
+    document.getElementById('channel-bio').textContent = 'Channel not found.';
+    document.getElementById('channel-profile-card').style.opacity = '1';
+    return;
+  }
+
+  channelProfile = profile;
+
+  document.getElementById('channel-header-title').textContent = profile.display_name || profile.login;
+  document.getElementById('channel-display-name').textContent = profile.display_name || profile.login;
+  document.getElementById('channel-login-text').textContent = '@' + profile.login;
+
+  var followersEl = document.getElementById('channel-followers');
+  followersEl.textContent = profile.followers >= 0
+    ? formatViewers(profile.followers) + ' followers'
+    : '';
+
+  document.getElementById('channel-bio').textContent = profile.bio || '';
+
+  var avatarEl = document.getElementById('channel-avatar');
+  if (profile.avatar_url) {
+    avatarEl.src = profile.avatar_url;
+    avatarEl.classList.remove('hidden');
+  }
+
+  document.getElementById('channel-live-badge').classList.toggle('hidden', !profile.is_live);
+  document.getElementById('channel-live-empty').classList.toggle('hidden', !!profile.is_live);
+
+  var followBtn = document.getElementById('channel-follow-btn');
+  followBtn.textContent = profile.is_favorited ? 'Following' : 'Follow';
+  followBtn.classList.toggle('following', !!profile.is_favorited);
+
+  var canWatch = profile.is_live && profile.platform !== 'youtube';
+  document.getElementById('channel-watch-btn').classList.toggle('hidden', !canWatch);
+
+  document.getElementById('channel-profile-card').style.opacity = '1';
 };
 
 /* ── Rendering ──────────────────────────────────────────── */
