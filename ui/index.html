@@ -1078,6 +1078,15 @@ body {
   transition: transform 0.12s ease;
 }
 .browse-stream-card:hover { transform: translateY(-2px); }
+.browse-stream-profile-link {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 4px 0 2px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.browse-stream-profile-link:hover { color: var(--accent); }
 .browse-stream-thumb {
   width: 100%;
   aspect-ratio: 16 / 9;
@@ -1480,6 +1489,7 @@ body {
   <div class="ctx-item" data-action="watch">&#9654; Watch in App</div>
   <div class="ctx-item" data-action="watch-external">&#8599; Open in IINA</div>
   <div class="ctx-item" data-action="browser">&#127760; Open in Browser</div>
+  <div class="ctx-item" data-action="profile">&#128100; View Channel</div>
   <div class="ctx-item" data-action="copy">&#128203; Copy URL</div>
   <div class="ctx-item" data-action="favorite">&#9733; Add to Favorites</div>
   <div class="ctx-item" data-action="remove">&#10005; Remove</div>
@@ -1849,6 +1859,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (api) api.watch_external(ctxChannel, quality);
     }
     else if (action === 'browser') { if (api) api.open_browser(ctxChannel, ctxPlat); }
+    else if (action === 'profile') { showChannelView(ctxChannel, ctxPlat, 'grid'); }
     else if (action === 'copy') {
       var baseUrl = ctxPlat === 'kick' ? 'https://kick.com/' : 'https://twitch.tv/';
       navigator.clipboard.writeText(baseUrl + ctxChannel);
@@ -2864,6 +2875,18 @@ window.onBrowseTopStreams = function(payload) {
     info.appendChild(viewersEl);
     card.appendChild(thumb);
     card.appendChild(info);
+
+    var profileLink = document.createElement('div');
+    profileLink.className = 'browse-stream-profile-link';
+    profileLink.textContent = 'View Channel';
+    (function(s) {
+      profileLink.onclick = function(e) {
+        e.stopPropagation();
+        showChannelView(s.channel_login, s.platform, 'browse');
+      };
+    })(stream);
+    card.appendChild(profileLink);
+
     grid.appendChild(card);
   });
 };
