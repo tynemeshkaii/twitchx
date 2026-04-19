@@ -1133,6 +1133,8 @@ body {
 }
 #browse-nav-btn:hover { background: var(--bg-overlay); color: var(--text-primary); }
 #browse-nav-wrapper { padding: 0 8px 6px; }
+#toolbar.hidden { display: none; }
+#stream-grid.hidden { display: none; }
 </style>
 </head>
 <body>
@@ -1454,6 +1456,9 @@ const state = {
   sidebarSections: loadSidebarSections(),
   favoritesMeta: {},
   activePlatformFilter: 'all',
+  browseMode: 'categories',
+  browseCategory: null,
+  browsePlatformFilter: 'all',
 };
 
 let api = null;
@@ -2223,6 +2228,82 @@ function hidePlayerView() {
   renderSidebar();
 }
 
+function showBrowseView() {
+  document.getElementById('toolbar').classList.add('hidden');
+  document.getElementById('stream-grid').classList.add('hidden');
+  document.getElementById('browse-view').classList.remove('hidden');
+  state.browseMode = 'categories';
+  state.browseCategory = null;
+  state.browsePlatformFilter = 'all';
+  document.querySelectorAll('.browse-platform-tab').forEach(function(t) {
+    t.classList.toggle('active', t.dataset.platform === 'all');
+  });
+  document.getElementById('browse-back-btn').classList.add('hidden');
+  document.getElementById('browse-title').textContent = 'Browse';
+  document.getElementById('browse-categories-grid').classList.remove('hidden');
+  document.getElementById('browse-streams-grid').classList.add('hidden');
+  loadBrowseCategories();
+}
+
+function hideBrowseView() {
+  document.getElementById('browse-view').classList.add('hidden');
+  document.getElementById('toolbar').classList.remove('hidden');
+  document.getElementById('stream-grid').classList.remove('hidden');
+}
+
+function browseGoBack() {
+  if (state.browseMode === 'streams') {
+    state.browseMode = 'categories';
+    state.browseCategory = null;
+    document.getElementById('browse-back-btn').classList.add('hidden');
+    document.getElementById('browse-title').textContent = 'Browse';
+    document.getElementById('browse-categories-grid').classList.remove('hidden');
+    document.getElementById('browse-streams-grid').classList.add('hidden');
+    document.getElementById('browse-empty').classList.add('hidden');
+  } else {
+    hideBrowseView();
+  }
+}
+
+function setBrowsePlatform(btn, platform) {
+  document.querySelectorAll('.browse-platform-tab').forEach(function(t) {
+    t.classList.remove('active');
+  });
+  btn.classList.add('active');
+  state.browsePlatformFilter = platform;
+  if (state.browseMode === 'categories') {
+    loadBrowseCategories();
+  } else if (state.browseCategory) {
+    _triggerBrowseTopStreams(state.browseCategory);
+  }
+}
+
+function loadBrowseCategories() {
+  document.getElementById('browse-categories-grid').replaceChildren();
+  document.getElementById('browse-loading').classList.remove('hidden');
+  document.getElementById('browse-empty').classList.add('hidden');
+  if (api) api.get_browse_categories(state.browsePlatformFilter);
+}
+
+function _triggerBrowseTopStreams(category) {
+  state.browseMode = 'streams';
+  state.browseCategory = category;
+  document.getElementById('browse-title').textContent = category.name;
+  document.getElementById('browse-back-btn').classList.remove('hidden');
+  document.getElementById('browse-categories-grid').classList.add('hidden');
+  document.getElementById('browse-streams-grid').replaceChildren();
+  document.getElementById('browse-streams-grid').classList.remove('hidden');
+  document.getElementById('browse-loading').classList.remove('hidden');
+  document.getElementById('browse-empty').classList.add('hidden');
+  if (api) {
+    api.get_browse_top_streams(
+      category.name,
+      category.platform_ids,
+      state.browsePlatformFilter
+    );
+  }
+}
+
 function toggleVideoFullscreen() {
   var video = document.getElementById('stream-video');
 
@@ -2407,6 +2488,106 @@ window.onStatusUpdate = function(data) {
   if (data.stale) {
     document.getElementById('updated-time').classList.add('stale');
   }
+};
+
+window.onBrowseCategories = function(categories) {
+  document.getElementById('browse-loading').classList.add('hidden');
+  var grid = document.getElementById('browse-categories-grid');
+  grid.replaceChildren();
+  if (!categories || !categories.length) {
+    document.getElementById('browse-empty').classList.remove('hidden');
+    return;
+  }
+  categories.forEach(function(cat) {
+    var card = document.createElement('div');
+    card.className = 'browse-category-card';
+    card.onclick = function() { _triggerBrowseTopStreams(cat); };
+
+    var img = document.createElement('img');
+    img.className = 'browse-category-art';
+    img.alt = '';
+    if (cat.box_art_url) img.src = cat.box_art_url;
+    img.onerror = function() { img.style.display = 'none'; };
+
+    var info = document.createElement('div');
+    info.className = 'browse-category-info';
+
+    var nameEl = document.createElement('span');
+    nameEl.className = 'browse-category-name';
+    nameEl.textContent = cat.name;
+
+    var badges = document.createElement('div');
+    badges.className = 'browse-category-platforms';
+    (cat.platforms || []).forEach(function(p) {
+      var badge = document.createElement('span');
+      badge.className = 'platform-badge ' + p;
+      badge.textContent = p.charAt(0).toUpperCase();
+      badges.appendChild(badge);
+    });
+
+    info.appendChild(nameEl);
+    info.appendChild(badges);
+    card.appendChild(img);
+    card.appendChild(info);
+    grid.appendChild(card);
+  });
+};
+
+window.onBrowseTopStreams = function(payload) {
+  document.getElementById('browse-loading').classList.add('hidden');
+  var grid = document.getElementById('browse-streams-grid');
+  grid.replaceChildren();
+  if (!payload || !payload.streams || !payload.streams.length) {
+    document.getElementById('browse-empty').classList.remove('hidden');
+    return;
+  }
+  payload.streams.forEach(function(stream) {
+    var card = document.createElement('div');
+    card.className = 'browse-stream-card';
+
+    if (stream.platform !== 'youtube') {
+      card.onclick = function() {
+        hideBrowseView();
+        var quality = document.getElementById('quality-select')
+          ? document.getElementById('quality-select').value
+          : 'best';
+        if (api) api.watch_direct(stream.channel_login, stream.platform, quality);
+      };
+    }
+
+    var thumb = document.createElement('img');
+    thumb.className = 'browse-stream-thumb';
+    thumb.alt = '';
+    if (stream.thumbnail_url) thumb.src = stream.thumbnail_url;
+    thumb.onerror = function() { thumb.style.display = 'none'; };
+
+    var info = document.createElement('div');
+    info.className = 'browse-stream-info';
+
+    var badge = document.createElement('span');
+    badge.className = 'platform-badge ' + stream.platform;
+    badge.textContent = stream.platform.charAt(0).toUpperCase();
+
+    var nameEl = document.createElement('span');
+    nameEl.className = 'browse-stream-name';
+    nameEl.textContent = stream.display_name;
+
+    var titleEl = document.createElement('span');
+    titleEl.className = 'browse-stream-title';
+    titleEl.textContent = stream.title;
+
+    var viewersEl = document.createElement('span');
+    viewersEl.className = 'browse-stream-viewers';
+    if (stream.viewers) viewersEl.textContent = formatViewers(stream.viewers);
+
+    info.appendChild(badge);
+    info.appendChild(nameEl);
+    info.appendChild(titleEl);
+    info.appendChild(viewersEl);
+    card.appendChild(thumb);
+    card.appendChild(info);
+    grid.appendChild(card);
+  });
 };
 
 /* ── Rendering ──────────────────────────────────────────── */
