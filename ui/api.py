@@ -1952,6 +1952,9 @@ class TwitchXApi:
             try:
                 for platform in to_fetch:
                     client = self._get_platform(platform)
+                    if client is None:
+                        logger.warning("browse: unknown platform %r, skipping", platform)
+                        continue
                     try:
                         categories = loop.run_until_complete(client.get_categories())
                         results[platform] = categories
@@ -2016,6 +2019,9 @@ class TwitchXApi:
                 for platform in to_fetch:
                     cat_id = platform_ids[platform]
                     client = self._get_platform(platform)
+                    if client is None:
+                        logger.warning("browse: unknown platform %r, skipping", platform)
+                        continue
                     try:
                         streams = loop.run_until_complete(
                             client.get_top_streams(category_id=cat_id, limit=20)
