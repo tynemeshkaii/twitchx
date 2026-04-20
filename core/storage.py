@@ -292,10 +292,12 @@ def load_browse_cache() -> dict[str, Any]:
 
 
 def save_browse_cache(data: dict[str, Any]) -> None:
-    """Persist browse cache to disk, creating directories as needed."""
+    """Persist browse cache to disk atomically, creating directories as needed."""
     path = CONFIG_DIR / "cache" / "browse_cache.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data))
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data))
+    os.replace(tmp, path)
 
 
 def is_browse_slot_fresh(

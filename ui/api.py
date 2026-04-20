@@ -127,6 +127,10 @@ class TwitchXApi:
         self._image_pool = ThreadPoolExecutor(
             max_workers=8, thread_name_prefix="twitchx-img"
         )
+        # Bounded thread pool for chat sends (prevents unbounded thread creation)
+        self._send_pool = ThreadPoolExecutor(
+            max_workers=2, thread_name_prefix="twitchx-send"
+        )
         # Chat
         self._chat_client: TwitchChatClient | KickChatClient | None = None
         self._chat_thread: threading.Thread | None = None
@@ -324,7 +328,7 @@ class TwitchXApi:
             or stream.get("session_title")
             or stream.get("title", ""),
             "game": game_name,
-            "viewers": stream.get("viewer_count", stream.get("viewers", 0)),
+            "viewers": stream.get("viewer_count") or stream.get("viewers") or 0,
             "started_at": stream.get("start_time")
             or stream.get("created_at")
             or stream.get("started_at", ""),
@@ -1131,13 +1135,16 @@ class TwitchXApi:
             )
 
     def remove_channel(self, channel: str, platform: str = "twitch") -> None:
+        # YouTube UC IDs are case-sensitive — compare without lowercasing.
+        # All other platforms store logins in lowercase already.
+        login_cmp = channel if platform == "youtube" else channel.lower()
 
         def _apply(cfg: dict) -> None:
             cfg["favorites"] = [
                 f
                 for f in cfg.get("favorites", [])
                 if not (
-                    f.get("login") == channel.lower() and f.get("platform") == platform
+                    f.get("login") == login_cmp and f.get("platform") == platform
                 )
             ]
 
@@ -1157,18 +1164,26 @@ class TwitchXApi:
                 for f in cfg.get("favorites", [])
                 if f.get("platform") == platform
             }
-            reordered = []
-            for login in new_order:
-                if login in old_favs:
-                    reordered.append(old_favs[login])
-                else:
-                    reordered.append(
-                        {"platform": platform, "login": login, "display_name": login}
-                    )
-            other_platforms = [
-                f for f in cfg.get("favorites", []) if f.get("platform") != platform
+            reordered = [
+                old_favs[login] if login in old_favs
+                else {"platform": platform, "login": login, "display_name": login}
+                for login in new_order
             ]
-            cfg["favorites"] = reordered + other_platforms
+            # Replace the platform's block in-place to preserve the relative
+            # order of other platforms (avoids shuffling Kick/YouTube positions).
+            result: list[dict] = []
+            inserted = False
+            for f in cfg.get("favorites", []):
+                if f.get("platform") == platform:
+                    if not inserted:
+                        result.extend(reordered)
+                        inserted = True
+                    # skip old entries for this platform (replaced by reordered)
+                else:
+                    result.append(f)
+            if not inserted:
+                result.extend(reordered)
+            cfg["favorites"] = result
 
         self._config = update_config(_apply)
 
@@ -1608,10 +1623,12 @@ class TwitchXApi:
         now = datetime.now().strftime("%H:%M:%S")
         total = sum(item.get("viewers", 0) for item in stream_items)
 
+        # Key by "platform:login" to avoid collisions when two platforms share a login.
         favorites_meta = {
-            f["login"]: {
+            f"{f.get('platform', 'twitch')}:{f['login']}": {
                 "display_name": f.get("display_name", f["login"]),
                 "platform": f.get("platform", "twitch"),
+                "login": f["login"],
             }
             for f in get_favorites(self._config)
         }
@@ -1957,21 +1974,28 @@ class TwitchXApi:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                for platform in to_fetch:
-                    client = self._get_platform(platform)
-                    if client is None:
-                        logger.warning("browse: unknown platform %r, skipping", platform)
-                        continue
-                    try:
-                        categories = loop.run_until_complete(client.get_categories())
-                        results[platform] = categories
-                        cache[f"categories_{platform}"] = {
-                            "data": categories,
-                            "fetched_at": now,
-                        }
-                    except Exception as e:
-                        logger.warning("browse categories failed for %s: %s", platform, e)
-                        results[platform] = []
+                async def _fetch_categories_parallel() -> None:
+                    clients = {
+                        p: self._get_platform(p)
+                        for p in to_fetch
+                        if self._get_platform(p) is not None
+                    }
+                    for p in to_fetch:
+                        if p not in clients:
+                            logger.warning("browse: unknown platform %r, skipping", p)
+                    gathered = await asyncio.gather(
+                        *[c.get_categories() for c in clients.values()],
+                        return_exceptions=True,
+                    )
+                    for p, result in zip(clients.keys(), gathered):
+                        if isinstance(result, BaseException):
+                            logger.warning("browse categories failed for %s: %s", p, result)
+                            results[p] = []
+                        else:
+                            results[p] = result
+                            cache[f"categories_{p}"] = {"data": result, "fetched_at": now}
+
+                loop.run_until_complete(_fetch_categories_parallel())
                 save_browse_cache(cache)
             finally:
                 self._close_thread_loop(loop)
@@ -2023,21 +2047,33 @@ class TwitchXApi:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                for platform in to_fetch:
-                    cat_id = platform_ids[platform]
-                    client = self._get_platform(platform)
-                    if client is None:
-                        logger.warning("browse: unknown platform %r, skipping", platform)
-                        continue
-                    try:
-                        streams = loop.run_until_complete(
-                            client.get_top_streams(category_id=cat_id, limit=20)
-                        )
-                        all_streams.extend(streams)
-                        slot = f"top_streams_{platform}_{cat_id}"
-                        cache[slot] = {"data": streams, "fetched_at": now}
-                    except Exception as e:
-                        logger.warning("browse top streams failed for %s: %s", platform, e)
+                async def _fetch_top_streams_parallel() -> None:
+                    clients = {
+                        p: self._get_platform(p)
+                        for p in to_fetch
+                        if self._get_platform(p) is not None
+                    }
+                    for p in to_fetch:
+                        if p not in clients:
+                            logger.warning("browse: unknown platform %r, skipping", p)
+                    gathered = await asyncio.gather(
+                        *[
+                            c.get_top_streams(category_id=platform_ids[p], limit=20)
+                            for p, c in clients.items()
+                        ],
+                        return_exceptions=True,
+                    )
+                    for p, result in zip(clients.keys(), gathered):
+                        if isinstance(result, BaseException):
+                            logger.warning("browse top streams failed for %s: %s", p, result)
+                        else:
+                            all_streams.extend(result)
+                            cache[f"top_streams_{p}_{platform_ids[p]}"] = {
+                                "data": result,
+                                "fetched_at": now,
+                            }
+
+                loop.run_until_complete(_fetch_top_streams_parallel())
             finally:
                 self._close_thread_loop(loop)
             save_browse_cache(cache)
@@ -2199,7 +2235,16 @@ class TwitchXApi:
                 if not profile:
                     self._eval_js("window.onChannelProfile(null)")
                     return
-                favs = get_favorites(self._config)
+                # For YouTube, get_channel_info() doesn't fetch stream status.
+                # Override is_live using the in-memory live streams cache.
+                if platform == "youtube":
+                    profile["is_live"] = any(
+                        s.get("login", "") == profile["login"]
+                        for s in self._live_streams
+                        if s.get("platform") == "youtube"
+                    )
+                fresh_config = load_config()
+                favs = get_favorites(fresh_config)
                 profile["is_favorited"] = any(
                     f.get("login") == profile["login"] and f.get("platform") == platform
                     for f in favs
@@ -2412,16 +2457,21 @@ class TwitchXApi:
 
     def stop_chat(self) -> None:
         """Stop current chat connection."""
-        if self._chat_client:
-            client = self._chat_client
-            client._running = False
-            loop = client._loop
-            if loop and not loop.is_closed():
-                fut = asyncio.run_coroutine_threadsafe(client.disconnect(), loop)
-                with contextlib.suppress(Exception):
-                    fut.result(timeout=3)
+        client = self._chat_client
         self._chat_client = None
         self._chat_thread = None
+        if client is None:
+            return
+        # Set _running before reading _loop so the chat thread exits its recv
+        # loop even if disconnect() can't be scheduled (loop already closed).
+        client._running = False
+        loop = client._loop
+        if loop is not None:
+            # Suppress RuntimeError("Event loop is closed") and TimeoutError —
+            # both can race with the chat thread closing the loop.
+            with contextlib.suppress(Exception):
+                fut = asyncio.run_coroutine_threadsafe(client.disconnect(), loop)
+                fut.result(timeout=3)
 
     def send_chat(
         self,
@@ -2501,7 +2551,8 @@ class TwitchXApi:
             )
             self._eval_js(f"window.onChatSendResult({send_result})")
 
-        threading.Thread(target=_do_send, daemon=True).start()
+        with contextlib.suppress(RuntimeError):
+            self._send_pool.submit(_do_send)
 
     def save_chat_width(self, width: int) -> None:
         """Persist chat panel width."""
@@ -2522,7 +2573,8 @@ class TwitchXApi:
 
     def _on_chat_message(self, msg: ChatMessage) -> None:
         """Callback from chat client — push to JS."""
-        platform_conf = get_platform_config(self._config, msg.platform)
+        config = self._config  # snapshot: update_config() replaces atomically, never mutates
+        platform_conf = get_platform_config(config, msg.platform)
         self_login = str(platform_conf.get("user_login", "")).strip().lower()
         is_self = bool(self_login and self_login == str(msg.author).strip().lower())
         data = json.dumps(
@@ -2572,6 +2624,7 @@ class TwitchXApi:
         self.stop_polling()
         self._cancel_launch_timer()
         self._image_pool.shutdown(wait=False)
+        self._send_pool.shutdown(wait=False)
         self._http.close()
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)

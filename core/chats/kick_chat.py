@@ -159,6 +159,9 @@ class KickChatClient:
 
     platform = "kick"
 
+    # Pusher delivers on multiple channel variants; deduplicate by msg_id.
+    _DEDUP_MAX = 200
+
     def __init__(self) -> None:
         self._ws: Any = None
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -170,6 +173,8 @@ class KickChatClient:
         self._running = False
         self._authenticated = False
         self._token: str | None = None
+        self._seen_msg_ids: set[str] = set()
+        self._seen_msg_order: list[str] = []
 
     async def connect(
         self,
@@ -242,6 +247,13 @@ class KickChatClient:
 
                         msg = parse_kick_event(event)
                         if msg and self._message_callback:
+                            if msg.msg_id:
+                                if msg.msg_id in self._seen_msg_ids:
+                                    continue
+                                self._seen_msg_ids.add(msg.msg_id)
+                                self._seen_msg_order.append(msg.msg_id)
+                                if len(self._seen_msg_order) > self._DEDUP_MAX:
+                                    self._seen_msg_ids.discard(self._seen_msg_order.pop(0))
                             self._message_callback(msg)
 
             except websockets.exceptions.ConnectionClosedOK:

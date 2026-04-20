@@ -76,14 +76,16 @@ def wait_for_oauth_code(port: int = 3457, timeout: int = 120) -> str | None:
 
     server = HTTPServer(("127.0.0.1", port), Handler)
     server.timeout = timeout
+    # HTTPServer.__init__ calls bind() + listen(), so the socket is ready to
+    # accept connections before serve_forever() is invoked.
+    server_ready.set()
 
     def serve() -> None:
-        server_ready.set()
         server.serve_forever()
 
     thread = threading.Thread(target=serve, daemon=True)
     thread.start()
-    server_ready.wait()
+    server_ready.wait()  # returns immediately; kept for clarity
 
     # Wait for either the callback or timeout
     thread.join(timeout=timeout)

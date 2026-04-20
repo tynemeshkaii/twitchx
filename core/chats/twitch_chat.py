@@ -29,17 +29,18 @@ RECONNECT_DELAYS = [3, 6, 12, 24, 48]
 def _unescape_tag(value: str) -> str:
     """Unescape IRCv3 tag value.
 
-    Order matters: ``\\\\`` must be replaced first so that ``\\s`` in the
-    raw string is not misinterpreted as an escaped space.
+    Split on ``\\\\`` first so that single-backslash sequences inside each
+    segment are unambiguous, then rejoin with a literal ``\\``.  This avoids
+    the NUL-byte placeholder trick which breaks on rare inputs containing \\x00.
     """
-    # Replace \\ first to avoid double-unescaping
-    result = value.replace("\\\\", "\x00")
-    result = result.replace("\\s", " ")
-    result = result.replace("\\n", "\n")
-    result = result.replace("\\r", "\r")
-    result = result.replace("\\:", ";")
-    result = result.replace("\x00", "\\")
-    return result
+    parts = value.split("\\\\")
+    for i, part in enumerate(parts):
+        part = part.replace("\\s", " ")
+        part = part.replace("\\n", "\n")
+        part = part.replace("\\r", "\r")
+        part = part.replace("\\:", ";")
+        parts[i] = part
+    return "\\".join(parts)
 
 
 def parse_tags(raw_tags: str) -> dict[str, str]:
