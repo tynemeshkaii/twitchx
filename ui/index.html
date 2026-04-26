@@ -2370,6 +2370,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     else if (action === 'favorite') { if (api) api.add_channel(ctxChannel, ctxPlat); }
     else if (action === 'remove') { if (api) api.remove_channel(ctxChannel, ctxPlat); }
+    else if (action === 'multistream') {
+      var emptyIdx = multiState.slots.indexOf(null);
+      if (emptyIdx !== -1) {
+        openMultistreamView();
+        addMultiSlot(emptyIdx, ctxChannel, ctxPlat);
+      }
+    }
     document.getElementById('context-menu').style.display = 'none';
     ctxChannel = null;
   });
@@ -4494,6 +4501,14 @@ function showContextMenu(e, login) {
     favItem.style.display = 'block';
     removeItem.style.display = 'none';
   }
+  var msItem = menu.querySelector('[data-action="multistream"]');
+  if (msItem) {
+    var allFull = multiState.slots.every(function(s) { return s !== null; });
+    var ctxStream = state.streams.find(function(s) { return s.login === login; });
+    var isYT = (ctxStream && ctxStream.platform === 'youtube') ||
+      (state.favoritesMeta[login] && state.favoritesMeta[login].platform === 'youtube');
+    msItem.style.display = (allFull || isYT) ? 'none' : 'block';
+  }
 }
 
 function showSidebarContextMenu(e, login) {
@@ -4505,6 +4520,14 @@ function showSidebarContextMenu(e, login) {
   menu.style.display = 'block';
   menu.querySelector('[data-action="favorite"]').style.display = 'none';
   menu.querySelector('[data-action="remove"]').style.display = 'block';
+  var msItem = menu.querySelector('[data-action="multistream"]');
+  if (msItem) {
+    var allFull = multiState.slots.every(function(s) { return s !== null; });
+    var ctxStream = state.streams.find(function(s) { return s.login === login; });
+    var isYT = (ctxStream && ctxStream.platform === 'youtube') ||
+      (state.favoritesMeta[login] && state.favoritesMeta[login].platform === 'youtube');
+    msItem.style.display = (allFull || isYT) ? 'none' : 'block';
+  }
 }
 
 /* ── Keyboard shortcuts ─────────────────────────────────── */
@@ -4514,6 +4537,7 @@ function handleKeydown(e) {
   var inInput = tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA';
 
   if (e.key === 'Escape') {
+    if (multiState.open) { closeMultistreamView(); return; }
     if (document.getElementById('settings-overlay').classList.contains('visible')) {
       closeSettings(); return;
     }
