@@ -1161,6 +1161,274 @@ body {
 }
 #channel-view.hidden { display: none; }
 
+/* ── Multi-stream view ─────────────────────────────── */
+#multistream-view {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: #000;
+  z-index: 5;
+}
+#multistream-view.hidden { display: none; }
+
+#multistream-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+#multistream-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  flex: 1;
+}
+#ms-toggle-chat-btn, #ms-close-btn {
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255,255,255,0.1);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+#ms-toggle-chat-btn:hover, #ms-close-btn:hover {
+  color: var(--text-primary);
+  border-color: rgba(255,255,255,0.2);
+}
+
+#multistream-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+#multistream-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 2px;
+  flex: 1;
+  background: #111;
+}
+
+.ms-slot { position: relative; overflow: hidden; background: var(--bg-elevated); }
+
+.ms-slot-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.ms-add-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 20px;
+  border: 2px dashed rgba(255,255,255,0.15);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 22px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.ms-add-btn span { font-size: 11px; }
+.ms-add-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+.ms-add-form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  width: 100%;
+  max-width: 220px;
+  margin: auto;
+}
+.ms-add-form input, .ms-add-form select {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255,255,255,0.12);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+.ms-add-form input:focus, .ms-add-form select:focus {
+  outline: none;
+  border-color: rgba(255,159,10,0.35);
+}
+.ms-form-btns { display: flex; gap: 6px; width: 100%; }
+.ms-confirm-btn {
+  flex: 1;
+  padding: 5px 0;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--accent);
+  color: #000;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ms-cancel-btn {
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255,255,255,0.12);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ms-slot-active { display: none; position: relative; height: 100%; }
+.ms-video { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.ms-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  background: var(--bg-elevated);
+}
+.ms-error-msg {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  color: var(--error-red);
+  font-size: 11px;
+  text-align: center;
+  padding: 12px;
+  background: var(--bg-elevated);
+}
+
+.ms-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 6px 8px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.75) 0%, transparent 100%);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.ms-slot:hover .ms-overlay,
+.ms-slot.audio-focus .ms-overlay { opacity: 1; }
+
+.ms-slot-info { display: flex; align-items: center; gap: 5px; }
+.ms-platform-badge {
+  font-size: 9px;
+  font-weight: 800;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--accent);
+  color: #000;
+}
+.ms-channel-name { font-size: 12px; font-weight: 600; color: #fff; }
+.ms-slot-controls { display: flex; gap: 4px; }
+.ms-audio-btn, .ms-chat-sw-btn, .ms-remove-btn {
+  padding: 3px 5px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(0,0,0,0.5);
+  color: #fff;
+  font-size: 11px;
+  cursor: pointer;
+}
+.ms-audio-btn:hover, .ms-chat-sw-btn:hover, .ms-remove-btn:hover {
+  background: rgba(0,0,0,0.75);
+}
+.ms-slot.audio-focus { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ms-slot.chat-focus .ms-chat-sw-btn { color: var(--accent); border-color: var(--accent); }
+
+#ms-chat-panel {
+  width: 280px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  border-left: 1px solid rgba(255,255,255,0.06);
+}
+#ms-chat-panel.hidden { display: none; }
+#ms-chat-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+#ms-chat-title { font-size: 12px; font-weight: 600; color: var(--text-primary); flex: 1; }
+#ms-chat-status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+#ms-chat-status-dot.connected { background: var(--live-green); }
+#ms-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+#ms-chat-new-messages {
+  display: none;
+  text-align: center;
+  padding: 4px;
+  background: var(--accent);
+  color: #000;
+  font-size: 11px;
+  cursor: pointer;
+}
+#ms-chat-new-messages.visible { display: block; }
+#ms-chat-input-area {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+#ms-chat-input {
+  flex: 1;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255,255,255,0.12);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: inherit;
+}
+#ms-chat-input:focus { outline: none; border-color: rgba(255,159,10,0.35); }
+#ms-chat-input:disabled { opacity: 0.45; cursor: not-allowed; }
+#ms-chat-send-btn {
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--accent);
+  color: #000;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+#ms-chat-send-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
 #channel-header {
   display: flex;
   align-items: center;
@@ -1492,6 +1760,164 @@ body {
         </div>
       </div>
 
+      <!-- Multi-stream view -->
+      <div id="multistream-view" class="hidden">
+        <div id="multistream-header">
+          <span id="multistream-title">&#9706; Multi-stream</span>
+          <button id="ms-toggle-chat-btn" onclick="toggleMsChat()">&#128172; Chat</button>
+          <button id="ms-close-btn" onclick="closeMultistreamView()">&#10005; Close</button>
+        </div>
+        <div id="multistream-body">
+          <div id="multistream-grid">
+
+            <div class="ms-slot" data-slot-idx="0">
+              <div class="ms-slot-empty">
+                <button class="ms-add-btn" data-slot="0">+<span>Add Stream</span></button>
+              </div>
+              <div class="ms-add-form" style="display:none">
+                <input class="ms-add-input" type="text" placeholder="channel name" maxlength="100" autocomplete="off" />
+                <select class="ms-add-platform">
+                  <option value="twitch">Twitch</option>
+                  <option value="kick">Kick</option>
+                </select>
+                <div class="ms-form-btns">
+                  <button class="ms-confirm-btn" data-slot="0">Add</button>
+                  <button class="ms-cancel-btn" data-slot="0">Cancel</button>
+                </div>
+              </div>
+              <div class="ms-slot-active">
+                <video class="ms-video" autoplay muted playsinline></video>
+                <div class="ms-loading">Loading stream...</div>
+                <div class="ms-error-msg"></div>
+                <div class="ms-overlay">
+                  <div class="ms-slot-info">
+                    <span class="ms-platform-badge"></span>
+                    <span class="ms-channel-name"></span>
+                  </div>
+                  <div class="ms-slot-controls">
+                    <button class="ms-audio-btn" data-slot="0" title="Focus audio">&#128266;</button>
+                    <button class="ms-chat-sw-btn" data-slot="0" title="Switch chat">&#128172;</button>
+                    <button class="ms-remove-btn" data-slot="0" title="Remove">&times;</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="ms-slot" data-slot-idx="1">
+              <div class="ms-slot-empty">
+                <button class="ms-add-btn" data-slot="1">+<span>Add Stream</span></button>
+              </div>
+              <div class="ms-add-form" style="display:none">
+                <input class="ms-add-input" type="text" placeholder="channel name" maxlength="100" autocomplete="off" />
+                <select class="ms-add-platform">
+                  <option value="twitch">Twitch</option>
+                  <option value="kick">Kick</option>
+                </select>
+                <div class="ms-form-btns">
+                  <button class="ms-confirm-btn" data-slot="1">Add</button>
+                  <button class="ms-cancel-btn" data-slot="1">Cancel</button>
+                </div>
+              </div>
+              <div class="ms-slot-active">
+                <video class="ms-video" autoplay muted playsinline></video>
+                <div class="ms-loading">Loading stream...</div>
+                <div class="ms-error-msg"></div>
+                <div class="ms-overlay">
+                  <div class="ms-slot-info">
+                    <span class="ms-platform-badge"></span>
+                    <span class="ms-channel-name"></span>
+                  </div>
+                  <div class="ms-slot-controls">
+                    <button class="ms-audio-btn" data-slot="1" title="Focus audio">&#128266;</button>
+                    <button class="ms-chat-sw-btn" data-slot="1" title="Switch chat">&#128172;</button>
+                    <button class="ms-remove-btn" data-slot="1" title="Remove">&times;</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="ms-slot" data-slot-idx="2">
+              <div class="ms-slot-empty">
+                <button class="ms-add-btn" data-slot="2">+<span>Add Stream</span></button>
+              </div>
+              <div class="ms-add-form" style="display:none">
+                <input class="ms-add-input" type="text" placeholder="channel name" maxlength="100" autocomplete="off" />
+                <select class="ms-add-platform">
+                  <option value="twitch">Twitch</option>
+                  <option value="kick">Kick</option>
+                </select>
+                <div class="ms-form-btns">
+                  <button class="ms-confirm-btn" data-slot="2">Add</button>
+                  <button class="ms-cancel-btn" data-slot="2">Cancel</button>
+                </div>
+              </div>
+              <div class="ms-slot-active">
+                <video class="ms-video" autoplay muted playsinline></video>
+                <div class="ms-loading">Loading stream...</div>
+                <div class="ms-error-msg"></div>
+                <div class="ms-overlay">
+                  <div class="ms-slot-info">
+                    <span class="ms-platform-badge"></span>
+                    <span class="ms-channel-name"></span>
+                  </div>
+                  <div class="ms-slot-controls">
+                    <button class="ms-audio-btn" data-slot="2" title="Focus audio">&#128266;</button>
+                    <button class="ms-chat-sw-btn" data-slot="2" title="Switch chat">&#128172;</button>
+                    <button class="ms-remove-btn" data-slot="2" title="Remove">&times;</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="ms-slot" data-slot-idx="3">
+              <div class="ms-slot-empty">
+                <button class="ms-add-btn" data-slot="3">+<span>Add Stream</span></button>
+              </div>
+              <div class="ms-add-form" style="display:none">
+                <input class="ms-add-input" type="text" placeholder="channel name" maxlength="100" autocomplete="off" />
+                <select class="ms-add-platform">
+                  <option value="twitch">Twitch</option>
+                  <option value="kick">Kick</option>
+                </select>
+                <div class="ms-form-btns">
+                  <button class="ms-confirm-btn" data-slot="3">Add</button>
+                  <button class="ms-cancel-btn" data-slot="3">Cancel</button>
+                </div>
+              </div>
+              <div class="ms-slot-active">
+                <video class="ms-video" autoplay muted playsinline></video>
+                <div class="ms-loading">Loading stream...</div>
+                <div class="ms-error-msg"></div>
+                <div class="ms-overlay">
+                  <div class="ms-slot-info">
+                    <span class="ms-platform-badge"></span>
+                    <span class="ms-channel-name"></span>
+                  </div>
+                  <div class="ms-slot-controls">
+                    <button class="ms-audio-btn" data-slot="3" title="Focus audio">&#128266;</button>
+                    <button class="ms-chat-sw-btn" data-slot="3" title="Switch chat">&#128172;</button>
+                    <button class="ms-remove-btn" data-slot="3" title="Remove">&times;</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+          <div id="ms-chat-panel" class="hidden">
+            <div id="ms-chat-header">
+              <span id="ms-chat-title">Chat</span>
+              <span id="ms-chat-status-dot"></span>
+            </div>
+            <div id="ms-chat-messages"></div>
+            <div id="ms-chat-new-messages">&#8595; New messages</div>
+            <div id="ms-chat-input-area">
+              <input id="ms-chat-input" type="text" placeholder="Send a message..." maxlength="500" disabled />
+              <button id="ms-chat-send-btn" disabled>Send</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Player view (replaces grid when a stream is playing) -->
       <div id="player-view">
         <div id="player-header">
@@ -1555,6 +1981,7 @@ body {
 <!-- Context menu -->
 <div id="context-menu">
   <div class="ctx-item" data-action="watch">&#9654; Watch in App</div>
+  <div class="ctx-item" data-action="multistream">&#9706; Add to Multi-stream</div>
   <div class="ctx-item" data-action="watch-external">&#8599; Open in IINA</div>
   <div class="ctx-item" data-action="browser">&#127760; Open in Browser</div>
   <div class="ctx-item" data-action="profile">&#128100; View Channel</div>
