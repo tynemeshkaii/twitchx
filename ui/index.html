@@ -2154,6 +2154,15 @@ const state = {
   browsePlatformFilter: 'all',
 };
 
+var multiState = {
+  slots: [null, null, null, null],
+  audioFocus: -1,
+  chatSlot: -1,
+  open: false,
+  chatVisible: false
+};
+var msChatAutoScroll = true;
+
 let api = null;
 let ctxChannel = null;
 let channelViewSource = 'grid';
@@ -2445,6 +2454,94 @@ document.addEventListener('DOMContentLoaded', function() {
       pywebview.api.save_chat_width(w);
     });
   })();
+
+  // Multi-stream grid click delegation
+  document.getElementById('multistream-grid').addEventListener('click', function(e) {
+    var addBtn = e.target.closest('.ms-add-btn');
+    if (addBtn) {
+      var slot = parseInt(addBtn.dataset.slot, 10);
+      var slotEl = document.querySelector('.ms-slot[data-slot-idx="' + slot + '"]');
+      slotEl.querySelector('.ms-slot-empty').style.display = 'none';
+      slotEl.querySelector('.ms-add-form').style.display = 'flex';
+      slotEl.querySelector('.ms-add-input').focus();
+      return;
+    }
+    var confirmBtn = e.target.closest('.ms-confirm-btn');
+    if (confirmBtn) {
+      var slot = parseInt(confirmBtn.dataset.slot, 10);
+      var slotEl = document.querySelector('.ms-slot[data-slot-idx="' + slot + '"]');
+      var channel = slotEl.querySelector('.ms-add-input').value.trim();
+      var platform = slotEl.querySelector('.ms-add-platform').value;
+      if (channel) {
+        addMultiSlot(slot, channel, platform);
+      } else {
+        slotEl.querySelector('.ms-add-form').style.display = 'none';
+        slotEl.querySelector('.ms-slot-empty').style.display = '';
+      }
+      return;
+    }
+    var cancelBtn = e.target.closest('.ms-cancel-btn');
+    if (cancelBtn) {
+      var slot = parseInt(cancelBtn.dataset.slot, 10);
+      var slotEl = document.querySelector('.ms-slot[data-slot-idx="' + slot + '"]');
+      slotEl.querySelector('.ms-add-form').style.display = 'none';
+      slotEl.querySelector('.ms-slot-empty').style.display = '';
+      return;
+    }
+    var audioBtn = e.target.closest('.ms-audio-btn');
+    if (audioBtn) { setAudioFocus(parseInt(audioBtn.dataset.slot, 10)); return; }
+    var chatBtn = e.target.closest('.ms-chat-sw-btn');
+    if (chatBtn) { switchMultiChat(parseInt(chatBtn.dataset.slot, 10)); return; }
+    var removeBtn = e.target.closest('.ms-remove-btn');
+    if (removeBtn) { removeMultiSlot(parseInt(removeBtn.dataset.slot, 10)); return; }
+  });
+
+  // Confirm add-form on Enter key
+  document.getElementById('multistream-grid').addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter') return;
+    var input = e.target.closest('.ms-add-input');
+    if (!input) return;
+    var slotEl = input.closest('.ms-slot');
+    var idx = parseInt(slotEl.dataset.slotIdx, 10);
+    var channel = input.value.trim();
+    var platform = slotEl.querySelector('.ms-add-platform').value;
+    if (channel) {
+      addMultiSlot(idx, channel, platform);
+    } else {
+      slotEl.querySelector('.ms-add-form').style.display = 'none';
+      slotEl.querySelector('.ms-slot-empty').style.display = '';
+    }
+  });
+
+  // ms-chat send button
+  document.getElementById('ms-chat-send-btn').addEventListener('click', function() {
+    var input = document.getElementById('ms-chat-input');
+    var text = input.value.trim();
+    if (!text || !api) return;
+    api.send_chat(text, null, null);
+    input.value = '';
+  });
+  document.getElementById('ms-chat-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      document.getElementById('ms-chat-send-btn').click();
+    }
+  });
+
+  // ms-chat new-messages scroll button
+  document.getElementById('ms-chat-new-messages').addEventListener('click', function() {
+    var el = document.getElementById('ms-chat-messages');
+    el.scrollTop = el.scrollHeight;
+    msChatAutoScroll = true;
+    document.getElementById('ms-chat-new-messages').classList.remove('visible');
+  });
+  document.getElementById('ms-chat-messages').addEventListener('scroll', function() {
+    var el = document.getElementById('ms-chat-messages');
+    msChatAutoScroll = (el.scrollHeight - el.scrollTop - el.clientHeight) < 60;
+    if (msChatAutoScroll) {
+      document.getElementById('ms-chat-new-messages').classList.remove('visible');
+    }
+  });
 });
 
 /* ── Global callbacks (called from Python via evaluate_js) ── */
@@ -2634,6 +2731,37 @@ window.onPlayerState = function(data) {
   state.playerChannel = data.channel;
   state.playerTitle = data.title || '';
   state.playerError = data.error || '';
+};
+
+window.onMultiSlotReady = function(data) {
+  var idx = data.slot_idx;
+  var slotEl = document.querySelector('.ms-slot[data-slot-idx="' + idx + '"]');
+  if (!slotEl || !multiState.slots[idx]) return;
+  var active = slotEl.querySelector('.ms-slot-active');
+  var loading = active.querySelector('.ms-loading');
+  var errEl = active.querySelector('.ms-error-msg');
+
+  if (data.error) {
+    loading.style.display = 'none';
+    errEl.textContent = data.error;
+    errEl.style.display = 'flex';
+    return;
+  }
+
+  var video = active.querySelector('.ms-video');
+  video.src = data.url;
+  video.muted = (multiState.audioFocus !== idx);
+  video.play().catch(function() {});
+  loading.style.display = 'none';
+  errEl.style.display = 'none';
+
+  active.querySelector('.ms-channel-name').textContent = data.channel || '';
+  active.querySelector('.ms-platform-badge').textContent =
+    (data.platform || '').charAt(0).toUpperCase();
+  if (data.title) multiState.slots[idx].title = data.title;
+
+  if (multiState.audioFocus === -1) setAudioFocus(idx);
+  if (multiState.chatSlot === -1) switchMultiChat(idx);
 };
 
 /* ── Chat ───────────────────────────────────────────────── */
@@ -2923,6 +3051,120 @@ function hidePlayerView() {
   setStatus('', 'info');
   renderGrid();
   renderSidebar();
+}
+
+function openMultistreamView() {
+  if (document.getElementById('player-view').classList.contains('active')) {
+    hidePlayerView();
+  }
+  document.getElementById('browse-view').classList.add('hidden');
+  document.getElementById('channel-view').classList.add('hidden');
+  document.getElementById('toolbar').classList.add('hidden');
+  document.getElementById('stream-grid').classList.add('hidden');
+  document.getElementById('multistream-view').classList.remove('hidden');
+  multiState.open = true;
+}
+
+function closeMultistreamView() {
+  for (var i = 0; i < 4; i++) {
+    if (multiState.slots[i]) _clearMultiSlot(i);
+  }
+  if (api) api.stop_multi();
+  multiState.slots = [null, null, null, null];
+  multiState.audioFocus = -1;
+  multiState.chatSlot = -1;
+  multiState.open = false;
+  multiState.chatVisible = false;
+  document.getElementById('multistream-view').classList.add('hidden');
+  document.getElementById('ms-chat-panel').classList.add('hidden');
+  document.getElementById('toolbar').classList.remove('hidden');
+  document.getElementById('stream-grid').classList.remove('hidden');
+  document.getElementById('ms-chat-messages').replaceChildren();
+}
+
+function _clearMultiSlot(idx) {
+  var slotEl = document.querySelector('.ms-slot[data-slot-idx="' + idx + '"]');
+  if (!slotEl) return;
+  var video = slotEl.querySelector('.ms-video');
+  if (video) { video.pause(); video.removeAttribute('src'); video.load(); }
+  slotEl.querySelector('.ms-slot-active').style.display = 'none';
+  slotEl.querySelector('.ms-slot-empty').style.display = '';
+  slotEl.querySelector('.ms-add-form').style.display = 'none';
+  slotEl.classList.remove('audio-focus', 'chat-focus');
+}
+
+function addMultiSlot(idx, channel, platform) {
+  var cfg = (typeof pywebview !== 'undefined' && pywebview.api)
+    ? pywebview.api.get_full_config_for_settings()
+    : {};
+  var quality = (cfg && cfg.settings && cfg.settings.quality) || 'best';
+  multiState.slots[idx] = { channel: channel, platform: platform, quality: quality, title: '' };
+  var slotEl = document.querySelector('.ms-slot[data-slot-idx="' + idx + '"]');
+  slotEl.querySelector('.ms-slot-empty').style.display = 'none';
+  slotEl.querySelector('.ms-add-form').style.display = 'none';
+  var active = slotEl.querySelector('.ms-slot-active');
+  active.style.display = '';
+  active.querySelector('.ms-loading').style.display = '';
+  active.querySelector('.ms-error-msg').style.display = 'none';
+  active.querySelector('.ms-video').muted = true;
+  if (api) api.add_multi_slot(idx, channel, platform, quality);
+}
+
+function removeMultiSlot(idx) {
+  _clearMultiSlot(idx);
+  multiState.slots[idx] = null;
+  if (multiState.audioFocus === idx) {
+    multiState.audioFocus = -1;
+    for (var i = 0; i < 4; i++) {
+      if (multiState.slots[i]) { setAudioFocus(i); break; }
+    }
+  }
+  if (multiState.chatSlot === idx) {
+    multiState.chatSlot = -1;
+    if (api) api.stop_chat();
+    document.getElementById('ms-chat-title').textContent = 'Chat';
+    document.getElementById('ms-chat-status-dot').className = '';
+    document.getElementById('ms-chat-input').disabled = true;
+    document.getElementById('ms-chat-send-btn').disabled = true;
+  }
+}
+
+function setAudioFocus(idx) {
+  document.querySelectorAll('.ms-slot').forEach(function(el) {
+    el.classList.remove('audio-focus');
+    var v = el.querySelector('.ms-video');
+    if (v) v.muted = true;
+  });
+  var focusEl = document.querySelector('.ms-slot[data-slot-idx="' + idx + '"]');
+  if (focusEl) {
+    focusEl.classList.add('audio-focus');
+    var v = focusEl.querySelector('.ms-video');
+    if (v) v.muted = false;
+  }
+  multiState.audioFocus = idx;
+}
+
+function switchMultiChat(idx) {
+  var slot = multiState.slots[idx];
+  if (!slot) return;
+  document.querySelectorAll('.ms-slot').forEach(function(el) {
+    el.classList.remove('chat-focus');
+  });
+  var el = document.querySelector('.ms-slot[data-slot-idx="' + idx + '"]');
+  if (el) el.classList.add('chat-focus');
+  multiState.chatSlot = idx;
+  document.getElementById('ms-chat-messages').replaceChildren();
+  document.getElementById('ms-chat-title').textContent = slot.channel;
+  if (api) {
+    api.stop_chat();
+    api.start_chat(slot.channel, slot.platform);
+  }
+  if (!multiState.chatVisible) toggleMsChat();
+}
+
+function toggleMsChat() {
+  multiState.chatVisible = !multiState.chatVisible;
+  document.getElementById('ms-chat-panel').classList.toggle('hidden', !multiState.chatVisible);
 }
 
 function showBrowseView() {
