@@ -1899,6 +1899,49 @@ class TwitchXApi:
         self._watching_channel = None
         self._eval_js("window.onPlayerStop()")
 
+    def add_multi_slot(
+        self, slot_idx: int, channel: str, platform: str, quality: str
+    ) -> None:
+        """Resolve HLS URL for one multistream slot. Emits window.onMultiSlotReady."""
+        if not 0 <= slot_idx <= 3:
+            return
+        channel_lower = channel.lower() if platform != "youtube" else channel
+        title = ""
+        for s in self._live_streams:
+            if (
+                self._stream_platform(s) == platform
+                and self._stream_login(s) == channel_lower
+            ):
+                title = s.get("title", "")
+                break
+
+        def do_resolve() -> None:
+            cfg = load_config()
+            settings = get_settings(cfg)
+            hls_url, err = resolve_hls_url(
+                channel,
+                quality,
+                settings.get("streamlink_path", "streamlink"),
+                platform=platform,
+            )
+            payload: dict[str, Any] = {
+                "slot_idx": slot_idx,
+                "channel": channel,
+                "platform": platform,
+                "title": title,
+            }
+            if hls_url:
+                payload["url"] = hls_url
+            else:
+                payload["error"] = err or "Could not resolve stream URL"
+            self._eval_js(f"window.onMultiSlotReady({json.dumps(payload)})")
+
+        self._run_in_thread(do_resolve)
+
+    def stop_multi(self) -> None:
+        """Stop chat for all multistream slots."""
+        self.stop_chat()
+
     def watch_external(self, channel: str, quality: str) -> None:
         """Launch stream in IINA (fallback)."""
         if not channel:
