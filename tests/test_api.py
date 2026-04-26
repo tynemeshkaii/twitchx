@@ -976,3 +976,121 @@ class TestParallelFetch:
         _, _, _, youtube_streams, twitch_error = result
         assert youtube_streams == fake_yt
         assert isinstance(twitch_error, httpx.ConnectError)
+
+
+class TestAddMultiSlot:
+    def test_success_emits_onMultiSlotReady(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _patch_storage(monkeypatch, tmp_path)
+        api = TwitchXApi()
+        emitted: list[str] = []
+        monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+        monkeypatch.setattr(
+            "ui.api.resolve_hls_url",
+            lambda ch, q, sl, platform: ("https://hls.example.com/s.m3u8", ""),
+        )
+
+        api.add_multi_slot(0, "xqc", "twitch", "best")
+
+        assert len(emitted) == 1
+        assert "onMultiSlotReady" in emitted[0]
+        payload = json.loads(emitted[0].split("(", 1)[1].rstrip(")"))
+        assert payload["slot_idx"] == 0
+        assert payload["url"] == "https://hls.example.com/s.m3u8"
+        assert payload["channel"] == "xqc"
+        assert payload["platform"] == "twitch"
+        assert "error" not in payload
+
+    def test_resolve_error_emits_error_payload(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _patch_storage(monkeypatch, tmp_path)
+        api = TwitchXApi()
+        emitted: list[str] = []
+        monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+        monkeypatch.setattr(
+            "ui.api.resolve_hls_url",
+            lambda ch, q, sl, platform: (None, "streamlink not found"),
+        )
+
+        api.add_multi_slot(2, "ninja", "twitch", "720p")
+
+        assert len(emitted) == 1
+        payload = json.loads(emitted[0].split("(", 1)[1].rstrip(")"))
+        assert payload["slot_idx"] == 2
+        assert "error" in payload
+        assert "url" not in payload
+
+    def test_out_of_range_slot_idx_is_noop(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _patch_storage(monkeypatch, tmp_path)
+        api = TwitchXApi()
+        emitted: list[str] = []
+        monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+
+        api.add_multi_slot(4, "xqc", "twitch", "best")
+
+        assert emitted == []
+
+    def test_negative_slot_idx_is_noop(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _patch_storage(monkeypatch, tmp_path)
+        api = TwitchXApi()
+        emitted: list[str] = []
+        monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+
+        api.add_multi_slot(-1, "xqc", "twitch", "best")
+
+        assert emitted == []
+
+    def test_title_populated_from_live_streams_cache(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _patch_storage(monkeypatch, tmp_path)
+        api = TwitchXApi()
+        api._live_streams = [
+            {"login": "xqc", "platform": "twitch", "title": "Gaming Session"}
+        ]
+        emitted: list[str] = []
+        monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+        monkeypatch.setattr(
+            "ui.api.resolve_hls_url",
+            lambda ch, q, sl, platform: ("https://hls.example.com/s.m3u8", ""),
+        )
+
+        api.add_multi_slot(0, "xqc", "twitch", "best")
+
+        payload = json.loads(emitted[0].split("(", 1)[1].rstrip(")"))
+        assert payload["title"] == "Gaming Session"
+
+    def test_kick_slot_passes_kick_platform_to_resolver(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _patch_storage(monkeypatch, tmp_path)
+        api = TwitchXApi()
+        emitted: list[str] = []
+        captured: dict[str, str] = {}
+        monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+
+        def fake_resolve(
+            ch: str, q: str, sl: str, platform: str
+        ) -> tuple[str, str]:
+            captured["platform"] = platform
+            return "https://hls.example.com/s.m3u8", ""
+
+        monkeypatch.setattr("ui.api.resolve_hls_url", fake_resolve)
+
+        api.add_multi_slot(1, "xqcow", "kick", "best")
+
+        assert captured["platform"] == "kick"
+        payload = json.loads(emitted[0].split("(", 1)[1].rstrip(")"))
+        assert payload["platform"] == "kick"
