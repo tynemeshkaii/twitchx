@@ -3732,6 +3732,8 @@ function renderGrid() {
   // Skip rendering when browse view is open — avoids restoring grid inline style
   if (document.getElementById('browse-view') &&
       !document.getElementById('browse-view').classList.contains('hidden')) return;
+  // Skip rendering when multistream view is open — same inline-style conflict
+  if (multiState.open) return;
 
   var grid = document.getElementById('stream-grid');
   var empty = document.getElementById('empty-state');
@@ -4506,7 +4508,7 @@ function showContextMenu(e, login) {
     var allFull = multiState.slots.every(function(s) { return s !== null; });
     var ctxStream = state.streams.find(function(s) { return s.login === login; });
     var isYT = (ctxStream && ctxStream.platform === 'youtube') ||
-      (state.favoritesMeta[login] && state.favoritesMeta[login].platform === 'youtube');
+      (state.favoritesMeta['youtube:' + login] !== undefined);
     msItem.style.display = (allFull || isYT) ? 'none' : 'block';
   }
 }
@@ -4525,7 +4527,7 @@ function showSidebarContextMenu(e, login) {
     var allFull = multiState.slots.every(function(s) { return s !== null; });
     var ctxStream = state.streams.find(function(s) { return s.login === login; });
     var isYT = (ctxStream && ctxStream.platform === 'youtube') ||
-      (state.favoritesMeta[login] && state.favoritesMeta[login].platform === 'youtube');
+      (state.favoritesMeta['youtube:' + login] !== undefined);
     msItem.style.display = (allFull || isYT) ? 'none' : 'block';
   }
 }

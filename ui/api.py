@@ -1939,7 +1939,7 @@ class TwitchXApi:
         self._run_in_thread(do_resolve)
 
     def stop_multi(self) -> None:
-        """Stop chat for all multistream slots."""
+        """Stop chat for the active multistream slot."""
         self.stop_chat()
 
     def watch_external(self, channel: str, quality: str) -> None:
