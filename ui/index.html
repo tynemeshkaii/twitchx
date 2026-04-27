@@ -1363,7 +1363,7 @@ body {
 }
 .ms-channel-name { font-size: 12px; font-weight: 600; color: #fff; }
 .ms-slot-controls { display: flex; gap: 4px; }
-.ms-audio-btn, .ms-chat-sw-btn, .ms-remove-btn {
+.ms-audio-btn, .ms-chat-sw-btn, .ms-fullscreen-btn, .ms-remove-btn {
   padding: 3px 5px;
   border-radius: var(--radius-sm);
   border: 1px solid rgba(255,255,255,0.2);
@@ -1372,7 +1372,7 @@ body {
   font-size: 11px;
   cursor: pointer;
 }
-.ms-audio-btn:hover, .ms-chat-sw-btn:hover, .ms-remove-btn:hover {
+.ms-audio-btn:hover, .ms-chat-sw-btn:hover, .ms-fullscreen-btn:hover, .ms-remove-btn:hover {
   background: rgba(0,0,0,0.75);
 }
 .ms-slot.audio-focus { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -1822,6 +1822,7 @@ body {
                   <div class="ms-slot-controls">
                     <button class="ms-audio-btn" data-slot="0" title="Focus audio">&#128266;</button>
                     <button class="ms-chat-sw-btn" data-slot="0" title="Switch chat">&#128172;</button>
+                    <button class="ms-fullscreen-btn" data-slot="0" title="Fullscreen (double-click)">&#9974;</button>
                     <button class="ms-remove-btn" data-slot="0" title="Remove">&times;</button>
                   </div>
                 </div>
@@ -1855,6 +1856,7 @@ body {
                   <div class="ms-slot-controls">
                     <button class="ms-audio-btn" data-slot="1" title="Focus audio">&#128266;</button>
                     <button class="ms-chat-sw-btn" data-slot="1" title="Switch chat">&#128172;</button>
+                    <button class="ms-fullscreen-btn" data-slot="1" title="Fullscreen (double-click)">&#9974;</button>
                     <button class="ms-remove-btn" data-slot="1" title="Remove">&times;</button>
                   </div>
                 </div>
@@ -1888,6 +1890,7 @@ body {
                   <div class="ms-slot-controls">
                     <button class="ms-audio-btn" data-slot="2" title="Focus audio">&#128266;</button>
                     <button class="ms-chat-sw-btn" data-slot="2" title="Switch chat">&#128172;</button>
+                    <button class="ms-fullscreen-btn" data-slot="2" title="Fullscreen (double-click)">&#9974;</button>
                     <button class="ms-remove-btn" data-slot="2" title="Remove">&times;</button>
                   </div>
                 </div>
@@ -1921,6 +1924,7 @@ body {
                   <div class="ms-slot-controls">
                     <button class="ms-audio-btn" data-slot="3" title="Focus audio">&#128266;</button>
                     <button class="ms-chat-sw-btn" data-slot="3" title="Switch chat">&#128172;</button>
+                    <button class="ms-fullscreen-btn" data-slot="3" title="Fullscreen (double-click)">&#9974;</button>
                     <button class="ms-remove-btn" data-slot="3" title="Remove">&times;</button>
                   </div>
                 </div>
@@ -2524,8 +2528,18 @@ document.addEventListener('DOMContentLoaded', function() {
     if (audioBtn) { setAudioFocus(parseInt(audioBtn.dataset.slot, 10)); return; }
     var chatBtn = e.target.closest('.ms-chat-sw-btn');
     if (chatBtn) { switchMultiChat(parseInt(chatBtn.dataset.slot, 10)); return; }
+    var fsBtn = e.target.closest('.ms-fullscreen-btn');
+    if (fsBtn) { toggleMsSlotFullscreen(parseInt(fsBtn.dataset.slot, 10)); return; }
     var removeBtn = e.target.closest('.ms-remove-btn');
     if (removeBtn) { removeMultiSlot(parseInt(removeBtn.dataset.slot, 10)); return; }
+  });
+
+  // Double-click on a slot to enter fullscreen
+  document.getElementById('multistream-grid').addEventListener('dblclick', function(e) {
+    if (e.target.closest('.ms-slot-controls') || e.target.closest('.ms-add-form') || e.target.closest('.ms-slot-empty')) return;
+    var slotEl = e.target.closest('.ms-slot');
+    if (!slotEl) return;
+    toggleMsSlotFullscreen(parseInt(slotEl.dataset.slotIdx, 10));
   });
 
   // Confirm add-form on Enter key
@@ -3416,6 +3430,28 @@ function toggleVideoFullscreen() {
   }
 
   // Native video fullscreen (works in WKWebView without extra preferences)
+  if (video.webkitEnterFullscreen) {
+    video.webkitEnterFullscreen();
+  } else if (video.requestFullscreen) {
+    video.requestFullscreen();
+  } else if (video.webkitRequestFullscreen) {
+    video.webkitRequestFullscreen();
+  }
+}
+
+function toggleMsSlotFullscreen(idx) {
+  // Exit if already in fullscreen
+  if (document.fullscreenElement || document.webkitFullscreenElement) {
+    if (document.exitFullscreen) document.exitFullscreen();
+    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    return;
+  }
+  if (!multiState.slots[idx]) return;
+  var slotEl = document.querySelector('.ms-slot[data-slot-idx="' + idx + '"]');
+  if (!slotEl) return;
+  var video = slotEl.querySelector('.ms-video');
+  if (!video) return;
+  // webkitEnterFullscreen is the most reliable path in WKWebView (uses native AVKit)
   if (video.webkitEnterFullscreen) {
     video.webkitEnterFullscreen();
   } else if (video.requestFullscreen) {
