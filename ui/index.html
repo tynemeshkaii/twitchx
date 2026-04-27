@@ -2525,7 +2525,8 @@ document.addEventListener('DOMContentLoaded', function() {
     var input = document.getElementById('ms-chat-input');
     var text = input.value.trim();
     if (!text || !api) return;
-    api.send_chat(text, null, null);
+    var requestId = 'ms-send-' + Date.now();
+    api.send_chat(text, null, null, null, requestId);
     input.value = '';
   });
   document.getElementById('ms-chat-input').addEventListener('keydown', function(e) {
@@ -2924,7 +2925,7 @@ window.onChatSendResult = function(result) {
   if (result.ok) return;
 
   setStatus(result.error || 'Failed to send chat message', 'error');
-  var input = document.getElementById('chat-input');
+  var input = document.getElementById(multiState.open ? 'ms-chat-input' : 'chat-input');
   if (input && !input.value && pending && pending.text) {
     input.value = pending.text;
   }
@@ -2971,11 +2972,14 @@ function clearChatMessages() {
 window.onChatStatus = function(status) {
   if (multiState.open) {
     var dot = document.getElementById('ms-chat-status-dot');
-    if (dot) dot.className = status.connected ? 'connected' : '';
+    if (dot) {
+      dot.className = status.connected ? 'connected' : '';
+      dot.title = status.connected ? 'Connected' : (status.error || 'Disconnected');
+    }
     var inp = document.getElementById('ms-chat-input');
     var btn = document.getElementById('ms-chat-send-btn');
-    if (inp) inp.disabled = !status.connected;
-    if (btn) btn.disabled = !status.connected;
+    if (inp) inp.disabled = !(status.connected && status.authenticated);
+    if (btn) btn.disabled = !(status.connected && status.authenticated);
     return;
   }
   chatAuthenticated = !!(status.authenticated);
@@ -3184,6 +3188,8 @@ function setAudioFocus(idx) {
 function switchMultiChat(idx) {
   var slot = multiState.slots[idx];
   if (!slot) return;
+  document.getElementById('ms-chat-input').disabled = true;
+  document.getElementById('ms-chat-send-btn').disabled = true;
   document.querySelectorAll('.ms-slot').forEach(function(el) {
     el.classList.remove('chat-focus');
   });
@@ -4539,10 +4545,10 @@ function handleKeydown(e) {
   var inInput = tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA';
 
   if (e.key === 'Escape') {
-    if (multiState.open) { closeMultistreamView(); return; }
     if (document.getElementById('settings-overlay').classList.contains('visible')) {
       closeSettings(); return;
     }
+    if (multiState.open) { closeMultistreamView(); return; }
     if (document.getElementById('context-menu').style.display === 'block') {
       document.getElementById('context-menu').style.display = 'none'; return;
     }
