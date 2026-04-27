@@ -1180,6 +1180,8 @@ body {
   background: var(--bg-surface);
   border-bottom: 1px solid rgba(255,255,255,0.06);
   flex-shrink: 0;
+  position: relative;
+  z-index: 3;
 }
 #multistream-title {
   font-size: 13px;
@@ -1187,18 +1189,39 @@ body {
   color: var(--text-primary);
   flex: 1;
 }
-#ms-toggle-chat-btn, #ms-close-btn {
+#ms-sidebar-btn, #ms-toggle-chat-btn, #ms-close-btn {
   padding: 4px 10px;
   border-radius: var(--radius-sm);
   border: 1px solid rgba(255,255,255,0.1);
   background: transparent;
   color: var(--text-secondary);
   font-size: 12px;
+  font-family: inherit;
   cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
 }
-#ms-toggle-chat-btn:hover, #ms-close-btn:hover {
+#ms-sidebar-btn:hover, #ms-toggle-chat-btn:hover, #ms-close-btn:hover {
   color: var(--text-primary);
   border-color: rgba(255,255,255,0.2);
+}
+#ms-sidebar-btn.active {
+  background: rgba(255,255,255,0.08);
+  color: var(--text-primary);
+  border-color: rgba(255,255,255,0.18);
+}
+#ms-sidebar-backdrop {
+  display: none;
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.48);
+  z-index: 2;
+  cursor: pointer;
+}
+#multistream-view.ms-sidebar-open #ms-sidebar-backdrop { display: block; }
+#main.ms-sidebar-open #sidebar {
+  position: relative;
+  z-index: 10;
+  box-shadow: 4px 0 24px rgba(0,0,0,0.55);
 }
 
 #multistream-body {
@@ -1764,9 +1787,11 @@ body {
       <div id="multistream-view" class="hidden">
         <div id="multistream-header">
           <span id="multistream-title">&#9706; Multi-stream</span>
+          <button id="ms-sidebar-btn" onclick="toggleMsSidebar()">&#9776; Sidebar</button>
           <button id="ms-toggle-chat-btn" onclick="toggleMsChat()">&#128172; Chat</button>
           <button id="ms-close-btn" onclick="closeMultistreamView()">&#10005; Close</button>
         </div>
+        <div id="ms-sidebar-backdrop" onclick="toggleMsSidebar()"></div>
         <div id="multistream-body">
           <div id="multistream-grid">
 
@@ -3116,11 +3141,24 @@ function closeMultistreamView() {
   multiState.chatSlot = -1;
   multiState.open = false;
   multiState.chatVisible = false;
+  document.getElementById('main').classList.remove('ms-sidebar-open');
+  document.getElementById('multistream-view').classList.remove('ms-sidebar-open');
   document.getElementById('multistream-view').classList.add('hidden');
   document.getElementById('ms-chat-panel').classList.add('hidden');
   document.getElementById('toolbar').classList.remove('hidden');
   document.getElementById('stream-grid').classList.remove('hidden');
   document.getElementById('ms-chat-messages').replaceChildren();
+  var btn = document.getElementById('ms-sidebar-btn');
+  if (btn) btn.classList.remove('active');
+}
+
+function toggleMsSidebar() {
+  var main = document.getElementById('main');
+  var mv = document.getElementById('multistream-view');
+  var btn = document.getElementById('ms-sidebar-btn');
+  var open = main.classList.toggle('ms-sidebar-open');
+  mv.classList.toggle('ms-sidebar-open', open);
+  if (btn) btn.classList.toggle('active', open);
 }
 
 function _clearMultiSlot(idx) {
