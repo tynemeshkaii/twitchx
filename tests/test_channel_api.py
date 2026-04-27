@@ -22,6 +22,12 @@ def _parse_channel_profile(emitted: list[str]) -> dict:
     return json.loads(raw.split("window.onChannelProfile(", 1)[1].rstrip(")"))
 
 
+def _parse_channel_media(emitted: list[str]) -> dict:
+    raw = emitted[-1]
+    assert "window.onChannelMedia(" in raw
+    return json.loads(raw.split("window.onChannelMedia(", 1)[1].rstrip(")"))
+
+
 def test_get_channel_profile_twitch_emits_js_callback(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -187,3 +193,60 @@ def test_get_channel_profile_ignores_unknown_platform(
     api.get_channel_profile("someone", "nonexistent")
 
     assert not emitted
+
+
+def test_get_channel_media_twitch_vods_emits_payload(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_storage(monkeypatch, tmp_path)
+    api = TwitchXApi()
+    emitted: list[str] = []
+
+    async def fake_vods(login: str, limit: int = 12) -> list[dict]:
+        assert login == "xqc"
+        assert limit == 12
+        return [
+            {
+                "id": "v1",
+                "platform": "twitch",
+                "kind": "vod",
+                "title": "Archive",
+                "url": "https://www.twitch.tv/videos/1",
+                "thumbnail_url": "https://thumb.jpg",
+                "published_at": "2026-04-24T10:00:00Z",
+                "duration_seconds": 3600,
+                "views": 100,
+                "channel_login": "xqc",
+                "channel_display_name": "xQc",
+            }
+        ]
+
+    monkeypatch.setattr(api._twitch, "get_channel_vods", fake_vods)
+    monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+    monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+
+    api.get_channel_media("xqc", "twitch", "vods")
+
+    payload = _parse_channel_media(emitted)
+    assert payload["platform"] == "twitch"
+    assert payload["tab"] == "vods"
+    assert payload["supported"] is True
+    assert payload["error"] is False
+    assert payload["items"][0]["id"] == "v1"
+
+
+def test_get_channel_media_kick_emits_unsupported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_storage(monkeypatch, tmp_path)
+    api = TwitchXApi()
+    emitted: list[str] = []
+    monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+
+    api.get_channel_media("trainwreckstv", "kick", "clips")
+
+    payload = _parse_channel_media(emitted)
+    assert payload["platform"] == "kick"
+    assert payload["tab"] == "clips"
+    assert payload["supported"] is False
+    assert payload["error"] is False

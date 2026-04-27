@@ -50,7 +50,9 @@ def resolve_hls_url(
             "streamlink not found.\n\nInstall it with:\n  brew install streamlink",
         )
 
-    if platform == "youtube":
+    if channel.startswith("http://") or channel.startswith("https://"):
+        stream_url = channel
+    elif platform == "youtube":
         stream_url = f"https://www.youtube.com/watch?v={channel}"
     elif platform == "kick":
         stream_url = f"https://kick.com/{channel}"

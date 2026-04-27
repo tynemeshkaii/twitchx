@@ -130,13 +130,15 @@ class TestGetChannelInfo:
         async def fake_get(endpoint: str, params: Any = None) -> Any:
             if endpoint == "/users":
                 return {
-                    "data": [{
-                        "id": "44322889",
-                        "login": "xqc",
-                        "display_name": "xQc",
-                        "profile_image_url": "https://img.jpg",
-                        "description": "lulw",
-                    }]
+                    "data": [
+                        {
+                            "id": "44322889",
+                            "login": "xqc",
+                            "display_name": "xQc",
+                            "profile_image_url": "https://img.jpg",
+                            "description": "lulw",
+                        }
+                    ]
                 }
             return {"data": [{"user_login": "xqc"}]}  # /streams
 
@@ -182,13 +184,15 @@ class TestGetChannelInfo:
         async def fake_get(endpoint: str, params: Any = None) -> Any:
             if endpoint == "/users":
                 return {
-                    "data": [{
-                        "id": "999",
-                        "login": "streamerfoo",
-                        "display_name": "StreamerFoo",
-                        "profile_image_url": "",
-                        "description": "",
-                    }]
+                    "data": [
+                        {
+                            "id": "999",
+                            "login": "streamerfoo",
+                            "display_name": "StreamerFoo",
+                            "profile_image_url": "",
+                            "description": "",
+                        }
+                    ]
                 }
             return {"data": []}  # /streams — not live
 
@@ -198,3 +202,103 @@ class TestGetChannelInfo:
         loop.close()
 
         assert result["is_live"] is False
+
+
+class TestChannelMedia:
+    def test_get_channel_vods_returns_normalized_archives(self) -> None:
+        client = TwitchClient()
+
+        async def fake_get(endpoint: str, params: Any = None) -> Any:
+            if endpoint == "/users":
+                return {
+                    "data": [
+                        {
+                            "id": "44322889",
+                            "login": "xqc",
+                            "display_name": "xQc",
+                        }
+                    ]
+                }
+            return {
+                "data": [
+                    {
+                        "id": "v123",
+                        "title": "Ranked grind",
+                        "url": "https://www.twitch.tv/videos/123",
+                        "thumbnail_url": "https://thumb/%{width}x%{height}.jpg",
+                        "created_at": "2026-04-24T18:00:00Z",
+                        "duration": "3h5m7s",
+                        "view_count": 12345,
+                    }
+                ]
+            }
+
+        loop = asyncio.new_event_loop()
+        client._get = fake_get  # type: ignore[method-assign]
+        result = loop.run_until_complete(client.get_channel_vods("xQc"))
+        loop.close()
+
+        assert result == [
+            {
+                "id": "v123",
+                "platform": "twitch",
+                "kind": "vod",
+                "channel_login": "xqc",
+                "channel_display_name": "xQc",
+                "title": "Ranked grind",
+                "url": "https://www.twitch.tv/videos/123",
+                "thumbnail_url": "https://thumb/440x248.jpg",
+                "published_at": "2026-04-24T18:00:00Z",
+                "duration_seconds": 11107,
+                "views": 12345,
+            }
+        ]
+
+    def test_get_channel_clips_returns_normalized_items(self) -> None:
+        client = TwitchClient()
+
+        async def fake_get(endpoint: str, params: Any = None) -> Any:
+            if endpoint == "/users":
+                return {
+                    "data": [
+                        {
+                            "id": "44322889",
+                            "login": "xqc",
+                            "display_name": "xQc",
+                        }
+                    ]
+                }
+            return {
+                "data": [
+                    {
+                        "id": "clip123",
+                        "title": "Huge comeback",
+                        "url": "https://clips.twitch.tv/FancyClip",
+                        "thumbnail_url": "https://clip-thumb.jpg",
+                        "created_at": "2026-04-20T12:00:00Z",
+                        "duration": 28.4,
+                        "view_count": 9876,
+                    }
+                ]
+            }
+
+        loop = asyncio.new_event_loop()
+        client._get = fake_get  # type: ignore[method-assign]
+        result = loop.run_until_complete(client.get_channel_clips("xQc"))
+        loop.close()
+
+        assert result == [
+            {
+                "id": "clip123",
+                "platform": "twitch",
+                "kind": "clip",
+                "channel_login": "xqc",
+                "channel_display_name": "xQc",
+                "title": "Huge comeback",
+                "url": "https://clips.twitch.tv/FancyClip",
+                "thumbnail_url": "https://clip-thumb.jpg",
+                "published_at": "2026-04-20T12:00:00Z",
+                "duration_seconds": 28,
+                "views": 9876,
+            }
+        ]

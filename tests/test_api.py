@@ -419,8 +419,10 @@ def test_start_chat_kick_uses_chatroom_and_scope_for_send_auth(
             )
 
     class InlineThread:
-        def __init__(self, target: object, daemon: bool = True) -> None:
-            self._target = target
+        def __init__(
+            self, target: object | None = None, *args: object, **kwargs: object
+        ) -> None:
+            self._target = target or kwargs.get("target")
 
         def start(self) -> None:
             assert callable(self._target)
@@ -476,14 +478,6 @@ def test_send_chat_kick_emits_send_result_without_local_echo(
                 message_id="kick-msg-1",
             )
 
-    class InlineThread:
-        def __init__(self, target: object, daemon: bool = True) -> None:
-            self._target = target
-
-        def start(self) -> None:
-            assert callable(self._target)
-            self._target()
-
     def fake_run_coroutine_threadsafe(coro: object, _loop: object) -> object:
         class FakeFuture:
             def result(self, timeout: float | None = None) -> ChatSendResult:
@@ -496,7 +490,7 @@ def test_send_chat_kick_emits_send_result_without_local_echo(
         return FakeFuture()
 
     api._chat_client = FakeKickChatClient()  # type: ignore[assignment]
-    monkeypatch.setattr("ui.api.threading.Thread", InlineThread)
+    monkeypatch.setattr(api._send_pool, "submit", lambda fn: fn())
     monkeypatch.setattr(
         "ui.api.asyncio.run_coroutine_threadsafe", fake_run_coroutine_threadsafe
     )
@@ -538,14 +532,6 @@ def test_send_chat_kick_failure_emits_error_result(
                 error="Kick blocked this message.",
             )
 
-    class InlineThread:
-        def __init__(self, target: object, daemon: bool = True) -> None:
-            self._target = target
-
-        def start(self) -> None:
-            assert callable(self._target)
-            self._target()
-
     def fake_run_coroutine_threadsafe(coro: object, _loop: object) -> object:
         class FakeFuture:
             def result(self, timeout: float | None = None) -> ChatSendResult:
@@ -558,7 +544,7 @@ def test_send_chat_kick_failure_emits_error_result(
         return FakeFuture()
 
     api._chat_client = FakeKickChatClient()  # type: ignore[assignment]
-    monkeypatch.setattr("ui.api.threading.Thread", InlineThread)
+    monkeypatch.setattr(api._send_pool, "submit", lambda fn: fn())
     monkeypatch.setattr(
         "ui.api.asyncio.run_coroutine_threadsafe", fake_run_coroutine_threadsafe
     )

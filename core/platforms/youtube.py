@@ -374,6 +374,134 @@ class YouTubeClient:
             "avatar_url": thumbs.get("default", {}).get("url", ""),
         }
 
+    @staticmethod
+    def _parse_iso8601_duration_seconds(raw: str) -> int:
+        """Convert ISO8601 video durations like PT1H2M3S to seconds."""
+        if not raw:
+            return 0
+        match = re.fullmatch(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", raw)
+        if not match:
+            return 0
+        hours = int(match.group(1) or 0)
+        minutes = int(match.group(2) or 0)
+        seconds = int(match.group(3) or 0)
+        return hours * 3600 + minutes * 60 + seconds
+
+    async def _get_channel_resource(
+        self, channel_id_or_handle: str, part: str
+    ) -> dict[str, Any]:
+        raw = channel_id_or_handle.strip()
+        if not raw:
+            return {}
+        params: dict[str, str]
+        if raw.startswith("@"):
+            params = {"part": part, "forHandle": raw}
+        else:
+            params = {"part": part, "id": raw}
+        data = await self._yt_get("channels", params=params)
+        items = data.get("items", []) if isinstance(data, dict) else []
+        return items[0] if items else {}
+
+    async def _get_uploaded_video_items(
+        self,
+        channel_id_or_handle: str,
+        max_results: int = 12,
+    ) -> list[dict[str, Any]]:
+        if not self._quota.check_and_use(1):
+            logger.warning("YouTube quota too low for channel media lookup")
+            return []
+        channel = await self._get_channel_resource(
+            channel_id_or_handle, "contentDetails,snippet"
+        )
+        uploads_id = (
+            channel.get("contentDetails", {})
+            .get("relatedPlaylists", {})
+            .get("uploads", "")
+        )
+        if not uploads_id:
+            return []
+
+        if not self._quota.check_and_use(1):
+            logger.warning("YouTube quota too low for uploads playlist lookup")
+            return []
+        playlist_data = await self._yt_get(
+            "playlistItems",
+            params={
+                "part": "snippet,contentDetails",
+                "playlistId": uploads_id,
+                "maxResults": str(min(max_results, 50)),
+            },
+        )
+        playlist_items = (
+            playlist_data.get("items", []) if isinstance(playlist_data, dict) else []
+        )
+        video_ids = [
+            item.get("contentDetails", {}).get("videoId", "")
+            for item in playlist_items
+            if item.get("contentDetails", {}).get("videoId")
+        ]
+        if not video_ids:
+            return []
+
+        if not self._quota.check_and_use(1):
+            logger.warning("YouTube quota too low for video metadata lookup")
+            return []
+        videos_data = await self._yt_get(
+            "videos",
+            params={
+                "part": "snippet,contentDetails,status,liveStreamingDetails",
+                "id": ",".join(video_ids),
+            },
+        )
+        items = videos_data.get("items", []) if isinstance(videos_data, dict) else []
+        by_id = {
+            item.get("id", ""): item
+            for item in items
+            if isinstance(item, dict) and item.get("id")
+        }
+        return [by_id[video_id] for video_id in video_ids if video_id in by_id]
+
+    def _normalize_uploaded_video(
+        self,
+        item: dict[str, Any],
+        kind: str,
+    ) -> dict[str, Any] | None:
+        video_id = item.get("id", "")
+        if not video_id:
+            return None
+        snippet = item.get("snippet", {})
+        status = item.get("status", {})
+        live_state = snippet.get("liveBroadcastContent", "none")
+        if status.get("privacyStatus") == "private":
+            return None
+        if live_state in ("live", "upcoming") or self._is_video_live(item):
+            return None
+        content = item.get("contentDetails", {})
+        duration_seconds = self._parse_iso8601_duration_seconds(
+            content.get("duration", "")
+        )
+        thumbs = snippet.get("thumbnails", {})
+        thumb_url = (
+            thumbs.get("maxres", {}).get("url")
+            or thumbs.get("high", {}).get("url")
+            or thumbs.get("medium", {}).get("url")
+            or thumbs.get("default", {}).get("url", "")
+        )
+        channel_id = snippet.get("channelId", "")
+        return {
+            "id": video_id,
+            "platform": "youtube",
+            "kind": kind,
+            "channel_login": channel_id,
+            "channel_display_name": snippet.get("channelTitle", channel_id),
+            "title": snippet.get("title", ""),
+            "url": f"https://www.youtube.com/watch?v={video_id}",
+            "thumbnail_url": thumb_url,
+            "published_at": snippet.get("publishedAt", ""),
+            "duration_seconds": duration_seconds,
+            "views": 0,
+        }
+
     async def search_channels(self, query: str) -> list[dict[str, Any]]:
         """Search for YouTube channels. Costs 100 quota units."""
         query = query.strip()
@@ -430,21 +558,11 @@ class YouTubeClient:
             if not raw:
                 return {}
 
-        # Resolve by @handle or by channel ID
-        if raw.startswith("@"):
-            params: dict[str, Any] = {
-                "part": "id,snippet,statistics",
-                "forHandle": raw,
-            }
-        else:
-            params = {"part": "snippet,statistics", "id": raw}
-
-        data = await self._yt_get("channels", params=params)
+        data = await self._get_channel_resource(raw, "snippet,statistics")
         self._quota.use(1)
-        items = data.get("items", []) if isinstance(data, dict) else []
-        if not items:
+        if not data:
             return {}
-        item = items[0]
+        item = data
         snippet = item.get("snippet", {})
         stats = item.get("statistics", {})
         thumbs = snippet.get("thumbnails", {})
@@ -455,6 +573,42 @@ class YouTubeClient:
             "avatar_url": thumbs.get("default", {}).get("url", ""),
             "followers": int(stats.get("subscriberCount", 0)),
         }
+
+    async def get_channel_vods(
+        self, channel_id_or_handle: str, limit: int = 12
+    ) -> list[dict[str, Any]]:
+        items = await self._get_uploaded_video_items(
+            channel_id_or_handle, max_results=limit
+        )
+        results: list[dict[str, Any]] = []
+        for item in items:
+            normalized = self._normalize_uploaded_video(item, "vod")
+            if normalized is not None:
+                results.append(normalized)
+            if len(results) >= limit:
+                break
+        return results
+
+    async def get_channel_clips(
+        self, channel_id_or_handle: str, limit: int = 12
+    ) -> list[dict[str, Any]]:
+        items = await self._get_uploaded_video_items(
+            channel_id_or_handle, max_results=max(limit * 3, 24)
+        )
+        results: list[dict[str, Any]] = []
+        for item in items:
+            normalized = self._normalize_uploaded_video(item, "clip")
+            if normalized is None:
+                continue
+            if (
+                normalized["duration_seconds"] <= 0
+                or normalized["duration_seconds"] > 90
+            ):
+                continue
+            results.append(normalized)
+            if len(results) >= limit:
+                break
+        return results
 
     # ── OAuth ────────────────────────────────────────────────
 
@@ -590,9 +744,7 @@ class YouTubeClient:
 
     # ── Browse ───────────────────────────────────────────────
 
-    async def get_categories(
-        self, query: str | None = None
-    ) -> list[dict[str, Any]]:
+    async def get_categories(self, query: str | None = None) -> list[dict[str, Any]]:
         """Return assignable YouTube video categories for US region.
 
         query is ignored — YouTube categories are a fixed regional list.
@@ -662,8 +814,8 @@ class YouTubeClient:
                     "viewers": 0,
                     "started_at": snippet.get("publishedAt", ""),
                     "thumbnail_url": snippet.get("thumbnails", {})
-                        .get("medium", {})
-                        .get("url", ""),
+                    .get("medium", {})
+                    .get("url", ""),
                     "avatar_url": "",
                 }
             )

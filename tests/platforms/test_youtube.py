@@ -131,9 +131,7 @@ class TestQuotaTracker:
 
     def test_check_and_use_fails_when_insufficient_budget(self, tmp_path: Path) -> None:
         today = date.today().isoformat()
-        _setup_config(
-            tmp_path, {"daily_quota_used": 9_950, "quota_reset_date": today}
-        )
+        _setup_config(tmp_path, {"daily_quota_used": 9_950, "quota_reset_date": today})
         from core.platforms.youtube import QuotaTracker
 
         qt = QuotaTracker(lambda: _yt_conf(tmp_path), _make_update_fn(tmp_path))
@@ -143,9 +141,7 @@ class TestQuotaTracker:
 
     def test_check_and_use_does_not_overshoot_quota(self, tmp_path: Path) -> None:
         today = date.today().isoformat()
-        _setup_config(
-            tmp_path, {"daily_quota_used": 9_999, "quota_reset_date": today}
-        )
+        _setup_config(tmp_path, {"daily_quota_used": 9_999, "quota_reset_date": today})
         from core.platforms.youtube import QuotaTracker
 
         qt = QuotaTracker(lambda: _yt_conf(tmp_path), _make_update_fn(tmp_path))
@@ -422,6 +418,203 @@ class TestGetChannelInfo:
         assert info["channel_id"] == "UCX6OQ3DkcsbYNE6H8uQQuVA"
         assert info["display_name"] == "MrBeast"
         assert info["followers"] == 100_000_000
+
+
+class TestChannelMedia:
+    def test_get_channel_vods_uses_uploads_playlist(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from core.platforms.youtube import YouTubeClient
+
+        client = YouTubeClient()
+
+        async def fake_yt_get(
+            endpoint: str, params: dict | None = None, auth_required: bool = False
+        ) -> dict[str, Any]:
+            if endpoint == "channels":
+                return {
+                    "items": [
+                        {
+                            "id": "UCchannel1234567890123456",
+                            "contentDetails": {
+                                "relatedPlaylists": {"uploads": "UUuploads123"}
+                            },
+                        }
+                    ]
+                }
+            if endpoint == "playlistItems":
+                return {
+                    "items": [
+                        {"contentDetails": {"videoId": "vidA"}},
+                        {"contentDetails": {"videoId": "vidB"}},
+                    ]
+                }
+            return {
+                "items": [
+                    {
+                        "id": "vidA",
+                        "snippet": {
+                            "channelId": "UCchannel1234567890123456",
+                            "channelTitle": "Creator",
+                            "title": "Latest upload",
+                            "publishedAt": "2026-04-24T10:00:00Z",
+                            "thumbnails": {"high": {"url": "https://yt/high.jpg"}},
+                            "liveBroadcastContent": "none",
+                        },
+                        "contentDetails": {"duration": "PT1H2M3S"},
+                        "status": {"privacyStatus": "public"},
+                        "liveStreamingDetails": {},
+                    },
+                    {
+                        "id": "vidB",
+                        "snippet": {
+                            "channelId": "UCchannel1234567890123456",
+                            "channelTitle": "Creator",
+                            "title": "Private upload",
+                            "publishedAt": "2026-04-23T10:00:00Z",
+                            "thumbnails": {},
+                            "liveBroadcastContent": "none",
+                        },
+                        "contentDetails": {"duration": "PT5M"},
+                        "status": {"privacyStatus": "private"},
+                        "liveStreamingDetails": {},
+                    },
+                ]
+            }
+
+        monkeypatch.setattr(client, "_yt_get", fake_yt_get)
+        monkeypatch.setattr(client._quota, "check_and_use", lambda n: True)
+
+        loop = asyncio.new_event_loop()
+        try:
+            result = loop.run_until_complete(
+                client.get_channel_vods("UCchannel1234567890123456")
+            )
+        finally:
+            loop.run_until_complete(client.close())
+            loop.close()
+
+        assert result == [
+            {
+                "id": "vidA",
+                "platform": "youtube",
+                "kind": "vod",
+                "channel_login": "UCchannel1234567890123456",
+                "channel_display_name": "Creator",
+                "title": "Latest upload",
+                "url": "https://www.youtube.com/watch?v=vidA",
+                "thumbnail_url": "https://yt/high.jpg",
+                "published_at": "2026-04-24T10:00:00Z",
+                "duration_seconds": 3723,
+                "views": 0,
+            }
+        ]
+
+    def test_get_channel_clips_filters_to_short_videos(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from core.platforms.youtube import YouTubeClient
+
+        client = YouTubeClient()
+
+        async def fake_yt_get(
+            endpoint: str, params: dict | None = None, auth_required: bool = False
+        ) -> dict[str, Any]:
+            if endpoint == "channels":
+                return {
+                    "items": [
+                        {
+                            "id": "UCchannel1234567890123456",
+                            "contentDetails": {
+                                "relatedPlaylists": {"uploads": "UUuploads123"}
+                            },
+                        }
+                    ]
+                }
+            if endpoint == "playlistItems":
+                return {
+                    "items": [
+                        {"contentDetails": {"videoId": "short1"}},
+                        {"contentDetails": {"videoId": "long1"}},
+                        {"contentDetails": {"videoId": "live1"}},
+                    ]
+                }
+            return {
+                "items": [
+                    {
+                        "id": "short1",
+                        "snippet": {
+                            "channelId": "UCchannel1234567890123456",
+                            "channelTitle": "Creator",
+                            "title": "Quick moment",
+                            "publishedAt": "2026-04-24T10:00:00Z",
+                            "thumbnails": {"medium": {"url": "https://yt/short.jpg"}},
+                            "liveBroadcastContent": "none",
+                        },
+                        "contentDetails": {"duration": "PT45S"},
+                        "status": {"privacyStatus": "public"},
+                        "liveStreamingDetails": {},
+                    },
+                    {
+                        "id": "long1",
+                        "snippet": {
+                            "channelId": "UCchannel1234567890123456",
+                            "channelTitle": "Creator",
+                            "title": "Too long",
+                            "publishedAt": "2026-04-23T10:00:00Z",
+                            "thumbnails": {},
+                            "liveBroadcastContent": "none",
+                        },
+                        "contentDetails": {"duration": "PT3M"},
+                        "status": {"privacyStatus": "public"},
+                        "liveStreamingDetails": {},
+                    },
+                    {
+                        "id": "live1",
+                        "snippet": {
+                            "channelId": "UCchannel1234567890123456",
+                            "channelTitle": "Creator",
+                            "title": "Still live",
+                            "publishedAt": "2026-04-22T10:00:00Z",
+                            "thumbnails": {},
+                            "liveBroadcastContent": "live",
+                        },
+                        "contentDetails": {"duration": "PT20S"},
+                        "status": {"privacyStatus": "public"},
+                        "liveStreamingDetails": {
+                            "actualStartTime": "2026-04-22T10:00:00Z"
+                        },
+                    },
+                ]
+            }
+
+        monkeypatch.setattr(client, "_yt_get", fake_yt_get)
+        monkeypatch.setattr(client._quota, "check_and_use", lambda n: True)
+
+        loop = asyncio.new_event_loop()
+        try:
+            result = loop.run_until_complete(
+                client.get_channel_clips("UCchannel1234567890123456")
+            )
+        finally:
+            loop.run_until_complete(client.close())
+            loop.close()
+
+        assert result == [
+            {
+                "id": "short1",
+                "platform": "youtube",
+                "kind": "clip",
+                "channel_login": "UCchannel1234567890123456",
+                "channel_display_name": "Creator",
+                "title": "Quick moment",
+                "url": "https://www.youtube.com/watch?v=short1",
+                "thumbnail_url": "https://yt/short.jpg",
+                "published_at": "2026-04-24T10:00:00Z",
+                "duration_seconds": 45,
+                "views": 0,
+            }
+        ]
 
 
 # ── OAuth + user + subscriptions ──────────────────────────────

@@ -1631,6 +1631,113 @@ body {
   letter-spacing: 0.01em;
 }
 
+.channel-media-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.channel-media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.channel-media-card {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--bg-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.channel-media-card.clip {
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+}
+
+.channel-media-thumb-wrap {
+  width: 208px;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: rgba(255,255,255,0.04);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.channel-media-card.clip .channel-media-thumb-wrap {
+  width: 100%;
+  border-radius: 0;
+}
+
+.channel-media-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.channel-media-body {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.channel-media-card.clip .channel-media-body {
+  padding: 12px;
+}
+
+.channel-media-title {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.channel-media-meta {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.channel-media-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.channel-media-btn {
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--accent);
+  color: #0A0A0C;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.channel-media-btn.secondary {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--bg-border);
+}
+
+.channel-media-btn.secondary:hover {
+  border-color: rgba(255,255,255,0.16);
+  color: var(--text-primary);
+}
+
+.channel-media-btn:hover { opacity: 0.9; }
+
 #browse-nav-btn {
   display: block;
   width: 100%;
@@ -1775,10 +1882,14 @@ body {
             <div id="channel-live-empty" class="channel-empty hidden">Channel is not live right now.</div>
           </div>
           <div id="channel-tab-vods" class="channel-tab-panel hidden">
-            <div class="channel-empty">VODs coming in a future update.</div>
+            <div id="channel-vods-loading" class="browse-loading hidden">Loading VODs...</div>
+            <div id="channel-vods-empty" class="channel-empty hidden"></div>
+            <div id="channel-vods-list" class="channel-media-list"></div>
           </div>
           <div id="channel-tab-clips" class="channel-tab-panel hidden">
-            <div class="channel-empty">Clips coming in a future update.</div>
+            <div id="channel-clips-loading" class="browse-loading hidden">Loading Clips...</div>
+            <div id="channel-clips-empty" class="channel-empty hidden"></div>
+            <div id="channel-clips-grid" class="channel-media-grid"></div>
           </div>
         </div>
       </div>
@@ -2152,6 +2263,16 @@ body {
 
 <script>
 /* ── State ──────────────────────────────────────────────── */
+function createChannelMediaState() {
+  return {
+    status: 'idle',
+    items: [],
+    supported: true,
+    error: false,
+    message: '',
+  };
+}
+
 const state = {
   streams: [],
   favorites: [],
@@ -2159,6 +2280,7 @@ const state = {
   selectedChannel: null,
   watchingChannel: null,
   playerPlatform: null,
+  playerHasChat: true,
   prevViewers: {},
   config: {},
   sortKey: 'viewers',
@@ -2181,6 +2303,11 @@ const state = {
   browseMode: 'categories',
   browseCategory: null,
   browsePlatformFilter: 'all',
+  channelTabs: {
+    active: 'live',
+    vods: createChannelMediaState(),
+    clips: createChannelMediaState(),
+  },
 };
 
 var multiState = {
@@ -2534,7 +2661,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (removeBtn) { removeMultiSlot(parseInt(removeBtn.dataset.slot, 10)); return; }
   });
 
-  // Double-click on a slot to enter fullscreen
+  // Double-click on a slot video to toggle fullscreen
   document.getElementById('multistream-grid').addEventListener('dblclick', function(e) {
     if (e.target.closest('.ms-slot-controls') || e.target.closest('.ms-add-form') || e.target.closest('.ms-slot-empty')) return;
     var slotEl = e.target.closest('.ms-slot');
@@ -2756,6 +2883,7 @@ window.onLaunchProgress = function(data) {
 
 window.onStreamReady = function(data) {
   state.playerPlatform = data.platform || 'twitch';
+  state.playerHasChat = data.has_chat !== false;
   document.getElementById('player-channel-name').textContent = data.channel || '';
   document.getElementById('player-stream-title').textContent = data.title || '';
 
@@ -3067,6 +3195,7 @@ function updateChatInput() {
 }
 
 function toggleChatPanel() {
+  if (!state.playerHasChat) return;
   var panel = document.getElementById('chat-panel');
   var handle = document.getElementById('chat-resize-handle');
   panel.classList.toggle('hidden');
@@ -3085,17 +3214,24 @@ function showPlayerView() {
   document.getElementById('stop-player-btn').style.display = 'inline-flex';
   document.getElementById('live-dot').classList.add('visible');
 
-  // Restore chat panel visibility and width from config
   var chatPanel = document.getElementById('chat-panel');
   var chatHandle = document.getElementById('chat-resize-handle');
-  var cfg = pywebview.api.get_full_config_for_settings();
-  if (cfg && cfg.chat_width) chatPanel.style.width = cfg.chat_width + 'px';
-  if (cfg && cfg.chat_visible === false) {
+  var toggleBtn = document.getElementById('toggle-chat-btn');
+  if (!state.playerHasChat) {
     chatPanel.classList.add('hidden');
     if (chatHandle) chatHandle.style.display = 'none';
+    if (toggleBtn) toggleBtn.style.display = 'none';
   } else {
-    chatPanel.classList.remove('hidden');
-    if (chatHandle) chatHandle.style.display = '';
+    if (toggleBtn) toggleBtn.style.display = '';
+    var cfg = pywebview.api.get_full_config_for_settings();
+    if (cfg && cfg.chat_width) chatPanel.style.width = cfg.chat_width + 'px';
+    if (cfg && cfg.chat_visible === false) {
+      chatPanel.classList.add('hidden');
+      if (chatHandle) chatHandle.style.display = 'none';
+    } else {
+      chatPanel.classList.remove('hidden');
+      if (chatHandle) chatHandle.style.display = '';
+    }
   }
   updateChatInput();
 
@@ -3122,12 +3258,14 @@ function hidePlayerView() {
 
   state.watchingChannel = null;
   state.playerPlatform = null;
+  state.playerHasChat = true;
   chatPlatform = null;
   chatAuthenticated = false;
   state.playerState = 'idle';
   document.getElementById('watch-btn').classList.remove('active');
   document.getElementById('stop-player-btn').style.display = 'none';
   document.getElementById('live-dot').classList.remove('visible');
+  document.getElementById('toggle-chat-btn').style.display = '';
   setStatus('', 'info');
   renderGrid();
   renderSidebar();
@@ -3285,9 +3423,179 @@ function hideBrowseView() {
   document.getElementById('stream-grid').classList.remove('hidden');
 }
 
+function resetChannelMediaPanels() {
+  ['vods', 'clips'].forEach(function(tab) {
+    var loading = document.getElementById('channel-' + tab + '-loading');
+    var empty = document.getElementById('channel-' + tab + '-empty');
+    var container = document.getElementById(
+      tab === 'vods' ? 'channel-vods-list' : 'channel-clips-grid'
+    );
+    if (loading) loading.classList.add('hidden');
+    if (empty) {
+      empty.classList.add('hidden');
+      empty.textContent = '';
+    }
+    if (container) container.replaceChildren();
+    state.channelTabs[tab] = createChannelMediaState();
+  });
+  state.channelTabs.active = 'live';
+}
+
+function getChannelMediaElements(tab) {
+  return {
+    loading: document.getElementById('channel-' + tab + '-loading'),
+    empty: document.getElementById('channel-' + tab + '-empty'),
+    container: document.getElementById(
+      tab === 'vods' ? 'channel-vods-list' : 'channel-clips-grid'
+    ),
+  };
+}
+
+function formatMediaDate(isoStr) {
+  if (!isoStr) return '';
+  var date = new Date(isoStr);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function formatDuration(seconds) {
+  if (!seconds || seconds < 0) return '';
+  var h = Math.floor(seconds / 3600);
+  var m = Math.floor((seconds % 3600) / 60);
+  var s = Math.floor(seconds % 60);
+  if (h > 0) return h + 'h ' + m + 'm';
+  if (m > 0) return m + 'm';
+  return s + 's';
+}
+
+function buildChannelMediaMeta(item, tab) {
+  var parts = [];
+  var dateText = formatMediaDate(item.published_at);
+  var durationText = formatDuration(item.duration_seconds || 0);
+  if (dateText) parts.push(dateText);
+  if (durationText) parts.push(durationText);
+  if (item.views) {
+    parts.push(formatViewers(item.views) + (tab === 'clips' ? ' views' : ' views'));
+  }
+  return parts.join(' • ');
+}
+
+function playChannelMedia(item) {
+  if (!api || !item || !item.url) return;
+  var quality = document.getElementById('quality-select')
+    ? document.getElementById('quality-select').value
+    : 'best';
+  hideChannelView();
+  api.watch_media(
+    item.url,
+    quality,
+    item.platform || (channelProfile && channelProfile.platform) || 'twitch',
+    item.channel_login || (channelProfile && channelProfile.login) || '',
+    item.title || '',
+    false
+  );
+}
+
+function openChannelMedia(item) {
+  if (api && item && item.url) api.open_url(item.url);
+}
+
+function createChannelMediaCard(item, tab) {
+  var card = document.createElement('div');
+  card.className = 'channel-media-card' + (tab === 'clips' ? ' clip' : '');
+
+  var thumbWrap = document.createElement('div');
+  thumbWrap.className = 'channel-media-thumb-wrap';
+  thumbWrap.onclick = function() { playChannelMedia(item); };
+
+  var thumb = document.createElement('img');
+  thumb.className = 'channel-media-thumb';
+  thumb.alt = '';
+  if (item.thumbnail_url) thumb.src = item.thumbnail_url;
+  thumb.onerror = function() { thumbWrap.style.display = 'none'; };
+  thumbWrap.appendChild(thumb);
+
+  var body = document.createElement('div');
+  body.className = 'channel-media-body';
+
+  var title = document.createElement('div');
+  title.className = 'channel-media-title';
+  title.textContent = item.title || (tab === 'clips' ? 'Untitled clip' : 'Untitled VOD');
+
+  var meta = document.createElement('div');
+  meta.className = 'channel-media-meta';
+  meta.textContent = buildChannelMediaMeta(item, tab);
+
+  var actions = document.createElement('div');
+  actions.className = 'channel-media-actions';
+
+  var playBtn = document.createElement('button');
+  playBtn.className = 'channel-media-btn';
+  playBtn.textContent = 'Play';
+  playBtn.onclick = function() { playChannelMedia(item); };
+
+  var openBtn = document.createElement('button');
+  openBtn.className = 'channel-media-btn secondary';
+  openBtn.textContent = 'Open';
+  openBtn.onclick = function() { openChannelMedia(item); };
+
+  actions.appendChild(playBtn);
+  actions.appendChild(openBtn);
+  body.appendChild(title);
+  body.appendChild(meta);
+  body.appendChild(actions);
+  card.appendChild(thumbWrap);
+  card.appendChild(body);
+  return card;
+}
+
+function renderChannelMediaTab(tab) {
+  var entry = state.channelTabs[tab];
+  var els = getChannelMediaElements(tab);
+  if (!entry || !els.loading || !els.empty || !els.container) return;
+
+  els.loading.classList.toggle('hidden', entry.status !== 'loading');
+  els.container.replaceChildren();
+
+  if (entry.status !== 'ready') {
+    els.empty.classList.add('hidden');
+    return;
+  }
+
+  if (!entry.supported || entry.error || !entry.items.length) {
+    els.empty.textContent = entry.message || (
+      tab === 'vods' ? 'No recent VODs found.' : 'No recent clips found.'
+    );
+    els.empty.classList.remove('hidden');
+    return;
+  }
+
+  els.empty.classList.add('hidden');
+  entry.items.forEach(function(item) {
+    els.container.appendChild(createChannelMediaCard(item, tab));
+  });
+}
+
+function ensureChannelTabLoaded(tab) {
+  if (tab === 'live' || !channelProfile || !api) return;
+  var entry = state.channelTabs[tab];
+  if (!entry || entry.status === 'loading' || entry.status === 'ready') {
+    renderChannelMediaTab(tab);
+    return;
+  }
+  entry.status = 'loading';
+  renderChannelMediaTab(tab);
+  api.get_channel_media(channelProfile.login, channelProfile.platform, tab);
+}
+
 function showChannelView(login, platform, source) {
   channelViewSource = source || 'grid';
   channelProfile = null;
+  resetChannelMediaPanels();
 
   if (channelViewSource === 'browse') {
     document.getElementById('browse-view').classList.add('hidden');
@@ -3331,12 +3639,14 @@ function hideChannelView() {
 }
 
 function switchChannelTab(btn, tab) {
+  state.channelTabs.active = tab;
   document.querySelectorAll('.channel-tab').forEach(function(t) {
     t.classList.toggle('active', t === btn);
   });
   document.querySelectorAll('.channel-tab-panel').forEach(function(p) {
     p.classList.toggle('hidden', p.id !== 'channel-tab-' + tab);
   });
+  ensureChannelTabLoaded(tab);
 }
 
 function toggleChannelFollow() {
@@ -3440,7 +3750,7 @@ function toggleVideoFullscreen() {
 }
 
 function toggleMsSlotFullscreen(idx) {
-  // Exit if already in fullscreen
+  // Exit if already fullscreen
   if (document.fullscreenElement || document.webkitFullscreenElement) {
     if (document.exitFullscreen) document.exitFullscreen();
     else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
@@ -3783,6 +4093,26 @@ window.onChannelProfile = function(profile) {
   document.getElementById('channel-watch-btn').classList.toggle('hidden', !canWatch);
 
   document.getElementById('channel-profile-card').style.opacity = '1';
+  ensureChannelTabLoaded(state.channelTabs.active);
+};
+
+window.onChannelMedia = function(payload) {
+  if (!payload || !payload.tab || !state.channelTabs[payload.tab]) return;
+  var channelView = document.getElementById('channel-view');
+  if (!channelView || channelView.classList.contains('hidden')) return;
+  if (!channelProfile) return;
+  if (payload.login !== channelProfile.login || payload.platform !== channelProfile.platform) {
+    return;
+  }
+
+  state.channelTabs[payload.tab] = {
+    status: 'ready',
+    items: payload.items || [],
+    supported: payload.supported !== false,
+    error: !!payload.error,
+    message: payload.message || '',
+  };
+  renderChannelMediaTab(payload.tab);
 };
 
 /* ── Rendering ──────────────────────────────────────────── */

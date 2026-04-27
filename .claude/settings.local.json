@@ -91,7 +91,8 @@
       "Bash(.venv/bin/python -m pytest tests/test_api.py::TestAsyncFetchIsolation tests/test_api.py -v)",
       "Bash(python -m pytest tests/test_api.py::TestAsyncFetchIsolation -v)",
       "Bash(python3 -m pytest tests/test_api.py::TestAsyncFetchIsolation -v)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "WebFetch(domain:github-twitchx)"
     ]
   }
 }

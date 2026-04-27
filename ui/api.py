@@ -120,9 +120,7 @@ class TwitchXApi:
         self._fetching_avatars: set[str] = set()
         self._fetching_thumbnails: set[str] = set()
         # Shared HTTP client for image downloads (connection-pooled, reused across threads)
-        self._http = httpx.Client(
-            timeout=10, limits=httpx.Limits(max_connections=20)
-        )
+        self._http = httpx.Client(timeout=10, limits=httpx.Limits(max_connections=20))
         # Bounded thread pool for avatar/thumbnail fetches (caps OS thread count)
         self._image_pool = ThreadPoolExecutor(
             max_workers=8, thread_name_prefix="twitchx-img"
@@ -1143,9 +1141,7 @@ class TwitchXApi:
             cfg["favorites"] = [
                 f
                 for f in cfg.get("favorites", [])
-                if not (
-                    f.get("login") == login_cmp and f.get("platform") == platform
-                )
+                if not (f.get("login") == login_cmp and f.get("platform") == platform)
             ]
 
         self._config = update_config(_apply)
@@ -1165,7 +1161,8 @@ class TwitchXApi:
                 if f.get("platform") == platform
             }
             reordered = [
-                old_favs[login] if login in old_favs
+                old_favs[login]
+                if login in old_favs
                 else {"platform": platform, "login": login, "display_name": login}
                 for login in new_order
             ]
@@ -1461,7 +1458,9 @@ class TwitchXApi:
             settings = get_settings(self._config)
             yt_interval = settings.get("youtube_refresh_interval", 300)
             yt_due = time.time() - self._last_youtube_fetch >= yt_interval
-            if not yt_due or not (yt_conf.get("api_key") or yt_conf.get("access_token")):
+            if not yt_due or not (
+                yt_conf.get("api_key") or yt_conf.get("access_token")
+            ):
                 return list(self._last_youtube_streams)
             try:
                 youtube_streams = await asyncio.wait_for(
@@ -1555,8 +1554,12 @@ class TwitchXApi:
                     if slug:
                         unified_map[slug] = {
                             "name": s.get("channel", {}).get("username") or slug,
-                            "title": s.get("stream_title") or s.get("session_title") or s.get("title", ""),
-                            "game": s.get("category", {}).get("name", "") if isinstance(s.get("category"), dict) else "",
+                            "title": s.get("stream_title")
+                            or s.get("session_title")
+                            or s.get("title", ""),
+                            "game": s.get("category", {}).get("name", "")
+                            if isinstance(s.get("category"), dict)
+                            else "",
                         }
                 for s in youtube_streams:
                     cid = s.get("login", "")
@@ -1715,9 +1718,7 @@ class TwitchXApi:
                 return
             self.refresh()
             if self._last_successful_fetch > 0:
-                stale = (
-                    time.time() - self._last_successful_fetch > 2 * interval_seconds
-                )
+                stale = time.time() - self._last_successful_fetch > 2 * interval_seconds
                 if stale:
                     self._eval_js(
                         "window.onStatusUpdate({text: 'Data may be stale', type: 'warn', stale: true})"
@@ -2000,7 +2001,8 @@ class TwitchXApi:
         )
         config = load_config()
         enabled = [
-            p for p in platforms
+            p
+            for p in platforms
             if config.get("platforms", {}).get(p, {}).get("enabled", False)
         ]
         cache = load_browse_cache()
@@ -2017,6 +2019,7 @@ class TwitchXApi:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
+
                 async def _fetch_categories_parallel() -> None:
                     clients = {
                         p: self._get_platform(p)
@@ -2032,11 +2035,16 @@ class TwitchXApi:
                     )
                     for p, result in zip(clients.keys(), gathered):
                         if isinstance(result, BaseException):
-                            logger.warning("browse categories failed for %s: %s", p, result)
+                            logger.warning(
+                                "browse categories failed for %s: %s", p, result
+                            )
                             results[p] = []
                         else:
                             results[p] = result
-                            cache[f"categories_{p}"] = {"data": result, "fetched_at": now}
+                            cache[f"categories_{p}"] = {
+                                "data": result,
+                                "fetched_at": now,
+                            }
 
                 loop.run_until_complete(_fetch_categories_parallel())
                 save_browse_cache(cache)
@@ -2070,9 +2078,7 @@ class TwitchXApi:
         platform_filter: str,
     ) -> None:
         in_filter = (
-            list(platform_ids.keys())
-            if platform_filter == "all"
-            else [platform_filter]
+            list(platform_ids.keys()) if platform_filter == "all" else [platform_filter]
         )
         platforms_to_query = [p for p in in_filter if p in platform_ids]
         cache = load_browse_cache()
@@ -2090,6 +2096,7 @@ class TwitchXApi:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
+
                 async def _fetch_top_streams_parallel() -> None:
                     clients = {
                         p: self._get_platform(p)
@@ -2108,7 +2115,9 @@ class TwitchXApi:
                     )
                     for p, result in zip(clients.keys(), gathered):
                         if isinstance(result, BaseException):
-                            logger.warning("browse top streams failed for %s: %s", p, result)
+                            logger.warning(
+                                "browse top streams failed for %s: %s", p, result
+                            )
                         else:
                             all_streams.extend(result)
                             cache[f"top_streams_{p}_{platform_ids[p]}"] = {
@@ -2179,6 +2188,80 @@ class TwitchXApi:
 
         self._run_in_thread(do_resolve)
 
+    def watch_media(
+        self,
+        url: str,
+        quality: str,
+        platform: str = "twitch",
+        channel: str = "",
+        title: str = "",
+        with_chat: bool = False,
+    ) -> None:
+        """Play a VOD or clip by direct media page URL via streamlink."""
+        if not url:
+            return
+
+        def _save_quality(cfg: dict[str, Any]) -> None:
+            cfg.get("settings", {})["quality"] = quality
+
+        self._config = update_config(_save_quality)
+        display_name = channel or title or "media"
+        safe_name = json.dumps(display_name)
+        self._eval_js(
+            f"window.onStatusUpdate({{text: 'Loading ' + {safe_name} + '...', type: 'warn'}})"
+        )
+        self._launch_channel = display_name
+        self._launch_elapsed = 0
+        self._start_launch_timer()
+
+        def do_resolve() -> None:
+            settings = get_settings(self._config)
+            hls_url, err = resolve_hls_url(
+                url,
+                quality,
+                settings.get("streamlink_path", "streamlink"),
+                platform=platform,
+            )
+            self._cancel_launch_timer()
+            self._launch_channel = None
+            if not hls_url:
+                result = json.dumps(
+                    {
+                        "success": False,
+                        "message": f"streamlink error: {err}"
+                        if err
+                        else "Could not resolve media URL",
+                        "channel": display_name,
+                    }
+                )
+                self._eval_js(f"window.onLaunchResult({result})")
+                return
+
+            self.stop_chat()
+            self._watching_channel = channel or display_name
+            stream_data = json.dumps(
+                {
+                    "url": hls_url,
+                    "channel": channel or display_name,
+                    "title": title,
+                    "platform": platform,
+                    "has_chat": with_chat,
+                }
+            )
+            self._eval_js(f"window.onStreamReady({stream_data})")
+            if with_chat and channel:
+                self.start_chat(channel, platform)
+            result = json.dumps(
+                {
+                    "success": True,
+                    "message": f"Playing {display_name}",
+                    "channel": channel or display_name,
+                }
+            )
+            self._eval_js(f"window.onLaunchResult({result})")
+
+        self._run_in_thread(do_resolve)
+
     def _start_launch_timer(self) -> None:
         self._cancel_launch_timer()
 
@@ -2210,6 +2293,10 @@ class TwitchXApi:
                 webbrowser.open(f"https://youtube.com/channel/{channel}")
             else:
                 webbrowser.open(f"https://twitch.tv/{channel}")
+
+    def open_url(self, url: str) -> None:
+        if url:
+            webbrowser.open(url)
 
     # ── Channel profile ─────────────────────────────────────────
 
@@ -2298,6 +2385,77 @@ class TwitchXApi:
                 self._eval_js("window.onChannelProfile(null)")
             finally:
                 self._close_thread_loop(loop)
+
+        self._run_in_thread(do_fetch)
+
+    def get_channel_media(
+        self,
+        login: str,
+        platform: str = "twitch",
+        tab: str = "vods",
+    ) -> None:
+        if tab not in ("vods", "clips"):
+            return
+        client = self._get_platform(platform)
+        if client is None:
+            return
+        if platform == "kick":
+            payload = {
+                "login": login,
+                "platform": platform,
+                "tab": tab,
+                "items": [],
+                "supported": False,
+                "error": False,
+                "message": "Kick's official API does not expose VODs or clips yet.",
+            }
+            self._eval_js(f"window.onChannelMedia({json.dumps(payload)})")
+            return
+
+        fetcher_name = "get_channel_vods" if tab == "vods" else "get_channel_clips"
+        fetcher = getattr(client, fetcher_name, None)
+        if fetcher is None:
+            payload = {
+                "login": login,
+                "platform": platform,
+                "tab": tab,
+                "items": [],
+                "supported": False,
+                "error": False,
+                "message": f"{platform.title()} does not support {tab} in this build.",
+            }
+            self._eval_js(f"window.onChannelMedia({json.dumps(payload)})")
+            return
+
+        def do_fetch() -> None:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                items = loop.run_until_complete(fetcher(login, limit=12))
+                payload = {
+                    "login": login,
+                    "platform": platform,
+                    "tab": tab,
+                    "items": items,
+                    "supported": True,
+                    "error": False,
+                    "message": "",
+                }
+            except Exception as e:
+                logger.warning("get_channel_media failed: %s", e)
+                payload = {
+                    "login": login,
+                    "platform": platform,
+                    "tab": tab,
+                    "items": [],
+                    "supported": True,
+                    "error": True,
+                    "message": f"Could not load {tab} right now.",
+                }
+            finally:
+                self._close_thread_loop(loop)
+
+            self._eval_js(f"window.onChannelMedia({json.dumps(payload)})")
 
         self._run_in_thread(do_fetch)
 
@@ -2616,7 +2774,9 @@ class TwitchXApi:
 
     def _on_chat_message(self, msg: ChatMessage) -> None:
         """Callback from chat client — push to JS."""
-        config = self._config  # snapshot: update_config() replaces atomically, never mutates
+        config = (
+            self._config
+        )  # snapshot: update_config() replaces atomically, never mutates
         platform_conf = get_platform_config(config, msg.platform)
         self_login = str(platform_conf.get("user_login", "")).strip().lower()
         is_self = bool(self_login and self_login == str(msg.author).strip().lower())

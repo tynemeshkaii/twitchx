@@ -304,9 +304,7 @@ class TwitchClient:
         data = await self._get("/search/channels", params=params)
         return data.get("data", [])
 
-    async def get_categories(
-        self, query: str | None = None
-    ) -> list[dict[str, Any]]:
+    async def get_categories(self, query: str | None = None) -> list[dict[str, Any]]:
         """Return top games from Helix, normalized to cross-platform format.
 
         With query: searches /games by name. Without: fetches /games/top?first=50.
@@ -323,8 +321,8 @@ class TwitchClient:
                 "category_id": g["id"],
                 "name": g["name"],
                 "box_art_url": g["box_art_url"]
-                    .replace("{width}", "285")
-                    .replace("{height}", "380"),
+                .replace("{width}", "285")
+                .replace("{height}", "380"),
                 "viewers": 0,
             }
             for g in data.get("data", [])
@@ -356,8 +354,8 @@ class TwitchClient:
                 "viewers": s["viewer_count"],
                 "started_at": s["started_at"],
                 "thumbnail_url": s["thumbnail_url"]
-                    .replace("{width}", "440")
-                    .replace("{height}", "248"),
+                .replace("{width}", "440")
+                .replace("{height}", "248"),
                 "avatar_url": "",
             }
             for s in data.get("data", [])
@@ -391,3 +389,101 @@ class TwitchClient:
             "is_live": is_live,
             "can_follow_via_api": False,
         }
+
+    @staticmethod
+    def _parse_duration_seconds(raw: str) -> int:
+        """Convert Twitch duration strings like '3h5m12s' to seconds."""
+        if not raw:
+            return 0
+        total = 0
+        for match in re.finditer(r"(\d+)([hms])", raw.lower()):
+            value = int(match.group(1))
+            unit = match.group(2)
+            if unit == "h":
+                total += value * 3600
+            elif unit == "m":
+                total += value * 60
+            else:
+                total += value
+        return total
+
+    async def _get_user_by_login(self, login: str) -> dict[str, Any]:
+        login = login.strip().lower()
+        if not login:
+            return {}
+        users_data = await self._get("/users", [("login", login)])
+        users = users_data.get("data", [])
+        return users[0] if users else {}
+
+    async def get_channel_vods(
+        self, login: str, limit: int = 12
+    ) -> list[dict[str, Any]]:
+        """Return recent archived broadcasts for a broadcaster."""
+        user = await self._get_user_by_login(login)
+        user_id = user.get("id", "")
+        if not user_id:
+            return []
+        data = await self._get(
+            "/videos",
+            [
+                ("user_id", user_id),
+                ("type", "archive"),
+                ("first", str(min(limit, 20))),
+            ],
+        )
+        items = data.get("data", [])
+        return [
+            {
+                "id": item.get("id", ""),
+                "platform": "twitch",
+                "kind": "vod",
+                "channel_login": user.get("login", login),
+                "channel_display_name": user.get("display_name", login),
+                "title": item.get("title", ""),
+                "url": item.get("url", ""),
+                "thumbnail_url": item.get("thumbnail_url", "")
+                .replace("%{width}", "440")
+                .replace("%{height}", "248"),
+                "published_at": item.get("created_at", ""),
+                "duration_seconds": self._parse_duration_seconds(
+                    item.get("duration", "")
+                ),
+                "views": int(item.get("view_count", 0) or 0),
+            }
+            for item in items
+            if item.get("id") and item.get("url")
+        ]
+
+    async def get_channel_clips(
+        self, login: str, limit: int = 12
+    ) -> list[dict[str, Any]]:
+        """Return top clips for a broadcaster, sorted by Twitch."""
+        user = await self._get_user_by_login(login)
+        user_id = user.get("id", "")
+        if not user_id:
+            return []
+        data = await self._get(
+            "/clips",
+            [
+                ("broadcaster_id", user_id),
+                ("first", str(min(limit, 20))),
+            ],
+        )
+        items = data.get("data", [])
+        return [
+            {
+                "id": item.get("id", ""),
+                "platform": "twitch",
+                "kind": "clip",
+                "channel_login": user.get("login", login),
+                "channel_display_name": user.get("display_name", login),
+                "title": item.get("title", ""),
+                "url": item.get("url", ""),
+                "thumbnail_url": item.get("thumbnail_url", ""),
+                "published_at": item.get("created_at", ""),
+                "duration_seconds": int(item.get("duration", 0) or 0),
+                "views": int(item.get("view_count", 0) or 0),
+            }
+            for item in items
+            if item.get("id") and item.get("url")
+        ]
