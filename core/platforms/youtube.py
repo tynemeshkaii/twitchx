@@ -12,7 +12,8 @@ from urllib.parse import urlencode
 
 import httpx
 
-from core.storage import load_config, token_is_valid, update_config
+from core.platforms.base import BasePlatformClient
+from core.storage import update_config
 
 logger = logging.getLogger(__name__)
 
@@ -121,61 +122,35 @@ def parse_rss_video_ids(xml_text: str) -> list[str]:
 # ── YouTubeClient ─────────────────────────────────────────────
 
 
-class YouTubeClient:
+class YouTubeClient(BasePlatformClient):
     """YouTube Data API v3 client with per-event-loop HTTP pooling."""
 
+    PLATFORM_ID = "youtube"
+    PLATFORM_NAME = "YouTube"
+
     def __init__(self) -> None:
-        self._config = load_config()
-        self._loop_clients: dict[asyncio.AbstractEventLoop, httpx.AsyncClient] = {}
-        self._token_locks: dict[asyncio.AbstractEventLoop, asyncio.Lock] = {}
-        self._loop_state_lock = threading.Lock()
-        self._quota = QuotaTracker(
-            self._yconf,
-        )
+        super().__init__()
+        self._quota = QuotaTracker(self._platform_config)
         self._live_video_ids: dict[str, str] = {}
 
-    def _yconf(self) -> dict[str, Any]:
-        """Shortcut to the YouTube platform config section."""
-        return self._config.get("platforms", {}).get("youtube", {})
+    def _client_headers(self) -> dict[str, str]:
+        return {"User-Agent": "TwitchX/2.0 (YouTube)"}
 
-    def _get_client(self) -> httpx.AsyncClient:
-        loop = asyncio.get_running_loop()
-        with self._loop_state_lock:
-            client = self._loop_clients.get(loop)
-            if client is None:
-                client = httpx.AsyncClient(timeout=15.0)
-                self._loop_clients[loop] = client
-            return client
-
-    def _get_token_lock(self) -> asyncio.Lock:
-        loop = asyncio.get_running_loop()
-        with self._loop_state_lock:
-            lock = self._token_locks.get(loop)
-            if lock is None:
-                lock = asyncio.Lock()
-                self._token_locks[loop] = lock
-            return lock
-
-    async def close(self) -> None:
-        await self.close_loop_resources()
-
-    async def close_loop_resources(self) -> None:
-        loop = asyncio.get_running_loop()
-        with self._loop_state_lock:
-            client = self._loop_clients.pop(loop, None)
-            self._token_locks.pop(loop, None)
-        if client is not None:
-            await client.aclose()
-
-    def reset_client(self) -> None:
-        """Compatibility no-op — clients are per-event-loop."""
+    def _check_response_errors(self, resp: httpx.Response) -> None:
+        """Handle YouTube-specific 403 quota exceeded."""
+        if resp.status_code == 403:
+            try:
+                body = resp.json()
+            except Exception:
+                raise ValueError("YouTube API quota exceeded") from None
+            errors = body.get("error", {}).get("errors", [])
+            for err in errors:
+                if err.get("reason") == "quotaExceeded":
+                    raise ValueError("YouTube API daily quota exceeded.")
 
     def quota_remaining(self) -> int:
         """Return the number of remaining YouTube Data API quota units for today."""
         return self._quota.remaining()
-
-    def _reload_config(self) -> None:
-        self._config = load_config()
 
     # ── Token management ─────────────────────────────────────
 
@@ -183,8 +158,8 @@ class YouTubeClient:
         """Return a valid OAuth token, refreshing if needed. None if unavailable."""
         async with self._get_token_lock():
             self._reload_config()
-            yc = self._yconf()
-            if token_is_valid(yc):
+            yc = self._platform_config()
+            if yc.get("access_token") and yc.get("token_expires_at", 0) > asyncio.get_running_loop().time() + 60:
                 return yc["access_token"]
             if yc.get("refresh_token"):
                 try:
@@ -211,33 +186,23 @@ class YouTubeClient:
         elif auth_required:
             raise ValueError("YouTube authentication required but no valid token.")
         else:
-            api_key = self._yconf().get("api_key", "")
+            api_key = self._platform_config().get("api_key", "")
             if not api_key:
                 raise ValueError("YouTube API key required. Set it in Settings.")
             query["key"] = api_key
 
         url = f"{YOUTUBE_API_URL}/{endpoint}"
-        logger.debug("YT GET %s params=%s", url, query)
-        client = self._get_client()
-        resp = await client.get(url, headers=headers, params=query)
-        logger.debug("YT Response: %d", resp.status_code)
-
-        if resp.status_code == 403:
-            body = resp.json()
-            errors = body.get("error", {}).get("errors", [])
-            for err in errors:
-                if err.get("reason") == "quotaExceeded":
-                    raise ValueError("YouTube API daily quota exceeded.")
-            resp.raise_for_status()
-        if resp.status_code == 401 and token:
-            new_token = await self._ensure_token()
-            if new_token:
-                headers["Authorization"] = f"Bearer {new_token}"
-                resp = await client.get(url, headers=headers, params=query)
-            else:
-                resp.raise_for_status()
-        resp.raise_for_status()
+        resp = await self._request("GET", url, params=query, headers=headers)
         return resp.json()
+
+    async def _get(
+        self,
+        endpoint: str,
+        params: dict[str, str] | None = None,
+        auth_required: bool = False,
+    ) -> dict[str, Any]:
+        """Compatibility alias for _yt_get (used by tests)."""
+        return await self._yt_get(endpoint, params, auth_required)
 
     # ── Live streams ─────────────────────────────────────────
 
@@ -337,7 +302,7 @@ class YouTubeClient:
                 logger.warning("YouTube quota exhausted, skipping live check")
                 break
             try:
-                data = await self._yt_get(
+                data = await self._get(
                     "videos",
                     params={
                         "part": "snippet,liveStreamingDetails",
@@ -398,7 +363,7 @@ class YouTubeClient:
             params = {"part": part, "forHandle": raw}
         else:
             params = {"part": part, "id": raw}
-        data = await self._yt_get("channels", params=params)
+        data = await self._get("channels", params=params)
         items = data.get("items", []) if isinstance(data, dict) else []
         return items[0] if items else {}
 
@@ -424,7 +389,7 @@ class YouTubeClient:
         if not self._quota.check_and_use(1):
             logger.warning("YouTube quota too low for uploads playlist lookup")
             return []
-        playlist_data = await self._yt_get(
+        playlist_data = await self._get(
             "playlistItems",
             params={
                 "part": "snippet,contentDetails",
@@ -446,7 +411,7 @@ class YouTubeClient:
         if not self._quota.check_and_use(1):
             logger.warning("YouTube quota too low for video metadata lookup")
             return []
-        videos_data = await self._yt_get(
+        videos_data = await self._get(
             "videos",
             params={
                 "part": "snippet,contentDetails,status,liveStreamingDetails",
@@ -511,7 +476,7 @@ class YouTubeClient:
             logger.warning("YouTube quota too low for search (need 100 units)")
             return []
         try:
-            data = await self._yt_get(
+            data = await self._get(
                 "search",
                 params={
                     "part": "snippet",
@@ -548,7 +513,7 @@ class YouTubeClient:
         if _VIDEO_ID_RE.match(raw) and not raw.startswith("UC"):
             if not self._quota.check_and_use(1):
                 raise ValueError("YouTube API daily quota exceeded.")
-            video_data = await self._yt_get(
+            video_data = await self._get(
                 "videos",
                 params={"part": "snippet", "id": raw},
             )
@@ -617,7 +582,7 @@ class YouTubeClient:
     def get_auth_url(self) -> str:
         """Generate Google OAuth authorization URL."""
         self._reload_config()
-        yc = self._yconf()
+        yc = self._platform_config()
         params = {
             "client_id": yc.get("client_id", ""),
             "redirect_uri": YOUTUBE_REDIRECT_URI,
@@ -631,7 +596,7 @@ class YouTubeClient:
     async def exchange_code(self, code: str) -> dict[str, Any]:
         """Exchange authorization code for tokens."""
         self._reload_config()
-        yc = self._yconf()
+        yc = self._platform_config()
         client = self._get_client()
         resp = await client.post(
             YOUTUBE_TOKEN_URL,
@@ -648,7 +613,7 @@ class YouTubeClient:
 
     async def refresh_user_token(self) -> str:
         """Refresh the OAuth token. Clears auth state on failure."""
-        yc = self._yconf()
+        yc = self._platform_config()
         client = self._get_client()
         resp = await client.post(
             YOUTUBE_TOKEN_URL,
@@ -687,7 +652,7 @@ class YouTubeClient:
 
     async def get_current_user(self) -> dict[str, Any]:
         """Get the authenticated user's YouTube channel info."""
-        data = await self._yt_get(
+        data = await self._get(
             "channels",
             params={"part": "snippet", "mine": "true"},
             auth_required=True,
@@ -727,7 +692,7 @@ class YouTubeClient:
             }
             if page_token:
                 params["pageToken"] = page_token
-            data = await self._yt_get(
+            data = await self._get(
                 "subscriptions", params=params, auth_required=True
             )
 
@@ -758,7 +723,7 @@ class YouTubeClient:
             return []
         if not self._quota.check_and_use(1):
             return []
-        data = await self._yt_get(
+        data = await self._get(
             "videoCategories",
             {"part": "snippet", "regionCode": "US"},
         )
@@ -799,7 +764,7 @@ class YouTubeClient:
         }
         if category_id:
             params["videoCategoryId"] = category_id
-        data = await self._yt_get("search", params)
+        data = await self._get("search", params)
         results: list[dict[str, Any]] = []
         for item in data.get("items", []):
             snippet = item.get("snippet")

@@ -17,13 +17,13 @@ Run a single test file: `uv run pytest tests/test_app.py -v`
 
 ## Architecture
 
-**Entrypoint:** `main.py` → `app.py` (TwitchXApp) → creates `ui/api.py` (TwitchXApi bridge) + pywebview window from `ui/index.html`.
+**Entrypoint:** `main.py` → `app.py` (TwitchXApp) → creates `TwitchXApi` (from `ui/api/` package) + pywebview window from `ui/index.html`.
 
 **Data flow:** JS event → `pywebview.api.<method>()` → `TwitchXApi` method → `threading.Thread` → `asyncio.new_event_loop()` runs async httpx → results pushed back to JS via `window.evaluate_js('window.onCallback(data)')`.
 
-**Platform clients** (`core/platforms/`): `TwitchClient`, `KickClient`, `YouTubeClient` — each extends the abstract `PlatformClient` in `core/platform.py`. Shared data models live there too: `StreamInfo`, `ChannelInfo`, `CategoryInfo`, `PlaybackInfo`, `TokenData`, `UserInfo`.
+**Platform clients** (`core/platforms/`): `TwitchClient`, `KickClient`, `YouTubeClient` — each extends `BasePlatformClient` in `core/platforms/base.py`, which itself extends the abstract `PlatformClient` in `core/platform.py`. Shared data models live there too: `StreamInfo`, `ChannelInfo`, `CategoryInfo`, `PlaybackInfo`, `TokenData`, `UserInfo`.
 
-**Chat clients** (`core/chats/`): `TwitchChatClient` (IRC over WebSocket), `KickChatClient` (Pusher WebSocket) — both implement `ChatClient` ABC in `core/chat.py`. Shared models: `ChatMessage`, `ChatStatus`, `ChatSendResult`.
+**Chat clients** (`core/chats/`): `TwitchChatClient` (IRC over WebSocket), `KickChatClient` (Pusher WebSocket) — both extend `BaseChatClient` in `core/chats/base.py`, which itself extends the `ChatClient` ABC in `core/chat.py`. Shared models: `ChatMessage`, `ChatStatus`, `ChatSendResult`.
 
 **Config** (`core/storage.py`): v2 nested format at `~/.config/twitchx/config.json`:
 - `config.platforms.twitch`, `config.platforms.kick`, `config.platforms.youtube` — per-platform OAuth/API credentials
@@ -32,12 +32,60 @@ Run a single test file: `uv run pytest tests/test_app.py -v`
 - Auto-migrates v1 flat config on first load (keys like `client_id`, `quality` at root)
 - Merge-on-load: missing keys filled from `DEFAULT_CONFIG`, never crash on stale format
 
-**`ui/api.py`** is the Python↔JS bridge (2855 lines). Holds references to all three platform clients + chat client. Key patterns:
+**`ui/api/`** (package, after 2026-04-28 Phase 2 decomposition) — Python↔JS bridge split into 7 modules:
+
+| Module | Class | Responsibility |
+|--------|-------|----------------|
+| `ui/api/__init__.py` | `TwitchXApi` | Orchestrator — owns shared state, delegates to sub-components, config methods |
+| `ui/api/_base.py` | `BaseApiComponent` | Shared infra: `_eval_js`, `_run_in_thread`, platform client accessors |
+| `ui/api/auth.py` | `AuthComponent` | OAuth login/logout for Twitch, Kick, YouTube + connection tests |
+| `ui/api/favorites.py` | `FavoritesComponent` | add/remove/reorder channels, import follows, search |
+| `ui/api/data.py` | `DataComponent` | refresh, polling, browse categories/streams, channel profiles |
+| `ui/api/streams.py` | `StreamsComponent` | watch, watch_direct, watch_external, watch_media, multistream, launch timer |
+| `ui/api/chat.py` | `ChatComponent` | start/stop/send chat, save width/visibility, message callbacks |
+| `ui/api/images.py` | `ImagesComponent` | avatar and thumbnail fetching via `_image_pool` |
+
+Key patterns:
+- `BaseApiComponent` provides `_twitch`, `_kick`, `_youtube`, `_config`, `_live_streams` via property delegation to `self._api` (the parent `TwitchXApi`)
+- `TwitchXApi.__init__` creates all sub-components, passing `self` — components access shared state through the orchestrator
+- All public `TwitchXApi` methods delegate to the appropriate sub-component (e.g. `self.login()` → `self._auth.login()`)
 - `_eval_js(code)` wrapper suppresses errors when window is closing (`_shutdown` Event guard)
 - `_run_in_thread(fn)` dispatches to `threading.Thread(daemon=True)` for all async I/O
 - Bounded thread pools: `_image_pool` (max 8) for avatar/thumbnail fetches, `_send_pool` (max 2) for chat sends
+- `app.py` unchanged — `from ui.api import TwitchXApi` imports from the package's `__init__.py`
 
-**`ui/index.html`** — all HTML/CSS/JS inline, no external dependencies. All design tokens as CSS custom properties in `:root`.
+**`ui/index.html`** — shell (~414 lines) that loads external CSS and JS modules. After 2026-04-28 Phase 3 decomposition:
+
+| Directory | File | Responsibility |
+|-----------|------|----------------|
+| `ui/css/` | `tokens.css` | CSS custom properties (`:root`) |
+| `ui/css/` | `reset.css` | Base resets, scrollbar, accessibility media queries |
+| `ui/css/` | `layout.css` | `#app`, `#main`, `#sidebar`, `#content`, `#toolbar` |
+| `ui/css/` | `components.css` | Buttons, inputs, cards, badges, sidebar sections, chat messages |
+| `ui/css/` | `views.css` | `#player-view`, `#browse-view`, `#channel-view`, `#multistream-view` |
+| `ui/css/` | `player.css` | `#player-bar`, `#chat-panel`, `#chat-resize-handle`, `#live-dot` |
+| `ui/js/` | `state.js` | `TwitchX.state`, `TwitchX.multiState`, shortcuts, chat state |
+| `ui/js/` | `utils.js` | `truncate`, `formatViewers`, `formatUptime`, `setStatus` |
+| `ui/js/` | `api-bridge.js` | `pywebviewready`, `TwitchX.api`, profile helpers |
+| `ui/js/` | `render.js` | `renderGrid`, `createStreamCard`, `createOnboardingCard` |
+| `ui/js/` | `sidebar.js` | `renderSidebar`, `createSidebarItem/Section`, layout logic |
+| `ui/js/` | `player.js` | `showPlayerView`, `hidePlayerView`, volume, fullscreen, PiP |
+| `ui/js/` | `multistream.js` | Slot management, audio/chat focus, dynamic slot creation |
+| `ui/js/` | `browse.js` | `showBrowseView`, category/top-stream loading |
+| `ui/js/` | `channel.js` | `showChannelView`, tabs, media cards, follow/watch actions |
+| `ui/js/` | `chat.js` | `submitChatMessage`, `renderChatEmotes`, reply handling |
+| `ui/js/` | `settings.js` | `openSettings`, `saveSettings`, connection tests |
+| `ui/js/` | `context-menu.js` | `showContextMenu`, `showSidebarContextMenu` |
+| `ui/js/` | `keyboard.js` | `handleKeydown`, shortcut rebinding, hotkeys settings |
+| `ui/js/` | `callbacks.js` | All `window.on*` thin proxies delegating to `TwitchX.*` |
+| `ui/js/` | `init.js` | `DOMContentLoaded`, `_bind*()` event wiring, uptime interval |
+
+Key patterns:
+- All modules use IIFE + `TwitchX` namespace (no globals except `window.on*` callbacks)
+- `var` replaced with `const`/`let` throughout
+- Multistream slots created dynamically via `TwitchX._createMultiSlot()` (no 4× HTML duplication)
+- All inline `onclick` attributes removed; event binding happens in `init.js` via `addEventListener`
+- Script load order: `state` → `utils` → `api-bridge` → `render` → `sidebar` → `player` → `multistream` → `browse` → `channel` → `chat` → `settings` → `context-menu` → `keyboard` → `callbacks` → `init`
 
 ## Key Gotchas
 
@@ -99,3 +147,79 @@ All dynamic content uses `document.createElement()` + `textContent` — no `inne
 ## Testing
 
 Run all: `make test` or `uv run pytest tests/ -v`. Run a single file: `uv run pytest tests/test_app.py -v`.
+
+Coverage: `make cov` (terminal report) or `make cov-html` (HTML report in `htmlcov/`).
+
+### Test infrastructure (`tests/conftest.py`)
+
+Shared fixtures reduce duplication across test files:
+
+| Fixture | Purpose |
+|---------|---------|
+| `temp_config_dir` | Redirects `~/.config/twitchx/` to a temp dir with a minimal `DEFAULT_CONFIG` pre-written. Use in any test that reads/writes config via `core.storage`. |
+| `config_with_twitch_auth` | Same as `temp_config_dir` but pre-populates Twitch OAuth tokens. |
+| `mock_twitch_client` | `MagicMock` configured as a `TwitchClient` with all common methods stubbed as `AsyncMock` returning sensibles defaults. |
+| `mock_kick_client` | Same for `KickClient`. |
+| `mock_youtube_client` | Same for `YouTubeClient`. |
+| `capture_eval_js` | Callable that records all `_eval_js(code)` calls into `capture.calls`; provides `capture.assert_any(fragment)` helper. |
+| `run_sync` | Patches `TwitchXApi._run_in_thread` to execute synchronously (calls `fn()` directly instead of spawning a thread). Apply once per test module and all `TwitchXApi` instances get synchronous dispatch. |
+
+Example usage:
+```python
+def test_my_feature(temp_config_dir, run_sync, capture_eval_js):
+    api = TwitchXApi()
+    api._eval_js = capture_eval_js
+    api.my_method("arg")
+    capture_eval_js.assert_any("onSomething")
+```
+
+### Writing new tests
+
+- Use `temp_config_dir` fixture instead of manually patching `core.storage.CONFIG_DIR`/`CONFIG_FILE`/`_OLD_CONFIG_DIR`
+- Use `run_sync` fixture instead of `monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())`
+- Use `capture_eval_js` fixture instead of `emitted: list[str] = []` + `lambda code: emitted.append(code)`
+- Platform/client mocks: use `mock_twitch_client`, `mock_kick_client`, `mock_youtube_client` from conftest
+- For OAuth tests, see `tests/test_oauth_server.py` for patterns
+
+## Base class hierarchy (after 2026-04-28 Phase 1 refactoring)
+
+### `BasePlatformClient` (`core/platforms/base.py`)
+
+Shared infrastructure for `TwitchClient`, `KickClient`, `YouTubeClient`:
+
+| Member | Purpose |
+|--------|---------|
+| `PLATFORM_ID` / `PLATFORM_NAME` | Set by subclasses (e.g. `"twitch"`, `"Twitch"`) |
+| `_loop_clients` / `_token_locks` | Per-event-loop `httpx.AsyncClient` and `asyncio.Lock` caching |
+| `_get_client()` | Returns or creates a per-loop `httpx.AsyncClient` |
+| `_get_token_lock()` | Returns or creates a per-loop `asyncio.Lock` |
+| `_platform_config()` | Returns platform config section via `get_platform_config(config, PLATFORM_ID)` |
+| `_request(method, url, ...)` | HTTP wrapper with 429-retry and 401-token-refresh; returns `httpx.Response` |
+| `_check_response_errors(resp)` | Override hook (YouTube: 403 quota exceeded) |
+| `_client_headers()` / `_client_timeout()` | Override hooks for per-platform User-Agent / timeout |
+
+Subclasses keep their own `_get()` with platform-specific auth/URL-building; `_request()` handles common retry logic.
+
+### `BaseChatClient` (`core/chats/base.py`)
+
+Shared infrastructure for `TwitchChatClient`, `KickChatClient`:
+
+| Member | Purpose |
+|--------|---------|
+| `platform` | Set by subclasses (`"twitch"` or `"kick"`) |
+| `on_message()` / `on_status()` | Callback registration |
+| `_emit_status(connected, error)` | Push status updates to registered callback |
+| `disconnect()` | Close WebSocket, emit offline status |
+| `_reconnect_loop(connect_fn)` | Outer reconnect loop with exponential backoff (`RECONNECT_DELAYS = [3, 6, 12, 24, 48]`) |
+| `StopReconnect` | Exception class — raise from `connect_fn` to exit reconnect loop cleanly |
+
+Subclasses define `connect()` which sets up credentials and passes a closure `_connect_ws` to `_reconnect_loop()`.
+
+### ABC updates (`core/platform.py`)
+
+- `refresh_token() -> TokenData` → `refresh_user_token() -> str | None`
+- `get_live_streams(channel_ids)` → `get_live_streams(identifiers)`
+- `get_channel_info(channel_id)` → `get_channel_info(identifier)`
+- `resolve_stream_url()` is now optional (`NotImplementedError` default)
+- `follow()` / `unfollow()` removed from required interface
+- `get_channel_vods()` / `get_channel_clips()` added as optional defaults (return `[]`)

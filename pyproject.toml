@@ -25,6 +25,7 @@ dev = [
     "pyright>=1.1.408",
     "pytest>=9.0.2",
     "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.1.0",
     "pytest-httpx>=0.35.0",
     "ruff>=0.15.6",
 ]
@@ -44,3 +45,8 @@ ignore = [".venv", "ui/native_player.py"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = [
+    "--cov=core",
+    "--cov=ui",
+    "--cov-report=term-missing",
+]

@@ -1,0 +1,30 @@
+:root {
+  /* Amber — the broadcast record light */
+  --accent:       #FF9F0A;
+  --accent-hover: #E8920A;
+  --accent-dim:   rgba(255, 159, 10, 0.10);
+
+  /* Warm obsidian depth system */
+  --bg-base:      #0A0A0C;
+  --bg-surface:   #131315;
+  --bg-elevated:  #1D1D20;
+  --bg-overlay:   #26262A;
+  --bg-border:    #222225;
+
+  /* Apple-style label hierarchy */
+  --text-primary:   #F2F2F7;
+  --text-secondary: #8E8E93;
+  --text-muted:     #6E6E73;
+
+  /* Semantic status */
+  --live-green:  #30D158;
+  --live-red:    #FF453A;
+  --warn-yellow: #FF9F0A;
+  --error-red:   #FF453A;
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+}

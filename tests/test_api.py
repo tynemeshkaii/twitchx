@@ -8,22 +8,14 @@ from unittest.mock import patch
 
 import pytest
 
-import core.storage as storage
 from core.chat import ChatMessage, ChatSendResult
 from core.storage import DEFAULT_CONFIG, load_config, save_config
 from ui.api import TwitchXApi
 
 
-def _patch_storage(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(storage, "CONFIG_DIR", tmp_path)  # type: ignore[attr-defined]
-    monkeypatch.setattr(storage, "CONFIG_FILE", tmp_path / "config.json")  # type: ignore[attr-defined]
-    monkeypatch.setattr(storage, "_OLD_CONFIG_DIR", tmp_path / "old")  # type: ignore[attr-defined]
-
-
 def test_add_channel_accepts_kick_url_with_hyphen(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _patch_storage(monkeypatch, tmp_path)
 
     api = TwitchXApi()
     monkeypatch.setattr(api, "refresh", lambda: None)
@@ -41,9 +33,8 @@ def test_add_channel_accepts_kick_url_with_hyphen(
 
 
 def test_get_config_exposes_existing_kick_profile_without_login(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _patch_storage(monkeypatch, tmp_path)
 
     config = {
         **DEFAULT_CONFIG,
@@ -68,9 +59,8 @@ def test_get_config_exposes_existing_kick_profile_without_login(
 
 
 def test_get_config_exposes_kick_scopes(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _patch_storage(monkeypatch, tmp_path)
 
     config = {
         **DEFAULT_CONFIG,
@@ -91,9 +81,8 @@ def test_get_config_exposes_kick_scopes(
 
 
 def test_kick_search_does_not_require_saved_credentials(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _patch_storage(monkeypatch, tmp_path)
 
     api = TwitchXApi()
     emitted: list[str] = []
@@ -120,9 +109,8 @@ def test_kick_search_does_not_require_saved_credentials(
 
 
 def test_search_channels_all_combines_kick_and_twitch_results(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _patch_storage(monkeypatch, tmp_path)
 
     config = {
         **DEFAULT_CONFIG,
@@ -188,9 +176,8 @@ def test_build_kick_stream_item_maps_current_public_payload() -> None:
 
 
 def test_save_settings_does_not_clear_existing_credentials_on_blank_fields(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _patch_storage(monkeypatch, tmp_path)
 
     config = {
         **DEFAULT_CONFIG,
@@ -236,9 +223,8 @@ def test_save_settings_does_not_clear_existing_credentials_on_blank_fields(
 
 
 def test_add_channel_emits_duplicate_warning_without_refresh(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _patch_storage(monkeypatch, tmp_path)
 
     save_config(
         {
@@ -265,9 +251,8 @@ def test_add_channel_emits_duplicate_warning_without_refresh(
 
 
 def test_watch_uses_kick_platform_for_kick_stream(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _patch_storage(monkeypatch, tmp_path)
 
     api = TwitchXApi()
     api._live_streams = [
@@ -292,11 +277,11 @@ def test_watch_uses_kick_platform_for_kick_stream(
         captured["platform"] = platform
         return ("https://example.com/kick.m3u8", "")
 
-    monkeypatch.setattr("ui.api.resolve_hls_url", fake_resolve)
+    monkeypatch.setattr("ui.api.streams.resolve_hls_url", fake_resolve)
     monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
     monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
-    monkeypatch.setattr(api, "_start_launch_timer", lambda: None)
-    monkeypatch.setattr(api, "_cancel_launch_timer", lambda: None)
+    monkeypatch.setattr(api._streams, "_start_launch_timer", lambda: None)
+    monkeypatch.setattr(api._streams, "_cancel_launch_timer", lambda: None)
     monkeypatch.setattr(api, "start_chat", lambda channel, platform: None)
 
     api.watch("train-wreck", "best")
@@ -306,9 +291,8 @@ def test_watch_uses_kick_platform_for_kick_stream(
 
 
 def test_watch_external_uses_kick_platform_for_kick_stream(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _patch_storage(monkeypatch, tmp_path)
 
     api = TwitchXApi()
     api._live_streams = [
@@ -338,7 +322,7 @@ def test_watch_external_uses_kick_platform_for_kick_stream(
         captured["platform"] = platform
         return Result()
 
-    monkeypatch.setattr("ui.api.launch_stream", fake_launch)
+    monkeypatch.setattr("ui.api.streams.launch_stream", fake_launch)
     monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
     monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
 
@@ -349,9 +333,8 @@ def test_watch_external_uses_kick_platform_for_kick_stream(
 
 
 def test_start_chat_kick_uses_chatroom_and_scope_for_send_auth(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _patch_storage(monkeypatch, tmp_path)
 
     config = {
         **DEFAULT_CONFIG,
@@ -391,7 +374,7 @@ def test_start_chat_kick_uses_chatroom_and_scope_for_send_auth(
         captured["can_send"] = can_send
 
     monkeypatch.setattr(api._kick, "get_channel_info", fake_channel_info)
-    monkeypatch.setattr(api, "_on_chat_status", lambda status: None)
+    monkeypatch.setattr(api._chat, "_on_chat_status", lambda status: None)
 
     class FakeKickChatClient:
         platform = "kick"
@@ -428,8 +411,8 @@ def test_start_chat_kick_uses_chatroom_and_scope_for_send_auth(
             assert callable(self._target)
             self._target()
 
-    monkeypatch.setattr("ui.api.KickChatClient", FakeKickChatClient)
-    monkeypatch.setattr("ui.api.threading.Thread", InlineThread)
+    monkeypatch.setattr("ui.api.chat.KickChatClient", FakeKickChatClient)
+    monkeypatch.setattr("threading.Thread", InlineThread)
 
     api.start_chat("vitaly", platform="kick")
 
@@ -440,9 +423,8 @@ def test_start_chat_kick_uses_chatroom_and_scope_for_send_auth(
 
 
 def test_send_chat_kick_emits_send_result_without_local_echo(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _patch_storage(monkeypatch, tmp_path)
 
     config = {
         **DEFAULT_CONFIG,
@@ -492,7 +474,7 @@ def test_send_chat_kick_emits_send_result_without_local_echo(
     api._chat_client = FakeKickChatClient()  # type: ignore[assignment]
     monkeypatch.setattr(api._send_pool, "submit", lambda fn: fn())
     monkeypatch.setattr(
-        "ui.api.asyncio.run_coroutine_threadsafe", fake_run_coroutine_threadsafe
+        "asyncio.run_coroutine_threadsafe", fake_run_coroutine_threadsafe
     )
 
     api.send_chat(
@@ -509,9 +491,8 @@ def test_send_chat_kick_emits_send_result_without_local_echo(
 
 
 def test_send_chat_kick_failure_emits_error_result(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _patch_storage(monkeypatch, tmp_path)
 
     api = TwitchXApi()
     emitted: list[str] = []
@@ -546,7 +527,7 @@ def test_send_chat_kick_failure_emits_error_result(
     api._chat_client = FakeKickChatClient()  # type: ignore[assignment]
     monkeypatch.setattr(api._send_pool, "submit", lambda fn: fn())
     monkeypatch.setattr(
-        "ui.api.asyncio.run_coroutine_threadsafe", fake_run_coroutine_threadsafe
+        "asyncio.run_coroutine_threadsafe", fake_run_coroutine_threadsafe
     )
 
     api.send_chat("hello kick", request_id="req-2")
@@ -557,9 +538,8 @@ def test_send_chat_kick_failure_emits_error_result(
 
 
 def test_on_chat_message_marks_own_kick_messages_as_self(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _patch_storage(monkeypatch, tmp_path)
 
     config = {
         **DEFAULT_CONFIG,
@@ -601,13 +581,9 @@ def test_on_chat_message_marks_own_kick_messages_as_self(
 
 
 class TestFetchLock:
-    def test_concurrent_refresh_is_no_op(self, tmp_path, monkeypatch) -> None:
+    def test_concurrent_refresh_is_no_op(self, temp_config_dir, monkeypatch) -> None:
         """A second refresh() while one is in progress must be a no-op."""
-        import core.storage as storage
 
-        monkeypatch.setattr(storage, "CONFIG_DIR", tmp_path)
-        monkeypatch.setattr(storage, "CONFIG_FILE", tmp_path / "config.json")
-        monkeypatch.setattr(storage, "_OLD_CONFIG_DIR", tmp_path / "old")
 
         from core.storage import DEFAULT_CONFIG, save_config
 
@@ -636,7 +612,7 @@ class TestFetchLock:
         fetch_started = threading.Event()
         fetch_proceed = threading.Event()
 
-        original_fetch = api._fetch_data
+        original_fetch = api._data._fetch_data
 
         def slow_fetch(*args, **kwargs):
             nonlocal call_count
@@ -645,7 +621,7 @@ class TestFetchLock:
             fetch_proceed.wait(timeout=2)
             original_fetch(*args, **kwargs)
 
-        monkeypatch.setattr(api, "_fetch_data", slow_fetch)
+        monkeypatch.setattr(api._data, "_fetch_data", slow_fetch)
 
         t = threading.Thread(target=api.refresh)
         t.start()
@@ -662,14 +638,10 @@ class TestFetchLock:
 
 class TestPollLock:
     def test_concurrent_start_polling_creates_one_timer(
-        self, tmp_path, monkeypatch
+        self, temp_config_dir, monkeypatch
     ) -> None:
         """Concurrent start_polling calls must result in exactly one active timer chain."""
-        import core.storage as storage
 
-        monkeypatch.setattr(storage, "CONFIG_DIR", tmp_path)
-        monkeypatch.setattr(storage, "CONFIG_FILE", tmp_path / "config.json")
-        monkeypatch.setattr(storage, "_OLD_CONFIG_DIR", tmp_path / "old")
 
         from ui.api import TwitchXApi
 
@@ -709,14 +681,10 @@ class TestPollLock:
 
 class TestAsyncFetchIsolation:
     def test_twitch_error_does_not_discard_kick_streams(
-        self, tmp_path, monkeypatch
+        self, temp_config_dir, monkeypatch
     ) -> None:
         """If Twitch raises, Kick results must still be returned."""
-        import core.storage as storage
 
-        monkeypatch.setattr(storage, "CONFIG_DIR", tmp_path)
-        monkeypatch.setattr(storage, "CONFIG_FILE", tmp_path / "config.json")
-        monkeypatch.setattr(storage, "_OLD_CONFIG_DIR", tmp_path / "old")
 
         from core.storage import DEFAULT_CONFIG, save_config
 
@@ -750,7 +718,7 @@ class TestAsyncFetchIsolation:
                     return_value=[fake_kick_stream],
                 ),
             ):
-                _, _, kick, _, _ = await api._async_fetch(
+                _, _, kick, _, _ = await api._data._async_fetch(
                     twitch_favorites=["somestreamer"],
                     kick_favorites=["streamer"],
                 )
@@ -763,14 +731,10 @@ class TestAsyncFetchIsolation:
         assert kick_results == [fake_kick_stream]
 
     def test_twitch_timeout_does_not_discard_kick_streams(
-        self, tmp_path, monkeypatch
+        self, temp_config_dir, monkeypatch
     ) -> None:
         """If Twitch times out, Kick results must still be returned."""
-        import core.storage as storage
 
-        monkeypatch.setattr(storage, "CONFIG_DIR", tmp_path)
-        monkeypatch.setattr(storage, "CONFIG_FILE", tmp_path / "config.json")
-        monkeypatch.setattr(storage, "_OLD_CONFIG_DIR", tmp_path / "old")
 
         from core.storage import DEFAULT_CONFIG, save_config
 
@@ -807,7 +771,7 @@ class TestAsyncFetchIsolation:
                     return_value=[fake_kick_stream],
                 ),
             ):
-                _, _, kick, _, _ = await api._async_fetch(
+                _, _, kick, _, _ = await api._data._async_fetch(
                     twitch_favorites=["somestreamer"],
                     kick_favorites=["streamer"],
                     _twitch_timeout=0.05,
@@ -824,12 +788,8 @@ class TestAsyncFetchIsolation:
 class TestParallelFetch:
     """Verify asyncio.gather parallel fetch: independent errors per platform."""
 
-    def _setup(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        import core.storage as storage
+    def _setup(self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
-        monkeypatch.setattr(storage, "CONFIG_DIR", tmp_path)
-        monkeypatch.setattr(storage, "CONFIG_FILE", tmp_path / "config.json")
-        monkeypatch.setattr(storage, "_OLD_CONFIG_DIR", tmp_path / "old")
         from core.storage import DEFAULT_CONFIG, save_config
 
         cfg = {
@@ -846,10 +806,10 @@ class TestParallelFetch:
         save_config(cfg)
 
     def test_twitch_cache_used_on_connect_error(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """ConnectError → _last_twitch_streams returned, twitch_error set."""
-        self._setup(tmp_path, monkeypatch)
+        self._setup(temp_config_dir, monkeypatch)
         import httpx
 
         from ui.api import TwitchXApi
@@ -862,7 +822,7 @@ class TestParallelFetch:
             with patch.object(
                 api._twitch, "_ensure_token", side_effect=httpx.ConnectError("down")
             ):
-                return await api._async_fetch(
+                return await api._data._async_fetch(
                     twitch_favorites=["cached_streamer"],
                     kick_favorites=[],
                 )
@@ -876,10 +836,10 @@ class TestParallelFetch:
         assert isinstance(twitch_error, httpx.ConnectError)
 
     def test_twitch_cache_updated_on_success(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Successful Twitch fetch updates _last_twitch_streams; twitch_error is None."""
-        self._setup(tmp_path, monkeypatch)
+        self._setup(temp_config_dir, monkeypatch)
         from ui.api import TwitchXApi
 
         api = TwitchXApi()
@@ -891,7 +851,7 @@ class TestParallelFetch:
                 patch.object(api._twitch, "get_live_streams", return_value=fresh),
                 patch.object(api._twitch, "get_users", return_value=[]),
             ):
-                return await api._async_fetch(
+                return await api._data._async_fetch(
                     twitch_favorites=["live_streamer"],
                     kick_favorites=[],
                 )
@@ -906,10 +866,10 @@ class TestParallelFetch:
         assert api._last_twitch_streams == fresh
 
     def test_twitch_timeout_sets_error_to_none(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Twitch TimeoutError → twitch_error=None (timeout is non-retriable)."""
-        self._setup(tmp_path, monkeypatch)
+        self._setup(temp_config_dir, monkeypatch)
         from ui.api import TwitchXApi
 
         api = TwitchXApi()
@@ -919,7 +879,7 @@ class TestParallelFetch:
 
         async def run():
             with patch.object(api._twitch, "_ensure_token", side_effect=slow_token):
-                return await api._async_fetch(
+                return await api._data._async_fetch(
                     twitch_favorites=["somestreamer"],
                     kick_favorites=[],
                     _twitch_timeout=0.05,
@@ -933,10 +893,10 @@ class TestParallelFetch:
         assert twitch_error is None
 
     def test_youtube_cache_served_when_twitch_fails(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """YouTube _last_youtube_streams served even when Twitch raises ConnectError."""
-        self._setup(tmp_path, monkeypatch)
+        self._setup(temp_config_dir, monkeypatch)
         import time
 
         import httpx
@@ -952,7 +912,7 @@ class TestParallelFetch:
             with patch.object(
                 api._twitch, "_ensure_token", side_effect=httpx.ConnectError("down")
             ):
-                return await api._async_fetch(
+                return await api._data._async_fetch(
                     twitch_favorites=["somestreamer"],
                     kick_favorites=[],
                     youtube_favorites=["UCfakechannel1234567890"],
@@ -969,15 +929,14 @@ class TestParallelFetch:
 
 class TestAddMultiSlot:
     def test_success_emits_onMultiSlotReady(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        _patch_storage(monkeypatch, tmp_path)
         api = TwitchXApi()
         emitted: list[str] = []
         monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
         monkeypatch.setattr(
-            "ui.api.resolve_hls_url",
+            "ui.api.streams.resolve_hls_url",
             lambda ch, q, sl, platform: ("https://hls.example.com/s.m3u8", ""),
         )
 
@@ -993,15 +952,14 @@ class TestAddMultiSlot:
         assert "error" not in payload
 
     def test_resolve_error_emits_error_payload(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        _patch_storage(monkeypatch, tmp_path)
         api = TwitchXApi()
         emitted: list[str] = []
         monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
         monkeypatch.setattr(
-            "ui.api.resolve_hls_url",
+            "ui.api.streams.resolve_hls_url",
             lambda ch, q, sl, platform: (None, "streamlink not found"),
         )
 
@@ -1014,9 +972,8 @@ class TestAddMultiSlot:
         assert "url" not in payload
 
     def test_out_of_range_slot_idx_is_noop(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        _patch_storage(monkeypatch, tmp_path)
         api = TwitchXApi()
         emitted: list[str] = []
         monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
@@ -1027,9 +984,8 @@ class TestAddMultiSlot:
         assert emitted == []
 
     def test_negative_slot_idx_is_noop(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        _patch_storage(monkeypatch, tmp_path)
         api = TwitchXApi()
         emitted: list[str] = []
         monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
@@ -1040,9 +996,8 @@ class TestAddMultiSlot:
         assert emitted == []
 
     def test_title_populated_from_live_streams_cache(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        _patch_storage(monkeypatch, tmp_path)
         api = TwitchXApi()
         api._live_streams = [
             {"login": "xqc", "platform": "twitch", "title": "Gaming Session"}
@@ -1051,7 +1006,7 @@ class TestAddMultiSlot:
         monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
         monkeypatch.setattr(
-            "ui.api.resolve_hls_url",
+            "ui.api.streams.resolve_hls_url",
             lambda ch, q, sl, platform: ("https://hls.example.com/s.m3u8", ""),
         )
 
@@ -1061,9 +1016,8 @@ class TestAddMultiSlot:
         assert payload["title"] == "Gaming Session"
 
     def test_kick_slot_passes_kick_platform_to_resolver(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        _patch_storage(monkeypatch, tmp_path)
         api = TwitchXApi()
         emitted: list[str] = []
         captured: dict[str, str] = {}
@@ -1074,7 +1028,7 @@ class TestAddMultiSlot:
             captured["platform"] = platform
             return "https://hls.example.com/s.m3u8", ""
 
-        monkeypatch.setattr("ui.api.resolve_hls_url", fake_resolve)
+        monkeypatch.setattr("ui.api.streams.resolve_hls_url", fake_resolve)
 
         api.add_multi_slot(1, "xqcow", "kick", "best")
 
@@ -1084,9 +1038,8 @@ class TestAddMultiSlot:
 
 
 def test_get_config_includes_pip_and_shortcuts(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _patch_storage(monkeypatch, tmp_path)
     api = TwitchXApi()
     cfg = api.get_config()
     assert "pip_enabled" in cfg
@@ -1097,9 +1050,8 @@ def test_get_config_includes_pip_and_shortcuts(
 
 
 def test_get_full_config_for_settings_includes_pip_and_shortcuts(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _patch_storage(monkeypatch, tmp_path)
     api = TwitchXApi()
     cfg = api.get_full_config_for_settings()
     assert "pip_enabled" in cfg
@@ -1110,9 +1062,8 @@ def test_get_full_config_for_settings_includes_pip_and_shortcuts(
 
 
 def test_save_settings_persists_pip_enabled_and_shortcuts(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _patch_storage(monkeypatch, tmp_path)
     api = TwitchXApi()
     monkeypatch.setattr(api, "start_polling", lambda interval: None)
     monkeypatch.setattr(api, "_eval_js", lambda code: None)

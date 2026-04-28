@@ -19,25 +19,10 @@ from core.storage import (
     token_is_valid,
 )
 
-# ── Helper to patch storage paths ───────────────────────────
-
-
-def _patch_storage(monkeypatch: object, tmp_path: Path) -> Path:
-    import core.storage as mod
-
-    config_file = tmp_path / "config.json"
-    monkeypatch.setattr(mod, "CONFIG_DIR", tmp_path)  # type: ignore[attr-defined]
-    monkeypatch.setattr(mod, "CONFIG_FILE", config_file)  # type: ignore[attr-defined]
-    monkeypatch.setattr(mod, "_OLD_CONFIG_DIR", tmp_path / "nonexistent")  # type: ignore[attr-defined]
-    return config_file
-
-
 # ── Config defaults / load / save ────────────────────────────
 
 
-def test_load_config_defaults(tmp_path: Path, monkeypatch: object) -> None:
-    _patch_storage(monkeypatch, tmp_path)
-
+def test_load_config_defaults(temp_config_dir: Path) -> None:
     config = load_config()
     for key in DEFAULT_CONFIG:
         assert key in config, f"Missing key: {key}"
@@ -46,15 +31,14 @@ def test_load_config_defaults(tmp_path: Path, monkeypatch: object) -> None:
     assert "favorites" in config
     assert config["platforms"]["twitch"]["client_id"] == ""
     assert config["settings"]["refresh_interval"] == 60
-    assert (tmp_path / "config.json").exists()
+    assert temp_config_dir.exists()
 
 
-def test_load_config_deep_merge(tmp_path: Path, monkeypatch: object) -> None:
+def test_load_config_deep_merge(temp_config_dir: Path) -> None:
     """A v2 config on disk with partial platform data gets missing keys from defaults."""
-    config_file = _patch_storage(monkeypatch, tmp_path)
 
     # Write a v2 config missing some twitch keys and missing kick/youtube entirely
-    config_file.write_text(
+    temp_config_dir.write_text(
         json.dumps(
             {
                 "platforms": {
@@ -80,8 +64,7 @@ def test_load_config_deep_merge(tmp_path: Path, monkeypatch: object) -> None:
     assert config["settings"]["refresh_interval"] == 60
 
 
-def test_save_and_reload(tmp_path: Path, monkeypatch: object) -> None:
-    _patch_storage(monkeypatch, tmp_path)
+def test_save_and_reload(temp_config_dir: Path) -> None:
 
     data = {
         "platforms": {
@@ -106,9 +89,8 @@ def test_save_and_reload(tmp_path: Path, monkeypatch: object) -> None:
 # ── v1 → v2 migration ───────────────────────────────────────
 
 
-def test_v1_migration_credentials(tmp_path: Path, monkeypatch: object) -> None:
+def test_v1_migration_credentials(temp_config_dir: Path) -> None:
     """v1 flat config migrates Twitch credentials into platforms.twitch."""
-    config_file = _patch_storage(monkeypatch, tmp_path)
 
     v1 = {
         "client_id": "my_id",
@@ -127,7 +109,7 @@ def test_v1_migration_credentials(tmp_path: Path, monkeypatch: object) -> None:
         "token_type": "user",
         "player_height": 480,
     }
-    config_file.write_text(json.dumps(v1))
+    temp_config_dir.write_text(json.dumps(v1))
 
     config = load_config()
 
@@ -155,11 +137,10 @@ def test_v1_migration_credentials(tmp_path: Path, monkeypatch: object) -> None:
     assert config["platforms"]["youtube"]["enabled"] is True
 
 
-def test_v1_migration_minimal(tmp_path: Path, monkeypatch: object) -> None:
+def test_v1_migration_minimal(temp_config_dir: Path) -> None:
     """v1 config with only a few keys still migrates correctly."""
-    config_file = _patch_storage(monkeypatch, tmp_path)
 
-    config_file.write_text(json.dumps({"client_id": "x", "favorites": ["a"]}))
+    temp_config_dir.write_text(json.dumps({"client_id": "x", "favorites": ["a"]}))
 
     config = load_config()
     assert config["platforms"]["twitch"]["client_id"] == "x"
@@ -170,9 +151,8 @@ def test_v1_migration_minimal(tmp_path: Path, monkeypatch: object) -> None:
     assert config["settings"]["quality"] == "best"
 
 
-def test_v2_config_no_remigration(tmp_path: Path, monkeypatch: object) -> None:
+def test_v2_config_no_remigration(temp_config_dir: Path) -> None:
     """A config with 'platforms' key is already v2 and should not be re-migrated."""
-    config_file = _patch_storage(monkeypatch, tmp_path)
 
     v2 = {
         "platforms": {
@@ -181,7 +161,7 @@ def test_v2_config_no_remigration(tmp_path: Path, monkeypatch: object) -> None:
         "favorites": [{"platform": "twitch", "login": "test", "display_name": "test"}],
         "settings": {"quality": "1080p"},
     }
-    config_file.write_text(json.dumps(v2))
+    temp_config_dir.write_text(json.dumps(v2))
 
     config = load_config()
     assert config["platforms"]["twitch"]["client_id"] == "already_v2"
@@ -191,9 +171,8 @@ def test_v2_config_no_remigration(tmp_path: Path, monkeypatch: object) -> None:
     assert config["settings"]["quality"] == "1080p"
 
 
-def test_fresh_install_gets_v2(tmp_path: Path, monkeypatch: object) -> None:
+def test_fresh_install_gets_v2(temp_config_dir: Path) -> None:
     """Fresh install (no config file) produces v2 defaults."""
-    _patch_storage(monkeypatch, tmp_path)
 
     config = load_config()
     assert "platforms" in config
@@ -354,10 +333,9 @@ def test_keyboard_shortcuts_in_default_settings() -> None:
 
 
 def test_keyboard_shortcuts_deep_merged_from_stored(
-    tmp_path: Path, monkeypatch: object
+    temp_config_dir: Path,
 ) -> None:
-    config_file = _patch_storage(monkeypatch, tmp_path)
-    config_file.write_text(
+    temp_config_dir.write_text(
         json.dumps(
             {
                 "platforms": {},

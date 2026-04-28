@@ -528,7 +528,7 @@ class TestKickChatClientReconnect:
 
         with (
             patch("core.chats.kick_chat.websockets.connect", _fake_connect),
-            patch("core.chats.kick_chat.asyncio.sleep", new_callable=AsyncMock),
+            patch("core.chats.base.asyncio.sleep", new_callable=AsyncMock),
         ):
             await client.connect(channel_id="ch", chatroom_id=1)
 

@@ -72,5 +72,5 @@ def test_get_top_streams_with_category_id_passes_param() -> None:
         _run(client.get_top_streams(category_id="15"))
     # _get is called with (url, params=...) as keyword arg
     params = mock_get.call_args.kwargs.get("params")
-    param_dict = dict(params) if isinstance(params, list) else params
+    param_dict: dict[str, str] = dict(params) if isinstance(params, list) else params or {}
     assert param_dict.get("category_id") == "15"

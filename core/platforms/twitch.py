@@ -3,14 +3,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-import threading
 import time
 from typing import Any
 from urllib.parse import urlencode
 
-import httpx
-
-from core.storage import load_config, token_is_valid, update_config
+from core.platforms.base import BasePlatformClient
+from core.storage import token_is_valid, update_config
 
 logger = logging.getLogger(__name__)
 
@@ -22,61 +20,17 @@ TWITCH_REDIRECT_URI = "http://localhost:3457/callback"
 OAUTH_SCOPE = "user:read:follows chat:read chat:edit"
 
 
-class TwitchClient:
+class TwitchClient(BasePlatformClient):
+    PLATFORM_ID = "twitch"
+    PLATFORM_NAME = "Twitch"
+
     def __init__(self) -> None:
-        self._config = load_config()
-        self._loop_clients: dict[asyncio.AbstractEventLoop, httpx.AsyncClient] = {}
-        self._token_locks: dict[asyncio.AbstractEventLoop, asyncio.Lock] = {}
-        self._loop_state_lock = threading.Lock()
-
-    def _tconf(self) -> dict[str, Any]:
-        """Shortcut to the Twitch platform config section."""
-        return self._config.get("platforms", {}).get("twitch", {})
-
-    async def close(self) -> None:
-        await self.close_loop_resources()
-
-    def reset_client(self) -> None:
-        """Compatibility no-op.
-
-        HTTP clients are now scoped per event loop, so a new temporary loop
-        automatically gets a fresh client and never reuses sockets from a
-        previously closed loop.
-        """
-
-    def _get_client(self) -> httpx.AsyncClient:
-        loop = asyncio.get_running_loop()
-        with self._loop_state_lock:
-            client = self._loop_clients.get(loop)
-            if client is None:
-                client = httpx.AsyncClient(timeout=15.0)
-                self._loop_clients[loop] = client
-            return client
-
-    def _get_token_lock(self) -> asyncio.Lock:
-        loop = asyncio.get_running_loop()
-        with self._loop_state_lock:
-            lock = self._token_locks.get(loop)
-            if lock is None:
-                lock = asyncio.Lock()
-                self._token_locks[loop] = lock
-            return lock
-
-    async def close_loop_resources(self) -> None:
-        loop = asyncio.get_running_loop()
-        with self._loop_state_lock:
-            client = self._loop_clients.pop(loop, None)
-            self._token_locks.pop(loop, None)
-        if client is not None:
-            await client.aclose()
-
-    def _reload_config(self) -> None:
-        self._config = load_config()
+        super().__init__()
 
     async def _ensure_token(self) -> str:
         async with self._get_token_lock():
             self._reload_config()
-            tc = self._tconf()
+            tc = self._platform_config()
             # Prefer user token if available
             if tc.get("token_type") == "user":
                 if token_is_valid(tc):
@@ -89,7 +43,7 @@ class TwitchClient:
             return await self._refresh_app_token()
 
     async def _refresh_app_token(self) -> str:
-        tc = self._tconf()
+        tc = self._platform_config()
         client_id = tc.get("client_id", "")
         client_secret = tc.get("client_secret", "")
         if not client_id or not client_secret:
@@ -122,7 +76,7 @@ class TwitchClient:
 
     def get_auth_url(self) -> str:
         self._reload_config()
-        tc = self._tconf()
+        tc = self._platform_config()
         params = urlencode(
             {
                 "client_id": tc["client_id"],
@@ -136,7 +90,7 @@ class TwitchClient:
 
     async def exchange_code(self, code: str) -> dict[str, Any]:
         self._reload_config()
-        tc = self._tconf()
+        tc = self._platform_config()
         resp = await self._get_client().post(
             TWITCH_AUTH_URL,
             data={
@@ -151,7 +105,7 @@ class TwitchClient:
         return resp.json()
 
     async def refresh_user_token(self) -> str:
-        tc = self._tconf()
+        tc = self._platform_config()
         resp = await self._get_client().post(
             TWITCH_AUTH_URL,
             data={
@@ -223,7 +177,7 @@ class TwitchClient:
         params: Any = None,
     ) -> Any:
         token = await self._ensure_token()
-        tc = self._tconf()
+        tc = self._platform_config()
         headers = {
             "Authorization": f"Bearer {token}",
             "Client-Id": tc["client_id"],

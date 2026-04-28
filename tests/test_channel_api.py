@@ -5,15 +5,8 @@ from pathlib import Path
 
 import pytest
 
-import core.storage as storage
 from core.storage import DEFAULT_CONFIG, save_config
 from ui.api import TwitchXApi
-
-
-def _patch_storage(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(storage, "CONFIG_DIR", tmp_path)  # type: ignore[attr-defined]
-    monkeypatch.setattr(storage, "CONFIG_FILE", tmp_path / "config.json")  # type: ignore[attr-defined]
-    monkeypatch.setattr(storage, "_OLD_CONFIG_DIR", tmp_path / "old")  # type: ignore[attr-defined]
 
 
 def _parse_channel_profile(emitted: list[str]) -> dict:
@@ -29,9 +22,8 @@ def _parse_channel_media(emitted: list[str]) -> dict:
 
 
 def test_get_channel_profile_twitch_emits_js_callback(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _patch_storage(monkeypatch, tmp_path)
     api = TwitchXApi()
     emitted: list[str] = []
 
@@ -63,9 +55,8 @@ def test_get_channel_profile_twitch_emits_js_callback(
 
 
 def test_get_channel_profile_marks_is_favorited_when_in_favorites(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _patch_storage(monkeypatch, tmp_path)
 
     config = {
         **DEFAULT_CONFIG,
@@ -100,9 +91,8 @@ def test_get_channel_profile_marks_is_favorited_when_in_favorites(
 
 
 def test_get_channel_profile_kick_normalizes_raw_dict(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _patch_storage(monkeypatch, tmp_path)
     api = TwitchXApi()
     emitted: list[str] = []
 
@@ -133,9 +123,8 @@ def test_get_channel_profile_kick_normalizes_raw_dict(
 
 
 def test_get_channel_profile_youtube_normalizes_raw_dict(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _patch_storage(monkeypatch, tmp_path)
     api = TwitchXApi()
     emitted: list[str] = []
 
@@ -164,9 +153,8 @@ def test_get_channel_profile_youtube_normalizes_raw_dict(
 
 
 def test_get_channel_profile_emits_null_on_empty_response(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _patch_storage(monkeypatch, tmp_path)
     api = TwitchXApi()
     emitted: list[str] = []
 
@@ -183,9 +171,8 @@ def test_get_channel_profile_emits_null_on_empty_response(
 
 
 def test_get_channel_profile_ignores_unknown_platform(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _patch_storage(monkeypatch, tmp_path)
     api = TwitchXApi()
     emitted: list[str] = []
     monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
@@ -196,9 +183,8 @@ def test_get_channel_profile_ignores_unknown_platform(
 
 
 def test_get_channel_media_twitch_vods_emits_payload(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _patch_storage(monkeypatch, tmp_path)
     api = TwitchXApi()
     emitted: list[str] = []
 
@@ -236,9 +222,8 @@ def test_get_channel_media_twitch_vods_emits_payload(
 
 
 def test_get_channel_media_kick_emits_unsupported(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _patch_storage(monkeypatch, tmp_path)
     api = TwitchXApi()
     emitted: list[str] = []
     monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))

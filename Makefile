@@ -1,4 +1,4 @@
-.PHONY: run debug lint fmt test check push
+.PHONY: run debug lint fmt test cov cov-html check push
 
 run:
 	uv run python main.py
@@ -15,6 +15,12 @@ fmt:
 
 test:
 	uv run pytest tests/ -v
+
+cov:
+	uv run pytest tests/ -v --cov=core --cov=ui --cov-report=term-missing
+
+cov-html:
+	uv run pytest tests/ -v --cov=core --cov=ui --cov-report=html
 
 check: lint test
 

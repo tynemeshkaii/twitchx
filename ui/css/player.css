@@ -1,0 +1,50 @@
+/* ── Player bar ─────────────────────────────────────────── */
+#player-bar {
+  height: 44px; background: var(--bg-surface);
+  border-top: 1px solid var(--bg-border);
+  display: flex; align-items: center; padding: 0 12px; gap: 7px;
+  flex-shrink: 0;
+}
+
+#player-bar select {
+  height: 28px; padding: 0 8px;
+  background: var(--bg-elevated); border: 1px solid var(--bg-border);
+  border-radius: var(--radius-sm); color: var(--text-primary);
+  font-size: 12px; font-family: inherit; outline: none; cursor: pointer;
+}
+
+/* ── Chat panel ───────────────────────────────────────── */
+#chat-panel {
+  width: var(--chat-width, 320px);
+  min-width: 240px; max-width: 480px;
+  display: flex; flex-direction: column;
+  background: var(--bg-surface);
+  border-left: 1px solid var(--bg-border);
+}
+#chat-panel.hidden { display: none; }
+
+#chat-resize-handle {
+  width: 6px; cursor: col-resize;
+  background: var(--bg-border); flex-shrink: 0;
+  transition: background 0.12s ease;
+  position: relative;
+}
+#chat-resize-handle::after {
+  content: ''; position: absolute; inset: 0 -6px;
+}
+#chat-resize-handle:hover { background: rgba(255,159,10,0.35); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+#live-dot {
+  animation: pulse 1.8s ease-in-out infinite;
+  color: var(--live-red); font-size: 12px; display: none;
+}
+#live-dot.visible { display: inline; }
+
+#status-text { font-size: 12px; color: var(--text-secondary); flex: 1; margin-left: 2px; }
+#total-viewers { font-size: 11px; color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+#updated-time { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+#updated-time.stale { color: var(--error-red); }

@@ -7,15 +7,14 @@ import logging
 import os
 import re
 import secrets
-import threading
 import time
 from typing import Any
 from urllib.parse import urlencode
 
-import httpx
 from curl_cffi import requests as curl_requests
 
-from core.storage import load_config, token_is_valid, update_config
+from core.platforms.base import BasePlatformClient
+from core.storage import token_is_valid, update_config
 
 logger = logging.getLogger(__name__)
 
@@ -46,57 +45,16 @@ def _generate_code_challenge(verifier: str) -> str:
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 
-class KickClient:
+class KickClient(BasePlatformClient):
+    PLATFORM_ID = "kick"
+    PLATFORM_NAME = "Kick"
+
     def __init__(self) -> None:
-        self._config = load_config()
-        self._loop_clients: dict[asyncio.AbstractEventLoop, httpx.AsyncClient] = {}
-        self._token_locks: dict[asyncio.AbstractEventLoop, asyncio.Lock] = {}
-        self._loop_state_lock = threading.Lock()
+        super().__init__()
         self._livestreams_cache: tuple[float, list[dict[str, Any]]] = (0, [])
 
-    def _kconf(self) -> dict[str, Any]:
-        """Shortcut to the Kick platform config section."""
-        return self._config.get("platforms", {}).get("kick", {})
-
-    async def close(self) -> None:
-        await self.close_loop_resources()
-
-    def reset_client(self) -> None:
-        """Compatibility no-op.
-
-        HTTP clients are now scoped per event loop, so a new temporary loop
-        automatically gets a fresh client and never reuses sockets from a
-        previously closed loop.
-        """
-
-    def _get_client(self) -> httpx.AsyncClient:
-        loop = asyncio.get_running_loop()
-        with self._loop_state_lock:
-            client = self._loop_clients.get(loop)
-            if client is None:
-                client = httpx.AsyncClient(timeout=15.0)
-                self._loop_clients[loop] = client
-            return client
-
-    def _get_token_lock(self) -> asyncio.Lock:
-        loop = asyncio.get_running_loop()
-        with self._loop_state_lock:
-            lock = self._token_locks.get(loop)
-            if lock is None:
-                lock = asyncio.Lock()
-                self._token_locks[loop] = lock
-            return lock
-
-    async def close_loop_resources(self) -> None:
-        loop = asyncio.get_running_loop()
-        with self._loop_state_lock:
-            client = self._loop_clients.pop(loop, None)
-            self._token_locks.pop(loop, None)
-        if client is not None:
-            await client.aclose()
-
-    def _reload_config(self) -> None:
-        self._config = load_config()
+    def _client_timeout(self) -> float:
+        return 15.0
 
     # ── OAuth (user-level PKCE) ──────────────────────────────
 
@@ -113,7 +71,7 @@ class KickClient:
             kc["oauth_state"] = state
 
         self._config = update_config(_apply)
-        kc = self._kconf()
+        kc = self._platform_config()
         params: dict[str, str] = {
             "response_type": "code",
             "client_id": kc.get("client_id", ""),
@@ -129,7 +87,7 @@ class KickClient:
     async def exchange_code(self, code: str) -> dict[str, Any]:
         """Exchange authorization code + PKCE verifier for tokens."""
         self._reload_config()
-        kc = self._kconf()
+        kc = self._platform_config()
         resp = await self._get_client().post(
             f"{KICK_AUTH_URL}/oauth/token",
             data={
@@ -151,7 +109,7 @@ class KickClient:
 
     async def refresh_user_token(self) -> str:
         """Refresh the user token; clear auth state on 400/401."""
-        kc = self._kconf()
+        kc = self._platform_config()
         resp = await self._get_client().post(
             f"{KICK_AUTH_URL}/oauth/token",
             data={
@@ -240,7 +198,7 @@ class KickClient:
         """Return a valid access token, refreshing if needed. Returns None if unavailable."""
         async with self._get_token_lock():
             self._reload_config()
-            kc = self._kconf()
+            kc = self._platform_config()
             if token_is_valid(kc):
                 return kc["access_token"]
             if kc.get("refresh_token"):

@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import re
-from collections.abc import Callable
 from typing import Any
 
 import httpx
 import websockets
 
-from core.chat import Badge, ChatMessage, ChatSendResult, ChatStatus, Emote
+from core.chat import Badge, ChatMessage, ChatSendResult, Emote
+from core.chats.base import BaseChatClient, StopReconnect
 
 logger = logging.getLogger(__name__)
 
@@ -151,10 +150,9 @@ PUSHER_URL = (
     "wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679"
     "?protocol=7&client=js&version=8.4.0&flash=false"
 )
-RECONNECT_DELAYS = [3, 6, 12, 24, 48]
 
 
-class KickChatClient:
+class KickChatClient(BaseChatClient):
     """Pusher WebSocket client for Kick chat."""
 
     platform = "kick"
@@ -163,15 +161,9 @@ class KickChatClient:
     _DEDUP_MAX = 200
 
     def __init__(self) -> None:
-        self._ws: Any = None
-        self._loop: asyncio.AbstractEventLoop | None = None
-        self._message_callback: Callable[[ChatMessage], None] | None = None
-        self._status_callback: Callable[[ChatStatus], None] | None = None
-        self._channel: str | None = None
+        super().__init__()
         self._chatroom_id: int | None = None
         self._broadcaster_user_id: int | None = None
-        self._running = False
-        self._authenticated = False
         self._token: str | None = None
         self._seen_msg_ids: set[str] = set()
         self._seen_msg_order: list[str] = []
@@ -189,7 +181,7 @@ class KickChatClient:
         self._chatroom_id = chatroom_id
         self._broadcaster_user_id = broadcaster_user_id
         self._running = True
-        self._loop = asyncio.get_running_loop()
+        self._loop = __import__("asyncio").get_running_loop()
         self._authenticated = (
             bool(token) if can_send is None else bool(token) and can_send
         )
@@ -200,9 +192,8 @@ class KickChatClient:
             f"chatrooms.{chatroom_id}",
             f"chatroom_{chatroom_id}",
         ]
-        attempt = 0
 
-        while self._running:
+        async def _connect_ws() -> None:
             try:
                 async with websockets.connect(PUSHER_URL) as ws:
                     self._ws = ws
@@ -211,7 +202,7 @@ class KickChatClient:
                     raw = await ws.recv()
                     event = json.loads(raw)
                     if event.get("event") != "pusher:connection_established":
-                        continue
+                        raise ValueError("Pusher connection not established")
 
                     # Kick currently acknowledges multiple channel aliases; subscribe
                     # to all known variants so chat survives backend naming changes.
@@ -225,7 +216,6 @@ class KickChatClient:
                             )
                         )
 
-                    attempt = 0
                     self._emit_status(connected=True)
 
                     while self._running:
@@ -257,52 +247,12 @@ class KickChatClient:
                                         self._seen_msg_order.pop(0)
                                     )
                             self._message_callback(msg)
-
             except websockets.exceptions.ConnectionClosedOK:
                 self._emit_status(connected=False)
-                break
-            except Exception:
-                if not self._running:
-                    break
-                delay = (
-                    RECONNECT_DELAYS[attempt]
-                    if attempt < len(RECONNECT_DELAYS)
-                    else RECONNECT_DELAYS[-1]
-                )
-                attempt += 1
-                if attempt >= len(RECONNECT_DELAYS):
-                    self._emit_status(
-                        connected=False, error="Max reconnect attempts reached"
-                    )
-                    break
-                logger.warning(
-                    "Kick chat disconnected, reconnecting in %ds (attempt %d)",
-                    delay,
-                    attempt,
-                )
-                self._emit_status(
-                    connected=False,
-                    error=f"Reconnecting in {delay}s (attempt {attempt})",
-                )
-                await asyncio.sleep(delay)
+                raise StopReconnect() from None
 
+        await self._reconnect_loop(_connect_ws)
         self._ws = None
-
-    async def disconnect(self) -> None:
-        """Disconnect from chat."""
-        self._running = False
-        if self._ws:
-            await self._ws.close()
-            self._ws = None
-        self._emit_status(connected=False)
-
-    def on_message(self, callback: Callable[[ChatMessage], None]) -> None:
-        """Register message callback."""
-        self._message_callback = callback
-
-    def on_status(self, callback: Callable[[ChatStatus], None]) -> None:
-        """Register status callback."""
-        self._status_callback = callback
 
     @staticmethod
     def _extract_send_error(
@@ -410,15 +360,3 @@ class KickChatClient:
             channel_id=channel_id,
             message_id=str(message_id) if message_id else None,
         )
-
-    def _emit_status(self, connected: bool, error: str | None = None) -> None:
-        if self._status_callback and self._channel:
-            self._status_callback(
-                ChatStatus(
-                    connected=connected,
-                    platform="kick",
-                    channel_id=self._channel,
-                    error=error,
-                    authenticated=self._authenticated,
-                )
-            )

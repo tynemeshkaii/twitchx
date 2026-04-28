@@ -1,0 +1,60 @@
+/* ── Layout ─────────────────────────────────────────────── */
+#app { display: flex; flex-direction: column; height: 100vh; }
+#main { display: flex; flex: 1; overflow: hidden; }
+
+/* ── Sidebar ────────────────────────────────────────────── */
+#sidebar {
+  width: 240px; flex-shrink: 0;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--bg-border);
+  display: flex; flex-direction: column;
+}
+
+#profile-area {
+  padding: 10px; border-bottom: 1px solid var(--bg-border);
+  min-height: 48px;
+}
+
+#kick-profile-area {
+  padding: 6px 10px; border-bottom: 1px solid var(--bg-border);
+}
+
+#platform-tabs {
+  display: flex; gap: 0;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--bg-border);
+}
+
+#favorites-header {
+  padding: 10px 10px 6px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px;
+}
+
+#channel-list {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 6px 8px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+/* ── Search area ────────────────────────────────────────── */
+#search-area {
+  padding: 6px 10px; border-top: 1px solid var(--bg-border);
+  position: relative;
+}
+#search-row { display: flex; gap: 5px; }
+
+/* ── Content area ───────────────────────────────────────── */
+#content { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-base); }
+
+#toolbar {
+  height: 38px; background: var(--bg-surface);
+  border-bottom: 1px solid var(--bg-border);
+  display: flex; align-items: center; padding: 0 12px; gap: 8px;
+  flex-shrink: 0;
+}
+#toolbar.hidden { display: none; }
+
+#browse-nav-wrapper { padding: 0 8px 6px; }
