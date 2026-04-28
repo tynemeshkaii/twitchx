@@ -2157,6 +2157,7 @@ body {
       <button class="settings-tab" data-tab="twitch">Twitch</button>
       <button class="settings-tab" data-tab="kick">Kick</button>
       <button class="settings-tab" data-tab="youtube">YouTube</button>
+      <button class="settings-tab" data-tab="hotkeys">Hotkeys</button>
     </div>
 
     <!-- General panel -->
@@ -2269,6 +2270,22 @@ body {
       <div id="yt-test-result" style="display:none;font-size:12px;margin-top:8px;text-align:center;"></div>
     </div>
 
+    <!-- Hotkeys panel -->
+    <div class="settings-panel" id="settings-panel-hotkeys">
+      <div class="setting-group">
+        <label>Keyboard Shortcuts</label>
+        <p style="font-size:11px;color:var(--text-muted);margin:4px 0 10px;">Click a key badge to rebind it. Press Esc to cancel.</p>
+        <table id="hotkeys-table" style="width:100%;border-collapse:collapse;"></table>
+        <button id="reset-shortcuts-btn" style="margin-top:10px;font-size:12px;padding:4px 10px;background:var(--bg-elevated);color:var(--text-secondary);border:1px solid var(--bg-border);border-radius:var(--radius-sm);cursor:pointer;">Reset to Defaults</button>
+      </div>
+      <div class="setting-group" style="margin-top:4px;">
+        <label>Picture-in-Picture</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+          <input type="checkbox" id="s-pip-enabled"> Show PiP button in player header
+        </label>
+      </div>
+    </div>
+
     <div id="settings-feedback"></div>
 
     <div class="settings-btns">
@@ -2369,6 +2386,22 @@ let ctxChannel = null;
 let channelViewSource = 'grid';
 let channelProfile = null;
 let sidebarResizeFrame = null;
+let _rebindAction = null;
+
+// Capture-phase listener intercepts keydowns during shortcut rebinding
+document.addEventListener('keydown', function(e) {
+  if (!_rebindAction) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (e.key === 'Escape') {
+    _rebindAction = null;
+    renderHotkeysSettings();
+    return;
+  }
+  state.shortcuts[_rebindAction] = e.key;
+  _rebindAction = null;
+  renderHotkeysSettings();
+}, true);
 
 /* ── pywebview ready ────────────────────────────────────── */
 window.addEventListener('pywebviewready', function() {
@@ -2432,6 +2465,10 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('eye-toggle-btn').addEventListener('click', toggleSecret);
   document.getElementById('test-btn').addEventListener('click', testConnection);
   document.getElementById('save-btn').addEventListener('click', saveSettings);
+  document.getElementById('reset-shortcuts-btn').addEventListener('click', function() {
+    state.shortcuts = Object.assign({}, DEFAULT_SHORTCUTS);
+    renderHotkeysSettings();
+  });
 
   // Settings tab switching
   document.querySelectorAll('.settings-tab').forEach(function(btn) {
@@ -4918,6 +4955,67 @@ function hideKickProfile() {
   document.getElementById('kick-user-info').style.display = 'none';
 }
 
+/* ── Hotkeys settings helpers ───────────────────────────── */
+function formatKeyName(key) {
+  if (key === ' ')          return 'Space';
+  if (key === 'ArrowUp')    return '↑';
+  if (key === 'ArrowDown')  return '↓';
+  if (key === 'ArrowLeft')  return '←';
+  if (key === 'ArrowRight') return '→';
+  if (key === 'Enter')      return '↵';
+  if (key === 'Backspace')  return '⌫';
+  if (key === 'Tab')        return '⇥';
+  return key;
+}
+
+function startRebind(action) {
+  _rebindAction = action;
+  renderHotkeysSettings();
+}
+
+function renderHotkeysSettings() {
+  var tbl = document.getElementById('hotkeys-table');
+  if (!tbl) return;
+  tbl.innerHTML = '';
+  Object.keys(SHORTCUT_LABELS).forEach(function(action) {
+    var key = state.shortcuts[action] !== undefined
+      ? state.shortcuts[action]
+      : DEFAULT_SHORTCUTS[action];
+    var isCapturing = _rebindAction === action;
+    var tr = document.createElement('tr');
+    tr.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+
+    var labelTd = document.createElement('td');
+    labelTd.style.cssText = 'padding:7px 0;font-size:12px;color:var(--text-secondary);';
+    labelTd.textContent = SHORTCUT_LABELS[action];
+
+    var keyTd = document.createElement('td');
+    keyTd.style.cssText = 'padding:7px 0;text-align:right;';
+
+    var kbd = document.createElement('kbd');
+    kbd.style.cssText = [
+      'display:inline-block',
+      'padding:2px 8px',
+      'border-radius:4px',
+      'font-size:11px',
+      'font-family:inherit',
+      'cursor:pointer',
+      'transition:all 0.1s',
+      isCapturing
+        ? 'background:var(--accent);color:#000;border:1px solid var(--accent);'
+        : 'background:var(--bg-elevated);color:var(--text-primary);border:1px solid rgba(255,255,255,0.15);',
+    ].join(';');
+    kbd.textContent = isCapturing ? 'Press key…' : formatKeyName(key);
+    kbd.title = isCapturing ? 'Press Esc to cancel' : 'Click to rebind';
+    kbd.addEventListener('click', function() { startRebind(action); });
+
+    keyTd.appendChild(kbd);
+    tr.appendChild(labelTd);
+    tr.appendChild(keyTd);
+    tbl.appendChild(tr);
+  });
+}
+
 /* ── Settings ───────────────────────────────────────────── */
 
 function openSettings() {
@@ -4953,6 +5051,12 @@ function openSettings() {
     document.getElementById('yt-user-area').style.display = 'none';
   }
   document.getElementById('yt-test-result').style.display = 'none';
+  // Hotkeys tab
+  if (config.keyboard_shortcuts) {
+    state.shortcuts = Object.assign({}, DEFAULT_SHORTCUTS, config.keyboard_shortcuts);
+  }
+  document.getElementById('s-pip-enabled').checked = !!config.pip_enabled;
+  renderHotkeysSettings();
   // Reset to General tab
   document.querySelectorAll('.settings-tab').forEach(function(b) { b.classList.remove('active'); });
   document.querySelectorAll('.settings-panel').forEach(function(p) { p.classList.remove('active'); });
@@ -4997,6 +5101,7 @@ function testConnection() {
 }
 
 function saveSettings() {
+  var pipEnabled = document.getElementById('s-pip-enabled').checked;
   var data = {
     client_id: document.getElementById('s-client-id').value.trim(),
     client_secret: document.getElementById('s-client-secret').value.trim(),
@@ -5008,7 +5113,13 @@ function saveSettings() {
     youtube_api_key: document.getElementById('yt-api-key').value.trim(),
     youtube_client_id: document.getElementById('yt-client-id').value.trim(),
     youtube_client_secret: document.getElementById('yt-client-secret').value.trim(),
+    keyboard_shortcuts: Object.assign({}, state.shortcuts),
+    pip_enabled: pipEnabled,
   };
+  // Apply pip button visibility immediately
+  state.pipEnabled = pipEnabled;
+  var pipBtn = document.getElementById('pip-player-btn');
+  if (pipBtn) pipBtn.style.display = pipEnabled ? '' : 'none';
   if (api) api.save_settings(JSON.stringify(data));
 }
 
