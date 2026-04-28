@@ -358,18 +358,20 @@ def test_keyboard_shortcuts_deep_merged_from_stored(
 ) -> None:
     config_file = _patch_storage(monkeypatch, tmp_path)
     config_file.write_text(
-        json.dumps({
-            "platforms": {},
-            "favorites": [],
-            "settings": {
-                "keyboard_shortcuts": {"refresh": "G", "mute": "N"},
-            },
-        })
+        json.dumps(
+            {
+                "platforms": {},
+                "favorites": [],
+                "settings": {
+                    "keyboard_shortcuts": {"refresh": "G", "mute": "N"},
+                },
+            }
+        )
     )
     config = load_config()
     sc = config["settings"]["keyboard_shortcuts"]
-    assert sc["refresh"] == "G"       # stored value wins
-    assert sc["mute"] == "N"          # stored value wins
-    assert sc["watch"] == " "         # default kept
-    assert sc["fullscreen"] == "f"    # default kept
-    assert sc["pip"] == "p"           # default kept
+    assert sc["refresh"] == "G"  # stored value wins
+    assert sc["mute"] == "N"  # stored value wins
+    assert sc["watch"] == " "  # default kept
+    assert sc["fullscreen"] == "f"  # default kept
+    assert sc["pip"] == "p"  # default kept

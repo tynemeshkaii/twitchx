@@ -209,7 +209,7 @@ class TwitchChatClient:
         """Connect to Twitch IRC and join channel. token=None for anonymous."""
         self._channel = channel_id
         self._running = True
-        self._loop = asyncio.get_event_loop()
+        self._loop = asyncio.get_running_loop()
 
         if token and login:
             self._authenticated = True

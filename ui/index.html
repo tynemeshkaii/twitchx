@@ -2431,14 +2431,14 @@ const state = {
   pipEnabled: false,
 };
 
-var multiState = {
+const multiState = {
   slots: [null, null, null, null],
   audioFocus: -1,
   chatSlot: -1,
   open: false,
   chatVisible: false
 };
-var msChatAutoScroll = true;
+let msChatAutoScroll = true;
 
 let api = null;
 let ctxChannel = null;
@@ -2446,6 +2446,17 @@ let channelViewSource = 'grid';
 let channelProfile = null;
 let sidebarResizeFrame = null;
 let _rebindAction = null;
+
+function callApi(name) {
+  if (!api) return;
+  try {
+    var method = api[name];
+    if (!method) return;
+    return method.apply(api, Array.prototype.slice.call(arguments, 1));
+  } catch(e) {
+    setStatus('Bridge error. Please restart.', 'error');
+  }
+}
 
 // Capture-phase listener intercepts keydowns during shortcut rebinding
 document.addEventListener('keydown', function(e) {
@@ -2465,10 +2476,9 @@ document.addEventListener('keydown', function(e) {
 /* ── pywebview ready ────────────────────────────────────── */
 window.addEventListener('pywebviewready', function() {
   api = window.pywebview.api;
-  // Restore user profile if logged in
-  setTimeout(function() {
-    if (!api) return;
-    const config = api.get_config();
+  if (!api) return;
+  try {
+    var config = api.get_config();
     state.kickScopes = (config && config.kick_scopes) || '';
     if (config && config.current_user) {
       showUserProfile(config.current_user);
@@ -2480,8 +2490,24 @@ window.addEventListener('pywebviewready', function() {
       state.shortcuts = Object.assign({}, DEFAULT_SHORTCUTS, config.keyboard_shortcuts);
     }
     state.pipEnabled = !!(config && config.pip_enabled);
-    document.getElementById('pip-player-btn').style.display = state.pipEnabled ? '' : 'none';
-  }, 100);
+    var pipBtn = document.getElementById('pip-player-btn');
+    if (pipBtn) pipBtn.style.display = state.pipEnabled ? '' : 'none';
+  } catch(e) {
+    // API bridge not ready yet — schedule a retry
+    setTimeout(function() {
+      if (api) {
+        try {
+          var retryConfig = api.get_config();
+          state.kickScopes = (retryConfig && retryConfig.kick_scopes) || '';
+          if (retryConfig && retryConfig.current_user) showUserProfile(retryConfig.current_user);
+          if (retryConfig && retryConfig.kick_user) showKickProfile(retryConfig.kick_user);
+          if (retryConfig && retryConfig.keyboard_shortcuts) {
+            state.shortcuts = Object.assign({}, DEFAULT_SHORTCUTS, retryConfig.keyboard_shortcuts);
+          }
+        } catch(e2) {}
+      }
+    }, 200);
+  }
 });
 
 window.addEventListener('resize', function() {
@@ -2671,7 +2697,7 @@ document.addEventListener('DOMContentLoaded', function() {
     else if (action === 'profile') { showChannelView(ctxChannel, ctxPlat, 'grid'); }
     else if (action === 'copy') {
       var baseUrl = ctxPlat === 'kick' ? 'https://kick.com/' : 'https://twitch.tv/';
-      navigator.clipboard.writeText(baseUrl + ctxChannel);
+      navigator.clipboard.writeText(baseUrl + ctxChannel).catch(function() {});
     }
     else if (action === 'favorite') { if (api) api.add_channel(ctxChannel, ctxPlat); }
     else if (action === 'remove') { if (api) api.remove_channel(ctxChannel, ctxPlat); }
@@ -2688,7 +2714,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Hide context menu on click outside
   document.addEventListener('click', function() {
-    document.getElementById('context-menu').style.display = 'none';
+    var menu = document.getElementById('context-menu');
+    if (menu && menu.style.display !== 'none') menu.style.display = 'none';
   });
 
   // Keyboard shortcuts
@@ -2763,7 +2790,7 @@ document.addEventListener('DOMContentLoaded', function() {
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
       var w = parseInt(panel.style.width) || 340;
-      pywebview.api.save_chat_width(w);
+      if (api) api.save_chat_width(w);
     });
   })();
 
@@ -2931,6 +2958,18 @@ window.onStreamsUpdate = function(data) {
       api.get_thumbnail(s.login, s.thumbnail_url);
     }
   }
+
+  // Prune stale caches — keep only entries for current favorites or live streams.
+  var keepLogins = new Set(state.favorites.concat(state.streams.map(function(s) { return s.login; })));
+  for (var key in state.avatars) {
+    if (!keepLogins.has(key)) delete state.avatars[key];
+  }
+  for (var key in state.thumbnails) {
+    if (!keepLogins.has(key)) delete state.thumbnails[key];
+  }
+  for (var key in state.prevViewers) {
+    if (!keepLogins.has(key)) delete state.prevViewers[key];
+  }
 };
 
 window.onSearchResults = function(results) {
@@ -3047,7 +3086,7 @@ window.onStreamReady = function(data) {
   var video = document.getElementById('stream-video');
   video.style.display = '';
   video.src = data.url;
-  video.play();
+  video.play().catch(function() {});
   var iinaBtn = document.getElementById('watch-external-btn');
   if (iinaBtn) { iinaBtn.disabled = false; iinaBtn.style.opacity = ''; }
   showPlayerView();
@@ -3097,12 +3136,12 @@ window.onMultiSlotReady = function(data) {
 
 /* ── Chat ───────────────────────────────────────────────── */
 
-var chatAutoScroll = true;
-var chatAuthenticated = false;
-var chatPlatform = null;
-var chatReplyTo = null; // { id, display, body }
-var chatPendingSends = Object.create(null);
-var chatSendCounter = 0;
+let chatAutoScroll = true;
+let chatAuthenticated = false;
+let chatPlatform = null;
+let chatReplyTo = null; // { id, display, body }
+let chatPendingSends = Object.create(null);
+let chatSendCounter = 0;
 
 function setChatReply(id, display, body) {
   chatReplyTo = { id: id, display: display, body: body };
@@ -3130,7 +3169,12 @@ function submitChatMessage() {
     text: text,
     reply: r ? { id: r.id, display: r.display, body: r.body } : null
   };
-  pywebview.api.send_chat(
+  setTimeout(function() {
+    if (chatPendingSends[requestId]) {
+      delete chatPendingSends[requestId];
+    }
+  }, 30000);
+  if (api) api.send_chat(
     text,
     r ? r.id : null,
     r ? r.display : null,
@@ -3356,7 +3400,7 @@ function toggleChatPanel() {
   var handle = document.getElementById('chat-resize-handle');
   panel.classList.toggle('hidden');
   if (handle) handle.style.display = panel.classList.contains('hidden') ? 'none' : '';
-  pywebview.api.save_chat_visibility(!panel.classList.contains('hidden'));
+  if (api) api.save_chat_visibility(!panel.classList.contains('hidden'));
 }
 
 function showPlayerView() {
@@ -3379,7 +3423,7 @@ function showPlayerView() {
     if (toggleBtn) toggleBtn.style.display = 'none';
   } else {
     if (toggleBtn) toggleBtn.style.display = '';
-    var cfg = pywebview.api.get_full_config_for_settings();
+    var cfg = api ? api.get_full_config_for_settings() : null;
     if (cfg && cfg.chat_width) chatPanel.style.width = cfg.chat_width + 'px';
     if (cfg && cfg.chat_visible === false) {
       chatPanel.classList.add('hidden');
@@ -3407,6 +3451,7 @@ function hidePlayerView() {
 
   // Clear chat
   clearChatMessages();
+  if (api) api.stop_chat();
 
   document.getElementById('player-view').classList.remove('active');
   document.getElementById('toolbar').style.display = '';
@@ -3428,6 +3473,7 @@ function hidePlayerView() {
 }
 
 function openMultistreamView() {
+  multiState.open = true;
   if (document.getElementById('player-view').classList.contains('active')) {
     hidePlayerView();
   }
@@ -3436,7 +3482,6 @@ function openMultistreamView() {
   document.getElementById('toolbar').classList.add('hidden');
   document.getElementById('stream-grid').classList.add('hidden');
   document.getElementById('multistream-view').classList.remove('hidden');
-  multiState.open = true;
 }
 
 function closeMultistreamView() {
@@ -3481,12 +3526,11 @@ function _clearMultiSlot(idx) {
 }
 
 function addMultiSlot(idx, channel, platform) {
-  var cfg = (typeof pywebview !== 'undefined' && pywebview.api)
-    ? pywebview.api.get_full_config_for_settings()
-    : {};
+  var cfg = api ? api.get_full_config_for_settings() : {};
   var quality = (cfg && cfg.settings && cfg.settings.quality) || 'best';
   multiState.slots[idx] = { channel: channel, platform: platform, quality: quality, title: '' };
   var slotEl = document.querySelector('.ms-slot[data-slot-idx="' + idx + '"]');
+  if (!slotEl) return;
   slotEl.querySelector('.ms-slot-empty').style.display = 'none';
   slotEl.querySelector('.ms-add-form').style.display = 'none';
   var active = slotEl.querySelector('.ms-slot-active');
@@ -3813,11 +3857,13 @@ function toggleChannelFollow() {
     p.is_favorited = false;
     document.getElementById('channel-follow-btn').textContent = 'Follow';
     document.getElementById('channel-follow-btn').classList.remove('following');
+    api.refresh();
   } else {
     api.add_channel(p.login, p.platform, p.display_name);
     p.is_favorited = true;
     document.getElementById('channel-follow-btn').textContent = 'Following';
     document.getElementById('channel-follow-btn').classList.add('following');
+    api.refresh();
   }
 }
 
@@ -5035,7 +5081,7 @@ function startRebind(action) {
 function renderHotkeysSettings() {
   var tbl = document.getElementById('hotkeys-table');
   if (!tbl) return;
-  tbl.innerHTML = '';
+  tbl.replaceChildren();
   Object.keys(SHORTCUT_LABELS).forEach(function(action) {
     var key = state.shortcuts[action] !== undefined
       ? state.shortcuts[action]
@@ -5354,7 +5400,7 @@ function setStatus(text, type) {
 }
 
 /* ── Uptime counter ─────────────────────────────────────── */
-setInterval(function() {
+var uptimeInterval = setInterval(function() {
   document.querySelectorAll('.stream-card').forEach(function(card) {
     var started = card.dataset.started;
     if (started) {

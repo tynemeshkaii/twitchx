@@ -546,11 +546,12 @@ class YouTubeClient:
         # If given a video ID (11 printable chars, not a UC ID), resolve to channel first
         _VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
         if _VIDEO_ID_RE.match(raw) and not raw.startswith("UC"):
+            if not self._quota.check_and_use(1):
+                raise ValueError("YouTube API daily quota exceeded.")
             video_data = await self._yt_get(
                 "videos",
                 params={"part": "snippet", "id": raw},
             )
-            self._quota.use(1)
             vitems = video_data.get("items", []) if isinstance(video_data, dict) else []
             if not vitems:
                 return {}
@@ -558,8 +559,9 @@ class YouTubeClient:
             if not raw:
                 return {}
 
+        if not self._quota.check_and_use(1):
+            raise ValueError("YouTube API daily quota exceeded.")
         data = await self._get_channel_resource(raw, "snippet,statistics")
-        self._quota.use(1)
         if not data:
             return {}
         item = data
@@ -614,6 +616,7 @@ class YouTubeClient:
 
     def get_auth_url(self) -> str:
         """Generate Google OAuth authorization URL."""
+        self._reload_config()
         yc = self._yconf()
         params = {
             "client_id": yc.get("client_id", ""),

@@ -1181,9 +1181,9 @@ class TwitchXApi:
                 if f.get("platform") == platform
             }
             reordered = [
-                old_favs[login]
-                if login in old_favs
-                else {"platform": platform, "login": login, "display_name": login}
+                old_favs.get(
+                    login, {"platform": platform, "login": login, "display_name": login}
+                )
                 for login in new_order
             ]
             # Replace the platform's block in-place to preserve the relative
@@ -1329,7 +1329,7 @@ class TwitchXApi:
                     self._fetch_data(tf, kf, yf)
                 )
             )
-        except Exception:
+        except BaseException:
             self._fetch_lock.release()
             raise
 
@@ -1937,13 +1937,15 @@ class TwitchXApi:
         # YouTube: resolve_hls_url needs a video ID, not a channel ID.
         # Look up video_id from the live cache; reject if not live / no video_id.
         if platform == "youtube" and not youtube_video_id:
-            error_payload = json.dumps({
-                "slot_idx": slot_idx,
-                "channel": channel,
-                "platform": platform,
-                "title": title,
-                "error": "YouTube channel is not currently live or stream info unavailable",
-            })
+            error_payload = json.dumps(
+                {
+                    "slot_idx": slot_idx,
+                    "channel": channel,
+                    "platform": platform,
+                    "title": title,
+                    "error": "YouTube channel is not currently live or stream info unavailable",
+                }
+            )
             self._eval_js(f"window.onMultiSlotReady({error_payload})")
             return
 
@@ -2072,7 +2074,7 @@ class TwitchXApi:
                         *[c.get_categories() for c in clients.values()],
                         return_exceptions=True,
                     )
-                    for p, result in zip(clients.keys(), gathered):
+                    for p, result in zip(clients.keys(), gathered, strict=True):
                         if isinstance(result, BaseException):
                             logger.warning(
                                 "browse categories failed for %s: %s", p, result
@@ -2152,7 +2154,7 @@ class TwitchXApi:
                         ],
                         return_exceptions=True,
                     )
-                    for p, result in zip(clients.keys(), gathered):
+                    for p, result in zip(clients.keys(), gathered, strict=True):
                         if isinstance(result, BaseException):
                             logger.warning(
                                 "browse top streams failed for %s: %s", p, result
@@ -2567,7 +2569,9 @@ class TwitchXApi:
                 # P2: persist pre-resized bytes so future cache hits skip Pillow
                 save_avatar(login_lower, resized_bytes, platform)
             except Exception as e:
-                logger.warning("get_avatar failed for %s/%s: %s", platform, login_lower, e)
+                logger.warning(
+                    "get_avatar failed for %s/%s: %s", platform, login_lower, e
+                )
             finally:
                 self._fetching_avatars.discard(dedup_key)
 

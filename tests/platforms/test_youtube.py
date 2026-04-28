@@ -634,6 +634,8 @@ class TestOAuth:
                 }
             }
         }
+        # Prevent _reload_config from overwriting the test config with disk state.
+        client._reload_config = lambda: None
         url = client.get_auth_url()
         assert "accounts.google.com" in url
         assert "test-client-id" in url

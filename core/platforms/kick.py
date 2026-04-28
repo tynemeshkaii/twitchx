@@ -52,6 +52,7 @@ class KickClient:
         self._loop_clients: dict[asyncio.AbstractEventLoop, httpx.AsyncClient] = {}
         self._token_locks: dict[asyncio.AbstractEventLoop, asyncio.Lock] = {}
         self._loop_state_lock = threading.Lock()
+        self._livestreams_cache: tuple[float, list[dict[str, Any]]] = (0, [])
 
     def _kconf(self) -> dict[str, Any]:
         """Shortcut to the Kick platform config section."""
@@ -101,6 +102,7 @@ class KickClient:
 
     def get_auth_url(self) -> str:
         """Generate PKCE challenge, store verifier in config, return auth URL."""
+        self._reload_config()
         verifier = _generate_code_verifier()
         challenge = _generate_code_challenge(verifier)
         state = secrets.token_urlsafe(32)
@@ -121,10 +123,6 @@ class KickClient:
             "code_challenge": challenge,
             "code_challenge_method": "S256",
         }
-        # Kick documents this sacrificial parameter only as a workaround when
-        # redirect_uri must use 127.0.0.1 instead of localhost.
-        if "127.0.0.1" in KICK_REDIRECT_URI:
-            params["redirect"] = "127.0.0.1"
         encoded_params = urlencode(params)
         return f"{KICK_AUTH_URL}/oauth/authorize?{encoded_params}"
 
@@ -383,10 +381,14 @@ class KickClient:
             return []
         # Kick's public livestreams endpoint does not support filtering by slug.
         # We fetch all live streams and filter client-side.
-        data = await self._get(f"{KICK_API_URL}/public/v1/livestreams")
-        streams: list[dict[str, Any]] = (
-            data.get("data", data) if isinstance(data, dict) else data
-        )
+        # Short-lived cache (5s) avoids re-fetching within a single poll cycle.
+        cache_time, cache_data = self._livestreams_cache
+        if time.time() - cache_time < 5:
+            streams = cache_data
+        else:
+            data = await self._get(f"{KICK_API_URL}/public/v1/livestreams")
+            streams = data.get("data", data) if isinstance(data, dict) else data
+            self._livestreams_cache = (time.time(), streams)
         slug_set = set(slugs)
         return [
             s

@@ -83,9 +83,9 @@ class TwitchXApp:
             existing = yt_best.get(k)
             if existing is None:
                 yt_best[k] = entry
-            elif _yt_id_re.match(existing.get("display_name", "")) and not _yt_id_re.match(
-                entry.get("display_name", "")
-            ):
+            elif _yt_id_re.match(
+                existing.get("display_name", "")
+            ) and not _yt_id_re.match(entry.get("display_name", "")):
                 # New entry has a real name; prefer it over the channel-ID display_name
                 yt_best[k] = entry
                 changed = True
@@ -129,10 +129,9 @@ class TwitchXApp:
                 if platform == "youtube":
                     # Substitute the best-quality entry for this channel
                     best = yt_best.get(name.lower(), entry)
-                    if (
-                        best.get("login") != entry.get("login")
-                        or best.get("display_name") != entry.get("display_name")
-                    ):
+                    if best.get("login") != entry.get("login") or best.get(
+                        "display_name"
+                    ) != entry.get("display_name"):
                         changed = True
                     cleaned.append(best)
                 else:

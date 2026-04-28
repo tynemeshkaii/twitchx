@@ -851,6 +851,7 @@ class TestParallelFetch:
         """ConnectError → _last_twitch_streams returned, twitch_error set."""
         self._setup(tmp_path, monkeypatch)
         import httpx
+
         from ui.api import TwitchXApi
 
         api = TwitchXApi()
@@ -936,8 +937,10 @@ class TestParallelFetch:
     ) -> None:
         """YouTube _last_youtube_streams served even when Twitch raises ConnectError."""
         self._setup(tmp_path, monkeypatch)
-        import httpx
         import time
+
+        import httpx
+
         from ui.api import TwitchXApi
 
         api = TwitchXApi()
@@ -1067,9 +1070,7 @@ class TestAddMultiSlot:
         monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
 
-        def fake_resolve(
-            ch: str, q: str, sl: str, platform: str
-        ) -> tuple[str, str]:
+        def fake_resolve(ch: str, q: str, sl: str, platform: str) -> tuple[str, str]:
             captured["platform"] = platform
             return "https://hls.example.com/s.m3u8", ""
 
@@ -1117,10 +1118,12 @@ def test_save_settings_persists_pip_enabled_and_shortcuts(
     monkeypatch.setattr(api, "_eval_js", lambda code: None)
 
     api.save_settings(
-        json.dumps({
-            "pip_enabled": True,
-            "keyboard_shortcuts": {"refresh": "g", "mute": "n"},
-        })
+        json.dumps(
+            {
+                "pip_enabled": True,
+                "keyboard_shortcuts": {"refresh": "g", "mute": "n"},
+            }
+        )
     )
 
     stored = load_config()

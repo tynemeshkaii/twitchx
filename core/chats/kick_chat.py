@@ -189,7 +189,7 @@ class KickChatClient:
         self._chatroom_id = chatroom_id
         self._broadcaster_user_id = broadcaster_user_id
         self._running = True
-        self._loop = asyncio.get_event_loop()
+        self._loop = asyncio.get_running_loop()
         self._authenticated = (
             bool(token) if can_send is None else bool(token) and can_send
         )
@@ -253,7 +253,9 @@ class KickChatClient:
                                 self._seen_msg_ids.add(msg.msg_id)
                                 self._seen_msg_order.append(msg.msg_id)
                                 if len(self._seen_msg_order) > self._DEDUP_MAX:
-                                    self._seen_msg_ids.discard(self._seen_msg_order.pop(0))
+                                    self._seen_msg_ids.discard(
+                                        self._seen_msg_order.pop(0)
+                                    )
                             self._message_callback(msg)
 
             except websockets.exceptions.ConnectionClosedOK:
