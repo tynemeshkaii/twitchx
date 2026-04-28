@@ -2278,6 +2278,33 @@ body {
 </div>
 
 <script>
+/* ── Keyboard shortcuts ─────────────────────────────────── */
+const DEFAULT_SHORTCUTS = {
+  refresh:      'r',
+  watch:        ' ',
+  fullscreen:   'f',
+  toggle_chat:  'c',
+  mute:         'm',
+  pip:          'p',
+  volume_up:    'ArrowUp',
+  volume_down:  'ArrowDown',
+  next_stream:  'ArrowRight',
+  prev_stream:  'ArrowLeft',
+};
+
+const SHORTCUT_LABELS = {
+  refresh:      'Refresh streams',
+  watch:        'Watch selected stream',
+  fullscreen:   'Toggle fullscreen',
+  toggle_chat:  'Toggle chat panel',
+  mute:         'Toggle mute',
+  pip:          'Toggle Picture-in-Picture',
+  volume_up:    'Volume up (+10%)',
+  volume_down:  'Volume down (-10%)',
+  next_stream:  'Select next stream',
+  prev_stream:  'Select previous stream',
+};
+
 /* ── State ──────────────────────────────────────────────── */
 function createChannelMediaState() {
   return {
@@ -2324,6 +2351,8 @@ const state = {
     vods: createChannelMediaState(),
     clips: createChannelMediaState(),
   },
+  shortcuts: Object.assign({}, DEFAULT_SHORTCUTS),
+  pipEnabled: false,
 };
 
 var multiState = {
@@ -2355,6 +2384,11 @@ window.addEventListener('pywebviewready', function() {
     if (config && config.kick_user) {
       showKickProfile(config.kick_user);
     }
+    if (config && config.keyboard_shortcuts) {
+      state.shortcuts = Object.assign({}, DEFAULT_SHORTCUTS, config.keyboard_shortcuts);
+    }
+    state.pipEnabled = !!(config && config.pip_enabled);
+    document.getElementById('pip-player-btn').style.display = state.pipEnabled ? '' : 'none';
   }, 100);
 });
 
@@ -3755,6 +3789,40 @@ function _triggerBrowseTopStreams(category) {
   }
 }
 
+function getActiveVideo() {
+  if (document.getElementById('player-view').classList.contains('active')) {
+    return document.getElementById('stream-video');
+  }
+  if (multiState.open && multiState.audioFocus >= 0) {
+    var slotEl = document.querySelector('.ms-slot[data-slot-idx="' + multiState.audioFocus + '"]');
+    return slotEl ? slotEl.querySelector('.ms-video') : null;
+  }
+  return null;
+}
+
+function adjustVolume(delta) {
+  var video = getActiveVideo();
+  if (!video) return;
+  video.muted = false;
+  video.volume = Math.max(0, Math.min(1, video.volume + delta));
+  setStatus('Volume: ' + Math.round(video.volume * 100) + '%', 'info');
+}
+
+function toggleMute() {
+  var video = getActiveVideo();
+  if (!video) return;
+  video.muted = !video.muted;
+  setStatus(video.muted ? 'Muted' : 'Unmuted', 'info');
+}
+
+function cycleStream(dir) {
+  var streams = getFilteredSortedStreams();
+  if (streams.length === 0) return;
+  var idx = streams.findIndex(function(s) { return s.login === state.selectedChannel; });
+  idx = (idx + dir + streams.length) % streams.length;
+  selectChannel(streams[idx].login);
+}
+
 function togglePiP(video) {
   if (!video) return;
   // Webkit path — most reliable in WKWebView on macOS
@@ -4992,6 +5060,7 @@ function showSidebarContextMenu(e, login) {
 function handleKeydown(e) {
   var tag = document.activeElement ? document.activeElement.tagName : '';
   var inInput = tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA';
+  var sc = state.shortcuts;
 
   if (e.key === 'Escape') {
     if (document.getElementById('settings-overlay').classList.contains('visible')) {
@@ -5014,16 +5083,38 @@ function handleKeydown(e) {
 
   if (inInput) return;
 
-  if (e.key === 'r' || e.key === 'F5' || (e.metaKey && e.key === 'r')) {
-    e.preventDefault(); doRefresh();
-  } else if (e.key === ' ' || e.key === 'Enter') {
-    e.preventDefault(); doWatch();
-  } else if (e.key === 'f' && document.getElementById('player-view').classList.contains('active')) {
-    e.preventDefault(); toggleVideoFullscreen();
-  } else if (e.key === 'c' && document.getElementById('player-view').classList.contains('active')) {
-    e.preventDefault(); toggleChatPanel();
-  } else if (e.metaKey && e.key === ',') {
-    e.preventDefault(); openSettings();
+  var inPlayer = document.getElementById('player-view').classList.contains('active');
+  var inMulti = multiState.open;
+
+  // Modifier-based shortcuts (not rebindable)
+  if (e.key === 'F5' || (e.metaKey && e.key === 'r')) {
+    e.preventDefault(); doRefresh(); return;
+  }
+  if (e.metaKey && e.key === ',') {
+    e.preventDefault(); openSettings(); return;
+  }
+
+  // Single-key shortcuts — skip if any modifier is held
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+  if (e.key === sc.refresh) { e.preventDefault(); doRefresh(); return; }
+  if (e.key === sc.watch || e.key === 'Enter') { e.preventDefault(); doWatch(); return; }
+
+  if (inPlayer) {
+    if (e.key === sc.fullscreen) { e.preventDefault(); toggleVideoFullscreen(); return; }
+    if (e.key === sc.toggle_chat) { e.preventDefault(); toggleChatPanel(); return; }
+    if (e.key === sc.pip) { e.preventDefault(); togglePiP(document.getElementById('stream-video')); return; }
+  }
+
+  if (inPlayer || inMulti) {
+    if (e.key === sc.volume_up)   { e.preventDefault(); adjustVolume(0.1);  return; }
+    if (e.key === sc.volume_down) { e.preventDefault(); adjustVolume(-0.1); return; }
+    if (e.key === sc.mute)        { e.preventDefault(); toggleMute();        return; }
+  }
+
+  if (!inPlayer && !inMulti) {
+    if (e.key === sc.next_stream) { e.preventDefault(); cycleStream(1);  return; }
+    if (e.key === sc.prev_stream) { e.preventDefault(); cycleStream(-1); return; }
   }
 }
 
