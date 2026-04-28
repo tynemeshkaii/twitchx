@@ -467,7 +467,12 @@ class TwitchXApi:
             if "keyboard_shortcuts" in parsed and isinstance(
                 parsed["keyboard_shortcuts"], dict
             ):
-                st["keyboard_shortcuts"] = parsed["keyboard_shortcuts"]
+                validated = {
+                    k: v
+                    for k, v in parsed["keyboard_shortcuts"].items()
+                    if isinstance(k, str) and isinstance(v, str) and 0 < len(v) <= 50
+                }
+                st["keyboard_shortcuts"] = validated
 
         self._config = update_config(_apply)
 
