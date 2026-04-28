@@ -71,6 +71,18 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "chat_width": 340,
     "active_platform_filter": "all",
     "pip_enabled": False,
+    "keyboard_shortcuts": {
+        "refresh": "r",
+        "watch": " ",
+        "fullscreen": "f",
+        "toggle_chat": "c",
+        "mute": "m",
+        "pip": "p",
+        "volume_up": "ArrowUp",
+        "volume_down": "ArrowDown",
+        "next_stream": "ArrowRight",
+        "prev_stream": "ArrowLeft",
+    },
 }
 
 DEFAULT_CONFIG: dict[str, Any] = {

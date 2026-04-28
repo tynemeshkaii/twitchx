@@ -7,6 +7,7 @@ from pathlib import Path
 
 from core.storage import (
     DEFAULT_CONFIG,
+    DEFAULT_SETTINGS,
     get_cached_avatar,
     get_favorite_logins,
     get_favorites,
@@ -336,3 +337,39 @@ def test_save_avatar_custom_platform(tmp_path: Path, monkeypatch: object) -> Non
 
     result = get_cached_avatar("streamer", platform="kick")
     assert result == b"kick_data"
+
+
+def test_keyboard_shortcuts_in_default_settings() -> None:
+    sc = DEFAULT_SETTINGS["keyboard_shortcuts"]
+    assert sc["refresh"] == "r"
+    assert sc["watch"] == " "
+    assert sc["fullscreen"] == "f"
+    assert sc["toggle_chat"] == "c"
+    assert sc["mute"] == "m"
+    assert sc["pip"] == "p"
+    assert sc["volume_up"] == "ArrowUp"
+    assert sc["volume_down"] == "ArrowDown"
+    assert sc["next_stream"] == "ArrowRight"
+    assert sc["prev_stream"] == "ArrowLeft"
+
+
+def test_keyboard_shortcuts_deep_merged_from_stored(
+    tmp_path: Path, monkeypatch: object
+) -> None:
+    config_file = _patch_storage(monkeypatch, tmp_path)
+    config_file.write_text(
+        json.dumps({
+            "platforms": {},
+            "favorites": [],
+            "settings": {
+                "keyboard_shortcuts": {"refresh": "G", "mute": "N"},
+            },
+        })
+    )
+    config = load_config()
+    sc = config["settings"]["keyboard_shortcuts"]
+    assert sc["refresh"] == "G"       # stored value wins
+    assert sc["mute"] == "N"          # stored value wins
+    assert sc["watch"] == " "         # default kept
+    assert sc["fullscreen"] == "f"    # default kept
+    assert sc["pip"] == "p"           # default kept
