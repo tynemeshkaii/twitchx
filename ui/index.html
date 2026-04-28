@@ -710,6 +710,17 @@ body {
 #fullscreen-player-btn:hover {
   border-color: rgba(255,255,255,0.15); color: var(--text-primary);
 }
+#pip-player-btn {
+  height: 26px; padding: 0 10px;
+  background: var(--bg-elevated); color: var(--text-secondary);
+  border: 1px solid var(--bg-border);
+  border-radius: var(--radius-sm);
+  font-size: 12px; cursor: pointer; font-family: inherit;
+  transition: all 0.12s ease;
+}
+#pip-player-btn:hover {
+  border-color: rgba(255,255,255,0.15); color: var(--text-primary);
+}
 #close-player-btn {
   height: 26px; padding: 0 12px;
   background: rgba(255, 69, 58, 0.15); color: var(--live-red);
@@ -1363,7 +1374,7 @@ body {
 }
 .ms-channel-name { font-size: 12px; font-weight: 600; color: #fff; }
 .ms-slot-controls { display: flex; gap: 4px; }
-.ms-audio-btn, .ms-chat-sw-btn, .ms-fullscreen-btn, .ms-remove-btn {
+.ms-audio-btn, .ms-chat-sw-btn, .ms-fullscreen-btn, .ms-pip-btn, .ms-remove-btn {
   padding: 3px 5px;
   border-radius: var(--radius-sm);
   border: 1px solid rgba(255,255,255,0.2);
@@ -1372,7 +1383,7 @@ body {
   font-size: 11px;
   cursor: pointer;
 }
-.ms-audio-btn:hover, .ms-chat-sw-btn:hover, .ms-fullscreen-btn:hover, .ms-remove-btn:hover {
+.ms-audio-btn:hover, .ms-chat-sw-btn:hover, .ms-fullscreen-btn:hover, .ms-pip-btn:hover, .ms-remove-btn:hover {
   background: rgba(0,0,0,0.75);
 }
 .ms-slot.audio-focus { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -1934,6 +1945,7 @@ body {
                     <button class="ms-audio-btn" data-slot="0" title="Focus audio">&#128266;</button>
                     <button class="ms-chat-sw-btn" data-slot="0" title="Switch chat">&#128172;</button>
                     <button class="ms-fullscreen-btn" data-slot="0" title="Fullscreen (double-click)">&#9974;</button>
+                    <button class="ms-pip-btn" data-slot="0" title="Picture-in-Picture">&#10697;</button>
                     <button class="ms-remove-btn" data-slot="0" title="Remove">&times;</button>
                   </div>
                 </div>
@@ -1968,6 +1980,7 @@ body {
                     <button class="ms-audio-btn" data-slot="1" title="Focus audio">&#128266;</button>
                     <button class="ms-chat-sw-btn" data-slot="1" title="Switch chat">&#128172;</button>
                     <button class="ms-fullscreen-btn" data-slot="1" title="Fullscreen (double-click)">&#9974;</button>
+                    <button class="ms-pip-btn" data-slot="1" title="Picture-in-Picture">&#10697;</button>
                     <button class="ms-remove-btn" data-slot="1" title="Remove">&times;</button>
                   </div>
                 </div>
@@ -2002,6 +2015,7 @@ body {
                     <button class="ms-audio-btn" data-slot="2" title="Focus audio">&#128266;</button>
                     <button class="ms-chat-sw-btn" data-slot="2" title="Switch chat">&#128172;</button>
                     <button class="ms-fullscreen-btn" data-slot="2" title="Fullscreen (double-click)">&#9974;</button>
+                    <button class="ms-pip-btn" data-slot="2" title="Picture-in-Picture">&#10697;</button>
                     <button class="ms-remove-btn" data-slot="2" title="Remove">&times;</button>
                   </div>
                 </div>
@@ -2036,6 +2050,7 @@ body {
                     <button class="ms-audio-btn" data-slot="3" title="Focus audio">&#128266;</button>
                     <button class="ms-chat-sw-btn" data-slot="3" title="Switch chat">&#128172;</button>
                     <button class="ms-fullscreen-btn" data-slot="3" title="Fullscreen (double-click)">&#9974;</button>
+                    <button class="ms-pip-btn" data-slot="3" title="Picture-in-Picture">&#10697;</button>
                     <button class="ms-remove-btn" data-slot="3" title="Remove">&times;</button>
                   </div>
                 </div>
@@ -2065,6 +2080,7 @@ body {
           <span id="player-stream-title"></span>
           <div id="player-header-actions">
             <button id="toggle-chat-btn" title="Toggle Chat (C)">&#128172;</button>
+            <button id="pip-player-btn" title="Picture-in-Picture (P)" style="display:none;">&#10697; PiP</button>
             <button id="fullscreen-player-btn" title="Fullscreen (F)">&#9974;</button>
             <button id="close-player-btn">&#10005; Close</button>
           </div>
@@ -2367,6 +2383,9 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('close-player-btn').addEventListener('click', function() { if (api) api.stop_player(); });
   document.getElementById('fullscreen-player-btn').addEventListener('click', toggleVideoFullscreen);
   document.getElementById('stream-video').addEventListener('dblclick', toggleVideoFullscreen);
+  document.getElementById('pip-player-btn').addEventListener('click', function() {
+    togglePiP(document.getElementById('stream-video'));
+  });
   document.getElementById('watch-external-btn').addEventListener('click', function() {
     if (!state.selectedChannel || !api) return;
     var quality = document.getElementById('quality-select').value;
@@ -2657,6 +2676,13 @@ document.addEventListener('DOMContentLoaded', function() {
     if (chatBtn) { switchMultiChat(parseInt(chatBtn.dataset.slot, 10)); return; }
     var fsBtn = e.target.closest('.ms-fullscreen-btn');
     if (fsBtn) { toggleMsSlotFullscreen(parseInt(fsBtn.dataset.slot, 10)); return; }
+    var msPipBtn = e.target.closest('.ms-pip-btn');
+    if (msPipBtn) {
+      var slot = parseInt(msPipBtn.dataset.slot, 10);
+      var slotEl = document.querySelector('.ms-slot[data-slot-idx="' + slot + '"]');
+      if (slotEl) togglePiP(slotEl.querySelector('.ms-video'));
+      return;
+    }
     var removeBtn = e.target.closest('.ms-remove-btn');
     if (removeBtn) { removeMultiSlot(parseInt(removeBtn.dataset.slot, 10)); return; }
   });
@@ -3726,6 +3752,25 @@ function _triggerBrowseTopStreams(category) {
       category.platform_ids,
       state.browsePlatformFilter
     );
+  }
+}
+
+function togglePiP(video) {
+  if (!video) return;
+  // Webkit path — most reliable in WKWebView on macOS
+  if (typeof video.webkitSupportsPresentationMode === 'function' &&
+      video.webkitSupportsPresentationMode('picture-in-picture')) {
+    var next = video.webkitPresentationMode === 'picture-in-picture' ? 'inline' : 'picture-in-picture';
+    video.webkitSetPresentationMode(next);
+    return;
+  }
+  // W3C fallback
+  if (document.pictureInPictureEnabled) {
+    if (document.pictureInPictureElement === video) {
+      document.exitPictureInPicture().catch(function() {});
+    } else {
+      video.requestPictureInPicture().catch(function() {});
+    }
   }
 }
 
