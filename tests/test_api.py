@@ -1080,3 +1080,52 @@ class TestAddMultiSlot:
         assert captured["platform"] == "kick"
         payload = json.loads(emitted[0].split("(", 1)[1].rstrip(")"))
         assert payload["platform"] == "kick"
+
+
+def test_get_config_includes_pip_and_shortcuts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_storage(monkeypatch, tmp_path)
+    api = TwitchXApi()
+    cfg = api.get_config()
+    assert "pip_enabled" in cfg
+    assert cfg["pip_enabled"] is False
+    assert "keyboard_shortcuts" in cfg
+    assert cfg["keyboard_shortcuts"]["refresh"] == "r"
+    assert cfg["keyboard_shortcuts"]["pip"] == "p"
+
+
+def test_get_full_config_for_settings_includes_pip_and_shortcuts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_storage(monkeypatch, tmp_path)
+    api = TwitchXApi()
+    cfg = api.get_full_config_for_settings()
+    assert "pip_enabled" in cfg
+    assert cfg["pip_enabled"] is False
+    assert "keyboard_shortcuts" in cfg
+    assert cfg["keyboard_shortcuts"]["refresh"] == "r"
+    assert cfg["keyboard_shortcuts"]["mute"] == "m"
+
+
+def test_save_settings_persists_pip_enabled_and_shortcuts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_storage(monkeypatch, tmp_path)
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "start_polling", lambda interval: None)
+    monkeypatch.setattr(api, "_eval_js", lambda code: None)
+
+    api.save_settings(
+        json.dumps({
+            "pip_enabled": True,
+            "keyboard_shortcuts": {"refresh": "g", "mute": "n"},
+        })
+    )
+
+    stored = load_config()
+    settings = stored["settings"]
+    assert settings["pip_enabled"] is True
+    sc = settings["keyboard_shortcuts"]
+    assert sc["refresh"] == "g"
+    assert sc["mute"] == "n"

@@ -381,6 +381,9 @@ class TwitchXApi:
                 ),
             }
         masked["youtube_quota_remaining"] = self._youtube.quota_remaining()
+        _st = get_settings(self._config)
+        masked["pip_enabled"] = _st.get("pip_enabled", False)
+        masked["keyboard_shortcuts"] = _st.get("keyboard_shortcuts", {})
         return masked
 
     def get_full_config_for_settings(self) -> dict[str, Any]:
@@ -410,6 +413,8 @@ class TwitchXApi:
             "youtube_display_name": yt_conf.get("user_display_name", ""),
             "youtube_user_login": yt_conf.get("user_login", ""),
             "youtube_quota_remaining": self._youtube.quota_remaining(),
+            "pip_enabled": settings.get("pip_enabled", False),
+            "keyboard_shortcuts": settings.get("keyboard_shortcuts", {}),
         }
 
     def save_settings(self, data: str) -> None:
@@ -457,6 +462,12 @@ class TwitchXApi:
                 new_yt_cs = parsed["youtube_client_secret"].strip()
                 if new_yt_cs:
                     yc["client_secret"] = new_yt_cs
+            if "pip_enabled" in parsed:
+                st["pip_enabled"] = bool(parsed["pip_enabled"])
+            if "keyboard_shortcuts" in parsed and isinstance(
+                parsed["keyboard_shortcuts"], dict
+            ):
+                st["keyboard_shortcuts"] = parsed["keyboard_shortcuts"]
 
         self._config = update_config(_apply)
 
