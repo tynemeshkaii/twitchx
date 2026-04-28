@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>TwitchX</title>
 <style>
 :root {
@@ -21,7 +21,7 @@
   /* Apple-style label hierarchy */
   --text-primary:   #F2F2F7;
   --text-secondary: #8E8E93;
-  --text-muted:     #48484A;
+  --text-muted:     #6E6E73;
 
   /* Semantic status */
   --live-green:  #30D158;
@@ -39,6 +39,7 @@
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
+  font: -apple-system-body;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
   background: var(--bg-base);
   color: var(--text-primary);
@@ -47,8 +48,61 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   user-select: none;
-  font-size: 13px;
   line-height: 1.4;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* Global focus ring for keyboard navigation */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Skip to main content — visible on focus, hidden otherwise */
+.skip-link {
+  position: absolute;
+  top: 8px; left: 8px;
+  z-index: 1000;
+  padding: 8px 16px;
+  background: var(--accent);
+  color: #0A0A0C;
+  border-radius: var(--radius-sm);
+  font-size: 13px; font-weight: 600;
+  text-decoration: none;
+  transform: translateY(-120%);
+  transition: transform 0.15s ease;
+}
+.skip-link:focus { transform: translateY(0); }
+
+/* Allow text selection where user intent is clear */
+#chat-messages, #ms-chat-messages,
+#settings-modal input, #settings-modal select, #settings-modal textarea,
+#search-input, #search-dropdown,
+#ms-add-input, #ms-add-form input,
+.channel-body-bio,
+.stream-card .card-title { user-select: text; }
+
+/* ── Accessibility system preferences ────────────────────── */
+@supports not (gap: 1px) {
+  #multistream-grid { gap: 2px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  #chat-messages, #ms-chat-messages { scroll-behavior: auto; }
+}
+@media (prefers-contrast: more) {
+  :root {
+    --text-muted: #AEAEB2;
+    --text-secondary: #C7C7CC;
+    --bg-border: #3A3A3F;
+  }
+  #settings-modal, #context-menu {
+    border-width: 2px;
+  }
 }
 
 /* ── Scrollbar ──────────────────────────────────────────── */
@@ -392,7 +446,7 @@ body {
   border-color: rgba(255, 159, 10, 0.4);
   box-shadow: 0 0 0 2px rgba(255, 159, 10, 0.10);
 }
-#search-input::placeholder { color: var(--text-muted); }
+#search-input::placeholder { color: var(--text-secondary); opacity: 0.6; }
 
 #add-btn {
   width: 30px; height: 30px; border: 1px solid var(--bg-border);
@@ -455,7 +509,7 @@ body {
   transition: border-color 0.12s ease;
 }
 #toolbar select:focus, #toolbar input:focus { border-color: rgba(255, 159, 10, 0.35); }
-#toolbar input::placeholder { color: var(--text-muted); }
+#toolbar input::placeholder { color: var(--text-secondary); opacity: 0.6; }
 #sort-select { width: 150px; cursor: pointer; }
 #filter-input { width: 175px; }
 
@@ -850,9 +904,13 @@ body {
 #chat-send-btn:hover { opacity: 0.88; }
 #chat-send-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 #chat-resize-handle {
-  width: 3px; cursor: col-resize;
+  width: 6px; cursor: col-resize;
   background: var(--bg-border); flex-shrink: 0;
   transition: background 0.12s ease;
+  position: relative;
+}
+#chat-resize-handle::after {
+  content: ''; position: absolute; inset: 0 -6px;
 }
 #chat-resize-handle:hover { background: rgba(255,159,10,0.35); }
 #toggle-chat-btn {
@@ -913,7 +971,7 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-xl);
   box-shadow: 0 40px 80px rgba(0, 0, 0, 0.7), 0 0 0 0.5px rgba(255,255,255,0.05);
-  width: 420px; padding: 22px; position: relative;
+  width: 420px; max-width: 90vw; padding: 22px; position: relative;
 }
 
 #settings-modal h2 {
@@ -1772,6 +1830,7 @@ body {
 </style>
 </head>
 <body>
+<a href="#content" class="skip-link">Skip to main content</a>
 <div id="app">
   <div id="main">
     <!-- Sidebar -->
@@ -1909,9 +1968,9 @@ body {
       <div id="multistream-view" class="hidden">
         <div id="multistream-header">
           <span id="multistream-title">&#9706; Multi-stream</span>
-          <button id="ms-sidebar-btn" onclick="toggleMsSidebar()">&#9776; Sidebar</button>
-          <button id="ms-toggle-chat-btn" onclick="toggleMsChat()">&#128172; Chat</button>
-          <button id="ms-close-btn" onclick="closeMultistreamView()">&#10005; Close</button>
+          <button id="ms-sidebar-btn" onclick="toggleMsSidebar()" aria-label="Toggle Sidebar">&#9776; Sidebar</button>
+          <button id="ms-toggle-chat-btn" onclick="toggleMsChat()" aria-label="Toggle Multi Chat">&#128172; Chat</button>
+          <button id="ms-close-btn" onclick="closeMultistreamView()" aria-label="Close Multistream">&#10005; Close</button>
         </div>
         <div id="ms-sidebar-backdrop" onclick="toggleMsSidebar()"></div>
         <div id="multistream-body">
@@ -1942,11 +2001,11 @@ body {
                     <span class="ms-channel-name"></span>
                   </div>
                   <div class="ms-slot-controls">
-                    <button class="ms-audio-btn" data-slot="0" title="Focus audio">&#128266;</button>
-                    <button class="ms-chat-sw-btn" data-slot="0" title="Switch chat">&#128172;</button>
-                    <button class="ms-fullscreen-btn" data-slot="0" title="Fullscreen (double-click)">&#9974;</button>
-                    <button class="ms-pip-btn" data-slot="0" title="Picture-in-Picture">&#10697;</button>
-                    <button class="ms-remove-btn" data-slot="0" title="Remove">&times;</button>
+                    <button class="ms-audio-btn" data-slot="0" title="Focus audio" aria-label="Focus audio">&#128266;</button>
+                    <button class="ms-chat-sw-btn" data-slot="0" title="Switch chat" aria-label="Switch chat">&#128172;</button>
+                    <button class="ms-fullscreen-btn" data-slot="0" title="Fullscreen (double-click)" aria-label="Fullscreen">&#9974;</button>
+                    <button class="ms-pip-btn" data-slot="0" title="Picture-in-Picture" aria-label="Picture in Picture">&#10697;</button>
+                    <button class="ms-remove-btn" data-slot="0" title="Remove" aria-label="Remove">&times;</button>
                   </div>
                 </div>
               </div>
@@ -1977,11 +2036,11 @@ body {
                     <span class="ms-channel-name"></span>
                   </div>
                   <div class="ms-slot-controls">
-                    <button class="ms-audio-btn" data-slot="1" title="Focus audio">&#128266;</button>
-                    <button class="ms-chat-sw-btn" data-slot="1" title="Switch chat">&#128172;</button>
-                    <button class="ms-fullscreen-btn" data-slot="1" title="Fullscreen (double-click)">&#9974;</button>
-                    <button class="ms-pip-btn" data-slot="1" title="Picture-in-Picture">&#10697;</button>
-                    <button class="ms-remove-btn" data-slot="1" title="Remove">&times;</button>
+                    <button class="ms-audio-btn" data-slot="1" title="Focus audio" aria-label="Focus audio">&#128266;</button>
+                    <button class="ms-chat-sw-btn" data-slot="1" title="Switch chat" aria-label="Switch chat">&#128172;</button>
+                    <button class="ms-fullscreen-btn" data-slot="1" title="Fullscreen (double-click)" aria-label="Fullscreen">&#9974;</button>
+                    <button class="ms-pip-btn" data-slot="1" title="Picture-in-Picture" aria-label="Picture in Picture">&#10697;</button>
+                    <button class="ms-remove-btn" data-slot="1" title="Remove" aria-label="Remove">&times;</button>
                   </div>
                 </div>
               </div>
@@ -2012,11 +2071,11 @@ body {
                     <span class="ms-channel-name"></span>
                   </div>
                   <div class="ms-slot-controls">
-                    <button class="ms-audio-btn" data-slot="2" title="Focus audio">&#128266;</button>
-                    <button class="ms-chat-sw-btn" data-slot="2" title="Switch chat">&#128172;</button>
-                    <button class="ms-fullscreen-btn" data-slot="2" title="Fullscreen (double-click)">&#9974;</button>
-                    <button class="ms-pip-btn" data-slot="2" title="Picture-in-Picture">&#10697;</button>
-                    <button class="ms-remove-btn" data-slot="2" title="Remove">&times;</button>
+                    <button class="ms-audio-btn" data-slot="2" title="Focus audio" aria-label="Focus audio">&#128266;</button>
+                    <button class="ms-chat-sw-btn" data-slot="2" title="Switch chat" aria-label="Switch chat">&#128172;</button>
+                    <button class="ms-fullscreen-btn" data-slot="2" title="Fullscreen (double-click)" aria-label="Fullscreen">&#9974;</button>
+                    <button class="ms-pip-btn" data-slot="2" title="Picture-in-Picture" aria-label="Picture in Picture">&#10697;</button>
+                    <button class="ms-remove-btn" data-slot="2" title="Remove" aria-label="Remove">&times;</button>
                   </div>
                 </div>
               </div>
@@ -2047,11 +2106,11 @@ body {
                     <span class="ms-channel-name"></span>
                   </div>
                   <div class="ms-slot-controls">
-                    <button class="ms-audio-btn" data-slot="3" title="Focus audio">&#128266;</button>
-                    <button class="ms-chat-sw-btn" data-slot="3" title="Switch chat">&#128172;</button>
-                    <button class="ms-fullscreen-btn" data-slot="3" title="Fullscreen (double-click)">&#9974;</button>
-                    <button class="ms-pip-btn" data-slot="3" title="Picture-in-Picture">&#10697;</button>
-                    <button class="ms-remove-btn" data-slot="3" title="Remove">&times;</button>
+                    <button class="ms-audio-btn" data-slot="3" title="Focus audio" aria-label="Focus audio">&#128266;</button>
+                    <button class="ms-chat-sw-btn" data-slot="3" title="Switch chat" aria-label="Switch chat">&#128172;</button>
+                    <button class="ms-fullscreen-btn" data-slot="3" title="Fullscreen (double-click)" aria-label="Fullscreen">&#9974;</button>
+                    <button class="ms-pip-btn" data-slot="3" title="Picture-in-Picture" aria-label="Picture in Picture">&#10697;</button>
+                    <button class="ms-remove-btn" data-slot="3" title="Remove" aria-label="Remove">&times;</button>
                   </div>
                 </div>
               </div>
@@ -2079,10 +2138,10 @@ body {
           <span id="player-channel-name"></span>
           <span id="player-stream-title"></span>
           <div id="player-header-actions">
-            <button id="toggle-chat-btn" title="Toggle Chat (C)">&#128172;</button>
-            <button id="pip-player-btn" title="Picture-in-Picture (P)" style="display:none;">&#10697; PiP</button>
-            <button id="fullscreen-player-btn" title="Fullscreen (F)">&#9974;</button>
-            <button id="close-player-btn">&#10005; Close</button>
+            <button id="toggle-chat-btn" title="Toggle Chat (C)" aria-label="Toggle Chat">&#128172;</button>
+            <button id="pip-player-btn" title="Picture-in-Picture (P)" aria-label="Picture in Picture" style="display:none;">&#10697; PiP</button>
+            <button id="fullscreen-player-btn" title="Fullscreen (F)" aria-label="Fullscreen">&#9974;</button>
+            <button id="close-player-btn" aria-label="Close Player">&#10005; Close</button>
           </div>
         </div>
         <div id="player-content">
@@ -2122,15 +2181,15 @@ body {
       <option value="audio_only">Audio only</option>
     </select>
     <button id="watch-btn">&#9654; Watch</button>
-    <button id="stop-player-btn" style="display:none;" title="Stop playback">&#9632; Stop</button>
-    <button id="watch-external-btn" title="Open in IINA">&#8599; IINA</button>
-    <button class="bar-btn" id="browser-btn" title="Open in browser">&#127760;</button>
+    <button id="stop-player-btn" style="display:none;" title="Stop playback" aria-label="Stop">&#9632; Stop</button>
+    <button id="watch-external-btn" title="Open in IINA" aria-label="Open in IINA">&#8599; IINA</button>
+    <button class="bar-btn" id="browser-btn" title="Open in browser" aria-label="Open in Browser">&#127760;</button>
     <span id="live-dot">&#9679;</span>
     <span id="status-text"></span>
     <span id="total-viewers"></span>
     <span id="updated-time"></span>
-    <button class="bar-btn" id="refresh-btn" title="Refresh (R)">&#8635;</button>
-    <button class="bar-btn" id="settings-btn" title="Settings (&#8984;,)">&#9881;</button>
+    <button class="bar-btn" id="refresh-btn" title="Refresh (R)" aria-label="Refresh">&#8635;</button>
+    <button class="bar-btn" id="settings-btn" title="Settings (&#8984;,)" aria-label="Settings">&#9881;</button>
   </div>
 </div>
 
@@ -5129,9 +5188,22 @@ function showContextMenu(e, login) {
   e.preventDefault();
   ctxChannel = login;
   var menu = document.getElementById('context-menu');
-  menu.style.left = e.clientX + 'px';
-  menu.style.top = e.clientY + 'px';
   menu.style.display = 'block';
+  // Let the browser compute the menu size before positioning
+  menu.style.visibility = 'hidden';
+  menu.style.left = '0';
+  menu.style.top = '0';
+  var left = e.clientX;
+  var top = e.clientY;
+  var mw = menu.offsetWidth;
+  var mh = menu.offsetHeight;
+  if (left + mw > window.innerWidth - 4)  left = window.innerWidth - mw - 4;
+  if (top + mh > window.innerHeight - 4) top = window.innerHeight - mh - 4;
+  if (left < 0) left = 0;
+  if (top < 0) top = 0;
+  menu.style.left = left + 'px';
+  menu.style.top = top + 'px';
+  menu.style.visibility = '';
   var favItem = menu.querySelector('[data-action="favorite"]');
   var removeItem = menu.querySelector('[data-action="remove"]');
   if (state.favorites.indexOf(login) !== -1) {
@@ -5155,9 +5227,21 @@ function showSidebarContextMenu(e, login) {
   e.preventDefault();
   ctxChannel = login;
   var menu = document.getElementById('context-menu');
-  menu.style.left = e.clientX + 'px';
-  menu.style.top = e.clientY + 'px';
   menu.style.display = 'block';
+  menu.style.visibility = 'hidden';
+  menu.style.left = '0';
+  menu.style.top = '0';
+  var left = e.clientX;
+  var top = e.clientY;
+  var mw = menu.offsetWidth;
+  var mh = menu.offsetHeight;
+  if (left + mw > window.innerWidth - 4)  left = window.innerWidth - mw - 4;
+  if (top + mh > window.innerHeight - 4) top = window.innerHeight - mh - 4;
+  if (left < 0) left = 0;
+  if (top < 0) top = 0;
+  menu.style.left = left + 'px';
+  menu.style.top = top + 'px';
+  menu.style.visibility = '';
   menu.querySelector('[data-action="favorite"]').style.display = 'none';
   menu.querySelector('[data-action="remove"]').style.display = 'block';
   var msItem = menu.querySelector('[data-action="multistream"]');

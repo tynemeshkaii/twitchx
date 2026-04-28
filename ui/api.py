@@ -8,6 +8,7 @@ import json
 import logging
 import re
 import subprocess
+import sys
 import threading
 import time
 import traceback
@@ -114,6 +115,7 @@ class TwitchXApi:
         self._last_youtube_streams: list[dict[str, Any]] = []
         self._last_twitch_streams: list[dict[str, Any]] = []
         self._last_twitch_users: list[dict[str, Any]] = []
+        self._last_kick_streams: list[dict[str, Any]] = []
         # User avatar URLs for lazy loading
         self._user_avatars: dict[str, str] = {}
         # Image fetch dedup: tracks in-flight requests to avoid duplicate threads
@@ -149,8 +151,10 @@ class TwitchXApi:
         """Safely evaluate JS in the webview window."""
         if self._shutdown.is_set() or self._window is None:
             return
-        with contextlib.suppress(Exception):
+        try:
             self._window.evaluate_js(code)
+        except Exception as e:
+            logger.debug("_eval_js failed: %s", e, exc_info=True)
 
     def _run_in_thread(self, fn: Any) -> None:
         threading.Thread(target=fn, daemon=True).start()
@@ -1258,7 +1262,8 @@ class TwitchXApi:
                     deduped.append(item)
 
                 self._eval_js(f"window.onSearchResults({json.dumps(deduped)})")
-            except Exception:
+            except Exception as e:
+                logger.warning("search_channels failed: %s", e, exc_info=True)
                 self._eval_js("window.onSearchResults([])")
             finally:
                 self._close_thread_loop(loop)
@@ -1339,9 +1344,6 @@ class TwitchXApi:
         retry_delays = [5, 15, 30]
         max_attempts = len(retry_delays) + 1
 
-        # Track whether this call still holds _fetch_lock so the finally
-        # block doesn't try to release a lock we yielded during retry sleep.
-        lock_held = True
         try:
             for attempt in range(1, max_attempts + 1):
                 if self._shutdown.is_set():
@@ -1380,17 +1382,7 @@ class TwitchXApi:
                             self._eval_js(
                                 f"window.onStatusUpdate({{text: 'Reconnecting... (attempt {att}/{max_attempts})', type: 'warn'}})"
                             )
-                            # Release the lock during the backoff sleep so that
-                            # a manual refresh (or the polling timer) can proceed
-                            # immediately rather than blocking for up to 30 s.
-                            lock_held = False
-                            self._fetch_lock.release()
                             time.sleep(delay)
-                            # Re-acquire after sleep; if another fetch already
-                            # started while we slept, defer to it and bail out.
-                            if not self._fetch_lock.acquire(blocking=False):
-                                return
-                            lock_held = True
                         else:
                             self._eval_js(
                                 "window.onStatusUpdate({text: 'No internet connection', type: 'error'})"
@@ -1422,8 +1414,7 @@ class TwitchXApi:
                 finally:
                     self._close_thread_loop(loop)
         finally:
-            if lock_held:
-                self._fetch_lock.release()
+            self._fetch_lock.release()
 
     async def _async_fetch(
         self,
@@ -1459,13 +1450,15 @@ class TwitchXApi:
             if not kick_favorites:
                 return []
             try:
-                return await asyncio.wait_for(
+                streams = await asyncio.wait_for(
                     self._kick.get_live_streams(kick_favorites),
                     timeout=_kick_timeout,
                 )
+                self._last_kick_streams = streams
+                return streams
             except Exception as e:
                 logger.warning("Kick fetch failed: %s", e)
-                return []
+                return list(self._last_kick_streams)
 
         async def _do_youtube() -> list[dict]:
             if not youtube_favorites:
@@ -1705,6 +1698,8 @@ class TwitchXApi:
         )
 
         def do_notify() -> None:
+            if sys.platform != "darwin":
+                return
             with contextlib.suppress(Exception):
                 subprocess.run(
                     ["osascript", "-e", script],
@@ -1767,6 +1762,10 @@ class TwitchXApi:
             self._eval_js(
                 "window.onLaunchResult({success: false, message: 'Select a channel first', channel: ''})"
             )
+            return
+
+        # Prevent double-watch from rapid clicks
+        if self._watching_channel is not None or self._launch_channel is not None:
             return
 
         stream = self._find_live_stream(channel)
@@ -1924,19 +1923,36 @@ class TwitchXApi:
             return
         channel_lower = channel.lower() if platform != "youtube" else channel
         title = ""
+        youtube_video_id: str | None = None
         for s in self._live_streams:
             if (
                 self._stream_platform(s) == platform
                 and self._stream_login(s) == channel_lower
             ):
                 title = s.get("title", "")
+                if platform == "youtube":
+                    youtube_video_id = s.get("video_id") or None
                 break
+
+        # YouTube: resolve_hls_url needs a video ID, not a channel ID.
+        # Look up video_id from the live cache; reject if not live / no video_id.
+        if platform == "youtube" and not youtube_video_id:
+            error_payload = json.dumps({
+                "slot_idx": slot_idx,
+                "channel": channel,
+                "platform": platform,
+                "title": title,
+                "error": "YouTube channel is not currently live or stream info unavailable",
+            })
+            self._eval_js(f"window.onMultiSlotReady({error_payload})")
+            return
 
         def do_resolve() -> None:
             cfg = load_config()
             settings = get_settings(cfg)
+            resolve_channel = youtube_video_id if youtube_video_id else channel
             hls_url, err = resolve_hls_url(
-                channel,
+                resolve_channel,
                 quality,
                 settings.get("streamlink_path", "streamlink"),
                 platform=platform,
@@ -1962,6 +1978,9 @@ class TwitchXApi:
     def watch_external(self, channel: str, quality: str) -> None:
         """Launch stream in IINA (fallback)."""
         if not channel:
+            self._eval_js(
+                "window.onLaunchResult({success: false, message: 'Select a channel first', channel: ''})"
+            )
             return
 
         stream = self._find_live_stream(channel)
@@ -1969,6 +1988,10 @@ class TwitchXApi:
 
         live_logins = {self._stream_login(s) for s in self._live_streams}
         if channel.lower() not in live_logins:
+            safe_ch = json.dumps(channel)
+            self._eval_js(
+                f"window.onLaunchResult({{success: false, message: {safe_ch} + ' is offline', channel: {safe_ch}}})"
+            )
             return
 
         def do_launch() -> None:
@@ -2156,7 +2179,18 @@ class TwitchXApi:
         YouTube is not supported — video_id is unavailable from browse search
         results; YouTube stream cards in browse are display-only.
         """
-        if not channel or platform not in ("twitch", "kick"):
+        if not channel:
+            return
+        if platform not in ("twitch", "kick"):
+            self._eval_js(
+                f"window.onLaunchResult({{success: false, "
+                f"message: {json.dumps(f'{platform} stream playback is not supported')}, "
+                f"channel: {json.dumps(channel)}}})"
+            )
+            return
+
+        # Prevent double-watch from rapid clicks
+        if self._watching_channel is not None or self._launch_channel is not None:
             return
 
         def _save_quality(cfg: dict[str, Any]) -> None:
@@ -2278,14 +2312,25 @@ class TwitchXApi:
 
         self._run_in_thread(do_resolve)
 
+    _MAX_LAUNCH_SECONDS = 20
+
     def _start_launch_timer(self) -> None:
         self._cancel_launch_timer()
 
         def tick() -> None:
-            if not self._shutdown.is_set() and self._launch_channel:
+            ch = self._launch_channel  # snapshot to avoid race with resolve thread
+            if not self._shutdown.is_set() and ch:
                 self._launch_elapsed += 3
-                ch = self._launch_channel
                 elapsed = self._launch_elapsed
+                if elapsed >= self._MAX_LAUNCH_SECONDS:
+                    safe_ch = json.dumps(ch)
+                    self._eval_js(
+                        f"window.onLaunchResult({{success: false, "
+                        f"message: 'Timed out after {elapsed}s waiting for streamlink', "
+                        f"channel: {safe_ch}}})"
+                    )
+                    self._launch_channel = None
+                    return
                 safe_ch = json.dumps(ch)
                 self._eval_js(
                     f"window.onLaunchProgress({{channel: {safe_ch}, elapsed: {elapsed}}})"
@@ -2334,9 +2379,12 @@ class TwitchXApi:
             }
         if platform == "kick":
             user = raw.get("user") or {}
+            cid = raw.get("channel_id")
+            if cid is None:
+                cid = raw.get("id")
             return {
                 "platform": "kick",
-                "channel_id": str(raw.get("channel_id") or raw.get("id", "")),
+                "channel_id": str(cid) if cid is not None else "",
                 "login": raw.get("slug", login),
                 "display_name": (
                     user.get("username")
@@ -2518,8 +2566,8 @@ class TwitchXApi:
                 self._eval_js(f"window.onAvatar({result})")
                 # P2: persist pre-resized bytes so future cache hits skip Pillow
                 save_avatar(login_lower, resized_bytes, platform)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("get_avatar failed for %s/%s: %s", platform, login_lower, e)
             finally:
                 self._fetching_avatars.discard(dedup_key)
 
@@ -2551,8 +2599,8 @@ class TwitchXApi:
                 data_url = f"data:image/jpeg;base64,{b64}"
                 result = json.dumps({"login": login, "data": data_url})
                 self._eval_js(f"window.onThumbnail({result})")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("get_thumbnail failed for %s: %s", login, e)
             finally:
                 self._fetching_thumbnails.discard(login)
 
@@ -2586,8 +2634,17 @@ class TwitchXApi:
                     loop.run_until_complete(
                         twitch_client.connect(channel, token=token, login=login)
                     )
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning("Twitch chat connect failed: %s", exc)
+                    self._on_chat_status(
+                        ChatStatus(
+                            connected=False,
+                            platform="twitch",
+                            channel_id=channel,
+                            error=str(exc)[:120],
+                            authenticated=bool(token and login),
+                        )
+                    )
                 finally:
                     twitch_client._loop = None
                     loop.close()
@@ -2671,6 +2728,16 @@ class TwitchXApi:
 
             self._chat_thread = threading.Thread(target=run_kick_chat, daemon=True)
             self._chat_thread.start()
+
+        else:
+            self._on_chat_status(
+                ChatStatus(
+                    connected=False,
+                    platform=platform,
+                    channel_id=channel,
+                    error=f"Chat not supported for {platform}",
+                )
+            )
 
     def stop_chat(self) -> None:
         """Stop current chat connection."""

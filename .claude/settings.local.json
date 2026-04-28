@@ -92,7 +92,8 @@
       "Bash(python -m pytest tests/test_api.py::TestAsyncFetchIsolation -v)",
       "Bash(python3 -m pytest tests/test_api.py::TestAsyncFetchIsolation -v)",
       "Bash(git checkout:*)",
-      "WebFetch(domain:github-twitchx)"
+      "WebFetch(domain:github-twitchx)",
+      "WebFetch(domain:pypi.org)"
     ]
   }
 }
