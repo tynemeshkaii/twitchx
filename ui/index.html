@@ -3819,7 +3819,11 @@ function cycleStream(dir) {
   var streams = getFilteredSortedStreams();
   if (streams.length === 0) return;
   var idx = streams.findIndex(function(s) { return s.login === state.selectedChannel; });
-  idx = (idx + dir + streams.length) % streams.length;
+  if (idx === -1) {
+    idx = dir > 0 ? 0 : streams.length - 1;
+  } else {
+    idx = (idx + dir + streams.length) % streams.length;
+  }
   selectChannel(streams[idx].login);
 }
 
