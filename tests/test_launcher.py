@@ -7,6 +7,12 @@ from core.launcher import launch_stream
 from core.stream_resolver import _run_streamlink
 
 
+def _mock_platform(url: str) -> MagicMock:
+    client = MagicMock()
+    client.build_stream_url = MagicMock(return_value=url)
+    return client
+
+
 class TestRunStreamlink:
     """Tests for the shared _run_streamlink helper in stream_resolver."""
 
@@ -70,10 +76,11 @@ class TestLaunchStream:
     ) -> None:
         # resolve_hls_url already handles fallback internally; simulate success
         mock_resolve.return_value = ("https://example.com/best.m3u8", "")
-        result = launch_stream("xqc", "720p60")
+        client = _mock_platform("https://twitch.tv/xqc")
+        result = launch_stream("xqc", "720p60", platform_client=client)
         assert result.success is True
         mock_resolve.assert_called_once_with(
-            "xqc", "720p60", "streamlink", platform="twitch"
+            "xqc", "720p60", "streamlink", client
         )
 
     @patch("core.launcher.check_iina", return_value=None)
@@ -83,7 +90,8 @@ class TestLaunchStream:
         mock_check_sl: MagicMock,
         mock_check_iina: MagicMock,
     ) -> None:
-        result = launch_stream("xqc", "best")
+        client = _mock_platform("https://twitch.tv/xqc")
+        result = launch_stream("xqc", "best", platform_client=client)
         assert result.success is False
         assert "not found" in result.message.lower()
 
@@ -94,6 +102,7 @@ class TestLaunchStream:
         mock_check_sl: MagicMock,
         mock_check_iina: MagicMock,
     ) -> None:
-        result = launch_stream("xqc", "best")
+        client = _mock_platform("https://twitch.tv/xqc")
+        result = launch_stream("xqc", "best", platform_client=client)
         assert result.success is False
         assert "not found" in result.message.lower()

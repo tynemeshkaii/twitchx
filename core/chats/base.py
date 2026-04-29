@@ -9,10 +9,11 @@ from collections.abc import Callable
 from typing import Any
 
 from core.chat import ChatClient, ChatMessage, ChatStatus
+from core.constants import CHAT_RECONNECT_DELAYS
 
 logger = logging.getLogger(__name__)
 
-RECONNECT_DELAYS = [3, 6, 12, 24, 48]
+RECONNECT_DELAYS = CHAT_RECONNECT_DELAYS
 
 
 class StopReconnect(Exception):

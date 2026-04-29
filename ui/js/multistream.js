@@ -1,4 +1,5 @@
-const TwitchX = window.TwitchX || {};
+window.TwitchX = window.TwitchX || {};
+const TwitchX = window.TwitchX;
 
 function openMultistreamView() {
   TwitchX.multiState.open = true;
@@ -55,7 +56,7 @@ function _clearMultiSlot(idx) {
 
 function addMultiSlot(idx, channel, platform) {
   const cfg = TwitchX.api ? TwitchX.api.get_full_config_for_settings() : {};
-  const quality = (cfg && cfg.settings && cfg.settings.quality) || 'best';
+  const quality = (cfg && cfg.quality) || 'best';
   TwitchX.multiState.slots[idx] = { channel: channel, platform: platform, quality: quality, title: '' };
   const slotEl = document.querySelector('.ms-slot[data-slot-idx="' + idx + '"]');
   if (!slotEl) return;

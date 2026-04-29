@@ -8,15 +8,19 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.platform import PlatformClient
 
 
 def _run_streamlink(
-    resolved_sl: str, twitch_url: str, quality: str
+    resolved_sl: str, stream_url: str, quality: str
 ) -> tuple[str | None, str]:
     """Run `streamlink --stream-url` and return (hls_url, error_text)."""
     try:
         result = subprocess.run(
-            [resolved_sl, "--stream-url", twitch_url, quality],
+            [resolved_sl, "--stream-url", stream_url, quality],
             capture_output=True,
             timeout=15,
         )
@@ -36,7 +40,7 @@ def resolve_hls_url(
     channel: str,
     quality: str,
     streamlink_path: str = "streamlink",
-    platform: str = "twitch",
+    platform_client: PlatformClient | None = None,
 ) -> tuple[str | None, str]:
     """Resolve HLS URL for a stream channel.
 
@@ -52,12 +56,10 @@ def resolve_hls_url(
 
     if channel.startswith("http://") or channel.startswith("https://"):
         stream_url = channel
-    elif platform == "youtube":
-        stream_url = f"https://www.youtube.com/watch?v={channel}"
-    elif platform == "kick":
-        stream_url = f"https://kick.com/{channel}"
+    elif platform_client is not None:
+        stream_url = platform_client.build_stream_url(channel)
     else:
-        stream_url = f"https://twitch.tv/{channel}"
+        return None, "No platform client provided and channel is not a direct URL"
 
     hls_url, err = _run_streamlink(resolved_sl, stream_url, quality)
 

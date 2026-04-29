@@ -268,7 +268,7 @@ def test_get_cached_avatar_expired(tmp_path: Path, monkeypatch: object) -> None:
     import core.storage as mod
 
     monkeypatch.setattr(mod, "AVATAR_DIR", tmp_path)  # type: ignore[attr-defined]
-    monkeypatch.setattr(mod, "_AVATAR_MAX_AGE", 0)  # type: ignore[attr-defined]
+    monkeypatch.setattr(mod, "AVATAR_CACHE_TTL_SECONDS", 0)  # type: ignore[attr-defined]
 
     platform_dir = tmp_path / "twitch"
     platform_dir.mkdir()
@@ -353,3 +353,242 @@ def test_keyboard_shortcuts_deep_merged_from_stored(
     assert sc["watch"] == " "  # default kept
     assert sc["fullscreen"] == "f"  # default kept
     assert sc["pip"] == "p"  # default kept
+
+
+# ── _migrate_favorites_v2 ────────────────────────────────────
+
+
+def test_migrate_favorites_v2_cleans_v1_urls(temp_config_dir: Path) -> None:
+    """v1 string favorites are converted to v2 dict objects."""
+    temp_config_dir.write_text(
+        json.dumps(
+            {
+                "platforms": {"twitch": {}, "kick": {}, "youtube": {}},
+                "favorites": [
+                    "https://twitch.tv/xqc",
+                    "just_ns",
+                    "twitch.tv/xqc",
+                    "good123",
+                ],
+                "settings": {},
+            }
+        )
+    )
+
+    config = load_config()
+    assert config["favorites"] == [
+        {"platform": "twitch", "login": "xqc", "display_name": "xqc"},
+        {"platform": "twitch", "login": "just_ns", "display_name": "just_ns"},
+        {"platform": "twitch", "login": "good123", "display_name": "good123"},
+    ]
+
+
+def test_migrate_favorites_v2_noop_clean_v2(temp_config_dir: Path) -> None:
+    """Clean v2 favorites are not re-saved."""
+    temp_config_dir.write_text(
+        json.dumps(
+            {
+                "platforms": {"twitch": {}, "kick": {}, "youtube": {}},
+                "favorites": [
+                    {"platform": "twitch", "login": "xqc", "display_name": "xQc"},
+                    {
+                        "platform": "kick",
+                        "login": "trainwreck",
+                        "display_name": "Trainwreck",
+                    },
+                ],
+                "settings": {},
+            }
+        )
+    )
+
+    mtime_before = temp_config_dir.stat().st_mtime
+    config = load_config()
+    mtime_after = temp_config_dir.stat().st_mtime
+    # No save needed — already clean
+    assert mtime_after == mtime_before
+    assert config["favorites"] == [
+        {"platform": "twitch", "login": "xqc", "display_name": "xQc"},
+        {
+            "platform": "kick",
+            "login": "trainwreck",
+            "display_name": "Trainwreck",
+        },
+    ]
+
+
+def test_migrate_favorites_v2_deduplicates_v2(temp_config_dir: Path) -> None:
+    """Duplicate v2 favorites are removed."""
+    temp_config_dir.write_text(
+        json.dumps(
+            {
+                "platforms": {"twitch": {}, "kick": {}, "youtube": {}},
+                "favorites": [
+                    {"platform": "twitch", "login": "xqc", "display_name": "xQc"},
+                    {"platform": "twitch", "login": "xqc", "display_name": "xQc"},
+                ],
+                "settings": {},
+            }
+        )
+    )
+
+    config = load_config()
+    assert len(config["favorites"]) == 1
+
+
+def test_migrate_favorites_v2_same_login_different_platforms_kept(
+    temp_config_dir: Path,
+) -> None:
+    """Same login on different platforms are NOT deduplicated."""
+    temp_config_dir.write_text(
+        json.dumps(
+            {
+                "platforms": {"twitch": {}, "kick": {}, "youtube": {}},
+                "favorites": [
+                    {"platform": "twitch", "login": "xqc", "display_name": "xQc"},
+                    {"platform": "kick", "login": "xqc", "display_name": "xQc"},
+                ],
+                "settings": {},
+            }
+        )
+    )
+
+    mtime_before = temp_config_dir.stat().st_mtime
+    config = load_config()
+    mtime_after = temp_config_dir.stat().st_mtime
+    assert len(config["favorites"]) == 2
+    assert mtime_after == mtime_before  # No change needed
+
+
+def test_migrate_favorites_v2_keeps_kick_slug_hyphen(temp_config_dir: Path) -> None:
+    temp_config_dir.write_text(
+        json.dumps(
+            {
+                "platforms": {"twitch": {}, "kick": {}, "youtube": {}},
+                "favorites": [
+                    {
+                        "platform": "kick",
+                        "login": "train-wreck",
+                        "display_name": "Train Wreck",
+                    },
+                ],
+                "settings": {},
+            }
+        )
+    )
+
+    mtime_before = temp_config_dir.stat().st_mtime
+    config = load_config()
+    mtime_after = temp_config_dir.stat().st_mtime
+    assert config["favorites"][0]["login"] == "train-wreck"
+    assert mtime_after == mtime_before
+
+
+def test_migrate_favorites_v2_normalizes_kick_url(temp_config_dir: Path) -> None:
+    temp_config_dir.write_text(
+        json.dumps(
+            {
+                "platforms": {"twitch": {}, "kick": {}, "youtube": {}},
+                "favorites": [
+                    {
+                        "platform": "kick",
+                        "login": "https://kick.com/train-wreck",
+                        "display_name": "Train Wreck",
+                    },
+                ],
+                "settings": {},
+            }
+        )
+    )
+
+    config = load_config()
+    assert config["favorites"][0]["login"] == "train-wreck"
+
+
+def test_migrate_favorites_v2_idempotent(temp_config_dir: Path) -> None:
+    """Repeated load_config calls do not corrupt favorites."""
+    temp_config_dir.write_text(
+        json.dumps(
+            {
+                "platforms": {"twitch": {}, "kick": {}, "youtube": {}},
+                "favorites": [
+                    {"platform": "twitch", "login": "xqc", "display_name": "xQc"},
+                ],
+                "settings": {},
+            }
+        )
+    )
+
+    config1 = load_config()
+    config2 = load_config()
+    assert config1["favorites"] == config2["favorites"]
+
+
+def test_migrate_favorites_v2_preserves_youtube_handle(temp_config_dir: Path) -> None:
+    """YouTube @handle login must keep the @ prefix during migration."""
+    temp_config_dir.write_text(
+        json.dumps(
+            {
+                "platforms": {"twitch": {}, "kick": {}, "youtube": {}},
+                "favorites": [
+                    {
+                        "platform": "youtube",
+                        "login": "@MrBeast",
+                        "display_name": "MrBeast",
+                    },
+                ],
+                "settings": {},
+            }
+        )
+    )
+
+    config = load_config()
+    assert config["favorites"][0]["login"] == "@mrbeast"
+
+
+def test_migrate_favorites_v2_preserves_youtube_video_prefix(
+    temp_config_dir: Path,
+) -> None:
+    """YouTube v: prefix must be preserved during migration."""
+    temp_config_dir.write_text(
+        json.dumps(
+            {
+                "platforms": {"twitch": {}, "kick": {}, "youtube": {}},
+                "favorites": [
+                    {
+                        "platform": "youtube",
+                        "login": "v:dQw4w9WgXcQ",
+                        "display_name": "Rick Astley",
+                    },
+                ],
+                "settings": {},
+            }
+        )
+    )
+
+    config = load_config()
+    assert config["favorites"][0]["login"] == "v:dQw4w9WgXcQ"
+
+
+def test_migrate_favorites_v2_preserves_youtube_channel_id(
+    temp_config_dir: Path,
+) -> None:
+    """Bare UC channel ID must stay intact (case-sensitive)."""
+    temp_config_dir.write_text(
+        json.dumps(
+            {
+                "platforms": {"twitch": {}, "kick": {}, "youtube": {}},
+                "favorites": [
+                    {
+                        "platform": "youtube",
+                        "login": "UCX6OQ3DkcsbYNE6H8uQQuVA",
+                        "display_name": "Test Channel",
+                    },
+                ],
+                "settings": {},
+            }
+        )
+    )
+
+    config = load_config()
+    assert config["favorites"][0]["login"] == "UCX6OQ3DkcsbYNE6H8uQQuVA"

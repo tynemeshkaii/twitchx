@@ -1,4 +1,5 @@
-const TwitchX = window.TwitchX || {};
+window.TwitchX = window.TwitchX || {};
+const TwitchX = window.TwitchX;
 
 function showContextMenu(e, login) {
   e.preventDefault();

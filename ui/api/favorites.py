@@ -128,7 +128,15 @@ class FavoritesComponent(BaseApiComponent):
     def add_channel(
         self, username: str, platform: str = "twitch", display_name: str = ""
     ) -> None:
-        clean = self._api._sanitize_channel_name(username, platform)
+        client = self._get_platform(platform)
+        if client is None:
+            self._eval_js(
+                "window.onStatusUpdate("
+                + json.dumps({"text": "Unknown platform", "type": "error"})
+                + ")"
+            )
+            return
+        clean = client.sanitize_identifier(username)
         if not clean:
             self._eval_js(
                 "window.onStatusUpdate("
@@ -344,7 +352,7 @@ class FavoritesComponent(BaseApiComponent):
                         self._kick.search_channels(query)
                     )
                     items.extend(
-                        self._api._normalize_kick_search_result(result)
+                        loop.run_until_complete(self._kick.normalize_search_result(result))
                         for result in kick_results
                     )
 
@@ -357,7 +365,7 @@ class FavoritesComponent(BaseApiComponent):
                             self._twitch.search_channels(query)
                         )
                         items.extend(
-                            self._api._normalize_twitch_search_result(result)
+                            loop.run_until_complete(self._twitch.normalize_search_result(result))
                             for result in twitch_results
                         )
 
@@ -368,7 +376,7 @@ class FavoritesComponent(BaseApiComponent):
                             self._youtube.search_channels(query)
                         )
                         items.extend(
-                            self._api._normalize_youtube_search_result(result)
+                            loop.run_until_complete(self._youtube.normalize_search_result(result))
                             for result in yt_results
                         )
 

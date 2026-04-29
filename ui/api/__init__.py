@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import re
 import threading
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor
@@ -268,21 +267,29 @@ class TwitchXApi:
     def get_config(self) -> dict[str, Any]:
         self._config = load_config()
         twitch_conf = get_platform_config(self._config, "twitch")
+        kick_conf = get_platform_config(self._config, "kick")
+        yt_conf = get_platform_config(self._config, "youtube")
         settings = get_settings(self._config)
+        all_favs = (
+            get_favorite_logins(self._config, "twitch")
+            + get_favorite_logins(self._config, "kick")
+            + get_favorite_logins(self._config, "youtube")
+        )
         masked = {
             "client_id": twitch_conf.get("client_id", "")[:8] + "..."
             if twitch_conf.get("client_id")
             else "",
             "has_credentials": bool(
-                twitch_conf.get("client_id") and twitch_conf.get("client_secret")
+                (twitch_conf.get("client_id") and twitch_conf.get("client_secret"))
+                or (kick_conf.get("client_id") and kick_conf.get("client_secret"))
+                or (yt_conf.get("api_key"))
             ),
             "quality": settings.get("quality", "best"),
             "refresh_interval": settings.get("refresh_interval", 60),
-            "favorites": get_favorite_logins(self._config, "twitch"),
+            "favorites": all_favs,
         }
         if self._current_user:
             masked["current_user"] = self._current_user
-        kick_conf = get_platform_config(self._config, "kick")
         masked["kick_has_credentials"] = bool(
             kick_conf.get("client_id") and kick_conf.get("client_secret")
         )
@@ -294,7 +301,6 @@ class TwitchXApi:
                 ),
             }
         masked["kick_scopes"] = kick_conf.get("oauth_scopes", "")
-        yt_conf = get_platform_config(self._config, "youtube")
         masked["youtube_has_credentials"] = bool(yt_conf.get("api_key"))
         masked["youtube_has_oauth"] = bool(
             yt_conf.get("client_id") and yt_conf.get("client_secret")
@@ -456,156 +462,8 @@ class TwitchXApi:
     # ─── Static helpers shared across components ──────────────
 
     @staticmethod
-    def _sanitize_username(raw: str) -> str:
-        raw = raw.strip()
-        match = re.search(r"(?:twitch\.tv/)([A-Za-z0-9_]+)", raw)
-        if match:
-            return match.group(1).lower()
-        return re.sub(r"[^A-Za-z0-9_]", "", raw).lower()
-
-    @staticmethod
-    def _sanitize_channel_name(raw: str, platform: str = "twitch") -> str:
-        raw = raw.strip()
-        if platform == "youtube":
-            match = re.search(r"youtube\.com/channel/(UC[\w-]{22})", raw, re.IGNORECASE)
-            if match:
-                return match.group(1)
-            match = re.search(r"[?&]v=([A-Za-z0-9_-]{11})", raw)
-            if match:
-                return "v:" + match.group(1)
-            match = re.search(
-                r"(?:youtube\.com/)?(@[A-Za-z0-9][A-Za-z0-9_.-]{2,29})",
-                raw,
-                re.IGNORECASE,
-            )
-            if match:
-                return match.group(1).lower()
-            clean = re.sub(r"[^A-Za-z0-9_-]", "", raw)
-            if re.match(r"^UC[\w-]{22}$", clean, re.IGNORECASE):
-                return clean
-            if re.match(r"^[A-Za-z0-9][A-Za-z0-9_.-]{2,29}$", clean):
-                return "@" + clean.lower()
-            return ""
-        if platform == "kick":
-            match = re.search(r"(?:kick\.com/)([A-Za-z0-9_-]+)", raw, re.IGNORECASE)
-            if match:
-                return match.group(1).lower()
-            return re.sub(r"[^A-Za-z0-9_-]", "", raw).lower()
-        return TwitchXApi._sanitize_username(raw)
-
-    @staticmethod
     def _parse_scopes(raw: str) -> set[str]:
         return {part.strip() for part in raw.split() if part.strip()}
-
-    @staticmethod
-    def _normalize_twitch_search_result(result: dict[str, Any]) -> dict[str, Any]:
-        return {
-            "login": result.get(
-                "broadcaster_login", result.get("display_name", "")
-            ).lower(),
-            "display_name": result.get("display_name", ""),
-            "is_live": result.get("is_live", False),
-            "game_name": result.get("game_name", ""),
-            "platform": "twitch",
-        }
-
-    @staticmethod
-    def _normalize_kick_search_result(result: dict[str, Any]) -> dict[str, Any]:
-        slug = result.get("slug", result.get("channel", {}).get("slug", "")).lower()
-        return {
-            "login": slug,
-            "display_name": result.get(
-                "username", result.get("user", {}).get("username", slug)
-            ),
-            "is_live": result.get("is_live", False),
-            "game_name": result.get("category", {}).get("name", "")
-            if isinstance(result.get("category"), dict)
-            else "",
-            "platform": "kick",
-        }
-
-    @staticmethod
-    def _normalize_youtube_search_result(result: dict[str, Any]) -> dict[str, Any]:
-        return {
-            "login": result.get("login", ""),
-            "display_name": result.get("display_name", ""),
-            "is_live": result.get("is_live", False),
-            "game_name": "",
-            "platform": "youtube",
-        }
-
-    @staticmethod
-    def _build_youtube_stream_item(stream: dict[str, Any]) -> dict[str, Any]:
-        return {
-            "login": stream.get("login", ""),
-            "display_name": stream.get("display_name", ""),
-            "title": stream.get("title", ""),
-            "game": stream.get("game", ""),
-            "viewers": stream.get("viewers", 0),
-            "started_at": stream.get("started_at", ""),
-            "thumbnail_url": stream.get("thumbnail_url", ""),
-            "viewer_trend": None,
-            "platform": "youtube",
-            "video_id": stream.get("video_id", ""),
-            "channel_id": stream.get("channel_id", ""),
-        }
-
-    @staticmethod
-    def _build_kick_stream_item(stream: dict[str, Any]) -> dict[str, Any]:
-        slug = (
-            stream.get("slug", "") or stream.get("channel", {}).get("slug", "")
-        ).lower()
-        channel_info = (
-            stream.get("channel", {}) if isinstance(stream.get("channel"), dict) else {}
-        )
-        category = stream.get("category", {})
-        categories = stream.get("categories", [])
-        stream_meta = (
-            stream.get("stream", {}) if isinstance(stream.get("stream"), dict) else {}
-        )
-
-        game_name = ""
-        if isinstance(category, dict):
-            game_name = category.get("name", "")
-        if not game_name and isinstance(categories, list) and categories:
-            first_category = categories[0]
-            if isinstance(first_category, dict):
-                game_name = first_category.get("name", "")
-
-        thumbnail = stream.get("thumbnail")
-        if isinstance(thumbnail, dict):
-            thumbnail_url = thumbnail.get("url", "")
-        elif isinstance(thumbnail, str):
-            thumbnail_url = thumbnail
-        else:
-            thumbnail_url = stream.get("thumbnail_url", "") or stream_meta.get(
-                "thumbnail", ""
-            )
-
-        display_name = (
-            channel_info.get("username")
-            or channel_info.get("slug")
-            or stream.get("user_name")
-            or slug
-        )
-
-        return {
-            "login": slug,
-            "display_name": display_name,
-            "title": stream.get("stream_title")
-            or stream.get("session_title")
-            or stream.get("title", ""),
-            "game": game_name,
-            "viewers": stream.get("viewer_count") or stream.get("viewers") or 0,
-            "started_at": stream.get("start_time")
-            or stream.get("created_at")
-            or stream.get("started_at", ""),
-            "thumbnail_url": thumbnail_url,
-            "viewer_trend": None,
-            "platform": "kick",
-            "broadcaster_user_id": stream.get("broadcaster_user_id"),
-            "channel_id": stream.get("channel_id"),
-        }
 
     # ─── Lifecycle ───────────────────────────────────────────
 

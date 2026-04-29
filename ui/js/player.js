@@ -1,4 +1,5 @@
-const TwitchX = window.TwitchX || {};
+window.TwitchX = window.TwitchX || {};
+const TwitchX = window.TwitchX;
 
 function showPlayerView() {
   document.getElementById('toolbar').style.display = 'none';

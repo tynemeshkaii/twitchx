@@ -80,6 +80,8 @@ def mock_twitch_client() -> MagicMock:
     client.get_followed_channels = AsyncMock(return_value=["streamer1", "streamer2"])
     client.get_channel_vods = AsyncMock(return_value=[])
     client.get_channel_clips = AsyncMock(return_value=[])
+    client.normalize_search_result = AsyncMock(return_value={"login": "test", "display_name": "Test", "platform": "twitch"})
+    client.normalize_stream_item = AsyncMock(return_value={"login": "test", "display_name": "Test", "platform": "twitch"})
     return client
 
 
@@ -102,6 +104,8 @@ def mock_kick_client() -> MagicMock:
         return_value={"login": "test", "display_name": "Test"}
     )
     client.get_followed_channels = AsyncMock(return_value=[])
+    client.normalize_search_result = AsyncMock(return_value={"login": "test-slug", "display_name": "Test", "platform": "kick"})
+    client.normalize_stream_item = AsyncMock(return_value={"login": "test-slug", "display_name": "Test", "platform": "kick"})
     return client
 
 
@@ -118,6 +122,8 @@ def mock_youtube_client() -> MagicMock:
     client.get_live_streams = AsyncMock(return_value=[])
     client.search_channels = AsyncMock(return_value=[])
     client.get_channel_info = AsyncMock(return_value={})
+    client.normalize_search_result = AsyncMock(return_value={"login": "UCtest", "display_name": "Test", "platform": "youtube"})
+    client.normalize_stream_item = AsyncMock(return_value={"login": "UCtest", "display_name": "Test", "platform": "youtube"})
     return client
 
 

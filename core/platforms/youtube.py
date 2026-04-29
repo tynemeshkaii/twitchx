@@ -804,3 +804,63 @@ class YouTubeClient(BasePlatformClient):
             "playback_type": "youtube_embed",
             "quality": quality,
         }
+
+    # ── Polymorphic helpers ────────────────────────────────────
+
+    @staticmethod
+    def build_stream_url(channel: str) -> str:
+        return f"https://www.youtube.com/watch?v={channel}"
+
+    @staticmethod
+    def sanitize_identifier(raw: str) -> str:
+        """Extract YouTube channel identifier from raw string.
+
+        Handles URLs (channel ID, @handle, video ID) and bare identifiers.
+        """
+        from core.utils import normalize_channel_id
+
+        raw = raw.strip()
+        # Direct channel URL
+        match = re.search(r"youtube\.com/channel/(UC[\w-]{22})", raw, re.IGNORECASE)
+        if match:
+            return match.group(1)
+        # Video URL — we can resolve this later via get_channel_info
+        match = re.search(r"[?&]v=([A-Za-z0-9_-]{11})", raw)
+        if match:
+            return "v:" + match.group(1)
+        # @handle
+        match = re.search(
+            r"(?:youtube\.com/)?(@[A-Za-z0-9][A-Za-z0-9_.-]{2,29})", raw, re.IGNORECASE
+        )
+        if match:
+            return match.group(1).lower()
+        clean = normalize_channel_id(raw)
+        if VALID_CHANNEL_ID.match(clean):
+            return clean
+        if re.match(r"^[A-Za-z0-9][A-Za-z0-9_.-]{2,29}$", clean):
+            return "@" + clean.lower()
+        return ""
+
+    async def normalize_search_result(self, raw: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "login": raw.get("login", ""),
+            "display_name": raw.get("display_name", ""),
+            "is_live": raw.get("is_live", False),
+            "game_name": "",
+            "platform": "youtube",
+        }
+
+    async def normalize_stream_item(self, raw: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "login": raw.get("login", ""),
+            "display_name": raw.get("display_name", ""),
+            "title": raw.get("title", ""),
+            "game": raw.get("game", ""),
+            "viewers": raw.get("viewers", 0),
+            "started_at": raw.get("started_at", ""),
+            "thumbnail_url": raw.get("thumbnail_url", ""),
+            "viewer_trend": None,
+            "platform": "youtube",
+            "video_id": raw.get("video_id", ""),
+            "channel_id": raw.get("channel_id", ""),
+        }

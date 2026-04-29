@@ -4,12 +4,15 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
+from core.constants import DEFAULT_IINA_PATH
 from core.stream_resolver import resolve_hls_url
 
-QUALITIES = ["best", "1080p60", "720p60", "480p", "360p", "audio_only"]
+if TYPE_CHECKING:
+    from core.platform import PlatformClient
 
-DEFAULT_IINA_PATH = "/Applications/IINA.app/Contents/MacOS/iina-cli"
+QUALITIES = ["best", "1080p60", "720p60", "480p", "360p", "audio_only"]
 
 
 @dataclass
@@ -38,7 +41,7 @@ def launch_stream(
     quality: str,
     streamlink_path: str = "streamlink",
     iina_path: str = DEFAULT_IINA_PATH,
-    platform: str = "twitch",
+    platform_client: PlatformClient | None = None,
 ) -> LaunchResult:
     sl_err = check_streamlink(streamlink_path)
     if sl_err:
@@ -48,7 +51,7 @@ def launch_stream(
         return LaunchResult(success=False, message=iina_err)
 
     # Resolve the direct HLS URL via stream_resolver (shared with native player)
-    hls_url, err = resolve_hls_url(channel, quality, streamlink_path, platform=platform)
+    hls_url, err = resolve_hls_url(channel, quality, streamlink_path, platform_client)
 
     if not hls_url:
         return LaunchResult(

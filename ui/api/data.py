@@ -447,11 +447,12 @@ class DataComponent(BaseApiComponent):
                 }
             )
 
+        loop = asyncio.get_event_loop()
         for s in kick_streams:
-            stream_items.append(self._api._build_kick_stream_item(s))
+            stream_items.append(loop.run_until_complete(self._kick.normalize_stream_item(s)))
 
         for s in youtube_streams:
-            stream_items.append(self._api._build_youtube_stream_item(s))
+            stream_items.append(loop.run_until_complete(self._youtube.normalize_stream_item(s)))
 
         self._live_streams = stream_items
 
@@ -459,14 +460,15 @@ class DataComponent(BaseApiComponent):
         now = datetime.now().strftime("%H:%M:%S")
         total = sum(item.get("viewers", 0) for item in stream_items)
 
-        favorites_meta = {
-            f"{f.get('platform', 'twitch')}:{f['login']}": {
-                "display_name": f.get("display_name", f["login"]),
-                "platform": f.get("platform", "twitch"),
-                "login": f["login"],
-            }
-            for f in get_favorites(self._config)
-        }
+        favorites_meta = {}
+        for f in get_favorites(self._config):
+            login = f["login"]
+            if login not in favorites_meta:
+                favorites_meta[login] = {
+                    "display_name": f.get("display_name", login),
+                    "platform": f.get("platform", "twitch"),
+                    "login": login,
+                }
 
         data = json.dumps(
             {

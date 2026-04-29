@@ -1,4 +1,5 @@
-const TwitchX = window.TwitchX || {};
+window.TwitchX = window.TwitchX || {};
+const TwitchX = window.TwitchX;
 
 // Capture-phase listener intercepts keydowns during shortcut rebinding
 document.addEventListener('keydown', function(e) {

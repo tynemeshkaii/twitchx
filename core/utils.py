@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import tkinter as tk
-from typing import Any
+import re
 
-from ui.theme import ACCENT, BG_ELEVATED, FONT_SYSTEM, TEXT_PRIMARY
+_YT_ID_RE = re.compile(r"^UC[\w-]{22}$", re.IGNORECASE)
 
 
 def format_viewers(count: int) -> str:
@@ -14,58 +13,63 @@ def format_viewers(count: int) -> str:
     return str(count)
 
 
-class Tooltip:
-    """Lightweight hover tooltip using an undecorated Toplevel."""
+def normalize_channel_id(raw: str) -> str:
+    """Sanitize a potential YouTube channel identifier.
 
-    def __init__(
-        self,
-        widget: Any,
-        text: str,
-        delay: int = 600,
-        wraplength: int = 320,
-    ) -> None:
-        self._widget = widget
-        self._text = text
-        self._delay = delay
-        self._wraplength = wraplength
-        self._tip: tk.Toplevel | None = None
-        self._after_id: str | None = None
-        widget.bind("<Enter>", self._on_enter, add="+")
-        widget.bind("<Leave>", self._on_leave, add="+")
+    Preserves case for UC IDs (they are case-sensitive) and strips
+    characters that cannot appear in a valid channel ID or handle.
+    """
+    return re.sub(r"[^A-Za-z0-9_-]", "", raw.strip())
 
-    def _on_enter(self, event: tk.Event) -> None:  # type: ignore[type-arg]
-        self._after_id = self._widget.after(self._delay, self._show)
 
-    def _on_leave(self, event: tk.Event) -> None:  # type: ignore[type-arg]
-        if self._after_id:
-            self._widget.after_cancel(self._after_id)
-            self._after_id = None
-        self._hide()
+def sanitize_twitch_login(raw: str) -> str:
+    """Extract Twitch login from raw string."""
+    raw = raw.strip()
+    match = re.search(r"twitch\.tv/([a-zA-Z0-9_]+)", raw)
+    if match:
+        return match.group(1).lower()
+    return re.sub(r"[^a-zA-Z0-9_]", "", raw).lower()
 
-    def _show(self) -> None:
-        self._after_id = None
-        self._hide()
-        x = self._widget.winfo_rootx() + 10
-        y = self._widget.winfo_rooty() + self._widget.winfo_height() + 4
-        tip = tk.Toplevel(self._widget)
-        tip.overrideredirect(True)
-        tip.geometry(f"+{x}+{y}")
-        tip.configure(bg=ACCENT)
-        label = tk.Label(
-            tip,
-            text=self._text,
-            bg=BG_ELEVATED,
-            fg=TEXT_PRIMARY,
-            font=(FONT_SYSTEM, 11),
-            wraplength=self._wraplength,
-            justify="left",
-            padx=6,
-            pady=6,
-        )
-        label.pack(padx=1, pady=1)
-        self._tip = tip
 
-    def _hide(self) -> None:
-        if self._tip:
-            self._tip.destroy()
-            self._tip = None
+def sanitize_kick_slug(raw: str) -> str:
+    """Extract Kick slug from raw string."""
+    raw = raw.strip()
+    match = re.search(r"kick\.com/([a-zA-Z0-9_-]+)", raw, re.IGNORECASE)
+    if match:
+        return match.group(1).lower()
+    return re.sub(r"[^a-zA-Z0-9_-]", "", raw).lower()
+
+
+def sanitize_youtube_id(raw: str) -> str:
+    """Sanitize a YouTube channel identifier."""
+    return normalize_channel_id(raw)
+
+
+def sanitize_youtube_login(raw: str) -> str:
+    """Extract YouTube channel identifier preserving @handle and v: prefixes.
+
+    Mirrors YouTubeClient.sanitize_identifier without importing the client.
+    """
+    raw = raw.strip()
+    # Already a v: prefixed video ID
+    if raw.startswith("v:"):
+        vid = raw[2:]
+        if re.match(r"^[A-Za-z0-9_-]{11}$", vid):
+            return raw
+    match = re.search(r"youtube\.com/channel/(UC[\w-]{22})", raw, re.IGNORECASE)
+    if match:
+        return match.group(1)
+    match = re.search(r"[?&]v=([A-Za-z0-9_-]{11})", raw)
+    if match:
+        return "v:" + match.group(1)
+    match = re.search(
+        r"(?:youtube\.com/)?(@[A-Za-z0-9][A-Za-z0-9_.-]{2,29})", raw, re.IGNORECASE
+    )
+    if match:
+        return match.group(1).lower()
+    clean = normalize_channel_id(raw)
+    if _YT_ID_RE.match(clean):
+        return clean
+    if re.match(r"^[A-Za-z0-9][A-Za-z0-9_.-]{2,29}$", clean):
+        return "@" + clean.lower()
+    return ""

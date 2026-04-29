@@ -441,3 +441,47 @@ class TwitchClient(BasePlatformClient):
             for item in items
             if item.get("id") and item.get("url")
         ]
+
+    # ── Polymorphic helpers ────────────────────────────────────
+
+    @staticmethod
+    def build_stream_url(channel: str) -> str:
+        return f"https://twitch.tv/{channel}"
+
+    @staticmethod
+    def sanitize_identifier(raw: str) -> str:
+        """Extract Twitch login from raw string.
+        Handles: 'https://twitch.tv/foo' → 'foo', '@foo' → 'foo', 'foo' → 'foo'."""
+        raw = raw.strip().lower()
+        match = re.search(r"twitch\.tv/([a-zA-Z0-9_]+)", raw)
+        if match:
+            return match.group(1)
+        return raw.lstrip("@")
+
+    async def normalize_search_result(self, raw: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "login": raw.get("broadcaster_login", raw.get("display_name", "")).lower(),
+            "display_name": raw.get("display_name", ""),
+            "is_live": raw.get("is_live", False),
+            "game_name": raw.get("game_name", ""),
+            "platform": "twitch",
+        }
+
+    async def normalize_stream_item(self, raw: dict[str, Any]) -> dict[str, Any]:
+        login = raw.get("user_login", "").lower()
+        thumb_url = (
+            raw.get("thumbnail_url", "")
+            .replace("{width}", "880")
+            .replace("{height}", "496")
+        )
+        return {
+            "login": login,
+            "display_name": raw.get("user_name", login),
+            "title": raw.get("title", ""),
+            "game": raw.get("game_name", ""),
+            "viewers": raw.get("viewer_count", 0),
+            "started_at": raw.get("started_at", ""),
+            "thumbnail_url": thumb_url,
+            "viewer_trend": None,
+            "platform": "twitch",
+        }

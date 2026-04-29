@@ -154,8 +154,12 @@ def test_search_channels_all_combines_kick_and_twitch_results(
     }
 
 
-def test_build_kick_stream_item_maps_current_public_payload() -> None:
-    item = TwitchXApi._build_kick_stream_item(
+@pytest.mark.asyncio
+async def test_build_kick_stream_item_maps_current_public_payload() -> None:
+    from core.platforms.kick import KickClient
+
+    client = KickClient()
+    item = await client.normalize_stream_item(
         {
             "slug": "vitaly",
             "stream_title": "CATCHING CHILD PREDATORS!",
@@ -270,11 +274,11 @@ def test_watch_uses_kick_platform_for_kick_stream(
         channel: str,
         quality: str,
         streamlink_path: str = "streamlink",
-        platform: str = "twitch",
+        platform_client=None,
     ) -> tuple[str | None, str]:
         captured["channel"] = channel
         captured["quality"] = quality
-        captured["platform"] = platform
+        captured["platform"] = platform_client.PLATFORM_ID if platform_client else ""
         return ("https://example.com/kick.m3u8", "")
 
     monkeypatch.setattr("ui.api.streams.resolve_hls_url", fake_resolve)
@@ -315,11 +319,11 @@ def test_watch_external_uses_kick_platform_for_kick_stream(
         quality: str,
         streamlink_path: str = "streamlink",
         iina_path: str = "",
-        platform: str = "twitch",
+        platform_client=None,
     ) -> Result:
         captured["channel"] = channel
         captured["quality"] = quality
-        captured["platform"] = platform
+        captured["platform"] = platform_client.PLATFORM_ID if platform_client else ""
         return Result()
 
     monkeypatch.setattr("ui.api.streams.launch_stream", fake_launch)
@@ -937,7 +941,7 @@ class TestAddMultiSlot:
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
         monkeypatch.setattr(
             "ui.api.streams.resolve_hls_url",
-            lambda ch, q, sl, platform: ("https://hls.example.com/s.m3u8", ""),
+            lambda ch, q, sl, platform_client: ("https://hls.example.com/s.m3u8", ""),
         )
 
         api.add_multi_slot(0, "xqc", "twitch", "best")
@@ -960,7 +964,7 @@ class TestAddMultiSlot:
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
         monkeypatch.setattr(
             "ui.api.streams.resolve_hls_url",
-            lambda ch, q, sl, platform: (None, "streamlink not found"),
+            lambda ch, q, sl, platform_client: (None, "streamlink not found"),
         )
 
         api.add_multi_slot(2, "ninja", "twitch", "720p")
@@ -1007,7 +1011,7 @@ class TestAddMultiSlot:
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
         monkeypatch.setattr(
             "ui.api.streams.resolve_hls_url",
-            lambda ch, q, sl, platform: ("https://hls.example.com/s.m3u8", ""),
+            lambda ch, q, sl, platform_client: ("https://hls.example.com/s.m3u8", ""),
         )
 
         api.add_multi_slot(0, "xqc", "twitch", "best")
@@ -1024,8 +1028,8 @@ class TestAddMultiSlot:
         monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
 
-        def fake_resolve(ch: str, q: str, sl: str, platform: str) -> tuple[str, str]:
-            captured["platform"] = platform
+        def fake_resolve(ch: str, q: str, sl: str, platform_client=None) -> tuple[str, str]:
+            captured["platform"] = platform_client.PLATFORM_ID if platform_client else ""
             return "https://hls.example.com/s.m3u8", ""
 
         monkeypatch.setattr("ui.api.streams.resolve_hls_url", fake_resolve)

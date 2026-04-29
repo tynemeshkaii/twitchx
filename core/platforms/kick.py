@@ -460,3 +460,89 @@ class KickClient(BasePlatformClient):
                 }
             )
         return results
+
+    # ── Polymorphic helpers ────────────────────────────────────
+
+    @staticmethod
+    def build_stream_url(channel: str) -> str:
+        return f"https://kick.com/{channel}"
+
+    @staticmethod
+    def sanitize_identifier(raw: str) -> str:
+        """Extract Kick slug from raw string.
+        Handles: 'https://kick.com/foo-bar' → 'foo-bar', 'foo-bar' → 'foo-bar'."""
+        raw = raw.strip()
+        match = re.search(r"kick\.com/([a-zA-Z0-9_-]+)", raw, re.IGNORECASE)
+        if match:
+            return match.group(1).lower()
+        return re.sub(r"[^a-zA-Z0-9_-]", "", raw).lower()
+
+    async def normalize_search_result(self, raw: dict[str, Any]) -> dict[str, Any]:
+        slug = raw.get("slug", raw.get("channel", {}).get("slug", "")).lower()
+        return {
+            "login": slug,
+            "display_name": raw.get(
+                "username", raw.get("user", {}).get("username", slug)
+            ),
+            "is_live": raw.get("is_live", False),
+            "game_name": raw.get("category", {}).get("name", "")
+            if isinstance(raw.get("category"), dict)
+            else "",
+            "platform": "kick",
+        }
+
+    async def normalize_stream_item(self, raw: dict[str, Any]) -> dict[str, Any]:
+        slug = (
+            raw.get("slug", "") or raw.get("channel", {}).get("slug", "")
+        ).lower()
+        channel_info = (
+            raw.get("channel", {}) if isinstance(raw.get("channel"), dict) else {}
+        )
+        category = raw.get("category", {})
+        categories = raw.get("categories", [])
+        stream_meta = (
+            raw.get("stream", {}) if isinstance(raw.get("stream"), dict) else {}
+        )
+
+        game_name = ""
+        if isinstance(category, dict):
+            game_name = category.get("name", "")
+        if not game_name and isinstance(categories, list) and categories:
+            first_category = categories[0]
+            if isinstance(first_category, dict):
+                game_name = first_category.get("name", "")
+
+        thumbnail = raw.get("thumbnail")
+        if isinstance(thumbnail, dict):
+            thumbnail_url = thumbnail.get("url", "")
+        elif isinstance(thumbnail, str):
+            thumbnail_url = thumbnail
+        else:
+            thumbnail_url = raw.get("thumbnail_url", "") or stream_meta.get(
+                "thumbnail", ""
+            )
+
+        display_name = (
+            channel_info.get("username")
+            or channel_info.get("slug")
+            or raw.get("user_name")
+            or slug
+        )
+
+        return {
+            "login": slug,
+            "display_name": display_name,
+            "title": raw.get("stream_title")
+            or raw.get("session_title")
+            or raw.get("title", ""),
+            "game": game_name,
+            "viewers": raw.get("viewer_count") or raw.get("viewers") or 0,
+            "started_at": raw.get("start_time")
+            or raw.get("created_at")
+            or raw.get("started_at", ""),
+            "thumbnail_url": thumbnail_url,
+            "viewer_trend": None,
+            "platform": "kick",
+            "broadcaster_user_id": raw.get("broadcaster_user_id"),
+            "channel_id": raw.get("channel_id"),
+        }

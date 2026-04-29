@@ -1,4 +1,5 @@
-const TwitchX = window.TwitchX || {};
+window.TwitchX = window.TwitchX || {};
+const TwitchX = window.TwitchX;
 
 function setChatReply(id, display, body) {
   TwitchX.chatReplyTo = { id: id, display: display, body: body };

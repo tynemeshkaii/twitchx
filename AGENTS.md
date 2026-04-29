@@ -144,6 +144,91 @@ All dynamic content uses `document.createElement()` + `textContent` — no `inne
 ### Config idempotency
 `pywebview` `get_full_config_for_settings()` is synchronous (JS calls, gets immediate return). For async ops, always use callback pattern.
 
+## 2026-04-29 — Phase 4: polymorphic platform strategy + constants consolidation
+
+Replaced platform-branching `if/elif` chains with polymorphic `PlatformClient` methods; consolidated constants; removed dead code; migrated favorites logic into `storage.py`.
+
+### `core/constants.py` (new)
+Consolidated shared constants previously scattered across modules:
+- `IINA_PATH` — fallback media player executable
+- `BROWSE_CACHE_TTL_SECONDS` (600), `BROWSE_CACHE_FILE`
+- `OAUTH_REDIRECT_PORT` (3457), `OAUTH_TIMEOUT_SECONDS` (120)
+- `AVATAR_SIZE`, `THUMBNAIL_SIZE`
+- `RECONNECT_DELAYS` — chat exponential backoff
+
+### Polymorphic `PlatformClient` methods (`core/platform.py`)
+Added to `PlatformClient` ABC and implemented in all three subclasses:
+
+| Method | Twitch | Kick | YouTube |
+|--------|--------|------|---------|
+| `sanitize_identifier(raw)` | `sanitize_twitch_login` | `sanitize_kick_slug` | preserves `UC…` case, `@handle`, `v:` prefix |
+| `normalize_search_result(raw)` | maps Twitch Helix shape | maps Typesense shape | maps YouTube search shape |
+| `normalize_stream_item(raw)` | maps `search_channels`/`followed` item | maps browse/top stream item | maps browse/top stream item |
+| `build_stream_url(channel, **kwargs)` | `https://twitch.tv/{channel}` | `https://kick.com/{channel}` | `https://youtube.com/channel/{channel}` or `https://youtube.com/watch?v={id}` |
+
+### `core/stream_resolver.py` & `core/launcher.py`
+- `resolve_hls_url(url, platform_client, quality)` — accepts `PlatformClient` instance instead of `platform: str`
+- `launch_stream(url, platform_client, quality, player)` — same; calls `platform_client.build_stream_url(...)` when no direct URL
+
+### Dead code removal
+- Deleted `Tooltip` class and `tkinter` import from `core/utils.py`
+- Deleted `ui/theme.py`
+
+### Favorites migration into `core/storage.py`
+- Moved `_migrate_favorites` from `app.py` → `storage._migrate_favorites_v2`
+- Added `sanitize_twitch_login`, `sanitize_kick_slug`, `sanitize_youtube_login` to `core/utils.py` (pure functions, avoids circular imports)
+- `_migrate_favorites_v2` handles:
+  - v1 string favorites → v2 dict conversion
+  - URL extraction (`twitch.tv/…`, `kick.com/…`, `youtube.com/channel/…`)
+  - YouTube `UC…` case preservation, `@handle` and `v:` prefix preservation
+  - Deduplication with human-readable `display_name` preference for YouTube
+  - Kick slug hyphen preservation
+- Removed static normalizers from `ui/api/__init__.py`: `_sanitize_channel_name`, `_normalize_*_search_result`, `_build_*_stream_item`
+
+### `ui/api/` updates for polymorphism
+- `favorites.py`: uses `client.sanitize_identifier()` and `client.normalize_search_result()`
+- `data.py`: uses `client.normalize_stream_item()` in `_on_data_fetched`
+- `streams.py`: updated `resolve_hls_url()` and `launch_stream()` calls for new signatures
+
+### Post-audit fixes
+- `sanitize_youtube_login("v:dQw4w9WgXcQ")` now correctly returns `"v:dQw4w9WgXcQ"` instead of mangling to `@vdqw4w9wgxcq`
+- `_migrate_favorites_v2` keeps sanitized entry login when merging best display name, preventing stale `yt_best` entries from overwriting a freshly-sanitized `v:` or `@handle` login
+
+---
+
+## 2026-04-29 — pywebview 6.x + WKWebView loading fixes
+
+### Problem
+pywebview 6.x injects its bridge code (`pywebview.state`, `pywebview.api`, `finish.js`) via `evaluateJavaScript` during HTML parsing. When using `html=` (inline HTML) with **multiple** inline `<script>` blocks, WKWebView silently drops all blocks **after** the pywebview injection point. This caused:
+- `TwitchX.api` never being set (`api-bridge.js` handler ran after injection)
+- All `TwitchX.*` methods missing (utils.js, render.js, etc. never executed)
+- Entire UI non-functional (buttons, settings, browse — nothing worked)
+
+### Solution
+`app.py` now uses `_inline_resources()` to:
+1. **Inline CSS** — replace `<link rel="stylesheet" href="...">` with `<style>content</style>`
+2. **Merge all JS modules into a single `<script>` block** — replace all `<script src="..."></script>` tags with one merged inline script. This prevents pywebview from interleaving injection between script blocks.
+3. **Remove duplicate `window.TwitchX` bootstrap** — only `state.js` declares `window.TwitchX = window.TwitchX || {}; const TwitchX = window.TwitchX;`, subsequent modules skip the redeclaration.
+
+### `const TwitchX` → `window.TwitchX` fix
+All `ui/js/*.js` files now use:
+```javascript
+window.TwitchX = window.TwitchX || {};
+const TwitchX = window.TwitchX;
+```
+instead of `const TwitchX = window.TwitchX || {};` which threw `SyntaxError` when modules were merged into one lexical scope.
+
+### `favorites_meta` bare-login keys
+`ui/api/data.py` now builds `favorites_meta` with bare `login` keys (not `"platform:login"` compound keys), matching what JS expects when looking up platform info for sidebar avatars and context menus.
+
+### Multistream quality lookup
+`ui/js/multistream.js` reads `(cfg && cfg.quality) || 'best'` instead of `cfg.settings.quality`.
+
+### Multiplatform `get_config()`
+`ui/api/__init__.py` `get_config()` now:
+- Returns favorites from **all** platforms (Twitch + Kick + YouTube)
+- Sets `has_credentials = True` if **any** platform has credentials
+
 ## Testing
 
 Run all: `make test` or `uv run pytest tests/ -v`. Run a single file: `uv run pytest tests/test_app.py -v`.

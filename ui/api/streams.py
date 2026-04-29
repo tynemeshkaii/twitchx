@@ -4,6 +4,7 @@ import json
 import threading
 from typing import Any
 
+from core.constants import DEFAULT_IINA_PATH
 from core.launcher import launch_stream
 from core.storage import get_settings, load_config, update_config
 from core.stream_resolver import resolve_hls_url
@@ -73,7 +74,7 @@ class StreamsComponent(BaseApiComponent):
                     video_id,
                     quality,
                     settings.get("streamlink_path", "streamlink"),
-                    platform="youtube",
+                    platform_client=self._youtube,
                 )
                 self._cancel_launch_timer()
                 self._api._launch_channel = None
@@ -119,11 +120,12 @@ class StreamsComponent(BaseApiComponent):
 
         def do_resolve() -> None:
             settings = get_settings(self._config)
+            platform_client = self._get_platform(platform)
             hls_url, err = resolve_hls_url(
                 channel,
                 quality,
                 settings.get("streamlink_path", "streamlink"),
-                platform=platform,
+                platform_client=platform_client,
             )
             self._cancel_launch_timer()
             self._api._launch_channel = None
@@ -196,11 +198,12 @@ class StreamsComponent(BaseApiComponent):
 
         def do_resolve() -> None:
             settings = get_settings(self._config)
+            platform_client = self._get_platform(platform)
             hls_url, err = resolve_hls_url(
                 channel,
                 quality,
                 settings.get("streamlink_path", "streamlink"),
-                platform=platform,
+                platform_client=platform_client,
             )
             self._cancel_launch_timer()
             self._api._launch_channel = None
@@ -252,14 +255,13 @@ class StreamsComponent(BaseApiComponent):
                 if platform == "youtube" and stream
                 else channel
             )
+            platform_client = self._get_platform(platform)
             result = launch_stream(
                 stream_channel,
                 quality,
                 settings.get("streamlink_path", "streamlink"),
-                settings.get(
-                    "iina_path", "/Applications/IINA.app/Contents/MacOS/iina-cli"
-                ),
-                platform=platform,
+                settings.get("iina_path", DEFAULT_IINA_PATH),
+                platform_client=platform_client,
             )
             r = json.dumps(
                 {
@@ -299,11 +301,12 @@ class StreamsComponent(BaseApiComponent):
 
         def do_resolve() -> None:
             settings = get_settings(self._config)
+            platform_client = self._get_platform(platform)
             hls_url, err = resolve_hls_url(
-                url,
+                channel,
                 quality,
                 settings.get("streamlink_path", "streamlink"),
-                platform=platform,
+                platform_client=platform_client,
             )
             self._cancel_launch_timer()
             self._api._launch_channel = None
@@ -382,11 +385,12 @@ class StreamsComponent(BaseApiComponent):
             cfg = load_config()
             settings = get_settings(cfg)
             resolve_channel = youtube_video_id if youtube_video_id else channel
+            platform_client = self._get_platform(platform)
             hls_url, err = resolve_hls_url(
                 resolve_channel,
                 quality,
                 settings.get("streamlink_path", "streamlink"),
-                platform=platform,
+                platform_client=platform_client,
             )
             payload: dict[str, Any] = {
                 "slot_idx": slot_idx,

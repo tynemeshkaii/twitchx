@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import threading
 import time
@@ -9,8 +10,17 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-CONFIG_DIR = Path.home() / ".config" / "twitchx"
-CONFIG_FILE = CONFIG_DIR / "config.json"
+from core.constants import (
+    AVATAR_CACHE_TTL_SECONDS,
+    BROWSE_CACHE_TTL_SECONDS,
+    CONFIG_DIR_NAME,
+    CONFIG_FILE_NAME,
+    DEFAULT_IINA_PATH,
+)
+from core.utils import sanitize_kick_slug, sanitize_twitch_login, sanitize_youtube_login
+
+CONFIG_DIR = Path.home() / ".config" / CONFIG_DIR_NAME
+CONFIG_FILE = CONFIG_DIR / CONFIG_FILE_NAME
 
 _OLD_CONFIG_DIR = Path.home() / ".config" / "streamdeck"
 
@@ -64,7 +74,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "refresh_interval": 60,
     "youtube_refresh_interval": 300,
     "streamlink_path": "streamlink",
-    "iina_path": "/Applications/IINA.app/Contents/MacOS/iina-cli",
+    "iina_path": DEFAULT_IINA_PATH,
     "notifications_enabled": True,
     "player_height": 360,
     "chat_visible": True,
@@ -189,6 +199,119 @@ def _migrate_old_config() -> None:
             shutil.copytree(old_avatars, new_avatars)
 
 
+def _migrate_favorites_v2(cfg: dict[str, Any]) -> bool:
+    """Normalize and deduplicate favorites. Idempotent.
+
+    - Restores mangled YouTube logins from display_name
+    - Deduplicates YouTube channels preferring human-readable display_name
+    - Converts v1 string favorites to v2 dict objects
+
+    Mutates cfg in-place and returns whether any changes were made.
+    """
+    raw = cfg.get("favorites", [])
+    changed = False
+
+    # Regex for a valid YouTube channel ID (UC + 22 word/hyphen chars)
+    _yt_id_re = re.compile(r"^UC[\w-]{22}$", re.IGNORECASE)
+
+    # ── Phase 1: restore YouTube logins that were mangled on entry ────────
+    pre: list[Any] = []
+    for entry in raw:
+        if isinstance(entry, dict) and entry.get("platform") == "youtube":
+            login: str = entry.get("login", "")
+            disp: str = entry.get("display_name", "")
+            if login and disp and login != disp and (
+                login.lower() == disp.lower()
+                or (_yt_id_re.match(disp) and not _yt_id_re.match(login))
+            ):
+                entry = {**entry, "login": disp}
+                changed = True
+        pre.append(entry)
+
+    # ── Phase 2: for each YouTube channel, pick the entry with the best
+    # display_name (a real human name beats a raw channel ID).
+    yt_best: dict[str, dict[str, Any]] = {}
+    for entry in pre:
+        if not isinstance(entry, dict) or entry.get("platform") != "youtube":
+            continue
+        login = entry.get("login", "")
+        if not login:
+            continue
+        k = login.lower()
+        existing = yt_best.get(k)
+        if existing is None:
+            yt_best[k] = entry
+        elif _yt_id_re.match(
+            existing.get("display_name", "")
+        ) and not _yt_id_re.match(entry.get("display_name", "")):
+            yt_best[k] = entry
+            changed = True
+
+    # ── Phase 3: standard dedup + legacy string → dict conversion ────────
+    cleaned: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+
+    for entry in pre:
+        if isinstance(entry, str):
+            name = sanitize_twitch_login(entry)
+            if not name:
+                changed = True
+                continue
+            key: tuple[str, str] = ("twitch", name)
+            if key in seen:
+                changed = True
+                continue
+            seen.add(key)
+            cleaned.append(
+                {"platform": "twitch", "login": name, "display_name": name}
+            )
+            changed = True
+
+        elif isinstance(entry, dict):
+            login = entry.get("login", "")
+            platform: str = entry.get("platform", "twitch")
+            if platform == "youtube":
+                name = sanitize_youtube_login(login) if login else ""
+            elif platform == "kick":
+                name = sanitize_kick_slug(login) if login else ""
+            else:
+                name = sanitize_twitch_login(login) if login else ""
+            if not name:
+                changed = True
+                continue
+            dedup_login = name.lower() if platform == "youtube" else name
+            key = (platform, dedup_login)
+            if key in seen:
+                changed = True
+                continue
+            seen.add(key)
+
+            if platform == "youtube":
+                if name != login:
+                    entry = {**entry, "login": name}
+                    changed = True
+                best = yt_best.get(name.lower(), entry)
+                if best is not entry:
+                    best_display = best.get("display_name", "")
+                    entry_display = entry.get("display_name", "")
+                    if best_display != entry_display:
+                        entry = {**entry, "display_name": best_display}
+                        changed = True
+                cleaned.append(entry)
+            else:
+                if name != login:
+                    entry = {**entry, "login": name}
+                    changed = True
+                cleaned.append(entry)
+
+        else:
+            changed = True
+
+    if changed:
+        cfg["favorites"] = cleaned
+    return changed
+
+
 def load_config() -> dict[str, Any]:
     _migrate_old_config()
     if not CONFIG_FILE.exists():
@@ -203,7 +326,10 @@ def load_config() -> dict[str, Any]:
         stored = _migrate_v1_to_v2(stored)
         save_config(stored)
 
+    favorites_changed = _migrate_favorites_v2(stored)
     merged = _deep_merge(DEFAULT_CONFIG, stored)
+    if favorites_changed:
+        save_config(merged)
     return merged
 
 
@@ -269,7 +395,6 @@ def get_favorite_logins(config: dict[str, Any], platform: str) -> list[str]:
 # ── Avatar disk cache ────────────────────────────────────────
 
 AVATAR_DIR = CONFIG_DIR / "avatars"
-_AVATAR_MAX_AGE = 7 * 24 * 3600  # 7 days
 
 
 def get_cached_avatar(login: str, platform: str = "twitch") -> bytes | None:
@@ -277,7 +402,7 @@ def get_cached_avatar(login: str, platform: str = "twitch") -> bytes | None:
     path = AVATAR_DIR / platform / f"{login}.png"
     if not path.exists():
         return None
-    if time.time() - path.stat().st_mtime > _AVATAR_MAX_AGE:
+    if time.time() - path.stat().st_mtime > AVATAR_CACHE_TTL_SECONDS:
         return None
     return path.read_bytes()
 
@@ -291,7 +416,6 @@ def save_avatar(login: str, data: bytes, platform: str = "twitch") -> None:
 
 # ── Browse cache ──────────────────────────────────────────────
 
-BROWSE_CACHE_TTL = 600  # 10 minutes
 
 
 def load_browse_cache() -> dict[str, Any]:
@@ -313,7 +437,7 @@ def save_browse_cache(data: dict[str, Any]) -> None:
 
 
 def is_browse_slot_fresh(
-    cache: dict[str, Any], slot_key: str, ttl: int = BROWSE_CACHE_TTL
+    cache: dict[str, Any], slot_key: str, ttl: int = BROWSE_CACHE_TTL_SECONDS
 ) -> bool:
     """Return True if the named cache slot exists and is within ttl seconds old."""
     return time.time() - cache.get(slot_key, {}).get("fetched_at", 0) < ttl

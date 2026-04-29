@@ -133,3 +133,28 @@ class PlatformClient(ABC):
     async def get_channel_clips(self, identifier: str, limit: int = 12) -> list[dict[str, Any]]:
         """Optional: return recent clips for a channel."""
         return []
+
+    # ── Polymorphic platform helpers ───────────────────────────
+
+    @staticmethod
+    @abstractmethod
+    def build_stream_url(channel: str) -> str:
+        """Build a platform-specific URL for streamlink."""
+        ...
+
+    @staticmethod
+    @abstractmethod
+    def sanitize_identifier(raw: str) -> str:
+        """Extract platform-specific channel identifier from raw input
+        (URL, handle, etc.) — e.g. 'https://twitch.tv/foo' → 'foo'."""
+        ...
+
+    @abstractmethod
+    async def normalize_search_result(self, raw: dict[str, Any]) -> dict[str, Any]:
+        """Convert a platform-specific search result to unified format."""
+        ...
+
+    @abstractmethod
+    async def normalize_stream_item(self, raw: dict[str, Any]) -> dict[str, Any]:
+        """Convert a platform-specific live stream dict to unified UI format."""
+        ...

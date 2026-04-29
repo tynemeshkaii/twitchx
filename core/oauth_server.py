@@ -4,6 +4,8 @@ import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
 
+from core.constants import OAUTH_PORT, OAUTH_TIMEOUT_SECONDS
+
 _RESPONSE_HTML = """\
 <!DOCTYPE html>
 <html>
@@ -34,10 +36,10 @@ h1 { color: #FF6B6B; }
 <h1>&#x2717; Authentication failed</h1>
 <p>Please try again from TwitchX.</p>
 </div></body></html>
-"""
+ """
 
 
-def wait_for_oauth_code(port: int = 3457, timeout: int = 120) -> str | None:
+def wait_for_oauth_code(port: int = OAUTH_PORT, timeout: int = OAUTH_TIMEOUT_SECONDS) -> str | None:
     """Start a temporary HTTP server and wait for Twitch OAuth callback.
 
     Returns the authorization code, or None on timeout.

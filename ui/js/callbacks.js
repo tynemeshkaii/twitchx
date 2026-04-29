@@ -1,4 +1,5 @@
-const TwitchX = window.TwitchX || {};
+window.TwitchX = window.TwitchX || {};
+const TwitchX = window.TwitchX;
 
 window.onStreamsUpdate = function(data) {
   TwitchX.state.hasCredentials = data.has_credentials !== false;
