@@ -42,18 +42,38 @@ window.onStreamsUpdate = function(data) {
     liveCount > 0 ? 'success' : 'info'
   );
 
+  // Throttle background image fetching when player is active
+  const playerActive = document.getElementById('player-view').classList.contains('active');
+
   // Request avatars for sidebar
-  for (const fav of TwitchX.state.favorites) {
-    if (!TwitchX.state.avatars[fav]) {
-      const platform = TwitchX.state.favoritesMeta[fav]?.platform || 'twitch';
-      TwitchX.api.get_avatar(fav, platform);
+  if (!playerActive) {
+    for (const fav of TwitchX.state.favorites) {
+      if (!TwitchX.state.avatars[fav]) {
+        const platform = TwitchX.state.favoritesMeta[fav]?.platform || 'twitch';
+        if (TwitchX.api) TwitchX.api.get_avatar(fav, platform);
+      }
+    }
+  } else {
+    // When player is active, only fetch avatars for currently visible sidebar items
+    // via requestIdleCallback to avoid main-thread contention with video compositing
+    if (typeof requestIdleCallback === 'function') {
+      requestIdleCallback(function() {
+        for (const fav of TwitchX.state.favorites) {
+          if (!TwitchX.state.avatars[fav]) {
+            const platform = TwitchX.state.favoritesMeta[fav]?.platform || 'twitch';
+            if (TwitchX.api) TwitchX.api.get_avatar(fav, platform);
+          }
+        }
+      }, { timeout: 2000 });
     }
   }
 
   // Request thumbnails for live streams
-  for (const s of TwitchX.state.streams) {
-    if (!TwitchX.state.thumbnails[s.login] && s.thumbnail_url) {
-      TwitchX.api.get_thumbnail(s.login, s.thumbnail_url);
+  if (!playerActive) {
+    for (const s of TwitchX.state.streams) {
+      if (!TwitchX.state.thumbnails[s.login] && s.thumbnail_url) {
+        TwitchX.api.get_thumbnail(s.login, s.thumbnail_url);
+      }
     }
   }
 
@@ -230,84 +250,124 @@ window.onMultiSlotReady = function(data) {
   if (TwitchX.multiState.chatSlot === -1) TwitchX.switchMultiChat(idx);
 };
 
-window.onChatMessage = function(msg) {
-  const container = TwitchX._getChatMessagesEl();
-  if (!container) return;
-  if (msg.msg_id) {
-    const existing = container.querySelector('.chat-msg[data-msg-id="' + String(msg.msg_id).replace(/"/g, '\\"') + '"]');
-    if (existing) return;
-  }
+/* ── Chat message batching ──────────────────────────────── */
+(function() {
+  let chatBatch = [];
+  let chatBatchTimer = null;
+  const BATCH_MS = 50;
+  const MAX_CHAT_MESSAGES = 150;
 
-  const el = document.createElement('div');
-  let cls = 'chat-msg';
-  if (msg.is_system) cls += ' system';
-  if (msg.is_self) cls += ' self';
-  el.className = cls;
-  if (msg.msg_id) el.dataset.msgId = msg.msg_id;
+  function flushChatBatch() {
+    if (chatBatch.length === 0) return;
+    const msgs = chatBatch;
+    chatBatch = [];
+    const container = TwitchX._getChatMessagesEl();
+    if (!container) return;
 
-  // Reply context line
-  if (msg.reply_to_display && msg.reply_to_body) {
-    const ctx = document.createElement('div');
-    ctx.className = 'chat-reply-ctx';
-    const rNick = document.createElement('span');
-    rNick.className = 'reply-nick';
-    rNick.textContent = '@' + msg.reply_to_display;
-    ctx.appendChild(rNick);
-    ctx.appendChild(document.createTextNode(': ' + msg.reply_to_body));
-    el.appendChild(ctx);
-  }
+    const fragment = document.createDocumentFragment();
+    const isMulti = TwitchX.multiState.open;
+    const maxMsgs = isMulti ? MAX_CHAT_MESSAGES : MAX_CHAT_MESSAGES;
 
-  for (let i = 0; i < msg.badges.length; i++) {
-    const badge = msg.badges[i];
-    if (badge.icon_url) {
-      const img = document.createElement('img');
-      img.className = 'badge';
-      img.src = badge.icon_url;
-      img.alt = badge.name;
-      el.appendChild(img);
+    msgs.forEach(function(msg) {
+      if (msg.msg_id) {
+        const existing = container.querySelector('.chat-msg[data-msg-id="' + String(msg.msg_id).replace(/"/g, '\\"') + '"]');
+        if (existing) return;
+      }
+
+      const el = document.createElement('div');
+      let cls = 'chat-msg';
+      if (msg.is_system) cls += ' system';
+      if (msg.is_self) cls += ' self';
+      el.className = cls;
+      if (msg.msg_id) el.dataset.msgId = msg.msg_id;
+
+      // Reply context line
+      if (msg.reply_to_display && msg.reply_to_body) {
+        const ctx = document.createElement('div');
+        ctx.className = 'chat-reply-ctx';
+        const rNick = document.createElement('span');
+        rNick.className = 'reply-nick';
+        rNick.textContent = '@' + msg.reply_to_display;
+        ctx.appendChild(rNick);
+        ctx.appendChild(document.createTextNode(': ' + msg.reply_to_body));
+        el.appendChild(ctx);
+      }
+
+      for (let i = 0; i < msg.badges.length; i++) {
+        const badge = msg.badges[i];
+        if (badge.icon_url) {
+          const img = document.createElement('img');
+          img.className = 'badge';
+          img.src = badge.icon_url;
+          img.alt = badge.name;
+          el.appendChild(img);
+        }
+      }
+
+      if (!msg.is_system) {
+        const nick = document.createElement('span');
+        nick.className = 'nick';
+        nick.textContent = msg.author_display;
+        if (msg.author_color) nick.style.color = msg.author_color;
+        el.appendChild(nick);
+
+        const sep = document.createElement('span');
+        sep.textContent = ': ';
+        el.appendChild(sep);
+      }
+
+      TwitchX.renderChatEmotes(el, msg.text, msg.emotes);
+
+      // Reply button (hover) — for non-system messages with an id, when authenticated
+      if (!msg.is_system && msg.msg_id && TwitchX.chatAuthenticated) {
+        const replyBtn = document.createElement('button');
+        replyBtn.className = 'reply-btn';
+        replyBtn.title = 'Reply';
+        replyBtn.textContent = '\u21A9';
+        replyBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          TwitchX.setChatReply(msg.msg_id, msg.author_display, msg.text);
+        });
+        el.appendChild(replyBtn);
+      }
+
+      fragment.appendChild(el);
+    });
+
+    container.appendChild(fragment);
+
+    while (container.children.length > maxMsgs) {
+      container.removeChild(container.firstChild);
+    }
+
+    if (TwitchX._getChatAutoScroll()) {
+      container.scrollTop = container.scrollHeight;
+    } else {
+      const btn = TwitchX._getChatNewMsgEl();
+      if (btn) btn.classList.add('visible');
     }
   }
 
-  if (!msg.is_system) {
-    const nick = document.createElement('span');
-    nick.className = 'nick';
-    nick.textContent = msg.author_display;
-    if (msg.author_color) nick.style.color = msg.author_color;
-    el.appendChild(nick);
-
-    const sep = document.createElement('span');
-    sep.textContent = ': ';
-    el.appendChild(sep);
+  function clearChatBatch() {
+    chatBatch = [];
+    if (chatBatchTimer) {
+      clearTimeout(chatBatchTimer);
+      chatBatchTimer = null;
+    }
   }
 
-  TwitchX.renderChatEmotes(el, msg.text, msg.emotes);
+  window.onChatMessage = function(msg) {
+    chatBatch.push(msg);
+    if (!chatBatchTimer) {
+      chatBatchTimer = setTimeout(function() {
+        chatBatchTimer = null;
+        flushChatBatch();
+      }, BATCH_MS);
+    }
+  };
 
-  // Reply button (hover) — for non-system messages with an id, when authenticated
-  if (!msg.is_system && msg.msg_id && TwitchX.chatAuthenticated) {
-    const replyBtn = document.createElement('button');
-    replyBtn.className = 'reply-btn';
-    replyBtn.title = 'Reply';
-    replyBtn.textContent = '\u21A9';
-    replyBtn.addEventListener('click', function(e) {
-      e.stopPropagation();
-      TwitchX.setChatReply(msg.msg_id, msg.author_display, msg.text);
-    });
-    el.appendChild(replyBtn);
-  }
-
-  container.appendChild(el);
-
-  while (container.children.length > 500) {
-    container.removeChild(container.firstChild);
-  }
-
-  if (TwitchX._getChatAutoScroll()) {
-    container.scrollTop = container.scrollHeight;
-  } else {
-    const btn = TwitchX._getChatNewMsgEl();
-    if (btn) btn.classList.add('visible');
-  }
-};
+  TwitchX.clearChatBatch = clearChatBatch;
+})();
 
 window.onChatSendResult = function(result) {
   if (!result) return;
@@ -346,6 +406,7 @@ window.onChatStatus = function(status) {
     if (status.connected) {
       dot.classList.add('connected');
       dot.title = status.authenticated ? 'Connected' : 'Connected (read-only)';
+      if (TwitchX.clearChatBatch) TwitchX.clearChatBatch();
       TwitchX.clearChatMessages();
       TwitchX.chatAutoScroll = true;
       const newBtn = document.getElementById('chat-new-messages');

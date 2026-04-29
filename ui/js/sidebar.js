@@ -300,11 +300,202 @@ function createSidebarSection(sectionKey, title, metaText, logins, streamMap) {
   return section;
 }
 
+function updateSidebarItem(item, login, streamMap) {
+  const stream = streamMap[login] || null;
+  const isLive = !!stream;
+  const isSelected = TwitchX.state.selectedChannel === login;
+
+  const wasLive = item.classList.contains('live');
+  const wasSelected = item.classList.contains('selected');
+
+  if (isLive !== wasLive) {
+    item.classList.toggle('live', isLive);
+    item.setAttribute('aria-label',
+      isLive
+        ? login + ', live, ' + Number(stream.viewers || 0).toLocaleString() + ' viewers'
+        : login + ', offline');
+    if (isLive && stream) {
+      item.dataset._lastViewers = String(stream.viewers || 0);
+    } else {
+      delete item.dataset._lastViewers;
+    }
+  } else if (isLive && stream) {
+    const lastViewers = item.dataset._lastViewers;
+    const currentViewers = String(stream.viewers || 0);
+    if (lastViewers !== currentViewers) {
+      item.setAttribute('aria-label', login + ', live, ' + Number(currentViewers).toLocaleString() + ' viewers');
+      item.dataset._lastViewers = currentViewers;
+    }
+  }
+  if (isSelected !== wasSelected) {
+    item.classList.toggle('selected', isSelected);
+    item.setAttribute('aria-pressed', String(isSelected));
+  }
+
+  const nameEl = item.querySelector('.name');
+  const favMeta = TwitchX.state.favoritesMeta[login] || {};
+  const newName = (stream && stream.display_name) || favMeta.display_name || login;
+  if (nameEl.textContent !== newName) {
+    nameEl.textContent = newName;
+  }
+
+  const metaEl = item.querySelector('.channel-meta');
+  const newMeta = isLive ? TwitchX.truncate(stream.game || 'Live now', 24) : 'Offline';
+  if (metaEl.textContent !== newMeta) {
+    metaEl.textContent = newMeta;
+  }
+
+  const avatar = item.querySelector('.avatar');
+  const newAvatar = TwitchX.state.avatars[login] || '';
+  if (avatar && avatar.src !== newAvatar) {
+    avatar.src = newAvatar;
+  }
+
+  const metricOrStatus = item.querySelector('.metric, .status-badge');
+  if (isLive) {
+    if (!metricOrStatus || !metricOrStatus.classList.contains('metric')) {
+      if (metricOrStatus) metricOrStatus.remove();
+      const metric = document.createElement('span');
+      metric.className = 'metric';
+      metric.textContent = TwitchX.formatViewers(stream.viewers);
+      metric.title = Number(stream.viewers || 0).toLocaleString() + ' viewers';
+      item.appendChild(metric);
+    } else {
+      const newViewers = TwitchX.formatViewers(stream.viewers);
+      if (metricOrStatus.textContent !== newViewers) {
+        metricOrStatus.textContent = newViewers;
+        metricOrStatus.title = Number(stream.viewers || 0).toLocaleString() + ' viewers';
+      }
+    }
+  } else {
+    if (!metricOrStatus || !metricOrStatus.classList.contains('status-badge')) {
+      if (metricOrStatus) metricOrStatus.remove();
+      const status = document.createElement('span');
+      status.className = 'status-badge';
+      status.textContent = 'Off';
+      item.appendChild(status);
+    }
+  }
+}
+
 function renderSidebar() {
   const list = document.getElementById('channel-list');
   const groups = getSidebarGroups();
   const selectedExpanded = expandSidebarSectionForLogin(TwitchX.state.selectedChannel);
 
+  // Skip full rebuild if sections already exist and membership hasn't changed
+  const existingOnlineSection = list.querySelector('.sidebar-section.online');
+  const existingOfflineSection = list.querySelector('.sidebar-section.offline');
+
+  if (existingOnlineSection && existingOfflineSection && TwitchX.state.favorites.length > 0) {
+    const onlineBody = existingOnlineSection.querySelector('.section-body');
+    const offlineBody = existingOfflineSection.querySelector('.section-body');
+
+    const oldOnlineLogins = Array.from(onlineBody.querySelectorAll('.channel-item')).map(function(el) { return el.dataset.login; });
+    const oldOfflineLogins = Array.from(offlineBody.querySelectorAll('.channel-item')).map(function(el) { return el.dataset.login; });
+
+    const onlineChanged = oldOnlineLogins.length !== groups.online.length ||
+      groups.online.some(function(l, i) { return oldOnlineLogins[i] !== l; });
+    const offlineChanged = oldOfflineLogins.length !== groups.offline.length ||
+      groups.offline.some(function(l, i) { return oldOfflineLogins[i] !== l; });
+
+    const onlineCollapsed = !!TwitchX.state.sidebarSections.online;
+    const offlineCollapsed = !!TwitchX.state.sidebarSections.offline;
+    const oldOnlineCollapsed = existingOnlineSection.classList.contains('collapsed');
+    const oldOfflineCollapsed = existingOfflineSection.classList.contains('collapsed');
+
+    const collapsedChanged = onlineCollapsed !== oldOnlineCollapsed || offlineCollapsed !== oldOfflineCollapsed;
+
+    if (!onlineChanged && !offlineChanged && !collapsedChanged) {
+      // In-place update only
+      groups.online.forEach(function(login) {
+        const item = onlineBody.querySelector('.channel-item[data-login="' + login + '"]');
+        if (item) updateSidebarItem(item, login, groups.streamMap);
+      });
+      groups.offline.forEach(function(login) {
+        const item = offlineBody.querySelector('.channel-item[data-login="' + login + '"]');
+        if (item) updateSidebarItem(item, login, groups.streamMap);
+      });
+      // Update section meta text
+      existingOnlineSection.querySelector('.section-meta').textContent =
+        getSidebarSectionMeta('online', groups.online, groups.streamMap);
+      existingOfflineSection.querySelector('.section-meta').textContent =
+        getSidebarSectionMeta('offline', groups.offline, groups.streamMap);
+      existingOnlineSection.querySelector('.section-count').textContent = String(groups.online.length);
+      existingOfflineSection.querySelector('.section-count').textContent = String(groups.offline.length);
+
+      document.getElementById('favorites-count-badge').textContent = String(TwitchX.state.favorites.length);
+
+      if (selectedExpanded) {
+        const selectedItem = list.querySelector('.channel-item.selected');
+        if (selectedItem) {
+          selectedItem.scrollIntoView({ block: 'nearest' });
+        }
+      }
+      // Defer layout to next frame to avoid forced reflow during video paint
+      requestAnimationFrame(function() {
+        applySidebarLayout(groups);
+      });
+      return;
+    }
+
+    // Membership or collapsed state changed — do diff rebuild of sections
+    // Rebuild online section
+    if (onlineChanged || collapsedChanged) {
+      const newOnlineSection = createSidebarSection(
+        'online',
+        'Online',
+        getSidebarSectionMeta('online', groups.online, groups.streamMap),
+        groups.online,
+        groups.streamMap
+      );
+      list.replaceChild(newOnlineSection, existingOnlineSection);
+    } else {
+      groups.online.forEach(function(login) {
+        const item = onlineBody.querySelector('.channel-item[data-login="' + login + '"]');
+        if (item) updateSidebarItem(item, login, groups.streamMap);
+      });
+      existingOnlineSection.querySelector('.section-meta').textContent =
+        getSidebarSectionMeta('online', groups.online, groups.streamMap);
+      existingOnlineSection.querySelector('.section-count').textContent = String(groups.online.length);
+    }
+
+    // Rebuild offline section
+    const currentOfflineSection = list.querySelector('.sidebar-section.offline');
+    if (offlineChanged || collapsedChanged) {
+      const newOfflineSection = createSidebarSection(
+        'offline',
+        'Offline',
+        getSidebarSectionMeta('offline', groups.offline, groups.streamMap),
+        groups.offline,
+        groups.streamMap
+      );
+      list.replaceChild(newOfflineSection, currentOfflineSection);
+    } else {
+      groups.offline.forEach(function(login) {
+        const item = offlineBody.querySelector('.channel-item[data-login="' + login + '"]');
+        if (item) updateSidebarItem(item, login, groups.streamMap);
+      });
+      currentOfflineSection.querySelector('.section-meta').textContent =
+        getSidebarSectionMeta('offline', groups.offline, groups.streamMap);
+      currentOfflineSection.querySelector('.section-count').textContent = String(groups.offline.length);
+    }
+
+    document.getElementById('favorites-count-badge').textContent = String(TwitchX.state.favorites.length);
+
+    if (selectedExpanded) {
+      const selectedItem = list.querySelector('.channel-item.selected');
+      if (selectedItem) {
+        selectedItem.scrollIntoView({ block: 'nearest' });
+      }
+    }
+    requestAnimationFrame(function() {
+      applySidebarLayout(groups);
+    });
+    return;
+  }
+
+  // Full rebuild (first render or empty favorites)
   while (list.firstChild) list.removeChild(list.firstChild);
 
   if (TwitchX.state.favorites.length === 0) {
@@ -332,8 +523,6 @@ function renderSidebar() {
     )
   );
 
-  applySidebarLayout(groups);
-
   document.getElementById('favorites-count-badge').textContent = String(TwitchX.state.favorites.length);
 
   if (selectedExpanded) {
@@ -342,6 +531,10 @@ function renderSidebar() {
       selectedItem.scrollIntoView({ block: 'nearest' });
     }
   }
+
+  requestAnimationFrame(function() {
+    applySidebarLayout(groups);
+  });
 }
 
 // Initialize sidebar sections from localStorage on load
@@ -355,4 +548,5 @@ TwitchX.applySidebarLayout = applySidebarLayout;
 TwitchX.getSidebarSectionMeta = getSidebarSectionMeta;
 TwitchX.createSidebarItem = createSidebarItem;
 TwitchX.createSidebarSection = createSidebarSection;
+TwitchX.updateSidebarItem = updateSidebarItem;
 TwitchX.renderSidebar = renderSidebar;

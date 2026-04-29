@@ -116,6 +116,7 @@ function switchMultiChat(idx) {
   if (el) el.classList.add('chat-focus');
   TwitchX.multiState.chatSlot = idx;
   document.getElementById('ms-chat-messages').replaceChildren();
+  if (TwitchX.clearChatBatch) TwitchX.clearChatBatch();
   document.getElementById('ms-chat-title').textContent = slot.channel;
   if (TwitchX.api) {
     TwitchX.api.stop_chat();

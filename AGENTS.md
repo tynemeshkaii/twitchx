@@ -308,3 +308,54 @@ Subclasses define `connect()` which sets up credentials and passes a closure `_c
 - `resolve_stream_url()` is now optional (`NotImplementedError` default)
 - `follow()` / `unfollow()` removed from required interface
 - `get_channel_vods()` / `get_channel_clips()` added as optional defaults (return `[]`)
+
+---
+
+## 2026-04-30 — Playback stability: HLS health monitor, FPS recovery, sidebar diffing, chat batching
+
+### Problem
+During long Twitch viewing sessions (>30–60 min), stream playback gradually degraded: FPS dropped, video stuttered. Pausing and resuming temporarily restored smoothness, indicating HLS back-buffer accumulation in WKWebView’s `AVPlayer`.
+
+### Solution
+
+#### `ui/js/player.js` — Video Health Monitor + FPS Monitor
+- **`checkVideoHealth()`** runs every 60 s while player is active:
+  - **Live-edge drift**: if `currentTime` lags `seekable.end` by >120 s → `seek` to live edge.
+  - **Buffer accumulation**: if `buffered.end` exceeds `currentTime` by >300 s → `softResetVideo()`.
+- **`softResetVideo()`** — preserves `src`, `muted`, `volume`; does `pause → load → src → play` to reset `MediaPlayer` without page reload.
+- **FPS monitor** — `requestAnimationFrame` loop measures frame time. Sustained >50 ms frames for 5 s triggers auto `softResetVideo()`.
+- Both monitors start in `showPlayerView()` and cleanly stop in `hidePlayerView()`.
+
+#### `ui/js/sidebar.js` — Diff-based rendering
+- Replaced full `while (list.firstChild) removeChild(...)` rebuild on every poll with **in-place updates**.
+- `renderSidebar()` compares current vs new `login` sets for Online/Offline sections:
+  - If membership unchanged → updates text/classes/src via `updateSidebarItem()` only.
+  - If membership changed → rebuilds only the affected section.
+- `applySidebarLayout()` deferred via `requestAnimationFrame` to avoid forced reflow during video compositing.
+- `updateSidebarItem()` also updates `aria-label` and caches last viewer count in `dataset._lastViewers` for accessibility.
+
+#### `ui/js/callbacks.js` — Chat batching + throttled fetching
+- **Chat limit**: reduced from 500 → **150** messages.
+- **Batch insertion**: incoming messages collect for 50 ms, then flushed as one `DocumentFragment` to reduce layout thrashing.
+- **Background image throttle**: when `player-view` is active, avatar/thumbnail fetches are skipped or deferred via `requestIdleCallback` (timeout 2 s) to free main thread for video.
+
+#### CSS containment (`ui/css/views.css`, `ui/css/player.css`)
+Added `contain: layout style paint` to:
+- `#player-view`
+- `#player-content`
+- `#chat-panel`
+This isolates layout/paint recalculations of chat and sidebar from video compositing.
+
+### Post-implementation debug audit & bug fixes
+
+Three bugs were found during a debug audit and fixed:
+
+1. **Chat batch leak (critical)** — Pending batched messages could flush into the wrong chat after a channel/context switch.
+   - Added `clearChatBatch()` inside the chat-batching IIFE and exported it as `TwitchX.clearChatBatch`.
+   - Called from: `clearChatMessages()`, `hidePlayerView()`, `switchMultiChat()`, and `onChatStatus(connected=true)`.
+
+2. **Missing `TwitchX.api` null-check** — `get_avatar()` was called without guard in the non-player-active path.
+   - Added `if (TwitchX.api)` check before `TwitchX.api.get_avatar()` in `onStreamsUpdate`.
+
+3. **Stale `aria-label` in sidebar** — `updateSidebarItem()` did not refresh the accessibility label when live status or viewer count changed.
+   - `updateSidebarItem()` now updates `aria-label` on `isLive` transition and viewer-count delta, tracking last viewers via `dataset._lastViewers`.

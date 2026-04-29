@@ -3,11 +3,13 @@
   display: none; flex-direction: column;
   flex: 1; overflow: hidden;
   background: #000;
+  contain: layout style paint;
 }
 #player-view.active { display: flex; }
 
 #player-content {
   display: flex; flex: 1; overflow: hidden;
+  contain: layout style paint;
 }
 #stream-video {
   flex: 1; min-width: 0; background: #000;

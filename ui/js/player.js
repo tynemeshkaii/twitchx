@@ -34,9 +34,14 @@ function showPlayerView() {
   updateChatInput();
 
   TwitchX.renderSidebar();
+  TwitchX.startVideoHealthMonitor();
+  TwitchX.startFpsMonitor();
 }
 
 function hidePlayerView() {
+  TwitchX.stopVideoHealthMonitor();
+  TwitchX.stopFpsMonitor();
+
   const video = document.getElementById('stream-video');
   video.pause();
   video.removeAttribute('src');
@@ -49,6 +54,7 @@ function hidePlayerView() {
 
   // Clear chat
   TwitchX.clearChatMessages();
+  if (TwitchX.clearChatBatch) TwitchX.clearChatBatch();
   if (TwitchX.api) TwitchX.api.stop_chat();
 
   document.getElementById('player-view').classList.remove('active');
@@ -181,6 +187,100 @@ function updateChatInput() {
   }
 }
 
+/* ── Video Health Monitor ───────────────────────────────── */
+
+function startVideoHealthMonitor() {
+  stopVideoHealthMonitor();
+  TwitchX._healthMonitorTimer = setInterval(checkVideoHealth, 60000);
+}
+
+function stopVideoHealthMonitor() {
+  if (TwitchX._healthMonitorTimer) {
+    clearInterval(TwitchX._healthMonitorTimer);
+    TwitchX._healthMonitorTimer = null;
+  }
+}
+
+function checkVideoHealth() {
+  const video = document.getElementById('stream-video');
+  if (!video || video.paused || !video.src) return;
+
+  // Seek to live edge if we're lagging behind (>120s back-buffer drift)
+  if (video.seekable && video.seekable.length > 0) {
+    const liveEdge = video.seekable.end(video.seekable.length - 1);
+    const drift = liveEdge - video.currentTime;
+    if (drift > 120) {
+      video.currentTime = liveEdge - 2;
+      TwitchX.setStatus('Caught up to live edge', 'info');
+      return;
+    }
+  }
+
+  // If buffered end is far ahead, do a soft reset to clear accumulated buffers
+  if (video.buffered && video.buffered.length > 0) {
+    const bufferedEnd = video.buffered.end(video.buffered.length - 1);
+    const bufferedDrift = bufferedEnd - video.currentTime;
+    if (bufferedDrift > 300) {
+      softResetVideo();
+      TwitchX.setStatus('Stream buffer cleared for smooth playback', 'info');
+      return;
+    }
+  }
+}
+
+function softResetVideo() {
+  const video = document.getElementById('stream-video');
+  if (!video || !video.src) return;
+  const currentSrc = video.src;
+  const wasMuted = video.muted;
+  const currentVolume = video.volume;
+  video.pause();
+  video.removeAttribute('src');
+  video.load();
+  video.src = currentSrc;
+  video.muted = wasMuted;
+  video.volume = currentVolume;
+  video.play().catch(function() {});
+}
+
+/* ── FPS Monitor ────────────────────────────────────────── */
+
+function startFpsMonitor() {
+  stopFpsMonitor();
+  TwitchX._fpsBadFrameCount = 0;
+  TwitchX._fpsLastTimestamp = 0;
+  TwitchX._fpsRafId = 0;
+
+  function tick(timestamp) {
+    if (!TwitchX._fpsRafId) return;
+    if (TwitchX._fpsLastTimestamp) {
+      const delta = timestamp - TwitchX._fpsLastTimestamp;
+      if (delta > 50) { // < 20 FPS
+        TwitchX._fpsBadFrameCount += 1;
+        if (TwitchX._fpsBadFrameCount >= 150) { // ~5s sustained bad frames @ 30fps check
+          softResetVideo();
+          TwitchX.setStatus('Auto-recovered playback smoothness', 'info');
+          TwitchX._fpsBadFrameCount = 0;
+        }
+      } else {
+        TwitchX._fpsBadFrameCount = Math.max(0, TwitchX._fpsBadFrameCount - 1);
+      }
+    }
+    TwitchX._fpsLastTimestamp = timestamp;
+    TwitchX._fpsRafId = requestAnimationFrame(tick);
+  }
+  TwitchX._fpsRafId = requestAnimationFrame(tick);
+}
+
+function stopFpsMonitor() {
+  if (TwitchX._fpsRafId) {
+    cancelAnimationFrame(TwitchX._fpsRafId);
+    TwitchX._fpsRafId = 0;
+  }
+  TwitchX._fpsLastTimestamp = 0;
+  TwitchX._fpsBadFrameCount = 0;
+}
+
 TwitchX.showPlayerView = showPlayerView;
 TwitchX.hidePlayerView = hidePlayerView;
 TwitchX.getActiveVideo = getActiveVideo;
@@ -191,3 +291,9 @@ TwitchX.togglePiP = togglePiP;
 TwitchX.toggleVideoFullscreen = toggleVideoFullscreen;
 TwitchX.toggleChatPanel = toggleChatPanel;
 TwitchX.updateChatInput = updateChatInput;
+TwitchX.startVideoHealthMonitor = startVideoHealthMonitor;
+TwitchX.stopVideoHealthMonitor = stopVideoHealthMonitor;
+TwitchX.checkVideoHealth = checkVideoHealth;
+TwitchX.softResetVideo = softResetVideo;
+TwitchX.startFpsMonitor = startFpsMonitor;
+TwitchX.stopFpsMonitor = stopFpsMonitor;

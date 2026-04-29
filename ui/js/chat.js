@@ -96,6 +96,7 @@ function clearChatMessages() {
     container.removeChild(container.firstChild);
   }
   clearChatReply();
+  if (TwitchX.clearChatBatch) TwitchX.clearChatBatch();
 }
 
 TwitchX.setChatReply = setChatReply;
