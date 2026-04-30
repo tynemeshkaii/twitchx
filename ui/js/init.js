@@ -101,11 +101,15 @@ TwitchX._bindPlayerEvents = function() {
   if (closeBtn) closeBtn.addEventListener('click', function() { if (TwitchX.api) TwitchX.api.stop_player(); });
   const fsBtn = document.getElementById('fullscreen-player-btn');
   if (fsBtn) fsBtn.addEventListener('click', TwitchX.toggleVideoFullscreen);
-  const video = document.getElementById('stream-video');
-  if (video) video.addEventListener('dblclick', TwitchX.toggleVideoFullscreen);
+  const playerContent = document.getElementById('player-content');
+  if (playerContent) {
+    playerContent.addEventListener('dblclick', function(e) {
+      if (e.target.closest('#stream-video')) TwitchX.toggleVideoFullscreen();
+    });
+  }
   const pipBtn = document.getElementById('pip-player-btn');
   if (pipBtn) pipBtn.addEventListener('click', function() {
-    TwitchX.togglePiP(document.getElementById('stream-video'));
+    TwitchX.togglePiP(TwitchX.getPlayerVideo());
   });
   const extBtn = document.getElementById('watch-external-btn');
   if (extBtn) extBtn.addEventListener('click', function() {

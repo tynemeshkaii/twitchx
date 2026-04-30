@@ -11,9 +11,11 @@ function openMultistreamView() {
   document.getElementById('toolbar').classList.add('hidden');
   document.getElementById('stream-grid').classList.add('hidden');
   document.getElementById('multistream-view').classList.remove('hidden');
+  TwitchX.startMultiHealthMonitor();
 }
 
 function closeMultistreamView() {
+  TwitchX.stopMultiHealthMonitor();
   for (let i = 0; i < 4; i++) {
     if (TwitchX.multiState.slots[i]) _clearMultiSlot(i);
   }
@@ -47,11 +49,25 @@ function _clearMultiSlot(idx) {
   const slotEl = document.querySelector('.ms-slot[data-slot-idx="' + idx + '"]');
   if (!slotEl) return;
   const video = slotEl.querySelector('.ms-video');
-  if (video) { video.pause(); video.removeAttribute('src'); video.load(); }
+  if (video) {
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+    video.remove();
+
+    const fresh = document.createElement('video');
+    fresh.className = 'ms-video';
+    fresh.autoplay = true;
+    fresh.muted = true;
+    fresh.playsInline = true;
+    slotEl.querySelector('.ms-slot-active').insertBefore(fresh, slotEl.querySelector('.ms-loading'));
+  }
   slotEl.querySelector('.ms-slot-active').style.display = 'none';
   slotEl.querySelector('.ms-slot-empty').style.display = '';
   slotEl.querySelector('.ms-add-form').style.display = 'none';
   slotEl.classList.remove('audio-focus', 'chat-focus');
+  delete slotEl.dataset._lastTime;
+  delete slotEl.dataset._frozenCount;
 }
 
 function addMultiSlot(idx, channel, platform) {
@@ -66,7 +82,8 @@ function addMultiSlot(idx, channel, platform) {
   active.style.display = 'block';
   active.querySelector('.ms-loading').style.display = '';
   active.querySelector('.ms-error-msg').style.display = 'none';
-  active.querySelector('.ms-video').muted = true;
+  const msVideo = active.querySelector('.ms-video');
+  if (msVideo) msVideo.muted = true;
   if (TwitchX.api) TwitchX.api.add_multi_slot(idx, channel, platform, quality);
 }
 
@@ -276,6 +293,98 @@ function _createMultiSlot(idx) {
   return slot;
 }
 
+/* ── Multistream Health Monitor ─────────────────────────── */
+
+function startMultiHealthMonitor() {
+  stopMultiHealthMonitor();
+  TwitchX._multiHealthTimer = setInterval(checkMultiHealth, 60000);
+}
+
+function stopMultiHealthMonitor() {
+  if (TwitchX._multiHealthTimer) {
+    clearInterval(TwitchX._multiHealthTimer);
+    TwitchX._multiHealthTimer = null;
+  }
+}
+
+function checkMultiHealth() {
+  if (!TwitchX.multiState.open) return;
+  for (let i = 0; i < 4; i++) {
+    if (!TwitchX.multiState.slots[i]) continue;
+    const slotEl = document.querySelector('.ms-slot[data-slot-idx="' + i + '"]');
+    if (!slotEl) continue;
+    const video = slotEl.querySelector('.ms-video');
+    if (!video || !video.src || video.paused) continue;
+
+    // Frozen detection (120s threshold — 2 checks at 60s interval)
+    const lastTime = slotEl.dataset._lastTime;
+    const nowTime = video.currentTime;
+    if (lastTime !== undefined && Math.abs(nowTime - parseFloat(lastTime)) < 0.5 && video.readyState >= 2) {
+      const frozenCount = parseInt(slotEl.dataset._frozenCount || '0', 10) + 1;
+      if (frozenCount >= 2) {
+        _reloadMultiSlot(i, 'frozen');
+        continue;
+      }
+      slotEl.dataset._frozenCount = String(frozenCount);
+    } else {
+      slotEl.dataset._frozenCount = '0';
+    }
+    slotEl.dataset._lastTime = String(nowTime);
+
+    // Buffer accumulation
+    if (video.buffered && video.buffered.length > 0) {
+      const bufferedEnd = video.buffered.end(video.buffered.length - 1);
+      const bufferedDrift = bufferedEnd - video.currentTime;
+      if (bufferedDrift > 180) {
+        _reloadMultiSlot(i, 'buffer-overflow');
+        continue;
+      }
+    }
+
+    // Live-edge drift
+    if (video.seekable && video.seekable.length > 0) {
+      const liveEdge = video.seekable.end(video.seekable.length - 1);
+      const drift = liveEdge - video.currentTime;
+      if (drift > 120) {
+        video.currentTime = liveEdge - 2;
+        console.log('[VideoHealth] multistream slot', i, 'caught up to live edge');
+      }
+    }
+  }
+}
+
+function _reloadMultiSlot(idx, reason) {
+  const slotEl = document.querySelector('.ms-slot[data-slot-idx="' + idx + '"]');
+  if (!slotEl) return;
+  const video = slotEl.querySelector('.ms-video');
+  if (!video || !video.src) return;
+
+  console.log('[VideoHealth] multistream slot', idx, reason, 'reset at', new Date().toISOString());
+
+  const oldSrc = video.src;
+  const wasMuted = video.muted;
+
+  video.pause();
+  video.removeAttribute('src');
+  video.load();
+  video.remove();
+
+  const fresh = document.createElement('video');
+  fresh.className = 'ms-video';
+  fresh.autoplay = true;
+  fresh.muted = wasMuted;
+  fresh.playsInline = true;
+
+  const active = slotEl.querySelector('.ms-slot-active');
+  active.insertBefore(fresh, active.querySelector('.ms-loading'));
+
+  fresh.src = oldSrc;
+  fresh.play().catch(function() {});
+
+  delete slotEl.dataset._lastTime;
+  delete slotEl.dataset._frozenCount;
+}
+
 TwitchX.openMultistreamView = openMultistreamView;
 TwitchX.closeMultistreamView = closeMultistreamView;
 TwitchX.toggleMsSidebar = toggleMsSidebar;
@@ -287,3 +396,7 @@ TwitchX.toggleMsChat = toggleMsChat;
 TwitchX.toggleMsSlotFullscreen = toggleMsSlotFullscreen;
 TwitchX._clearMultiSlot = _clearMultiSlot;
 TwitchX._createMultiSlot = _createMultiSlot;
+TwitchX.startMultiHealthMonitor = startMultiHealthMonitor;
+TwitchX.stopMultiHealthMonitor = stopMultiHealthMonitor;
+TwitchX.checkMultiHealth = checkMultiHealth;
+TwitchX._reloadMultiSlot = _reloadMultiSlot;

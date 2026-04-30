@@ -107,7 +107,7 @@ function handleKeydown(e) {
   if (inPlayer) {
     if (e.key === sc.fullscreen) { e.preventDefault(); TwitchX.toggleVideoFullscreen(); return; }
     if (e.key === sc.toggle_chat) { e.preventDefault(); TwitchX.toggleChatPanel(); return; }
-    if (e.key === sc.pip) { e.preventDefault(); TwitchX.togglePiP(document.getElementById('stream-video')); return; }
+    if (e.key === sc.pip) { e.preventDefault(); TwitchX.togglePiP(TwitchX.getPlayerVideo()); return; }
   }
 
   if (inPlayer || inMulti) {

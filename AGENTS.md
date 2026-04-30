@@ -359,3 +359,74 @@ Three bugs were found during a debug audit and fixed:
 
 3. **Stale `aria-label` in sidebar** — `updateSidebarItem()` did not refresh the accessibility label when live status or viewer count changed.
    - `updateSidebarItem()` now updates `aria-label` on `isLive` transition and viewer-count delta, tracking last viewers via `dataset._lastViewers`.
+
+---
+
+## 2026-04-29 — Gentle Video Reset + Frozen Detection + Multistream Health
+
+### Problem
+The previous `softResetVideo()` (pause → load → src → play) did not reliably destroy WKWebView's internal `MediaPlayer`, so HLS back-buffers kept accumulating and FPS degraded after 30–60 min of Twitch playback. Manual pause/resume fixed it temporarily, proving the issue was buffer state, not network.
+
+### Solution
+
+#### `ui/js/player.js` — Gentle Video Reset (crossfade swap)
+Replaced `softResetVideo()` with **`gentleResetVideo(reason)`**:
+1. Creates a **shadow `<video>`** with `position:absolute` and `opacity:0`, sharing the same parent as the old element.
+2. New DOM node forces WKWebView to spawn a **fresh `MediaPlayer`**.
+3. Shadow video pre-loads the same HLS `src` muted.
+4. On `playing` or `loadeddata` (or 2.5 s fallback), performs a **150 ms CSS crossfade** (`opacity` transition).
+5. Old video is `pause() → removeAttribute('src') → load() → remove()` to guarantee buffer release.
+6. Shadow video is promoted to the active element (`TwitchX._playerVideo = newVideo`).
+
+This produces no perceptible black screen — only a sub-second opacity blend.
+
+#### `ui/js/player.js` — Video element abstraction
+- Added `TwitchX._playerVideo` and `TwitchX.getPlayerVideo()` so all player code references the current live element, not a stale `document.getElementById` cache.
+- `hidePlayerView()` now **destroys** the old `<video>` and inserts a fresh empty one, preventing a dead MediaPlayer from leaking across sessions.
+
+#### `ui/js/player.js` — Frozen Video Monitor (new)
+- `checkFrozenVideo()` runs every **10 s** while player is active.
+- If `currentTime` has not changed for 10 s while `!paused && readyState >= 2`, the decoder is stuck → triggers `gentleResetVideo('frozen')`.
+
+#### `ui/js/player.js` — Improved Health Monitor triggers
+- Buffer threshold reduced from **300 s → 180 s** (problem starts earlier).
+- Live-edge drift unchanged (>120 s → seek).
+- Proactive reset: silent `gentleResetVideo('proactive')` every **30 min** to prevent accumulation before symptoms appear.
+
+#### `ui/js/player.js` — Improved FPS Monitor
+- Skips measurement when `document.hidden` (macOS throttles rAF on background) or `video.paused` or `readyState < 2`.
+- Threshold raised from **50 ms → 66 ms** (< 15 FPS) to reduce false positives.
+- Requires **consecutive** bad frames for ~5 s, not cumulative count.
+
+#### `ui/js/multistream.js` — Multistream Health Monitor
+- `startMultiHealthMonitor()` / `stopMultiHealthMonitor()` run every **60 s** while multistream is open.
+- Per-slot checks:
+  - **Frozen**: `currentTime` stale for 120 s (2 checks) → `_reloadMultiSlot(idx, 'frozen')`.
+  - **Buffer**: `buffered.end - currentTime > 180 s` → `_reloadMultiSlot(idx, 'buffer-overflow')`.
+  - **Live-edge drift**: `seekable.end - currentTime > 120 s` → seek to edge.
+- `_reloadMultiSlot()` recreates the `<video>` element inside the slot (new MediaPlayer) and restores `src`.
+- `_clearMultiSlot()` now fully destroys the old video and inserts a fresh element.
+
+### Post-implementation bug-fix audit
+
+1. **`gentleResetVideo()` shadow video position** — `appendChild` inserted the shadow video after `#chat-panel`, breaking the flex row order (`video → handle → chat`).
+   - Fixed: `container.insertBefore(newVideo, oldVideo)` preserves DOM order.
+2. **Re-entrant `gentleResetVideo()`** — `getPlayerVideo()` returned the old element during the 160 ms crossfade, so concurrent health checks could trigger a second reset.
+   - Fixed: `TwitchX._playerVideo = null` is set immediately at the start of `gentleResetVideo()`.
+3. **Proactive reset fired only once** — `setTimeout` is single-shot; after the first 30-min reset the timer expired.
+   - Fixed: `startProactiveReset()` now uses a self-rescheduling `setTimeout` callback (acts like `setInterval` but survives resets cleanly).
+4. **`hidePlayerView()` null-reference risk** — `getPlayerVideo()` could theoretically return `null` if DOM was empty.
+   - Fixed: added `if (video) { ... }` guard before `pause()` / `remove()`.
+5. **Multistream frozen detection float jitter** — `String(nowTime) === lastTime` failed on tiny floating-point differences (e.g. `120.5000001` vs `"120.5"`).
+   - Fixed: `Math.abs(nowTime - parseFloat(lastTime)) < 0.5`.
+6. **`addMultiSlot()` missing `.ms-video` guard** — `active.querySelector('.ms-video').muted = true` threw TypeError when the element was absent.
+   - Fixed: stored result in `msVideo` variable with `if (msVideo)` guard.
+7. **PiP button stale reference** — `document.getElementById('stream-video')` in `init.js` could reference a removed element after `gentleResetVideo()`.
+   - Fixed: uses `TwitchX.getPlayerVideo()` instead.
+
+#### `ui/js/init.js` & `ui/js/keyboard.js` — Event delegation
+- Replaced direct `video.addEventListener('dblclick', ...)` with **delegation** on `#player-content` using `e.target.closest('#stream-video')`. This survives video recreation.
+- `keyboard.js` PiP shortcut now uses `TwitchX.getPlayerVideo()` instead of `document.getElementById('stream-video')`.
+
+#### Diagnostic logging
+All reset paths log to `console.log('[VideoHealth]', reason, ...)` with timestamp, src (query-stripped), and currentTime for future debugging.

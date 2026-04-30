@@ -1,6 +1,16 @@
 window.TwitchX = window.TwitchX || {};
 const TwitchX = window.TwitchX;
 
+/* ── Video element abstraction ──────────────────────────── */
+
+TwitchX._playerVideo = null;
+
+function getPlayerVideo() {
+  return TwitchX._playerVideo || document.getElementById('stream-video');
+}
+
+/* ── Player view ────────────────────────────────────────── */
+
 function showPlayerView() {
   document.getElementById('toolbar').style.display = 'none';
   document.getElementById('stream-grid').style.display = 'none';
@@ -36,17 +46,34 @@ function showPlayerView() {
   TwitchX.renderSidebar();
   TwitchX.startVideoHealthMonitor();
   TwitchX.startFpsMonitor();
+  TwitchX.startFrozenMonitor();
+  TwitchX.startProactiveReset();
 }
 
 function hidePlayerView() {
   TwitchX.stopVideoHealthMonitor();
   TwitchX.stopFpsMonitor();
+  TwitchX.stopFrozenMonitor();
+  TwitchX.stopProactiveReset();
 
-  const video = document.getElementById('stream-video');
-  video.pause();
-  video.removeAttribute('src');
-  video.load();
-  video.style.display = '';
+  const video = getPlayerVideo();
+  if (video) {
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+    video.style.display = '';
+
+    // Phase 6: guaranteed cleanup — destroy the MediaPlayer
+    video.remove();
+  }
+
+  const fresh = document.createElement('video');
+  fresh.id = 'stream-video';
+  fresh.autoplay = true;
+  fresh.controls = true;
+  fresh.playsInline = true;
+  document.getElementById('player-content').appendChild(fresh);
+  TwitchX._playerVideo = null;
 
   // Restore IINA button
   const iinaBtn = document.getElementById('watch-external-btn');
@@ -78,7 +105,7 @@ function hidePlayerView() {
 
 function getActiveVideo() {
   if (document.getElementById('player-view').classList.contains('active')) {
-    return document.getElementById('stream-video');
+    return getPlayerVideo();
   }
   if (TwitchX.multiState.open && TwitchX.multiState.audioFocus >= 0) {
     const slotEl = document.querySelector('.ms-slot[data-slot-idx="' + TwitchX.multiState.audioFocus + '"]');
@@ -134,7 +161,7 @@ function togglePiP(video) {
 }
 
 function toggleVideoFullscreen() {
-  const video = document.getElementById('stream-video');
+  const video = getPlayerVideo();
 
   // Exit fullscreen
   if (document.fullscreenElement || document.webkitFullscreenElement) {
@@ -202,7 +229,7 @@ function stopVideoHealthMonitor() {
 }
 
 function checkVideoHealth() {
-  const video = document.getElementById('stream-video');
+  const video = getPlayerVideo();
   if (!video || video.paused || !video.src) return;
 
   // Seek to live edge if we're lagging behind (>120s back-buffer drift)
@@ -216,31 +243,143 @@ function checkVideoHealth() {
     }
   }
 
-  // If buffered end is far ahead, do a soft reset to clear accumulated buffers
+  // If buffered end is far ahead, do a gentle reset to clear accumulated buffers
   if (video.buffered && video.buffered.length > 0) {
     const bufferedEnd = video.buffered.end(video.buffered.length - 1);
     const bufferedDrift = bufferedEnd - video.currentTime;
-    if (bufferedDrift > 300) {
-      softResetVideo();
+    if (bufferedDrift > 180) {
+      gentleResetVideo('buffer-overflow');
       TwitchX.setStatus('Stream buffer cleared for smooth playback', 'info');
       return;
     }
   }
 }
 
-function softResetVideo() {
-  const video = document.getElementById('stream-video');
-  if (!video || !video.src) return;
-  const currentSrc = video.src;
-  const wasMuted = video.muted;
-  const currentVolume = video.volume;
-  video.pause();
-  video.removeAttribute('src');
-  video.load();
-  video.src = currentSrc;
-  video.muted = wasMuted;
-  video.volume = currentVolume;
-  video.play().catch(function() {});
+/* ── Frozen Video Monitor ───────────────────────────────── */
+
+function startFrozenMonitor() {
+  stopFrozenMonitor();
+  TwitchX._frozenLastTime = undefined;
+  TwitchX._frozenStreak = 0;
+  TwitchX._frozenTimer = setInterval(checkFrozenVideo, 10000);
+}
+
+function stopFrozenMonitor() {
+  if (TwitchX._frozenTimer) {
+    clearInterval(TwitchX._frozenTimer);
+    TwitchX._frozenTimer = null;
+  }
+  TwitchX._frozenLastTime = undefined;
+  TwitchX._frozenStreak = 0;
+}
+
+function checkFrozenVideo() {
+  const video = getPlayerVideo();
+  if (!video || video.paused || !video.src || video.readyState < 2) return;
+
+  const now = video.currentTime;
+  if (TwitchX._frozenLastTime !== undefined && now === TwitchX._frozenLastTime) {
+    TwitchX._frozenStreak = (TwitchX._frozenStreak || 0) + 1;
+    if (TwitchX._frozenStreak >= 1) { // 10 seconds frozen
+      gentleResetVideo('frozen');
+      TwitchX.setStatus('Auto-recovered playback smoothness', 'info');
+      TwitchX._frozenStreak = 0;
+      TwitchX._frozenLastTime = undefined;
+      return;
+    }
+  } else {
+    TwitchX._frozenStreak = 0;
+  }
+  TwitchX._frozenLastTime = now;
+}
+
+/* ── Gentle Video Reset (crossfade swap) ────────────────── */
+
+function gentleResetVideo(reason) {
+  const oldVideo = getPlayerVideo();
+  if (!oldVideo || !oldVideo.src) return;
+
+  // Prevent re-entrant calls from using the old element
+  TwitchX._playerVideo = null;
+
+  console.log('[VideoHealth]', reason, 'reset starting at', new Date().toISOString(),
+    'src=', oldVideo.src.split('?')[0], 'currentTime=', oldVideo.currentTime);
+
+  const container = oldVideo.parentNode;
+  const savedSrc = oldVideo.src;
+  const savedMuted = oldVideo.muted;
+  const savedVolume = oldVideo.volume;
+
+  const newVideo = document.createElement('video');
+  newVideo.autoplay = true;
+  newVideo.controls = true;
+  newVideo.playsInline = true;
+  newVideo.id = 'stream-video';
+  newVideo.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;transition:opacity 0.15s';
+
+  newVideo.src = savedSrc;
+  newVideo.muted = true;
+  newVideo.volume = savedVolume;
+
+  container.insertBefore(newVideo, oldVideo);
+  newVideo.play().catch(function() {});
+
+  let swapped = false;
+
+  function doSwap() {
+    if (swapped) return;
+    swapped = true;
+
+    oldVideo.style.transition = 'opacity 0.15s';
+    oldVideo.style.opacity = '0';
+    newVideo.style.opacity = '1';
+
+    setTimeout(function() {
+      oldVideo.pause();
+      oldVideo.removeAttribute('src');
+      oldVideo.load();
+      oldVideo.remove();
+
+      newVideo.style.position = '';
+      newVideo.style.top = '';
+      newVideo.style.left = '';
+      newVideo.style.width = '';
+      newVideo.style.height = '';
+      newVideo.style.transition = '';
+      newVideo.muted = savedMuted;
+
+      TwitchX._playerVideo = newVideo;
+      console.log('[VideoHealth]', reason, 'reset completed');
+    }, 160);
+  }
+
+  newVideo.addEventListener('playing', doSwap, { once: true });
+  newVideo.addEventListener('loadeddata', doSwap, { once: true });
+
+  setTimeout(function() {
+    if (!swapped) doSwap();
+  }, 2500);
+}
+
+/* ── Proactive Reset (30 min) ───────────────────────────── */
+
+function startProactiveReset() {
+  stopProactiveReset();
+  function tick() {
+    const video = getPlayerVideo();
+    if (video && !video.paused && video.src) {
+      gentleResetVideo('proactive');
+    }
+    TwitchX._proactiveTimer = setTimeout(tick, 30 * 60 * 1000);
+  }
+  TwitchX._proactiveTimer = setTimeout(tick, 30 * 60 * 1000);
+}
+
+function stopProactiveReset() {
+  if (TwitchX._proactiveTimer) {
+    clearTimeout(TwitchX._proactiveTimer);
+    TwitchX._proactiveTimer = null;
+  }
 }
 
 /* ── FPS Monitor ────────────────────────────────────────── */
@@ -250,20 +389,32 @@ function startFpsMonitor() {
   TwitchX._fpsBadFrameCount = 0;
   TwitchX._fpsLastTimestamp = 0;
   TwitchX._fpsRafId = 0;
+  TwitchX._fpsConsecutiveBad = 0;
 
   function tick(timestamp) {
     if (!TwitchX._fpsRafId) return;
+    if (document.hidden) {
+      TwitchX._fpsLastTimestamp = timestamp;
+      TwitchX._fpsRafId = requestAnimationFrame(tick);
+      return;
+    }
+    const video = getPlayerVideo();
+    if (!video || video.paused || video.readyState < 2) {
+      TwitchX._fpsLastTimestamp = timestamp;
+      TwitchX._fpsRafId = requestAnimationFrame(tick);
+      return;
+    }
     if (TwitchX._fpsLastTimestamp) {
       const delta = timestamp - TwitchX._fpsLastTimestamp;
-      if (delta > 50) { // < 20 FPS
-        TwitchX._fpsBadFrameCount += 1;
-        if (TwitchX._fpsBadFrameCount >= 150) { // ~5s sustained bad frames @ 30fps check
-          softResetVideo();
+      if (delta > 66) { // < 15 FPS
+        TwitchX._fpsConsecutiveBad += 1;
+        if (TwitchX._fpsConsecutiveBad >= 300) { // ~5s sustained
+          gentleResetVideo('fps-drop');
           TwitchX.setStatus('Auto-recovered playback smoothness', 'info');
-          TwitchX._fpsBadFrameCount = 0;
+          TwitchX._fpsConsecutiveBad = 0;
         }
       } else {
-        TwitchX._fpsBadFrameCount = Math.max(0, TwitchX._fpsBadFrameCount - 1);
+        TwitchX._fpsConsecutiveBad = Math.max(0, TwitchX._fpsConsecutiveBad - 1);
       }
     }
     TwitchX._fpsLastTimestamp = timestamp;
@@ -279,6 +430,7 @@ function stopFpsMonitor() {
   }
   TwitchX._fpsLastTimestamp = 0;
   TwitchX._fpsBadFrameCount = 0;
+  TwitchX._fpsConsecutiveBad = 0;
 }
 
 TwitchX.showPlayerView = showPlayerView;
@@ -294,6 +446,12 @@ TwitchX.updateChatInput = updateChatInput;
 TwitchX.startVideoHealthMonitor = startVideoHealthMonitor;
 TwitchX.stopVideoHealthMonitor = stopVideoHealthMonitor;
 TwitchX.checkVideoHealth = checkVideoHealth;
-TwitchX.softResetVideo = softResetVideo;
+TwitchX.startFrozenMonitor = startFrozenMonitor;
+TwitchX.stopFrozenMonitor = stopFrozenMonitor;
+TwitchX.checkFrozenVideo = checkFrozenVideo;
+TwitchX.gentleResetVideo = gentleResetVideo;
 TwitchX.startFpsMonitor = startFpsMonitor;
 TwitchX.stopFpsMonitor = stopFpsMonitor;
+TwitchX.startProactiveReset = startProactiveReset;
+TwitchX.stopProactiveReset = stopProactiveReset;
+TwitchX.getPlayerVideo = getPlayerVideo;
