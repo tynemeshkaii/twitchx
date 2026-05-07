@@ -59,6 +59,13 @@ function addChannelDirect(login, platform, displayName) {
 
 function doWatch() {
   if (!TwitchX.state.selectedChannel || !TwitchX.api) return;
+  if (
+    TwitchX.state.watchingChannel &&
+    TwitchX.state.watchingChannel.toLowerCase() === TwitchX.state.selectedChannel.toLowerCase()
+  ) {
+    TwitchX.setStatus('Already watching ' + TwitchX.state.selectedChannel, 'info');
+    return;
+  }
   const quality = document.getElementById('quality-select').value;
   TwitchX.api.watch(TwitchX.state.selectedChannel, quality);
 }
@@ -242,6 +249,7 @@ function hideChannelView() {
   } else {
     document.getElementById('toolbar').classList.remove('hidden');
     document.getElementById('stream-grid').classList.remove('hidden');
+    TwitchX.renderGrid();
   }
 }
 

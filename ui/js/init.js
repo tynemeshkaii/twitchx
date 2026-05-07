@@ -11,6 +11,25 @@ document.addEventListener('keydown', function(e) {
     TwitchX.renderHotkeysSettings();
     return;
   }
+
+  // Phase 9: duplicate-key detection with confirm-swap
+  // Merge defaults + current state so we catch collisions with untouched defaults too.
+  const allShortcuts = Object.assign({}, TwitchX.DEFAULT_SHORTCUTS, TwitchX.state.shortcuts);
+  const existing = Object.keys(allShortcuts).find(function(action) {
+    return action !== TwitchX._rebindAction && allShortcuts[action] === e.key;
+  });
+  if (existing) {
+    var msg = '"' + TwitchX.formatKeyName(e.key) + '" is already bound to "' +
+              TwitchX.SHORTCUT_LABELS[existing] + '". Swap bindings?';
+    if (window.confirm(msg)) {
+      TwitchX.state.shortcuts[existing] = TwitchX.DEFAULT_SHORTCUTS[TwitchX._rebindAction];
+      TwitchX.state.shortcuts[TwitchX._rebindAction] = e.key;
+    }
+    TwitchX._rebindAction = null;
+    TwitchX.renderHotkeysSettings();
+    return;
+  }
+
   TwitchX.state.shortcuts[TwitchX._rebindAction] = e.key;
   TwitchX._rebindAction = null;
   TwitchX.renderHotkeysSettings();
@@ -261,6 +280,9 @@ TwitchX._bindSettingsEvents = function() {
       document.querySelectorAll('.settings-panel').forEach(function(p) { p.classList.remove('active'); });
       btn.classList.add('active');
       document.getElementById('settings-panel-' + btn.dataset.tab).classList.add('active');
+      if (btn.dataset.tab === 'statistics') {
+        TwitchX.loadWatchStatistics();
+      }
     });
   });
 

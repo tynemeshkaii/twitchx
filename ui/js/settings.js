@@ -1,6 +1,136 @@
 window.TwitchX = window.TwitchX || {};
 const TwitchX = window.TwitchX;
 
+function formatDuration(seconds) {
+  if (!seconds || seconds < 0) return '0m';
+  if (seconds < 60) return seconds + 's';
+  var m = Math.floor(seconds / 60);
+  if (m < 60) return m + 'm';
+  var h = Math.floor(m / 60);
+  m = m % 60;
+  if (h < 24) return h + 'h ' + m + 'm';
+  var d = Math.floor(h / 24);
+  h = h % 24;
+  return d + 'd ' + h + 'h ' + m + 'm';
+}
+
+function createStatCard(value, label) {
+  var card = document.createElement('div');
+  card.className = 'stat-card';
+  var valEl = document.createElement('span');
+  valEl.className = 'stat-value';
+  valEl.textContent = value;
+  var lblEl = document.createElement('span');
+  lblEl.className = 'stat-label';
+  lblEl.textContent = label;
+  card.appendChild(valEl);
+  card.appendChild(lblEl);
+  return card;
+}
+
+function renderWatchStats(stats) {
+  if (!stats) return;
+
+  if (stats.today) {
+    document.getElementById('stat-today-time').textContent = formatDuration(stats.today.total_sec);
+    document.getElementById('stat-today-streams').textContent = stats.today.streams_count || 0;
+    document.getElementById('stat-today-channels').textContent = stats.today.unique_channels || 0;
+  }
+
+  var weeklyContainer = document.getElementById('stats-weekly');
+  weeklyContainer.textContent = '';
+  if (stats.weekly && stats.weekly.length > 0) {
+    var table = document.createElement('table');
+    table.className = 'stats-table';
+    var thead = document.createElement('thead');
+    var headerRow = document.createElement('tr');
+    ['Date', 'Platform', 'Time', 'Streams', 'Channels'].forEach(function(h) {
+      var th = document.createElement('th');
+      th.textContent = h;
+      headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+
+    var tbody = document.createElement('tbody');
+    stats.weekly.forEach(function(row) {
+      var tr = document.createElement('tr');
+      var cells = [
+        row.date,
+        row.platform.charAt(0).toUpperCase() + row.platform.slice(1),
+        formatDuration(row.total_sec),
+        String(row.streams_count),
+        String(row.unique_channels),
+      ];
+      cells.forEach(function(c) {
+        var td = document.createElement('td');
+        td.textContent = c;
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    weeklyContainer.appendChild(table);
+  } else {
+    var emptyMsg = document.createElement('div');
+    emptyMsg.style.cssText = 'font-size:12px;color:var(--text-muted);padding:8px 0;';
+    emptyMsg.textContent = 'No data for this week yet.';
+    weeklyContainer.appendChild(emptyMsg);
+  }
+
+  if (stats.total) {
+    document.getElementById('stat-total-time').textContent = formatDuration(stats.total.total_sec);
+    document.getElementById('stat-total-channels').textContent = stats.total.unique_channels || 0;
+  }
+
+  var topContainer = document.getElementById('stats-top-channels');
+  topContainer.textContent = '';
+  if (stats.top_channels && stats.top_channels.length > 0) {
+    stats.top_channels.forEach(function(ch) {
+      var item = document.createElement('div');
+      item.className = 'stats-list-item';
+
+      var leftSpan = document.createElement('span');
+      var chName = document.createElement('span');
+      chName.className = 'stats-channel';
+      chName.textContent = ch.display_name || ch.channel;
+      leftSpan.appendChild(chName);
+
+      var badge = document.createElement('span');
+      badge.className = 'stats-platform-badge';
+      badge.textContent = ch.platform.charAt(0).toUpperCase();
+      leftSpan.appendChild(badge);
+
+      var rightSpan = document.createElement('span');
+      rightSpan.className = 'stats-value';
+      rightSpan.textContent = formatDuration(ch.total_sec) + ' \u00b7 ' + ch.sessions_count + ' sessions';
+
+      item.appendChild(leftSpan);
+      item.appendChild(rightSpan);
+      topContainer.appendChild(item);
+    });
+  } else {
+    var emptyMsg = document.createElement('div');
+    emptyMsg.style.cssText = 'font-size:12px;color:var(--text-muted);padding:8px 0;';
+    emptyMsg.textContent = 'No watch data yet.';
+    topContainer.appendChild(emptyMsg);
+  }
+
+  document.getElementById('stats-loading').style.display = 'none';
+  document.getElementById('stats-content').style.display = 'block';
+}
+
+function loadWatchStatistics() {
+  if (!TwitchX.api) return;
+  try {
+    var stats = JSON.parse(TwitchX.api.get_watch_statistics('all'));
+    renderWatchStats(stats);
+  } catch (e) {
+    console.warn('Failed to load watch statistics:', e);
+    document.getElementById('stats-loading').textContent = 'Failed to load statistics';
+  }
+}
+
 function openSettings() {
   if (!TwitchX.api) return;
   const config = TwitchX.api.get_full_config_for_settings();
@@ -11,7 +141,6 @@ function openSettings() {
   document.getElementById('s-interval').value = String(config.refresh_interval || 60);
   document.getElementById('s-kick-client-id').value = config.kick_client_id || '';
   document.getElementById('s-kick-client-secret').value = config.kick_client_secret || '';
-  // Show/hide Kick login/user area
   if (config.kick_display_name) {
     document.getElementById('kick-login-area').style.display = 'none';
     document.getElementById('kick-user-area').style.display = 'block';
@@ -23,7 +152,6 @@ function openSettings() {
   document.getElementById('yt-api-key').value = config.youtube_api_key || '';
   document.getElementById('yt-client-id').value = config.youtube_client_id || '';
   document.getElementById('yt-client-secret').value = config.youtube_client_secret || '';
-  // Show/hide YouTube login/user area
   if (config.youtube_display_name) {
     document.getElementById('yt-login-area').style.display = 'none';
     document.getElementById('yt-user-area').style.display = 'block';
@@ -34,17 +162,17 @@ function openSettings() {
     document.getElementById('yt-user-area').style.display = 'none';
   }
   document.getElementById('yt-test-result').style.display = 'none';
-  // Hotkeys tab
   if (config.keyboard_shortcuts) {
     TwitchX.state.shortcuts = Object.assign({}, TwitchX.DEFAULT_SHORTCUTS, config.keyboard_shortcuts);
   }
   document.getElementById('s-pip-enabled').checked = !!config.pip_enabled;
   TwitchX.renderHotkeysSettings();
-  // Reset to General tab
   document.querySelectorAll('.settings-tab').forEach(function(b) { b.classList.remove('active'); });
   document.querySelectorAll('.settings-panel').forEach(function(p) { p.classList.remove('active'); });
   document.querySelector('.settings-tab[data-tab="general"]').classList.add('active');
   document.getElementById('settings-panel-general').classList.add('active');
+  document.getElementById('stats-loading').style.display = 'block';
+  document.getElementById('stats-content').style.display = 'none';
   document.getElementById('settings-feedback').textContent = '';
   document.getElementById('settings-overlay').classList.add('visible');
 }
@@ -57,6 +185,9 @@ function openSettingsToTab(tab) {
   const panel = document.getElementById('settings-panel-' + tab);
   if (tabBtn) tabBtn.classList.add('active');
   if (panel) panel.classList.add('active');
+  if (tab === 'statistics') {
+    loadWatchStatistics();
+  }
 }
 
 function closeSettings() {
@@ -99,7 +230,6 @@ function saveSettings() {
     keyboard_shortcuts: Object.assign({}, TwitchX.state.shortcuts),
     pip_enabled: pipEnabled,
   };
-  // Apply pip button visibility immediately
   TwitchX.state.pipEnabled = pipEnabled;
   const pipBtn = document.getElementById('pip-player-btn');
   if (pipBtn) pipBtn.style.display = pipEnabled ? '' : 'none';
@@ -112,3 +242,5 @@ TwitchX.closeSettings = closeSettings;
 TwitchX.toggleSecret = toggleSecret;
 TwitchX.testConnection = testConnection;
 TwitchX.saveSettings = saveSettings;
+TwitchX.loadWatchStatistics = loadWatchStatistics;
+TwitchX.renderWatchStats = renderWatchStats;

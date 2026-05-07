@@ -294,6 +294,148 @@ def test_watch_uses_kick_platform_for_kick_stream(
     assert any("onStreamReady" in code for code in emitted)
 
 
+def test_watch_is_noop_when_already_watching_same_channel(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    api = TwitchXApi()
+    api._watching_channel = "shroud"
+    api._live_streams = [
+        {
+            "login": "shroud",
+            "title": "Test stream",
+            "platform": "twitch",
+        }
+    ]
+
+    emitted: list[str] = []
+    monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+    monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+
+    api.watch("shroud", "best")
+
+    assert not any("onStreamReady" in code for code in emitted)
+    assert any("Already watching" in code for code in emitted)
+    assert api._watching_channel == "shroud"
+
+
+def test_watch_is_noop_case_insensitive(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    api = TwitchXApi()
+    api._watching_channel = "Shroud"
+    api._live_streams = [
+        {
+            "login": "shroud",
+            "title": "Test stream",
+            "platform": "twitch",
+        }
+    ]
+
+    emitted: list[str] = []
+    monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+    monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+
+    api.watch("shroud", "best")
+
+    assert not any("onStreamReady" in code for code in emitted)
+    assert any("Already watching" in code for code in emitted)
+    assert api._watching_channel == "Shroud"
+
+
+def test_watch_starts_new_session_after_ending_previous(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    api = TwitchXApi()
+    api._live_streams = [
+        {"login": "one", "title": "First", "platform": "twitch"},
+        {"login": "two", "title": "Second", "platform": "twitch"},
+    ]
+    monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+    monkeypatch.setattr(api, "_eval_js", lambda code: None)
+    monkeypatch.setattr(api._streams, "_start_launch_timer", lambda: None)
+    monkeypatch.setattr(api._streams, "_cancel_launch_timer", lambda: None)
+    monkeypatch.setattr(api, "start_chat", lambda channel, platform: None)
+    monkeypatch.setattr(
+        "ui.api.streams.resolve_hls_url",
+        lambda channel, quality, streamlink_path, platform_client=None: (
+            f"https://example.com/{channel}.m3u8",
+            "",
+        ),
+    )
+
+    api.watch("one", "best")
+    first_session = api._active_watch_session
+    api._watching_channel = None
+    api.watch("two", "best")
+
+    recent = api._watch_stats.get_recent_sessions(10)
+    first = next(row for row in recent if row["id"] == first_session)
+    assert first["ended_at"] is not None
+    assert api._active_watch_session != first_session
+
+
+def test_watch_ignores_late_resolver_after_launch_invalidated(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    api = TwitchXApi()
+    api._live_streams = [{"login": "shroud", "title": "Live", "platform": "twitch"}]
+    emitted: list[str] = []
+
+    def fake_resolve(
+        channel: str,
+        quality: str,
+        streamlink_path: str = "streamlink",
+        platform_client=None,
+    ) -> tuple[str, str]:
+        api._launch_id += 1
+        return "https://example.com/late.m3u8", ""
+
+    monkeypatch.setattr("ui.api.streams.resolve_hls_url", fake_resolve)
+    monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+    monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+    monkeypatch.setattr(api._streams, "_start_launch_timer", lambda: None)
+    monkeypatch.setattr(api._streams, "_cancel_launch_timer", lambda: None)
+
+    api.watch("shroud", "best")
+
+    assert not any("onStreamReady" in code for code in emitted)
+    assert api._watching_channel is None
+
+
+def test_watch_media_resolves_original_media_url(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    api = TwitchXApi()
+    captured: dict[str, str] = {}
+    emitted: list[str] = []
+
+    def fake_resolve(
+        channel: str,
+        quality: str,
+        streamlink_path: str = "streamlink",
+        platform_client=None,
+    ) -> tuple[str, str]:
+        captured["channel"] = channel
+        return "https://example.com/vod.m3u8", ""
+
+    monkeypatch.setattr("ui.api.streams.resolve_hls_url", fake_resolve)
+    monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+    monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+    monkeypatch.setattr(api._streams, "_start_launch_timer", lambda: None)
+    monkeypatch.setattr(api._streams, "_cancel_launch_timer", lambda: None)
+
+    api.watch_media(
+        "https://www.twitch.tv/videos/123",
+        "best",
+        platform="twitch",
+        channel="xqc",
+        title="VOD",
+    )
+
+    assert captured["channel"] == "https://www.twitch.tv/videos/123"
+    assert any("onStreamReady" in code for code in emitted)
+
+
 def test_watch_external_uses_kick_platform_for_kick_stream(
     temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -588,7 +730,6 @@ class TestFetchLock:
     def test_concurrent_refresh_is_no_op(self, temp_config_dir, monkeypatch) -> None:
         """A second refresh() while one is in progress must be a no-op."""
 
-
         from core.storage import DEFAULT_CONFIG, save_config
 
         cfg = {
@@ -646,7 +787,6 @@ class TestPollLock:
     ) -> None:
         """Concurrent start_polling calls must result in exactly one active timer chain."""
 
-
         from ui.api import TwitchXApi
 
         api = TwitchXApi()
@@ -688,7 +828,6 @@ class TestAsyncFetchIsolation:
         self, temp_config_dir, monkeypatch
     ) -> None:
         """If Twitch raises, Kick results must still be returned."""
-
 
         from core.storage import DEFAULT_CONFIG, save_config
 
@@ -738,7 +877,6 @@ class TestAsyncFetchIsolation:
         self, temp_config_dir, monkeypatch
     ) -> None:
         """If Twitch times out, Kick results must still be returned."""
-
 
         from core.storage import DEFAULT_CONFIG, save_config
 
@@ -1028,8 +1166,12 @@ class TestAddMultiSlot:
         monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
 
-        def fake_resolve(ch: str, q: str, sl: str, platform_client=None) -> tuple[str, str]:
-            captured["platform"] = platform_client.PLATFORM_ID if platform_client else ""
+        def fake_resolve(
+            ch: str, q: str, sl: str, platform_client=None
+        ) -> tuple[str, str]:
+            captured["platform"] = (
+                platform_client.PLATFORM_ID if platform_client else ""
+            )
             return "https://hls.example.com/s.m3u8", ""
 
         monkeypatch.setattr("ui.api.streams.resolve_hls_url", fake_resolve)
@@ -1039,6 +1181,63 @@ class TestAddMultiSlot:
         assert captured["platform"] == "kick"
         payload = json.loads(emitted[0].split("(", 1)[1].rstrip(")"))
         assert payload["platform"] == "kick"
+
+    def test_youtube_slot_preserves_channel_id_case_for_lookup(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        api = TwitchXApi()
+        api._live_streams = [
+            {
+                "login": "UCAbCdEfGhIjKlMnOpQrStU",
+                "platform": "youtube",
+                "title": "Live",
+                "video_id": "abc123def45",
+            }
+        ]
+        emitted: list[str] = []
+        captured: dict[str, str] = {}
+        monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+
+        def fake_resolve(
+            ch: str, q: str, sl: str, platform_client=None
+        ) -> tuple[str, str]:
+            captured["channel"] = ch
+            return "https://hls.example.com/yt.m3u8", ""
+
+        monkeypatch.setattr("ui.api.streams.resolve_hls_url", fake_resolve)
+
+        api.add_multi_slot(0, "UCAbCdEfGhIjKlMnOpQrStU", "youtube", "best")
+
+        assert captured["channel"] == "abc123def45"
+        payload = json.loads(emitted[0].split("(", 1)[1].rstrip(")"))
+        assert "error" not in payload
+
+
+def test_refresh_no_favorites_reports_kick_credentials(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = {
+        **DEFAULT_CONFIG,
+        "platforms": {
+            **DEFAULT_CONFIG["platforms"],
+            "kick": {
+                **DEFAULT_CONFIG["platforms"]["kick"],
+                "client_id": "kick_id",
+                "client_secret": "kick_secret",
+            },
+        },
+    }
+    save_config(config)
+
+    api = TwitchXApi()
+    emitted: list[str] = []
+    monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+
+    api.refresh()
+
+    payload = json.loads(emitted[-1].split("window.onStreamsUpdate(", 1)[1].rstrip(")"))
+    assert payload["has_credentials"] is True
 
 
 def test_get_config_includes_pip_and_shortcuts(
@@ -1087,3 +1286,56 @@ def test_save_settings_persists_pip_enabled_and_shortcuts(
     sc = settings["keyboard_shortcuts"]
     assert sc["refresh"] == "g"
     assert sc["mute"] == "n"
+
+
+def test_save_settings_filters_unknown_shortcut_keys(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "start_polling", lambda interval: None)
+    monkeypatch.setattr(api, "_eval_js", lambda code: None)
+
+    api.save_settings(
+        json.dumps(
+            {
+                "keyboard_shortcuts": {
+                    "refresh": "g",
+                    "unknown_action": "z",
+                }
+            }
+        )
+    )
+
+    stored = load_config()
+    sc = stored["settings"]["keyboard_shortcuts"]
+    assert "refresh" in sc
+    assert "unknown_action" not in sc
+
+
+def test_save_settings_filters_invalid_shortcut_values_and_falls_back_to_defaults(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "start_polling", lambda interval: None)
+    monkeypatch.setattr(api, "_eval_js", lambda code: None)
+
+    api.save_settings(
+        json.dumps(
+            {
+                "keyboard_shortcuts": {
+                    "refresh": "g",
+                    "mute": "",
+                    "pip": "a" * 51,
+                    "fullscreen": 123,
+                }
+            }
+        )
+    )
+
+    stored = load_config()
+    sc = stored["settings"]["keyboard_shortcuts"]
+    assert sc.get("refresh") == "g"
+    # Invalid values are filtered out; deep_merge restores defaults for missing keys
+    assert sc.get("mute") == "m"
+    assert sc.get("pip") == "p"
+    assert sc.get("fullscreen") == "f"

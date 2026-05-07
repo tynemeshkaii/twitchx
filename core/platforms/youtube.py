@@ -159,7 +159,11 @@ class YouTubeClient(BasePlatformClient):
         async with self._get_token_lock():
             self._reload_config()
             yc = self._platform_config()
-            if yc.get("access_token") and yc.get("token_expires_at", 0) > asyncio.get_running_loop().time() + 60:
+            if (
+                yc.get("access_token")
+                and yc.get("token_expires_at", 0)
+                > asyncio.get_running_loop().time() + 60
+            ):
                 return yc["access_token"]
             if yc.get("refresh_token"):
                 try:
@@ -692,9 +696,7 @@ class YouTubeClient(BasePlatformClient):
             }
             if page_token:
                 params["pageToken"] = page_token
-            data = await self._get(
-                "subscriptions", params=params, auth_required=True
-            )
+            data = await self._get("subscriptions", params=params, auth_required=True)
 
             for item in data.get("items", []):
                 snippet = item.get("snippet", {})

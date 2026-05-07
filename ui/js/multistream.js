@@ -45,11 +45,23 @@ function toggleMsSidebar() {
   if (btn) btn.classList.toggle('active', open);
 }
 
+function _bindSlotPiPEvents(video, pipBtn) {
+  if (!video || video._pipEventsBound) return;
+  video._pipEventsBound = true;
+  video.addEventListener('webkitpresentationmodechanged', function() {
+    const inPiP = video.webkitPresentationMode === 'picture-in-picture';
+    if (pipBtn) pipBtn.classList.toggle('active', inPiP);
+  });
+}
+
 function _clearMultiSlot(idx) {
   const slotEl = document.querySelector('.ms-slot[data-slot-idx="' + idx + '"]');
   if (!slotEl) return;
   const video = slotEl.querySelector('.ms-video');
   if (video) {
+    if (TwitchX.isVideoPiP && TwitchX.isVideoPiP(video)) {
+      TwitchX.togglePiP(video);
+    }
     video.pause();
     video.removeAttribute('src');
     video.load();
@@ -61,6 +73,8 @@ function _clearMultiSlot(idx) {
     fresh.muted = true;
     fresh.playsInline = true;
     slotEl.querySelector('.ms-slot-active').insertBefore(fresh, slotEl.querySelector('.ms-loading'));
+    const pipBtn = slotEl.querySelector('.ms-pip-btn');
+    _bindSlotPiPEvents(fresh, pipBtn);
   }
   slotEl.querySelector('.ms-slot-active').style.display = 'none';
   slotEl.querySelector('.ms-slot-empty').style.display = '';
@@ -148,6 +162,17 @@ function toggleMsChat() {
 }
 
 function toggleMsSlotFullscreen(idx) {
+  const slotEl = document.querySelector('.ms-slot[data-slot-idx="' + idx + '"]');
+  const video = slotEl ? slotEl.querySelector('.ms-video') : null;
+
+  // Exit Safari Video Presentation Mode (WKWebView)
+  if (video && video.webkitPresentationMode === 'fullscreen') {
+    if (typeof video.webkitSetPresentationMode === 'function') {
+      video.webkitSetPresentationMode('inline');
+    }
+    return;
+  }
+
   // Exit if already fullscreen
   if (document.fullscreenElement || document.webkitFullscreenElement) {
     if (document.exitFullscreen) document.exitFullscreen();
@@ -155,9 +180,7 @@ function toggleMsSlotFullscreen(idx) {
     return;
   }
   if (!TwitchX.multiState.slots[idx]) return;
-  const slotEl = document.querySelector('.ms-slot[data-slot-idx="' + idx + '"]');
   if (!slotEl) return;
-  const video = slotEl.querySelector('.ms-video');
   if (!video) return;
   // webkitEnterFullscreen is the most reliable path in WKWebView (uses native AVKit)
   if (video.webkitEnterFullscreen) {
@@ -231,6 +254,7 @@ function _createMultiSlot(idx) {
   video.muted = true;
   video.playsInline = true;
   active.appendChild(video);
+
   const loading = document.createElement('div');
   loading.className = 'ms-loading';
   loading.textContent = 'Loading stream...';
@@ -279,6 +303,7 @@ function _createMultiSlot(idx) {
   pipBtn.setAttribute('aria-label', 'Picture in Picture');
   pipBtn.textContent = '\u29C9';
   controls.appendChild(pipBtn);
+  _bindSlotPiPEvents(video, pipBtn);
   const removeBtn = document.createElement('button');
   removeBtn.className = 'ms-remove-btn';
   removeBtn.dataset.slot = idx;
@@ -359,6 +384,39 @@ function _reloadMultiSlot(idx, reason) {
   const video = slotEl.querySelector('.ms-video');
   if (!video || !video.src) return;
 
+  // Do not destroy the DOM element while in PiP or fullscreen — that kills the session
+  if (TwitchX.isVideoPiP && TwitchX.isVideoPiP(video)) {
+    console.log('[VideoHealth] multistream slot', idx, reason, 'soft reset (PiP) at', new Date().toISOString());
+    const oldSrc = video.src;
+    const wasMuted = video.muted;
+    video.pause();
+    video.removeAttribute('src');
+    video.src = '';
+    video.load();
+    video.src = oldSrc;
+    video.muted = wasMuted;
+    video.play().catch(function() {});
+    delete slotEl.dataset._lastTime;
+    delete slotEl.dataset._frozenCount;
+    return;
+  }
+
+  if (video.webkitPresentationMode === 'fullscreen') {
+    console.log('[VideoHealth] multistream slot', idx, reason, 'soft reset (fullscreen) at', new Date().toISOString());
+    const oldSrc = video.src;
+    const wasMuted = video.muted;
+    video.pause();
+    video.removeAttribute('src');
+    video.src = '';
+    video.load();
+    video.src = oldSrc;
+    video.muted = wasMuted;
+    video.play().catch(function() {});
+    delete slotEl.dataset._lastTime;
+    delete slotEl.dataset._frozenCount;
+    return;
+  }
+
   console.log('[VideoHealth] multistream slot', idx, reason, 'reset at', new Date().toISOString());
 
   const oldSrc = video.src;
@@ -377,6 +435,9 @@ function _reloadMultiSlot(idx, reason) {
 
   const active = slotEl.querySelector('.ms-slot-active');
   active.insertBefore(fresh, active.querySelector('.ms-loading'));
+
+  const pipBtn = slotEl.querySelector('.ms-pip-btn');
+  _bindSlotPiPEvents(fresh, pipBtn);
 
   fresh.src = oldSrc;
   fresh.play().catch(function() {});

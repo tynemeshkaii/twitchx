@@ -98,7 +98,9 @@ class PlatformClient(ABC):
     async def get_current_user(self) -> dict[str, Any]: ...
 
     @abstractmethod
-    async def get_live_streams(self, identifiers: list[str]) -> list[dict[str, Any]]: ...
+    async def get_live_streams(
+        self, identifiers: list[str]
+    ) -> list[dict[str, Any]]: ...
 
     @abstractmethod
     async def get_top_streams(
@@ -112,25 +114,31 @@ class PlatformClient(ABC):
     async def get_channel_info(self, identifier: str) -> dict[str, Any]: ...
 
     @abstractmethod
-    async def get_followed_channels(self, user_id: str) -> list[str] | list[dict[str, str]]: ...
+    async def get_followed_channels(
+        self, user_id: str
+    ) -> list[str] | list[dict[str, str]]: ...
 
     @abstractmethod
-    async def get_categories(self, query: str | None = None) -> list[dict[str, Any]]: ...
+    async def get_categories(
+        self, query: str | None = None
+    ) -> list[dict[str, Any]]: ...
 
-    async def resolve_stream_url(
-        self, channel_id: str, quality: str
-    ) -> dict[str, Any]:
+    async def resolve_stream_url(self, channel_id: str, quality: str) -> dict[str, Any]:
         """Optional: return playback info for a live stream."""
         raise NotImplementedError
 
     @abstractmethod
     async def close(self) -> None: ...
 
-    async def get_channel_vods(self, identifier: str, limit: int = 12) -> list[dict[str, Any]]:
+    async def get_channel_vods(
+        self, identifier: str, limit: int = 12
+    ) -> list[dict[str, Any]]:
         """Optional: return recent VODs for a channel."""
         return []
 
-    async def get_channel_clips(self, identifier: str, limit: int = 12) -> list[dict[str, Any]]:
+    async def get_channel_clips(
+        self, identifier: str, limit: int = 12
+    ) -> list[dict[str, Any]]:
         """Optional: return recent clips for a channel."""
         return []
 

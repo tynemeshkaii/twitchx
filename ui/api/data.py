@@ -80,7 +80,10 @@ class DataComponent(BaseApiComponent):
                 return
             self.refresh()
             if self._api._last_successful_fetch > 0:
-                stale = time.time() - self._api._last_successful_fetch > 2 * interval_seconds
+                stale = (
+                    time.time() - self._api._last_successful_fetch
+                    > 2 * interval_seconds
+                )
                 if stale:
                     self._eval_js(
                         "window.onStatusUpdate({text: 'Data may be stale', type: 'warn', stale: true})"
@@ -118,7 +121,12 @@ class DataComponent(BaseApiComponent):
 
         if not all_favorites:
             has_creds = bool(
-                twitch_conf.get("client_id") and twitch_conf.get("client_secret")
+                (twitch_conf.get("client_id") and twitch_conf.get("client_secret"))
+                or (
+                    get_platform_config(self._config, "kick").get("client_id")
+                    and get_platform_config(self._config, "kick").get("client_secret")
+                )
+                or get_platform_config(self._config, "youtube").get("api_key")
             )
             data = json.dumps(
                 {
@@ -449,10 +457,14 @@ class DataComponent(BaseApiComponent):
 
         loop = asyncio.get_event_loop()
         for s in kick_streams:
-            stream_items.append(loop.run_until_complete(self._kick.normalize_stream_item(s)))
+            stream_items.append(
+                loop.run_until_complete(self._kick.normalize_stream_item(s))
+            )
 
         for s in youtube_streams:
-            stream_items.append(loop.run_until_complete(self._youtube.normalize_stream_item(s)))
+            stream_items.append(
+                loop.run_until_complete(self._youtube.normalize_stream_item(s))
+            )
 
         self._live_streams = stream_items
 
@@ -489,21 +501,28 @@ class DataComponent(BaseApiComponent):
 
     @staticmethod
     def _stream_login(stream: dict[str, Any]) -> str:
-        return (
+        login = (
             stream.get("login")
             or stream.get("user_login")
             or stream.get("channel", {}).get("slug", "")
             or stream.get("slug", "")
-        ).lower()
+        )
+        return str(login) if stream.get("platform") == "youtube" else str(login).lower()
+
+    @classmethod
+    def _stream_matches_channel(cls, stream: dict[str, Any], channel: str) -> bool:
+        login = cls._stream_login(stream)
+        if stream.get("platform") == "youtube":
+            return login == channel
+        return login == channel.lower()
 
     @staticmethod
-    def _stream_platform(stream: dict[str, Any]) -> str:
-        return str(stream.get("platform", "twitch"))
+    def _stream_platform(stream: dict[str, Any] | None) -> str:
+        return str((stream or {}).get("platform", "twitch"))
 
     def _find_live_stream(self, channel: str) -> dict[str, Any] | None:
-        channel_lower = channel.lower()
         for stream in self._live_streams:
-            if self._stream_login(stream) == channel_lower:
+            if self._stream_matches_channel(stream, channel):
                 return stream
         return None
 

@@ -220,9 +220,14 @@ def _migrate_favorites_v2(cfg: dict[str, Any]) -> bool:
         if isinstance(entry, dict) and entry.get("platform") == "youtube":
             login: str = entry.get("login", "")
             disp: str = entry.get("display_name", "")
-            if login and disp and login != disp and (
-                login.lower() == disp.lower()
-                or (_yt_id_re.match(disp) and not _yt_id_re.match(login))
+            if (
+                login
+                and disp
+                and login != disp
+                and (
+                    login.lower() == disp.lower()
+                    or (_yt_id_re.match(disp) and not _yt_id_re.match(login))
+                )
             ):
                 entry = {**entry, "login": disp}
                 changed = True
@@ -241,9 +246,9 @@ def _migrate_favorites_v2(cfg: dict[str, Any]) -> bool:
         existing = yt_best.get(k)
         if existing is None:
             yt_best[k] = entry
-        elif _yt_id_re.match(
-            existing.get("display_name", "")
-        ) and not _yt_id_re.match(entry.get("display_name", "")):
+        elif _yt_id_re.match(existing.get("display_name", "")) and not _yt_id_re.match(
+            entry.get("display_name", "")
+        ):
             yt_best[k] = entry
             changed = True
 
@@ -262,9 +267,7 @@ def _migrate_favorites_v2(cfg: dict[str, Any]) -> bool:
                 changed = True
                 continue
             seen.add(key)
-            cleaned.append(
-                {"platform": "twitch", "login": name, "display_name": name}
-            )
+            cleaned.append({"platform": "twitch", "login": name, "display_name": name})
             changed = True
 
         elif isinstance(entry, dict):
@@ -415,7 +418,6 @@ def save_avatar(login: str, data: bytes, platform: str = "twitch") -> None:
 
 
 # ── Browse cache ──────────────────────────────────────────────
-
 
 
 def load_browse_cache() -> dict[str, Any]:

@@ -30,11 +30,6 @@
   background: var(--bg-surface);
   flex-shrink: 0;
 }
-#browse-title {
-  font-size: 14px; font-weight: 700;
-  color: var(--text-primary); flex: 1; letter-spacing: -0.02em;
-}
-
 #browse-platform-tabs { display: flex; gap: 3px; }
 
 #browse-body { flex: 1; overflow-y: auto; padding: 14px; }

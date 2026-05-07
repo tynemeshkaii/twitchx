@@ -10,6 +10,7 @@ from core.oauth_server import wait_for_oauth_code
 
 def test_oauth_server_receives_code() -> None:
     """OAuth server receives code from callback URL."""
+
     def _request() -> None:
         time.sleep(0.1)
         with suppress(Exception):
@@ -32,6 +33,7 @@ def test_oauth_server_timeout() -> None:
 
 def test_oauth_server_ignores_non_callback_paths() -> None:
     """Requests not to /callback are ignored."""
+
     def _bad_request() -> None:
         time.sleep(0.1)
         with suppress(Exception):
@@ -40,9 +42,7 @@ def test_oauth_server_ignores_non_callback_paths() -> None:
     def _good_request() -> None:
         time.sleep(0.2)
         with suppress(Exception):
-            urllib.request.urlopen(
-                "http://localhost:3457/callback?code=real-code"
-            )
+            urllib.request.urlopen("http://localhost:3457/callback?code=real-code")
 
     threading.Thread(target=_bad_request, daemon=True).start()
     threading.Thread(target=_good_request, daemon=True).start()

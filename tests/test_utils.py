@@ -54,10 +54,7 @@ class TestSanitizeKickSlug:
         assert sanitize_kick_slug("train-wreck") == "train-wreck"
 
     def test_url(self) -> None:
-        assert (
-            sanitize_kick_slug("https://kick.com/train-wreck")
-            == "train-wreck"
-        )
+        assert sanitize_kick_slug("https://kick.com/train-wreck") == "train-wreck"
 
     def test_whitespace(self) -> None:
         assert sanitize_kick_slug("  train-wreck  ") == "train-wreck"

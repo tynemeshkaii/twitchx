@@ -39,7 +39,9 @@ h1 { color: #FF6B6B; }
  """
 
 
-def wait_for_oauth_code(port: int = OAUTH_PORT, timeout: int = OAUTH_TIMEOUT_SECONDS) -> str | None:
+def wait_for_oauth_code(
+    port: int = OAUTH_PORT, timeout: int = OAUTH_TIMEOUT_SECONDS
+) -> str | None:
     """Start a temporary HTTP server and wait for Twitch OAuth callback.
 
     Returns the authorization code, or None on timeout.

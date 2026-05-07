@@ -1,255 +1,463 @@
-# AGENTS.md
+# AGENTS.md — TwitchX Project Context
 
-TwitchX — a multi-platform live-stream client for macOS. Single-window pywebview app with native WebKit WebView. Polls Twitch, Kick, and YouTube APIs for live streams; plays via native AVPlayer or IINA fallback.
-
-## Dev Commands
-
-```bash
-make run     # launch (uv run python main.py)
-make debug   # launch with TWITCHX_DEBUG=1 (httpx request/response logging)
-make lint    # ruff check . && pyright .
-make fmt     # ruff format .
-make test    # uv run pytest tests/ -v
-make check   # lint + test (run before committing)
-```
-
-Run a single test file: `uv run pytest tests/test_app.py -v`
-
-## Architecture
-
-**Entrypoint:** `main.py` → `app.py` (TwitchXApp) → creates `TwitchXApi` (from `ui/api/` package) + pywebview window from `ui/index.html`.
-
-**Data flow:** JS event → `pywebview.api.<method>()` → `TwitchXApi` method → `threading.Thread` → `asyncio.new_event_loop()` runs async httpx → results pushed back to JS via `window.evaluate_js('window.onCallback(data)')`.
-
-**Platform clients** (`core/platforms/`): `TwitchClient`, `KickClient`, `YouTubeClient` — each extends `BasePlatformClient` in `core/platforms/base.py`, which itself extends the abstract `PlatformClient` in `core/platform.py`. Shared data models live there too: `StreamInfo`, `ChannelInfo`, `CategoryInfo`, `PlaybackInfo`, `TokenData`, `UserInfo`.
-
-**Chat clients** (`core/chats/`): `TwitchChatClient` (IRC over WebSocket), `KickChatClient` (Pusher WebSocket) — both extend `BaseChatClient` in `core/chats/base.py`, which itself extends the `ChatClient` ABC in `core/chat.py`. Shared models: `ChatMessage`, `ChatStatus`, `ChatSendResult`.
-
-**Config** (`core/storage.py`): v2 nested format at `~/.config/twitchx/config.json`:
-- `config.platforms.twitch`, `config.platforms.kick`, `config.platforms.youtube` — per-platform OAuth/API credentials
-- `config.settings` — quality, refresh intervals, paths, shortcuts
-- `config.favorites` — list of `{login, platform, display_name}` dicts
-- Auto-migrates v1 flat config on first load (keys like `client_id`, `quality` at root)
-- Merge-on-load: missing keys filled from `DEFAULT_CONFIG`, never crash on stale format
-
-**`ui/api/`** (package, after 2026-04-28 Phase 2 decomposition) — Python↔JS bridge split into 7 modules:
-
-| Module | Class | Responsibility |
-|--------|-------|----------------|
-| `ui/api/__init__.py` | `TwitchXApi` | Orchestrator — owns shared state, delegates to sub-components, config methods |
-| `ui/api/_base.py` | `BaseApiComponent` | Shared infra: `_eval_js`, `_run_in_thread`, platform client accessors |
-| `ui/api/auth.py` | `AuthComponent` | OAuth login/logout for Twitch, Kick, YouTube + connection tests |
-| `ui/api/favorites.py` | `FavoritesComponent` | add/remove/reorder channels, import follows, search |
-| `ui/api/data.py` | `DataComponent` | refresh, polling, browse categories/streams, channel profiles |
-| `ui/api/streams.py` | `StreamsComponent` | watch, watch_direct, watch_external, watch_media, multistream, launch timer |
-| `ui/api/chat.py` | `ChatComponent` | start/stop/send chat, save width/visibility, message callbacks |
-| `ui/api/images.py` | `ImagesComponent` | avatar and thumbnail fetching via `_image_pool` |
-
-Key patterns:
-- `BaseApiComponent` provides `_twitch`, `_kick`, `_youtube`, `_config`, `_live_streams` via property delegation to `self._api` (the parent `TwitchXApi`)
-- `TwitchXApi.__init__` creates all sub-components, passing `self` — components access shared state through the orchestrator
-- All public `TwitchXApi` methods delegate to the appropriate sub-component (e.g. `self.login()` → `self._auth.login()`)
-- `_eval_js(code)` wrapper suppresses errors when window is closing (`_shutdown` Event guard)
-- `_run_in_thread(fn)` dispatches to `threading.Thread(daemon=True)` for all async I/O
-- Bounded thread pools: `_image_pool` (max 8) for avatar/thumbnail fetches, `_send_pool` (max 2) for chat sends
-- `app.py` unchanged — `from ui.api import TwitchXApi` imports from the package's `__init__.py`
-
-**`ui/index.html`** — shell (~414 lines) that loads external CSS and JS modules. After 2026-04-28 Phase 3 decomposition:
-
-| Directory | File | Responsibility |
-|-----------|------|----------------|
-| `ui/css/` | `tokens.css` | CSS custom properties (`:root`) |
-| `ui/css/` | `reset.css` | Base resets, scrollbar, accessibility media queries |
-| `ui/css/` | `layout.css` | `#app`, `#main`, `#sidebar`, `#content`, `#toolbar` |
-| `ui/css/` | `components.css` | Buttons, inputs, cards, badges, sidebar sections, chat messages |
-| `ui/css/` | `views.css` | `#player-view`, `#browse-view`, `#channel-view`, `#multistream-view` |
-| `ui/css/` | `player.css` | `#player-bar`, `#chat-panel`, `#chat-resize-handle`, `#live-dot` |
-| `ui/js/` | `state.js` | `TwitchX.state`, `TwitchX.multiState`, shortcuts, chat state |
-| `ui/js/` | `utils.js` | `truncate`, `formatViewers`, `formatUptime`, `setStatus` |
-| `ui/js/` | `api-bridge.js` | `pywebviewready`, `TwitchX.api`, profile helpers |
-| `ui/js/` | `render.js` | `renderGrid`, `createStreamCard`, `createOnboardingCard` |
-| `ui/js/` | `sidebar.js` | `renderSidebar`, `createSidebarItem/Section`, layout logic |
-| `ui/js/` | `player.js` | `showPlayerView`, `hidePlayerView`, volume, fullscreen, PiP |
-| `ui/js/` | `multistream.js` | Slot management, audio/chat focus, dynamic slot creation |
-| `ui/js/` | `browse.js` | `showBrowseView`, category/top-stream loading |
-| `ui/js/` | `channel.js` | `showChannelView`, tabs, media cards, follow/watch actions |
-| `ui/js/` | `chat.js` | `submitChatMessage`, `renderChatEmotes`, reply handling |
-| `ui/js/` | `settings.js` | `openSettings`, `saveSettings`, connection tests |
-| `ui/js/` | `context-menu.js` | `showContextMenu`, `showSidebarContextMenu` |
-| `ui/js/` | `keyboard.js` | `handleKeydown`, shortcut rebinding, hotkeys settings |
-| `ui/js/` | `callbacks.js` | All `window.on*` thin proxies delegating to `TwitchX.*` |
-| `ui/js/` | `init.js` | `DOMContentLoaded`, `_bind*()` event wiring, uptime interval |
-
-Key patterns:
-- All modules use IIFE + `TwitchX` namespace (no globals except `window.on*` callbacks)
-- `var` replaced with `const`/`let` throughout
-- Multistream slots created dynamically via `TwitchX._createMultiSlot()` (no 4× HTML duplication)
-- All inline `onclick` attributes removed; event binding happens in `init.js` via `addEventListener`
-- Script load order: `state` → `utils` → `api-bridge` → `render` → `sidebar` → `player` → `multistream` → `browse` → `channel` → `chat` → `settings` → `context-menu` → `keyboard` → `callbacks` → `init`
-
-## Key Gotchas
-
-### Never block the main thread
-All network I/O runs in `threading.Thread` with `asyncio.new_event_loop()`. Results pushed to JS via `window.evaluate_js()`. The `_shutdown` `threading.Event` guards all `_eval_js()` calls from background threads.
-
-### `watch()` vs `watch_direct()` vs `add_multi_slot()`
-- `watch()` gates on `self._live_streams` cache — use for channels in the poller's grid
-- `watch_direct(channel, platform, quality)` for streams opened from browse (not in live cache). Works for Twitch/Kick only; YouTube browse cards have no `video_id`
-- `add_multi_slot(slot_idx, channel, platform, quality)` for multistream — calls `resolve_hls_url` directly
-
-### Platform-specific identity rules
-- **YouTube channel IDs (`UCxxxx…`)** are case-sensitive — never lowercase them. `remove_channel` and favorite lookups must use exact-case comparison for YouTube
-- **`favorites_meta` uses `"platform:login"` compound keys** (not bare `login`) to avoid collisions when two platforms have identically-named streamers
-- **Kick `channel_id`** is an integer in raw API responses — always coerce with `str()` in `_normalize_channel_info_to_profile`
-
-### `_normalize_channel_info_to_profile(platform)` patterns
-Maps three different raw API shapes to a unified dict. YouTube's `is_live` is set `False` by the normalizer, then corrected by `get_channel_profile` checking `self._live_streams` cache. Kick's `avatar_url` comes from `user.profile_pic`.
-
-### Browse cache
-`_fetch_browse_categories` and `_fetch_browse_top_streams` cache per-platform slots in `~/.config/twitchx/cache/browse_cache.json` (10-min TTL). Use a **local** `config = load_config()` in browse threads — never assign `self._config` from a background thread (shared-state race with polling thread).
-
-### Multistream display rules
-- Show a slot container with **`element.style.display = 'block'`** — never `style.display = ''`. Clearing the inline style hands control to CSS, and `.ms-slot-active { display: none }` is default
-- WKWebView plays audio on `<video>` elements even when parent is `display: none`
-
-### YouTube browse quota
-`get_categories()` costs 1 unit; `get_top_streams()` costs 100 units. Both silently return `[]` when quota exhausted. The 10-min browse cache prevents re-calling on every category click.
-
-### `streamlink --stream-url` timeout
-Can take up to 15s. If the requested quality isn't available, falls back to `best` automatically.
-
-### OAuth flow
-- Redirect URI: `http://localhost:3457/callback`
-- OAuth server in `core/oauth_server.py` has 120s timeout, auto-shuts after handling callback
-- After OAuth flows, HTTP clients are event-loop-scoped — `reset_client()` is now a no-op (each loop gets its own `httpx.AsyncClient`)
-
-### Chat
-- `send_chat` dispatches via `_send_pool` (`ThreadPoolExecutor(max_workers=2)`) — not raw threads
-- `KickChatClient` subscribes to three Pusher aliases — deduplicates via LRU set of `_seen_msg_ids`
-- `stop_chat`: null `self._chat_client` before dispatching async disconnect (race safety)
-- `onChatStatus` gates send input on `status.connected && status.authenticated`, not `connected` alone
-
-### Escape key priority
-Settings overlay → multistream view → context menu → search dropdown. Always dismiss topmost layer first.
-
-### `renderGrid` view guards
-Returns early when `#browse-view` or `#multistream-view` is open — prevents the periodic poller from restoring `stream-grid`'s inline `style.display` over `class="hidden"`.
-
-### pyright exclusion
-`ui/native_player.py` is excluded in `pyproject.toml` — pyobjc type stubs are incomplete. All AppKit/AVKit ops in that file must run on main thread via `AppHelper.callAfter()`.
-
-### DOM safety
-All dynamic content uses `document.createElement()` + `textContent` — no `innerHTML` with user data.
-
-### Config idempotency
-`pywebview` `get_full_config_for_settings()` is synchronous (JS calls, gets immediate return). For async ops, always use callback pattern.
-
-## 2026-04-29 — Phase 4: polymorphic platform strategy + constants consolidation
-
-Replaced platform-branching `if/elif` chains with polymorphic `PlatformClient` methods; consolidated constants; removed dead code; migrated favorites logic into `storage.py`.
-
-### `core/constants.py` (new)
-Consolidated shared constants previously scattered across modules:
-- `IINA_PATH` — fallback media player executable
-- `BROWSE_CACHE_TTL_SECONDS` (600), `BROWSE_CACHE_FILE`
-- `OAUTH_REDIRECT_PORT` (3457), `OAUTH_TIMEOUT_SECONDS` (120)
-- `AVATAR_SIZE`, `THUMBNAIL_SIZE`
-- `RECONNECT_DELAYS` — chat exponential backoff
-
-### Polymorphic `PlatformClient` methods (`core/platform.py`)
-Added to `PlatformClient` ABC and implemented in all three subclasses:
-
-| Method | Twitch | Kick | YouTube |
-|--------|--------|------|---------|
-| `sanitize_identifier(raw)` | `sanitize_twitch_login` | `sanitize_kick_slug` | preserves `UC…` case, `@handle`, `v:` prefix |
-| `normalize_search_result(raw)` | maps Twitch Helix shape | maps Typesense shape | maps YouTube search shape |
-| `normalize_stream_item(raw)` | maps `search_channels`/`followed` item | maps browse/top stream item | maps browse/top stream item |
-| `build_stream_url(channel, **kwargs)` | `https://twitch.tv/{channel}` | `https://kick.com/{channel}` | `https://youtube.com/channel/{channel}` or `https://youtube.com/watch?v={id}` |
-
-### `core/stream_resolver.py` & `core/launcher.py`
-- `resolve_hls_url(url, platform_client, quality)` — accepts `PlatformClient` instance instead of `platform: str`
-- `launch_stream(url, platform_client, quality, player)` — same; calls `platform_client.build_stream_url(...)` when no direct URL
-
-### Dead code removal
-- Deleted `Tooltip` class and `tkinter` import from `core/utils.py`
-- Deleted `ui/theme.py`
-
-### Favorites migration into `core/storage.py`
-- Moved `_migrate_favorites` from `app.py` → `storage._migrate_favorites_v2`
-- Added `sanitize_twitch_login`, `sanitize_kick_slug`, `sanitize_youtube_login` to `core/utils.py` (pure functions, avoids circular imports)
-- `_migrate_favorites_v2` handles:
-  - v1 string favorites → v2 dict conversion
-  - URL extraction (`twitch.tv/…`, `kick.com/…`, `youtube.com/channel/…`)
-  - YouTube `UC…` case preservation, `@handle` and `v:` prefix preservation
-  - Deduplication with human-readable `display_name` preference for YouTube
-  - Kick slug hyphen preservation
-- Removed static normalizers from `ui/api/__init__.py`: `_sanitize_channel_name`, `_normalize_*_search_result`, `_build_*_stream_item`
-
-### `ui/api/` updates for polymorphism
-- `favorites.py`: uses `client.sanitize_identifier()` and `client.normalize_search_result()`
-- `data.py`: uses `client.normalize_stream_item()` in `_on_data_fetched`
-- `streams.py`: updated `resolve_hls_url()` and `launch_stream()` calls for new signatures
-
-### Post-audit fixes
-- `sanitize_youtube_login("v:dQw4w9WgXcQ")` now correctly returns `"v:dQw4w9WgXcQ"` instead of mangling to `@vdqw4w9wgxcq`
-- `_migrate_favorites_v2` keeps sanitized entry login when merging best display name, preventing stale `yt_best` entries from overwriting a freshly-sanitized `v:` or `@handle` login
+TwitchX — мультиплатформенный клиент прямых трансляций для macOS. Однооконное pywebview-приложение с нативным WebKit WebView. Опрашивает API Twitch, Kick и YouTube; воспроизводит стримы через нативный AVPlayer или IINA (fallback).
 
 ---
 
-## 2026-04-29 — pywebview 6.x + WKWebView loading fixes
+## 1. At a Glance
 
-### Problem
-pywebview 6.x injects its bridge code (`pywebview.state`, `pywebview.api`, `finish.js`) via `evaluateJavaScript` during HTML parsing. When using `html=` (inline HTML) with **multiple** inline `<script>` blocks, WKWebView silently drops all blocks **after** the pywebview injection point. This caused:
-- `TwitchX.api` never being set (`api-bridge.js` handler ran after injection)
-- All `TwitchX.*` methods missing (utils.js, render.js, etc. never executed)
-- Entire UI non-functional (buttons, settings, browse — nothing worked)
+### Dev Commands
 
-### Solution
-`app.py` now uses `_inline_resources()` to:
-1. **Inline CSS** — replace `<link rel="stylesheet" href="...">` with `<style>content</style>`
-2. **Merge all JS modules into a single `<script>` block** — replace all `<script src="..."></script>` tags with one merged inline script. This prevents pywebview from interleaving injection between script blocks.
-3. **Remove duplicate `window.TwitchX` bootstrap** — only `state.js` declares `window.TwitchX = window.TwitchX || {}; const TwitchX = window.TwitchX;`, subsequent modules skip the redeclaration.
-
-### `const TwitchX` → `window.TwitchX` fix
-All `ui/js/*.js` files now use:
-```javascript
-window.TwitchX = window.TwitchX || {};
-const TwitchX = window.TwitchX;
+```bash
+make run     # запуск (uv run python main.py)
+make debug   # запуск с TWITCHX_DEBUG=1 (логирование httpx)
+make lint    # ruff check . && pyright .
+make fmt     # ruff format .
+make test    # uv run pytest tests/ -v
+make check   # lint + test (перед коммитом)
 ```
-instead of `const TwitchX = window.TwitchX || {};` which threw `SyntaxError` when modules were merged into one lexical scope.
 
-### `favorites_meta` bare-login keys
-`ui/api/data.py` now builds `favorites_meta` with bare `login` keys (not `"platform:login"` compound keys), matching what JS expects when looking up platform info for sidebar avatars and context menus.
+Запуск одного файла: `uv run pytest tests/test_app.py -v`
 
-### Multistream quality lookup
-`ui/js/multistream.js` reads `(cfg && cfg.quality) || 'best'` instead of `cfg.settings.quality`.
+Покрытие: `make cov` (терминал) или `make cov-html` (`htmlcov/`).
 
-### Multiplatform `get_config()`
-`ui/api/__init__.py` `get_config()` now:
-- Returns favorites from **all** platforms (Twitch + Kick + YouTube)
-- Sets `has_credentials = True` if **any** platform has credentials
+Если `uv` недоступен в `PATH`, используй локальное окружение:
+```bash
+.venv/bin/python -m pytest tests/ -q
+.venv/bin/python -m ruff check .
+.venv/bin/pyright --pythonpath .venv/bin/python .
+```
 
-## Testing
+### Directory Map
 
-Run all: `make test` or `uv run pytest tests/ -v`. Run a single file: `uv run pytest tests/test_app.py -v`.
+| Path | Что находится | Зачем агенту знать |
+|------|---------------|-------------------|
+| `main.py` | Точка входа | Запускает `TwitchXApp` |
+| `app.py` | `TwitchXApp` | Создаёт `TwitchXApi` + окно pywebview |
+| `core/platforms/` | TwitchClient, KickClient, YouTubeClient | Наследуют `BasePlatformClient` → `PlatformClient` |
+| `core/chats/` | TwitchChatClient, KickChatClient | Наследуют `BaseChatClient` → `ChatClient` |
+| `core/storage.py` | Config v2, миграции, DEFAULT_CONFIG | Все операции с `~/.config/twitchx/` |
+| `core/constants.py` | Общие константы | TTL кэша, порты OAuth, размеры изображений, watch_stats |
+| `core/watch_stats.py` | `WatchStatsDB` — SQLite-трекер статистики просмотров | start_session/end_session, daily_summary, get_top_channels, err-handled |
+| `core/stream_resolver.py` | `resolve_hls_url()` | Принимает `PlatformClient` instance |
+| `core/launcher.py` | `launch_stream()` | Принимает `PlatformClient` instance |
+| `ui/api/` | Python↔JS bridge (7 модулей) | См. §5 |
+| `ui/index.html` | Shell (~414 строк) | pywebview 6.x требует inline ресурсов |
+| `ui/css/` | 6 CSS-модулей | См. §3.1 |
+| `ui/js/` | 14 JS-модулей | См. §3.2 |
+| `tests/` | Pytest suite | `conftest.py` с фикстурами |
 
-Coverage: `make cov` (terminal report) or `make cov-html` (HTML report in `htmlcov/`).
+---
 
-### Test infrastructure (`tests/conftest.py`)
+## 2. Architecture Overview
 
-Shared fixtures reduce duplication across test files:
+### Entry Points & Data Flow
 
-| Fixture | Purpose |
-|---------|---------|
-| `temp_config_dir` | Redirects `~/.config/twitchx/` to a temp dir with a minimal `DEFAULT_CONFIG` pre-written. Use in any test that reads/writes config via `core.storage`. |
-| `config_with_twitch_auth` | Same as `temp_config_dir` but pre-populates Twitch OAuth tokens. |
-| `mock_twitch_client` | `MagicMock` configured as a `TwitchClient` with all common methods stubbed as `AsyncMock` returning sensibles defaults. |
-| `mock_kick_client` | Same for `KickClient`. |
-| `mock_youtube_client` | Same for `YouTubeClient`. |
-| `capture_eval_js` | Callable that records all `_eval_js(code)` calls into `capture.calls`; provides `capture.assert_any(fragment)` helper. |
-| `run_sync` | Patches `TwitchXApi._run_in_thread` to execute synchronously (calls `fn()` directly instead of spawning a thread). Apply once per test module and all `TwitchXApi` instances get synchronous dispatch. |
+```
+main.py → app.py (TwitchXApp)
+              ↓
+        TwitchXApi  ←———  pywebview.api.<method>()
+              ↓                  ↑
+    threading.Thread      window.evaluate_js('window.onCallback(data)')
+              ↓
+    asyncio.new_event_loop()
+              ↓
+        httpx.AsyncClient  →  Twitch/Kick/YouTube APIs
+```
 
-Example usage:
+**Правило:** весь сетевой I/O — в `threading.Thread` с отдельным `asyncio` event loop. Результаты пушатся в JS через `_eval_js(code)`. `_shutdown` (`threading.Event`) защищает все вызовы `_eval_js` из фоновых потоков при закрытии окна.
+
+### Class Hierarchy
+
+**Platform Clients**
+```
+PlatformClient (ABC)          ← core/platform.py
+    ↑
+BasePlatformClient            ← core/platforms/base.py
+    ↑
+TwitchClient / KickClient / YouTubeClient
+```
+
+**Chat Clients**
+```
+ChatClient (ABC)              ← core/chat.py
+    ↑
+BaseChatClient                ← core/chats/base.py
+    ↑
+TwitchChatClient / KickChatClient
+```
+
+### Config & Storage
+
+- **Путь:** `~/.config/twitchx/config.json` (v2 nested format).
+- **Watch Statistics DB:** `~/.config/twitchx/watch_stats.db` (SQLite).
+- **Корневые ключи:** `platforms.{twitch,kick,youtube}`, `settings`, `favorites`.
+- **Favorites:** список `{login, platform, display_name}`.
+- **Миграция:** v1 flat config → v2 автоматически при первой загрузке.
+- **Merge-on-load:** недостающие ключи заполняются из `DEFAULT_CONFIG`, приложение никогда не падает на устаревшем формате.
+- **Важно:** из фоновых потоков используйте **локальный** `config = load_config()`, никогда не записывайте в `self._config` из треда (race condition с polling thread).
+
+---
+
+## 3. Frontend Reference (ui/)
+
+### 3.1 CSS Decomposition
+
+| File | Зона ответственности |
+|------|---------------------|
+| `tokens.css` | CSS custom properties (`:root`) |
+| `reset.css` | Base resets, scrollbar, accessibility media queries |
+| `layout.css` | `#app`, `#main`, `#sidebar`, `#content`, `#toolbar` |
+| `components.css` | Buttons, inputs, cards, badges, sidebar sections, chat messages |
+| `views.css` | `#player-view`, `#browse-view`, `#channel-view`, `#multistream-view` |
+| `player.css` | `#player-bar`, `#chat-panel`, `#chat-resize-handle`, `#live-dot`, PiP button active states |
+
+**Containment:** `#player-view`, `#player-content`, `#chat-panel` имеют `contain: layout style paint` для изоляции пересчётов от видео-композитинга.
+
+### 3.2 JS Module Dependency & Load Order
+
+Все модули — IIFE + `TwitchX` namespace. Нет глобалов, кроме `window.on*` callbacks.
+
+Порядок загрузки:
+```
+state → utils → api-bridge → render → sidebar → player → multistream → browse → channel → chat → settings → context-menu → keyboard → callbacks → init
+```
+
+| File | Ответственность |
+|------|-----------------|
+| `state.js` | `TwitchX.state`, `TwitchX.multiState`, shortcuts, chat state |
+| `utils.js` | `truncate`, `formatViewers`, `formatUptime`, `setStatus` |
+| `api-bridge.js` | `pywebviewready`, `TwitchX.api`, profile helpers |
+| `render.js` | `renderGrid`, `createStreamCard`, `createOnboardingCard` |
+| `sidebar.js` | `renderSidebar`, diff-based updates, layout logic |
+| `player.js` | Video lifecycle, health monitors, fullscreen, gentle reset |
+| `multistream.js` | Slot management, audio/chat focus, health monitor |
+| `browse.js` | `showBrowseView`, breadcrumb nav (`Following > Browse > Category`), category/top-stream loading |
+| `channel.js` | `showChannelView`, tabs, media cards, follow/watch actions |
+| `chat.js` | `submitChatMessage`, `renderChatEmotes`, reply handling |
+| `settings.js` | `openSettings`, `saveSettings`, connection tests |
+| `context-menu.js` | `showContextMenu`, `showSidebarContextMenu` |
+| `keyboard.js` | `handleKeydown`, shortcut rebinding, hotkeys (player + multistream scopes), duplicate-key confirm-swap |
+| `callbacks.js` | Все `window.on*` — thin proxies к `TwitchX.*` |
+| `init.js` | `DOMContentLoaded`, `_bind*()` wiring, uptime interval |
+
+**pywebview 6.x Constraint:** модули не загружаются через отдельные `<script src="...">`. `app.py._inline_resources()` мержит все JS в **один** inline `<script>` блок и CSS в inline `<style>`. Только `state.js` содержит `window.TwitchX = window.TwitchX || {};`, остальные используют `const TwitchX = window.TwitchX;`.
+
+### 3.3 Video Player Lifecycle (Player.js)
+
+**Единый источник правды.** Все методы — свойства `window.TwitchX`.
+
+#### Video Element Abstraction
+- `TwitchX._playerVideo` — текущий живой `<video>` элемент.
+- `TwitchX.getPlayerVideo()` — единая точка доступа. Никогда не кешируй `document.getElementById('stream-video')`.
+- `hidePlayerView()` уничтожает старый `<video>` и вставляет свежий пустой элемент через `insertBefore(fresh, firstChild)` (сохраняет порядок DOM: video → handle → chat).
+
+#### Gentle Reset (Crossfade Swap)
+`gentleResetVideo(reason)` — основной способ сброса HLS-буфера:
+1. Создаёт **shadow `<video>`** (`position:absolute`, `opacity:0`) через `insertBefore(newVideo, oldVideo)`.
+2. Новый DOM-нод заставляет WKWebView создать свежий `MediaPlayer`.
+3. Shadow video грузит тот же HLS `src` в mute.
+4. По событию `playing` / `loadeddata` (или fallback 2.5 с) — CSS crossfade 150 мс.
+5. Старый video: `pause() → removeAttribute('src') → load() → remove()`.
+6. Shadow video становится активным (`_playerVideo = newVideo`).
+
+**Guard'ы:**
+- Если `isVideoFullscreen(oldVideo)` → вызывает `softResetVideo(reason)` и возвращает (fullscreen привязан к DOM-ноду, gentle reset убьёт его).
+- Если `isVideoPiP(oldVideo)` → вызывает `softResetVideo(reason)` и возвращает (PiP аналогично привязан к DOM-ноду).
+- `_gentleResetInProgress` + `_gentleResetTimer` — отменяет предыдущий pending reset при повторном вызове.
+- `_playerVideo = null` выставляется **сразу** в начале, предотвращая re-entrancy.
+
+#### Soft Reset (Same-DOM)
+`softResetVideo(reason)` — для случаев, когда нельзя уничтожать DOM-нод (fullscreen):
+- `pause → src = '' → load() → restore src/muted/volume → play()`.
+- Не создаёт новый MediaPlayer, поэтому back-buffer может частично сохраниться.
+- `_softResetInProgress` guard сбрасывается через `setTimeout(..., 100)`.
+
+#### Fullscreen Detection & Toggle
+`isVideoFullscreen(video)`:
+- Проверяет `document.fullscreenElement` / `document.webkitFullscreenElement` через `.contains(video)` (не глобально!).
+- Проверяет `video.webkitPresentationMode === 'fullscreen'` (Safari Video Presentation Mode в WKWebView).
+
+`toggleVideoFullscreen()`:
+- Early return если `getPlayerVideo()` вернул `null` (защита от race при recursive call после PiP exit).
+- Вход: `video.webkitEnterFullscreen()` или `video.requestFullscreen()`.
+- Выход: `video.webkitSetPresentationMode('inline')`, fallback на `document.webkitExitFullscreen()` / `video.webkitExitFullscreen()`.
+- **PiP guard:** если `isVideoPiP(video)` — вызывает `togglePiP(video)` и через 50 мс рекурсивно вызывает себя (WebKit должен выйти из PiP до входа в fullscreen).
+
+#### PiP Detection & Safety
+`isVideoPiP(video)`:
+- Проверяет `video.webkitPresentationMode === 'picture-in-picture'`.
+- Проверяет `document.pictureInPictureElement === video`.
+
+`togglePiP(video)`:
+- WebKit path: `webkitSetPresentationMode('picture-in-picture' / 'inline')`.
+- W3C fallback: `requestPictureInPicture()` / `exitPictureInPicture()`.
+
+**Guards:**
+- `gentleResetVideo`: если `isVideoPiP(oldVideo)` → `softResetVideo(reason)` (не уничтожать DOM-нод в PiP).
+- `hidePlayerView`: перед `video.remove()` вызывает `togglePiP(video)` (иначе нативное PiP окно крашится).
+- `_reloadMultiSlot`: аналогичный guard для `.ms-video` (soft reset при PiP/fullscreen).
+- `_clearMultiSlot`: перед `video.remove()` выходит из PiP (`togglePiP`) — иначе краш нативного окна.
+
+**Events:**
+- `_bindPiPEvents(video)` добавляет `enterpictureinpicture`, `leavepictureinpicture`, `webkitpresentationmodechanged`.
+- Обновляет `#pip-player-btn.active` и `.ms-pip-btn.active`.
+- Вызывается при создании свежего video в `hidePlayerView`, при swap в `gentleResetVideo.doSwap`, и в `showPlayerView` если флаг `_pipEventsBound` отсутствует.
+- **Multistream:** `_bindSlotPiPEvents(video, pipBtn)` — отдельная helper-функция в `multistream.js`, привязывает `webkitpresentationmodechanged` к `.ms-video` и обновляет `.ms-pip-btn.active`. Вызывается при создании слота, после `_reloadMultiSlot`, и после `_clearMultiSlot` (при создании нового video).
+
+#### Health Monitors
+- **`checkVideoHealth()`** — каждые 60 с:
+  - Live-edge drift: `currentTime` отстаёт от `seekable.end` на >120 с → `seekTo(liveEdge)`.
+  - Buffer accumulation: `buffered.end - currentTime > 180` с → `gentleResetVideo('buffer-overflow')`.
+- **`checkFrozenVideo()`** — каждые 10 с:
+  - Если `currentTime` не изменился 10 с при `!paused && readyState >= 2` → `gentleResetVideo('frozen')`.
+- **FPS Monitor** — `requestAnimationFrame` loop:
+  - Пропускает замер при `document.hidden`, `paused`, `readyState < 2`.
+  - Порог: кадр >66 мс (<15 FPS) **подряд** ~5 с → `gentleResetVideo('fps')`.
+- **Proactive Reset** — `gentleResetVideo('proactive')` каждые 30 мин (self-rescheduling `setTimeout`).
+
+**Все reset-пути логируют:** `console.log('[VideoHealth]', reason, src, currentTime)`.
+
+#### Race Safety
+- `hidePlayerView()` при active gentle reset: отменяет таймер, удаляет shadow video, чистит `_gentleReset*` flags.
+- Event delegation для dblclick на `#player-content` вместо прямого `video.addEventListener` — переживает recreation.
+
+### 3.4 Sidebar Lifecycle (Sidebar.js)
+
+**Diff-based rendering** — полная перестройка заменена на in-place updates:
+- `renderSidebar()` сравнивает текущий и новый набор `login` для Online/Offline секций.
+- Если состав не изменился → `updateSidebarItem()` обновляет только текст/classes/src.
+- Если состав изменился → перестраивается только затронутая секция.
+- `applySidebarLayout()` отложен через `requestAnimationFrame`.
+- `updateSidebarItem()` обновляет `aria-label` и кеширует `dataset._lastViewers`.
+
+### 3.5 Chat Lifecycle (Chat.js + Callbacks)
+
+**Batching:**
+- Лимит сообщений: **150** (не 500).
+- Входящие сообщения собираются 50 мс, затем flush одним `DocumentFragment`.
+- `clearChatBatch()` экспортирован как `TwitchX.clearChatBatch`. **Обязательно** вызывать при:
+  - `clearChatMessages()`
+  - `hidePlayerView()`
+  - `switchMultiChat()`
+  - `onChatStatus(connected=true)`
+  - `window.onStreamReady()` (чтобы старые сообщения не висели под новым заголовком)
+
+**Background throttle:** когда `player-view` активен, аватарки/тамбнейлы откладываются через `requestIdleCallback` (timeout 2 с) или пропускаются.
+
+**Python side:**
+- `send_chat` → `_send_pool` (`ThreadPoolExecutor(max_workers=2)`), не raw threads.
+- `KickChatClient` — дедупликация через LRU `_seen_msg_ids` (3 Pusher alias'а).
+- `stop_chat`: `self._chat_client = None` **перед** dispatch async disconnect (race safety).
+- `onChatStatus` в JS gate'ит input на `status.connected && status.authenticated`.
+
+---
+
+## 4. Backend Reference (core/)
+
+### 4.1 Platform Client Hierarchy
+
+**BasePlatformClient** (`core/platforms/base.py`) — общая инфраструктура:
+
+| Member | Назначение |
+|--------|-----------|
+| `PLATFORM_ID` / `PLATFORM_NAME` | `"twitch"` / `"Twitch"` и т.д. |
+| `_loop_clients` / `_token_locks` | Кеш `httpx.AsyncClient` и `asyncio.Lock` per-loop |
+| `_get_client()` | Возвращает/создаёт `httpx.AsyncClient` для текущего loop |
+| `_get_token_lock()` | Возвращает/создаёт `asyncio.Lock` для текущего loop |
+| `_platform_config()` | Секция конфига платформы через `get_platform_config()` |
+| `_request(method, url, ...)` | HTTP wrapper: 429-retry, 401-refresh, возвращает `httpx.Response` |
+| `_check_response_errors(resp)` | Override hook (YouTube: 403 quota exceeded) |
+| `_client_headers()` / `_client_timeout()` | Override hooks |
+
+### 4.2 Polymorphic Platform Methods
+
+Реализованы в каждом подклассе (`core/platform.py`):
+
+| Method | Twitch | Kick | YouTube |
+|--------|--------|------|---------|
+| `sanitize_identifier(raw)` | `sanitize_twitch_login` | `sanitize_kick_slug` | сохраняет `UC…` case, `@handle`, `v:` prefix |
+| `normalize_search_result(raw)` | Twitch Helix shape | Typesense shape | YouTube search shape |
+| `normalize_stream_item(raw)` | `search_channels` / `followed` | browse/top stream item | browse/top stream item |
+| `build_stream_url(channel, **kwargs)` | `https://twitch.tv/{channel}` | `https://kick.com/{channel}` | `https://youtube.com/channel/{channel}` или `/watch?v={id}` |
+
+### 4.3 Stream Resolution & Launcher
+
+- `resolve_hls_url(url, platform_client, quality)` — принимает **instance** `PlatformClient`, не строку `platform`.
+- `launch_stream(url, platform_client, quality, player)` — аналогично.
+- `streamlink --stream-url` — timeout до 15 с; если запрошенное качество недоступно, fallback на `best`.
+
+### 4.4 Chat Client Hierarchy
+
+**BaseChatClient** (`core/chats/base.py`):
+
+| Member | Назначение |
+|--------|-----------|
+| `platform` | `"twitch"` или `"kick"` |
+| `on_message()` / `on_status()` | Регистрация колбэков |
+| `_emit_status(connected, error)` | Пуш статуса в JS |
+| `disconnect()` | Закрытие WS, offline статус |
+| `_reconnect_loop(connect_fn)` | Экспоненциальный backoff (`RECONNECT_DELAYS = [3, 6, 12, 24, 48]`) |
+| `StopReconnect` | Исключение для чистого выхода из reconnect loop |
+
+### 4.5 Config & Constants
+
+**core/constants.py**
+- `IINA_PATH` — fallback media player
+- `BROWSE_CACHE_TTL_SECONDS` = 600, `BROWSE_CACHE_FILE`
+- `OAUTH_REDIRECT_PORT` = 3457, `OAUTH_TIMEOUT_SECONDS` = 120
+- `AVATAR_SIZE`, `THUMBNAIL_SIZE`
+- `RECONNECT_DELAYS`
+- `WATCH_STATS_DB_NAME` = `"watch_stats.db"`, `WATCH_STATS_SESSION_CLEANUP_DAYS` = 90
+
+**core/storage.py**
+- `_migrate_favorites_v2` — v1 string favorites → v2 dict; URL extraction; сохранение `UC…` case, `@handle`, `v:` prefix; дедупликация.
+- `sanitize_twitch_login`, `sanitize_kick_slug`, `sanitize_youtube_login` — pure functions в `core/utils.py`.
+
+**OAuth:**
+- Redirect URI: `http://localhost:3457/callback`
+- OAuth server в `core/oauth_server.py` — 120 с timeout, авто-остановка после callback.
+- `reset_client()` — no-op (каждый loop получает свой `httpx.AsyncClient`).
+
+---
+
+## 5. API Bridge (ui/api/)
+
+### 5.1 Component Decomposition
+
+| Module | Class | Ответственность |
+|--------|-------|-----------------|
+| `__init__.py` | `TwitchXApi` | Оркестратор, shared state, config methods |
+| `_base.py` | `BaseApiComponent` | `_eval_js`, `_run_in_thread`, доступ к клиентам |
+| `auth.py` | `AuthComponent` | OAuth login/logout, connection tests |
+| `favorites.py` | `FavoritesComponent` | add/remove/reorder, import follows, search |
+| `data.py` | `DataComponent` | refresh, polling, browse categories/streams, profiles |
+| `streams.py` | `StreamsComponent` | watch, watch_direct, watch_external, watch_media, multistream |
+| `chat.py` | `ChatComponent` | start/stop/send chat, width/visibility |
+| `images.py` | `ImagesComponent` | avatar/thumbnail fetching via `_image_pool` |
+
+### 5.2 Key Patterns
+
+- `BaseApiComponent` предоставляет `_twitch`, `_kick`, `_youtube`, `_config`, `_live_streams` через property delegation на `self._api`.
+- `TwitchXApi.__init__` создаёт все sub-components, передавая `self`.
+- Все public методы `TwitchXApi` делегируют sub-component (например, `self.login()` → `self._auth.login()`).
+- `_eval_js(code)` — suppress errors при закрытии окна (`_shutdown` guard).
+- `_run_in_thread(fn)` — `threading.Thread(daemon=True)` для всего async I/O.
+- Thread pools: `_image_pool` (max 8) для аватарок, `_send_pool` (max 2) для отправки чата.
+- `_active_watch_session` защищён `_active_watch_lock` (`threading.Lock`) от race между background resolve-тредом и main-thread `stop_player`. `_start_watch_session()` всегда завершает предыдущую active session под этим lock перед записью нового `session_id`.
+- `_launch_id` — generation guard для запуска стрима. Все `watch*` пути должны брать id через `_begin_launch()` и проверять `_is_launch_current()` перед `onStreamReady`/`onLaunchResult(success)`, чтобы late `streamlink` result после timeout не стартовал плеер.
+- `_watch_stats.cleanup_old_sessions()` вынесен в daemon-поток при старте (не блокирует `__init__`). Он удаляет `watch_sessions` и `daily_summary` только старше `WATCH_STATS_SESSION_CLEANUP_DAYS`, не всю историю до сегодняшнего дня.
+
+### 5.3 Watch Methods — When to Use
+
+| Method | Когда использовать | Ограничения |
+|--------|-------------------|-------------|
+| `watch(channel)` | Канал из live grid (sidebar/poller) | Гейт на `self._live_streams` cache; Twitch/Kick/YouTube live, YouTube требует `video_id` в cache |
+| `watch_direct(channel, platform, quality)` | Открыт из Browse (нет в live cache) | Twitch/Kick only; YouTube browse cards не имеют `video_id` |
+| `watch_media(url, quality, platform, channel, title, with_chat)` | VOD/clip/media карточка из Channel view | В `resolve_hls_url()` всегда передавать исходный `url`, не `channel` |
+| `add_multi_slot(slot_idx, channel, platform, quality)` | Multistream | Зовёт `resolve_hls_url` напрямую; YouTube lookup через exact-case channel id + cached `video_id` |
+
+**No-op guard:** `watch()` и `watch_direct()` возвращают `"Already watching ..."`, если `_watching_channel.lower() == channel.lower()`. `_launch_channel is not None` блокирует только concurrent resolve attempts. Timeout должен инвалидировать `_launch_id`, иначе late resolver может отправить противоречивый success после failure.
+
+**Chat preservation:** `stop_chat()` вызывается **внутри** resolve thread **после** `if not hls_url: return`, но **перед** присвоением нового `_watching_channel`. Если `streamlink` упал, старый чат остаётся жив.
+
+**Watch stats:** успешные `watch()`, `watch_direct()`, `watch_media()` и первый multistream slot стартуют session только после успешного HLS resolve. Старт новой session обязан атомарно завершить предыдущую, иначе в SQLite останется `ended_at NULL`.
+
+### 5.4 get_config()
+
+- Возвращает favorites из **всех** платформ (Twitch + Kick + YouTube).
+- `has_credentials = True` если **хотя бы одна** платформа имеет credentials.
+- `refresh()` обязан сохранять ту же семантику `has_credentials` даже когда favorites пустые: Twitch OAuth, Kick cookies/credentials или YouTube API key достаточно для `true`.
+
+---
+
+## 6. Critical Rules & Gotchas
+
+### 6.1 Platform Identity
+- **YouTube channel IDs (`UCxxxx…`)** — case-sensitive. Никогда не lower-case. `remove_channel`, favorite lookups, live-cache checks и multistream lookup — exact-case comparison для YouTube.
+- Для live stream comparisons используй `DataComponent._stream_matches_channel()`, а не ручной `.lower()`. `DataComponent._stream_login()` сохраняет case для YouTube и lower-case только для Twitch/Kick.
+- **`favorites_meta` использует bare `login` keys** (не `"platform:login"` compound keys), так как JS ожидает именно это для sidebar avatars и context menus.
+- **Kick `channel_id`** — integer в raw API. Всегда приводить `str()` в `_normalize_channel_info_to_profile`.
+
+### 6.2 Multistream Display
+- Показывать slot: `element.style.display = 'block'` — **никогда** `style.display = ''`. Очистка inline style отдаёт управление CSS, а `.ms-slot-active { display: none }` — default.
+- WKWebView проигрывает audio на `<video>` даже когда parent имеет `display: none`.
+
+### 6.3 Browse & Quota
+- Browse cache: `~/.config/twitchx/cache/browse_cache.json`, TTL 10 мин.
+- YouTube: `get_categories()` = 1 unit, `get_top_streams()` = 100 units. При исчерпании quota — silent `[]`.
+
+### 6.4 UI Safety
+- **DOM safety:** весь динамический контент через `document.createElement()` + `textContent`. Никакого `innerHTML` с user data.
+- **Escape key priority:** Settings overlay → channel view → browse view → multistream view → context menu → search dropdown. Всегда закрывать верхний слой первым.
+- **renderGrid guards:** возвращает early, если открыт `#browse-view` или `#multistream-view` (prevent poller от восстановления `stream-grid` display).
+
+### 6.5 pyright & Native Code
+- `ui/native_player.py` исключён в `pyproject.toml` (pyobjc stubs incomplete).
+- Все AppKit/AVKit операции в `native_player.py` — только на main thread через `AppHelper.callAfter()`.
+
+### 6.6 Config Idempotency
+- `get_full_config_for_settings()` — **синхронный** (JS вызывает, получает immediate return).
+- Для async ops — всегда callback pattern.
+
+---
+
+## 7. Decision Log
+
+Краткая история ключевых архитектурных решений. Текущее состояние — см. тематические секции выше.
+
+| Date | Phase | Problem | Solution | Status |
+|------|-------|---------|----------|--------|
+| 2026-04-28 | Phase 1-3 | Монолитные `app.py` и `index.html` | Декомпозиция `ui/api/` (7 модулей), CSS (6 файлов), JS (14 модулей). Base class hierarchy для platform/chat clients. | ✅ Active |
+| 2026-04-29 | Phase 4 | `if/elif` chains по платформам | Полиморфные методы в `PlatformClient` (sanitize/normalize/build_stream_url). Консолидация констант в `core/constants.py`. Миграция favorites в `storage.py`. | ✅ Active |
+| 2026-04-29 | pywebview 6.x | WKWebView silent drop script blocks после bridge injection | `_inline_resources()` в `app.py`: inline CSS + single merged JS block. `window.TwitchX` bootstrap только в `state.js`. | ✅ Active |
+| 2026-04-30 | Playback stability | FPS drop, stutter после 30–60 мин | Health monitor (live-edge drift, buffer accumulation). FPS monitor (66 ms threshold). Sidebar diff-based rendering. Chat batching (50 мс). CSS containment. | ✅ Active |
+| 2026-04-30 | Gentle reset | `softResetVideo()` не уничтожал MediaPlayer | `gentleResetVideo()` — shadow video + crossfade swap. Frozen detection (10 с). Proactive reset (30 мин). Multistream health monitor. | ✅ Active |
+| 2026-04-30 | Sidebar switching | Нельзя переключить канал без закрытия плеера | Убран hard block `_watching_channel is not None`. Case-insensitive no-op guard. `stop_chat()` после проверки `hls_url`. | ✅ Active |
+| 2026-05-02 | Fullscreen fixes | Chat слева, auto fullscreen exit, dblclick не выходит | `insertBefore` для DOM order. `isVideoFullscreen()` с `webkitPresentationMode`. `softResetVideo()` для fullscreen. Re-entrancy guards. | ✅ Active |
+| 2026-05-04 | Browse navigation | Нет способа вернуться из Browse в Following, нет breadcrumb-навигации | Breadcrumb `Following > Browse > Category` через `<nav id="browse-breadcrumbs">`. Event delegation для click-обработчиков. Escape закрывает channel → browse → multistream. `hideBrowseView()`/`hideChannelView()` вызывают `renderGrid()`. Guard на `player-view.active` при возврате. | ✅ Active |
+| 2026-05-05 | Phase 9 | PiP крашится при gentle reset, hotkeys не работают в multistream | `isVideoPiP()` guard (softReset fallback), `toggleVideoFullscreen` выходит из PiP перед входом, `hidePlayerView` выходит из PiP перед удалением, expanded hotkey scope (`pip`/`toggle_chat` в multistream), duplicate-key detection с `window.confirm()` swap. | ✅ Active |
+| 2026-05-05 | Phase 9 fixes | Null dereference в toggleVideoFullscreen, PiP event listener loss после _reloadMultiSlot, duplicate-key detection blind spot | `if (!video) return` guard, `_bindSlotPiPEvents()` helper с rebinding после reload/clear, merged `DEFAULT_SHORTCUTS + state.shortcuts` для поиска дубликатов. | ✅ Active |
+| 2026-05-05 | Phase 10 | Import follows не было авто-импорта после логина, не было статистики просмотров | `WatchStatsDB` (core/watch_stats.py) с SQLite-трекингом сессий и daily_summary. Авто-импорт follows после Twitch и YouTube логина. `silent` параметр в import_follows. Statistics dashboard в Settings. | ✅ Active |
+| 2026-05-05 | Phase 10 fixes | Code review выявил 14 багов: assert в production, close() не завершал сессию, рассинхрон дат, нет SQLite error handling, innerHTML, orphaned daily_summary, race на session_id | `raise RuntimeError` вместо `assert`, `_end_watch_session` в `close()`, стандартизация `date(started_at)` везде, `try/except sqlite3.Error` во всех методах, DOM-создание вместо innerHTML, `daily_summary` cleanup, `_active_watch_lock` mutex, daemon-thread cleanup, логгирование silent-ошибок | ✅ Active |
+| 2026-05-07 | Phase 10 review fixes | Code review выявил regressions в stats/playback/config: orphan sessions при switch, VOD игнорировал media URL, weekly stats стирались cleanup, YouTube IDs lower-case, Kick/YouTube credentials терялись при empty favorites, launch timeout race | `_start_watch_session()` завершает предыдущую session, `watch_media()` resolve по `url`, `daily_summary` cleanup по retention window, `_stream_matches_channel()` с exact-case YouTube, `refresh()` считает credentials по всем платформам, `_launch_id` инвалидирует late resolver, JS import callback принимает `{added}` | ✅ Active |
+
+---
+
+## 8. Testing Guide
+
+### 8.1 Shared Fixtures (`tests/conftest.py`)
+
+| Fixture | Назначение |
+|---------|-----------|
+| `temp_config_dir` | Перенаправляет `~/.config/twitchx/` во временную директорию с `DEFAULT_CONFIG` |
+| `config_with_twitch_auth` | Как `temp_config_dir`, но с предзаполненными Twitch OAuth tokens |
+| `mock_twitch_client` | `MagicMock` как `TwitchClient`, методы — `AsyncMock` |
+| `mock_kick_client` | Аналогично для `KickClient` |
+| `mock_youtube_client` | Аналогично для `YouTubeClient` |
+| `capture_eval_js` | Записывает все `_eval_js(code)` вызовы; `capture.assert_any(fragment)` |
+| `run_sync` | Патчит `TwitchXApi._run_in_thread` на синхронное исполнение |
+
+### 8.2 Patterns
+
+- Используй `temp_config_dir` вместо ручного патчинга `CONFIG_DIR` / `CONFIG_FILE`.
+- Используй `run_sync` вместо `monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())`.
+- Используй `capture_eval_js` вместо ручного списка `emitted`.
+- Для launch-timeout race тестов вручную инвалидируй `_launch_id` и проверяй, что late resolver не вызывает `onStreamReady`/success.
+- Для YouTube live-cache тестов используй mixed-case `UC...` id и `_stream_matches_channel()`, чтобы не спрятать bug за `.lower()`.
+
+### 8.3 Verification Commands
+
+```bash
+.venv/bin/python -m pytest tests/ -q
+.venv/bin/python -m ruff check .
+.venv/bin/pyright --pythonpath .venv/bin/python .
+```
+
+Прямой `.venv/bin/pyright .` может не увидеть зависимости в локальном venv; для этого проекта используй `--pythonpath .venv/bin/python`.
+
+### 8.4 Example
+
 ```python
 def test_my_feature(temp_config_dir, run_sync, capture_eval_js):
     api = TwitchXApi()
@@ -258,175 +466,33 @@ def test_my_feature(temp_config_dir, run_sync, capture_eval_js):
     capture_eval_js.assert_any("onSomething")
 ```
 
-### Writing new tests
+---
 
-- Use `temp_config_dir` fixture instead of manually patching `core.storage.CONFIG_DIR`/`CONFIG_FILE`/`_OLD_CONFIG_DIR`
-- Use `run_sync` fixture instead of `monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())`
-- Use `capture_eval_js` fixture instead of `emitted: list[str] = []` + `lambda code: emitted.append(code)`
-- Platform/client mocks: use `mock_twitch_client`, `mock_kick_client`, `mock_youtube_client` from conftest
-- For OAuth tests, see `tests/test_oauth_server.py` for patterns
+## 9. Troubleshooting / Agent Cheat Sheet
 
-## Base class hierarchy (after 2026-04-28 Phase 1 refactoring)
-
-### `BasePlatformClient` (`core/platforms/base.py`)
-
-Shared infrastructure for `TwitchClient`, `KickClient`, `YouTubeClient`:
-
-| Member | Purpose |
-|--------|---------|
-| `PLATFORM_ID` / `PLATFORM_NAME` | Set by subclasses (e.g. `"twitch"`, `"Twitch"`) |
-| `_loop_clients` / `_token_locks` | Per-event-loop `httpx.AsyncClient` and `asyncio.Lock` caching |
-| `_get_client()` | Returns or creates a per-loop `httpx.AsyncClient` |
-| `_get_token_lock()` | Returns or creates a per-loop `asyncio.Lock` |
-| `_platform_config()` | Returns platform config section via `get_platform_config(config, PLATFORM_ID)` |
-| `_request(method, url, ...)` | HTTP wrapper with 429-retry and 401-token-refresh; returns `httpx.Response` |
-| `_check_response_errors(resp)` | Override hook (YouTube: 403 quota exceeded) |
-| `_client_headers()` / `_client_timeout()` | Override hooks for per-platform User-Agent / timeout |
-
-Subclasses keep their own `_get()` with platform-specific auth/URL-building; `_request()` handles common retry logic.
-
-### `BaseChatClient` (`core/chats/base.py`)
-
-Shared infrastructure for `TwitchChatClient`, `KickChatClient`:
-
-| Member | Purpose |
-|--------|---------|
-| `platform` | Set by subclasses (`"twitch"` or `"kick"`) |
-| `on_message()` / `on_status()` | Callback registration |
-| `_emit_status(connected, error)` | Push status updates to registered callback |
-| `disconnect()` | Close WebSocket, emit offline status |
-| `_reconnect_loop(connect_fn)` | Outer reconnect loop with exponential backoff (`RECONNECT_DELAYS = [3, 6, 12, 24, 48]`) |
-| `StopReconnect` | Exception class — raise from `connect_fn` to exit reconnect loop cleanly |
-
-Subclasses define `connect()` which sets up credentials and passes a closure `_connect_ws` to `_reconnect_loop()`.
-
-### ABC updates (`core/platform.py`)
-
-- `refresh_token() -> TokenData` → `refresh_user_token() -> str | None`
-- `get_live_streams(channel_ids)` → `get_live_streams(identifiers)`
-- `get_channel_info(channel_id)` → `get_channel_info(identifier)`
-- `resolve_stream_url()` is now optional (`NotImplementedError` default)
-- `follow()` / `unfollow()` removed from required interface
-- `get_channel_vods()` / `get_channel_clips()` added as optional defaults (return `[]`)
+| Симптом | Искать в | Проверить |
+|---------|---------|-----------|
+| «Видео зависает/тормозит после 30+ мин» | §3.3 | `gentleResetVideo()`, `checkVideoHealth()`, `checkFrozenVideo()`, FPS monitor threshold, proactive reset timer |
+| «Чат не очищается при смене канала» | §3.5 | `clearChatBatch()` вызывается в `onStreamReady`, `hidePlayerView`, `switchMultiChat`? |
+| «Fullscreen сам выходит» | §3.3 | `isVideoFullscreen()` guard в `gentleResetVideo()`. `softResetVideo()` при fullscreen. Multistream `_reloadMultiSlot()` guard. |
+| «Чат оказался слева от видео» | §3.3 | `hidePlayerView()` использует `insertBefore(fresh, firstChild)`, не `appendChild`. |
+| «Двойной клик не выходит из fullscreen» | §3.3 | `toggleVideoFullscreen()` обрабатывает `webkitSetPresentationMode('inline')`. |
+| «PiP окно зависает/крашится» | §3.3 | `isVideoPiP()` guard в `gentleResetVideo()`. `hidePlayerView()` выходит из PiP перед `video.remove()`. Multistream `_clearMultiSlot()` и `_reloadMultiSlot()` имеют аналогичные guards. |
+| «Хоткей не срабатывает в multistream» | §3.2, keyboard.js | Проверить что `pip` и `toggle_chat` расширены на `inMulti` scope. |
+| «Duplicate key warning не появился при rebind» | §3.2, init.js | Проверка ведётся по merged map `DEFAULT_SHORTCUTS + state.shortcuts`. |
+| «Добавляю новую платформу» | §4.1, §4.2, §5 | `PlatformClient` ABC → `BasePlatformClient` → concrete class. Полиморфные методы. `build_stream_url()`. |
+| «Favorites теряются/дублируются» | §2 (Config), §4.5 | `_migrate_favorites_v2`. Case sensitivity YouTube (`UC…`). bare-login keys в `favorites_meta`. |
+| «Browse показывает пустоту» | §6.3 | YouTube quota exhausted? Browse cache TTL (10 мин)? `load_config()` локальный в треде? |
+| «Chat messages дублируются» | §3.5 | `KickChatClient._seen_msg_ids` LRU set. `clearChatBatch()` при смене канала. |
+| «Watch stats не обновляются» | §4.5, core/watch_stats.py | `_end_watch_session()` вызывается в `stop_player`/`stop_multi`? `_start_watch_session()` — после `_watching_channel` в streams.py? `close()` вызывает `_end_watch_session`? |
+| «Watch stats остаётся с `ended_at NULL` после переключения» | §5.2, streams.py | `_start_watch_session()` завершает текущую session под `_active_watch_lock` перед стартом новой? |
+| «Weekly stats пустая после рестарта» | §5.2, core/watch_stats.py | `cleanup_old_sessions()` удаляет `daily_summary` только старше retention window, не все даты `< today`? |
+| «VOD/clip Play запускает live или падает offline» | §5.3, streams.py | `watch_media()` передаёт `url` в `resolve_hls_url()`, а не `channel`? |
+| «YouTube multistream/live slot unavailable при `UC...`» | §6.1, data.py | `_stream_login()` не lower-case YouTube? Сравнение идёт через `_stream_matches_channel()`? Есть cached `video_id`? |
+| «После timeout stream всё равно стартует» | §5.2, streams.py | `_launch_id` инвалидируется на timeout? Resolve thread проверяет `_is_launch_current()` перед callbacks? |
+| «Watch stats не отображаются в Settings» | §3.2, settings.js | `loadWatchStatistics()` экспортирован в `TwitchX.loadWatchStatistics`? В `init.js` вызов через `TwitchX.loadWatchStatistics()`? |
+| «pytest падает с race» | §8 | `run_sync` применён? `temp_config_dir` используется? `_eval_js` замокан? |
 
 ---
 
-## 2026-04-30 — Playback stability: HLS health monitor, FPS recovery, sidebar diffing, chat batching
-
-### Problem
-During long Twitch viewing sessions (>30–60 min), stream playback gradually degraded: FPS dropped, video stuttered. Pausing and resuming temporarily restored smoothness, indicating HLS back-buffer accumulation in WKWebView’s `AVPlayer`.
-
-### Solution
-
-#### `ui/js/player.js` — Video Health Monitor + FPS Monitor
-- **`checkVideoHealth()`** runs every 60 s while player is active:
-  - **Live-edge drift**: if `currentTime` lags `seekable.end` by >120 s → `seek` to live edge.
-  - **Buffer accumulation**: if `buffered.end` exceeds `currentTime` by >300 s → `softResetVideo()`.
-- **`softResetVideo()`** — preserves `src`, `muted`, `volume`; does `pause → load → src → play` to reset `MediaPlayer` without page reload.
-- **FPS monitor** — `requestAnimationFrame` loop measures frame time. Sustained >50 ms frames for 5 s triggers auto `softResetVideo()`.
-- Both monitors start in `showPlayerView()` and cleanly stop in `hidePlayerView()`.
-
-#### `ui/js/sidebar.js` — Diff-based rendering
-- Replaced full `while (list.firstChild) removeChild(...)` rebuild on every poll with **in-place updates**.
-- `renderSidebar()` compares current vs new `login` sets for Online/Offline sections:
-  - If membership unchanged → updates text/classes/src via `updateSidebarItem()` only.
-  - If membership changed → rebuilds only the affected section.
-- `applySidebarLayout()` deferred via `requestAnimationFrame` to avoid forced reflow during video compositing.
-- `updateSidebarItem()` also updates `aria-label` and caches last viewer count in `dataset._lastViewers` for accessibility.
-
-#### `ui/js/callbacks.js` — Chat batching + throttled fetching
-- **Chat limit**: reduced from 500 → **150** messages.
-- **Batch insertion**: incoming messages collect for 50 ms, then flushed as one `DocumentFragment` to reduce layout thrashing.
-- **Background image throttle**: when `player-view` is active, avatar/thumbnail fetches are skipped or deferred via `requestIdleCallback` (timeout 2 s) to free main thread for video.
-
-#### CSS containment (`ui/css/views.css`, `ui/css/player.css`)
-Added `contain: layout style paint` to:
-- `#player-view`
-- `#player-content`
-- `#chat-panel`
-This isolates layout/paint recalculations of chat and sidebar from video compositing.
-
-### Post-implementation debug audit & bug fixes
-
-Three bugs were found during a debug audit and fixed:
-
-1. **Chat batch leak (critical)** — Pending batched messages could flush into the wrong chat after a channel/context switch.
-   - Added `clearChatBatch()` inside the chat-batching IIFE and exported it as `TwitchX.clearChatBatch`.
-   - Called from: `clearChatMessages()`, `hidePlayerView()`, `switchMultiChat()`, and `onChatStatus(connected=true)`.
-
-2. **Missing `TwitchX.api` null-check** — `get_avatar()` was called without guard in the non-player-active path.
-   - Added `if (TwitchX.api)` check before `TwitchX.api.get_avatar()` in `onStreamsUpdate`.
-
-3. **Stale `aria-label` in sidebar** — `updateSidebarItem()` did not refresh the accessibility label when live status or viewer count changed.
-   - `updateSidebarItem()` now updates `aria-label` on `isLive` transition and viewer-count delta, tracking last viewers via `dataset._lastViewers`.
-
----
-
-## 2026-04-29 — Gentle Video Reset + Frozen Detection + Multistream Health
-
-### Problem
-The previous `softResetVideo()` (pause → load → src → play) did not reliably destroy WKWebView's internal `MediaPlayer`, so HLS back-buffers kept accumulating and FPS degraded after 30–60 min of Twitch playback. Manual pause/resume fixed it temporarily, proving the issue was buffer state, not network.
-
-### Solution
-
-#### `ui/js/player.js` — Gentle Video Reset (crossfade swap)
-Replaced `softResetVideo()` with **`gentleResetVideo(reason)`**:
-1. Creates a **shadow `<video>`** with `position:absolute` and `opacity:0`, sharing the same parent as the old element.
-2. New DOM node forces WKWebView to spawn a **fresh `MediaPlayer`**.
-3. Shadow video pre-loads the same HLS `src` muted.
-4. On `playing` or `loadeddata` (or 2.5 s fallback), performs a **150 ms CSS crossfade** (`opacity` transition).
-5. Old video is `pause() → removeAttribute('src') → load() → remove()` to guarantee buffer release.
-6. Shadow video is promoted to the active element (`TwitchX._playerVideo = newVideo`).
-
-This produces no perceptible black screen — only a sub-second opacity blend.
-
-#### `ui/js/player.js` — Video element abstraction
-- Added `TwitchX._playerVideo` and `TwitchX.getPlayerVideo()` so all player code references the current live element, not a stale `document.getElementById` cache.
-- `hidePlayerView()` now **destroys** the old `<video>` and inserts a fresh empty one, preventing a dead MediaPlayer from leaking across sessions.
-
-#### `ui/js/player.js` — Frozen Video Monitor (new)
-- `checkFrozenVideo()` runs every **10 s** while player is active.
-- If `currentTime` has not changed for 10 s while `!paused && readyState >= 2`, the decoder is stuck → triggers `gentleResetVideo('frozen')`.
-
-#### `ui/js/player.js` — Improved Health Monitor triggers
-- Buffer threshold reduced from **300 s → 180 s** (problem starts earlier).
-- Live-edge drift unchanged (>120 s → seek).
-- Proactive reset: silent `gentleResetVideo('proactive')` every **30 min** to prevent accumulation before symptoms appear.
-
-#### `ui/js/player.js` — Improved FPS Monitor
-- Skips measurement when `document.hidden` (macOS throttles rAF on background) or `video.paused` or `readyState < 2`.
-- Threshold raised from **50 ms → 66 ms** (< 15 FPS) to reduce false positives.
-- Requires **consecutive** bad frames for ~5 s, not cumulative count.
-
-#### `ui/js/multistream.js` — Multistream Health Monitor
-- `startMultiHealthMonitor()` / `stopMultiHealthMonitor()` run every **60 s** while multistream is open.
-- Per-slot checks:
-  - **Frozen**: `currentTime` stale for 120 s (2 checks) → `_reloadMultiSlot(idx, 'frozen')`.
-  - **Buffer**: `buffered.end - currentTime > 180 s` → `_reloadMultiSlot(idx, 'buffer-overflow')`.
-  - **Live-edge drift**: `seekable.end - currentTime > 120 s` → seek to edge.
-- `_reloadMultiSlot()` recreates the `<video>` element inside the slot (new MediaPlayer) and restores `src`.
-- `_clearMultiSlot()` now fully destroys the old video and inserts a fresh element.
-
-### Post-implementation bug-fix audit
-
-1. **`gentleResetVideo()` shadow video position** — `appendChild` inserted the shadow video after `#chat-panel`, breaking the flex row order (`video → handle → chat`).
-   - Fixed: `container.insertBefore(newVideo, oldVideo)` preserves DOM order.
-2. **Re-entrant `gentleResetVideo()`** — `getPlayerVideo()` returned the old element during the 160 ms crossfade, so concurrent health checks could trigger a second reset.
-   - Fixed: `TwitchX._playerVideo = null` is set immediately at the start of `gentleResetVideo()`.
-3. **Proactive reset fired only once** — `setTimeout` is single-shot; after the first 30-min reset the timer expired.
-   - Fixed: `startProactiveReset()` now uses a self-rescheduling `setTimeout` callback (acts like `setInterval` but survives resets cleanly).
-4. **`hidePlayerView()` null-reference risk** — `getPlayerVideo()` could theoretically return `null` if DOM was empty.
-   - Fixed: added `if (video) { ... }` guard before `pause()` / `remove()`.
-5. **Multistream frozen detection float jitter** — `String(nowTime) === lastTime` failed on tiny floating-point differences (e.g. `120.5000001` vs `"120.5"`).
-   - Fixed: `Math.abs(nowTime - parseFloat(lastTime)) < 0.5`.
-6. **`addMultiSlot()` missing `.ms-video` guard** — `active.querySelector('.ms-video').muted = true` threw TypeError when the element was absent.
-   - Fixed: stored result in `msVideo` variable with `if (msVideo)` guard.
-7. **PiP button stale reference** — `document.getElementById('stream-video')` in `init.js` could reference a removed element after `gentleResetVideo()`.
-   - Fixed: uses `TwitchX.getPlayerVideo()` instead.
-
-#### `ui/js/init.js` & `ui/js/keyboard.js` — Event delegation
-- Replaced direct `video.addEventListener('dblclick', ...)` with **delegation** on `#player-content` using `e.target.closest('#stream-video')`. This survives video recreation.
-- `keyboard.js` PiP shortcut now uses `TwitchX.getPlayerVideo()` instead of `document.getElementById('stream-video')`.
-
-#### Diagnostic logging
-All reset paths log to `console.log('[VideoHealth]', reason, ...)` with timestamp, src (query-stripped), and currentTime for future debugging.
+*Archive: предыдущая версия файла сохранена как `AGENTS.md.archive`.*

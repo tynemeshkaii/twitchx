@@ -88,7 +88,7 @@
       <div id="browse-view" class="hidden">
         <div id="browse-header">
           <button id="browse-back-btn" class="browse-back-btn hidden">&#8592; Back</button>
-          <span id="browse-title">Browse</span>
+          <nav id="browse-breadcrumbs" aria-label="Browse breadcrumbs"></nav>
           <div id="browse-platform-tabs">
             <button class="browse-platform-tab active" data-platform="all">All</button>
             <button class="browse-platform-tab" data-platform="twitch">Twitch</button>
@@ -258,6 +258,7 @@
       <button class="settings-tab" data-tab="kick">Kick</button>
       <button class="settings-tab" data-tab="youtube">YouTube</button>
       <button class="settings-tab" data-tab="hotkeys">Hotkeys</button>
+      <button class="settings-tab" data-tab="statistics">Statistics</button>
     </div>
 
     <!-- General panel -->
@@ -383,6 +384,51 @@
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
           <input type="checkbox" id="s-pip-enabled"> Show PiP button in player header
         </label>
+      </div>
+    </div>
+
+    <!-- Statistics panel -->
+    <div class="settings-panel" id="settings-panel-statistics">
+      <div id="stats-loading" style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px;">Loading statistics...</div>
+      <div id="stats-content" style="display:none;">
+        <div class="setting-group">
+          <label>Today</label>
+          <div id="stats-today" class="stats-grid">
+            <div class="stat-card">
+              <span class="stat-value" id="stat-today-time">--</span>
+              <span class="stat-label">Watch time</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-value" id="stat-today-streams">--</span>
+              <span class="stat-label">Streams</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-value" id="stat-today-channels">--</span>
+              <span class="stat-label">Channels</span>
+            </div>
+          </div>
+        </div>
+        <div class="setting-group">
+          <label>This Week</label>
+          <div id="stats-weekly"></div>
+        </div>
+        <div class="setting-group">
+          <label>All Time</label>
+          <div class="stats-grid" style="grid-template-columns:1fr 1fr;">
+            <div class="stat-card">
+              <span class="stat-value" id="stat-total-time">--</span>
+              <span class="stat-label">Total watch time</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-value" id="stat-total-channels">--</span>
+              <span class="stat-label">Unique channels</span>
+            </div>
+          </div>
+        </div>
+        <div class="setting-group">
+          <label>Top Channels</label>
+          <div id="stats-top-channels" class="stats-list"></div>
+        </div>
       </div>
     </div>
 

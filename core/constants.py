@@ -26,3 +26,7 @@ JPEG_QUALITY = 85
 CHAT_WIDTH_MIN = 250
 CHAT_WIDTH_MAX = 500
 CHAT_RECONNECT_DELAYS = [3, 6, 12, 24, 48]
+
+# Watch Statistics
+WATCH_STATS_DB_NAME = "watch_stats.db"
+WATCH_STATS_SESSION_CLEANUP_DAYS = 90  # sessions older than this are pruned

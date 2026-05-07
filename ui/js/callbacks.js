@@ -8,6 +8,11 @@ window.onStreamsUpdate = function(data) {
   TwitchX.state.liveSet = new Set(data.live_set || []);
   TwitchX.state.userAvatars = data.user_avatars || {};
 
+  // Phase 9: keep PiP button visibility in sync with server config
+  TwitchX.state.pipEnabled = data.pip_enabled === true;
+  const pipBtn = document.getElementById('pip-player-btn');
+  if (pipBtn) pipBtn.style.display = TwitchX.state.pipEnabled ? '' : 'none';
+
   // Compute viewer trends
   const newStreams = data.streams || [];
   for (const s of newStreams) {
@@ -193,6 +198,10 @@ window.onLaunchProgress = function(data) {
 };
 
 window.onStreamReady = function(data) {
+  // Clear stale chat messages from the previous stream before switching
+  TwitchX.clearChatMessages();
+  if (TwitchX.clearChatBatch) TwitchX.clearChatBatch();
+
   TwitchX.state.playerPlatform = data.platform || 'twitch';
   TwitchX.state.playerHasChat = data.has_chat !== false;
   document.getElementById('player-channel-name').textContent = data.channel || '';
@@ -543,7 +552,8 @@ window.onYouTubeTestResult = function(result) {
   document.getElementById('yt-test-btn').disabled = false;
 };
 
-window.onYouTubeImportComplete = function(count) {
+window.onYouTubeImportComplete = function(data) {
+  const count = data && typeof data === 'object' ? data.added : data;
   const tr = document.getElementById('yt-test-result');
   tr.style.display = 'block';
   tr.textContent = '\u2713 Imported ' + count + ' subscriptions';

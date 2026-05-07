@@ -492,9 +492,7 @@ class KickClient(BasePlatformClient):
         }
 
     async def normalize_stream_item(self, raw: dict[str, Any]) -> dict[str, Any]:
-        slug = (
-            raw.get("slug", "") or raw.get("channel", {}).get("slug", "")
-        ).lower()
+        slug = (raw.get("slug", "") or raw.get("channel", {}).get("slug", "")).lower()
         channel_info = (
             raw.get("channel", {}) if isinstance(raw.get("channel"), dict) else {}
         )

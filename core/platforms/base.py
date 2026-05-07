@@ -104,9 +104,11 @@ class BasePlatformClient(PlatformClient):
         async with self._get_token_lock():
             self._reload_config()
             platform_cfg = self._platform_config()
-            if platform_cfg.get("access_token") and platform_cfg.get(
-                "token_expires_at", 0
-            ) > asyncio.get_running_loop().time() + 60:
+            if (
+                platform_cfg.get("access_token")
+                and platform_cfg.get("token_expires_at", 0)
+                > asyncio.get_running_loop().time() + 60
+            ):
                 return platform_cfg["access_token"]
             if platform_cfg.get("refresh_token"):
                 try:

@@ -17,18 +17,21 @@ class FavoritesComponent(BaseApiComponent):
 
     # ── Import ──────────────────────────────────────────────────
 
-    def import_follows(self) -> None:
+    def import_follows(self, silent: bool = False) -> None:
         if not self._api._current_user:
-            self._eval_js('window.onImportError("Not logged in")')
+            if not silent:
+                self._eval_js('window.onImportError("Not logged in")')
             return
         twitch_conf = self._get_twitch_config()
         user_id = self._api._current_user.get("id", twitch_conf.get("user_id", ""))
         if not user_id:
-            self._eval_js('window.onImportError("No user ID")')
+            if not silent:
+                self._eval_js('window.onImportError("No user ID")')
             return
-        self._eval_js(
-            "window.onStatusUpdate({text: 'Importing followed channels...', type: 'warn'})"
-        )
+        if not silent:
+            self._eval_js(
+                "window.onStatusUpdate({text: 'Importing followed channels...', type: 'warn'})"
+            )
 
         def do_import() -> None:
             loop = asyncio.new_event_loop()
@@ -60,26 +63,31 @@ class FavoritesComponent(BaseApiComponent):
                             added += 1
 
                 self._config = update_config(_apply)
-                result = json.dumps({"added": added})
-                self._eval_js(f"window.onImportComplete({result})")
+                if not silent or added > 0:
+                    result = json.dumps({"added": added})
+                    self._eval_js(f"window.onImportComplete({result})")
                 self._api._data.refresh()
             except Exception as e:
                 msg = str(e)[:80] if str(e) else "Import failed"
-                safe_msg = json.dumps(msg)
-                self._eval_js(f"window.onImportError({safe_msg})")
+                logger.warning("Twitch import %s: %s", "silent" if silent else "failed", e)
+                if not silent:
+                    safe_msg = json.dumps(msg)
+                    self._eval_js(f"window.onImportError({safe_msg})")
             finally:
                 self._close_thread_loop(loop)
 
         self._run_in_thread(do_import)
 
-    def youtube_import_follows(self) -> None:
+    def youtube_import_follows(self, silent: bool = False) -> None:
         yt_conf = self._get_youtube_config()
         if not yt_conf.get("access_token"):
-            self._eval_js('window.onYouTubeImportError("Not logged in to YouTube")')
+            if not silent:
+                self._eval_js('window.onYouTubeImportError("Not logged in to YouTube")')
             return
-        self._eval_js(
-            "window.onStatusUpdate({text: 'Importing YouTube subscriptions...', type: 'warn'})"
-        )
+        if not silent:
+            self._eval_js(
+                "window.onStatusUpdate({text: 'Importing YouTube subscriptions...', type: 'warn'})"
+            )
 
         def do_import() -> None:
             loop = asyncio.new_event_loop()
@@ -111,13 +119,16 @@ class FavoritesComponent(BaseApiComponent):
                             added += 1
 
                 self._config = update_config(_apply)
-                result = json.dumps({"added": added})
-                self._eval_js(f"window.onYouTubeImportComplete({result})")
+                if not silent or added > 0:
+                    result = json.dumps({"added": added})
+                    self._eval_js(f"window.onYouTubeImportComplete({result})")
                 self._api._data.refresh()
             except Exception as e:
                 msg = str(e)[:80] if str(e) else "YouTube import failed"
-                safe_msg = json.dumps(msg)
-                self._eval_js(f"window.onYouTubeImportError({safe_msg})")
+                logger.warning("YouTube import %s: %s", "silent" if silent else "failed", e)
+                if not silent:
+                    safe_msg = json.dumps(msg)
+                    self._eval_js(f"window.onYouTubeImportError({safe_msg})")
             finally:
                 self._close_thread_loop(loop)
 
@@ -352,7 +363,9 @@ class FavoritesComponent(BaseApiComponent):
                         self._kick.search_channels(query)
                     )
                     items.extend(
-                        loop.run_until_complete(self._kick.normalize_search_result(result))
+                        loop.run_until_complete(
+                            self._kick.normalize_search_result(result)
+                        )
                         for result in kick_results
                     )
 
@@ -365,7 +378,9 @@ class FavoritesComponent(BaseApiComponent):
                             self._twitch.search_channels(query)
                         )
                         items.extend(
-                            loop.run_until_complete(self._twitch.normalize_search_result(result))
+                            loop.run_until_complete(
+                                self._twitch.normalize_search_result(result)
+                            )
                             for result in twitch_results
                         )
 
@@ -376,7 +391,9 @@ class FavoritesComponent(BaseApiComponent):
                             self._youtube.search_channels(query)
                         )
                         items.extend(
-                            loop.run_until_complete(self._youtube.normalize_search_result(result))
+                            loop.run_until_complete(
+                                self._youtube.normalize_search_result(result)
+                            )
                             for result in yt_results
                         )
 

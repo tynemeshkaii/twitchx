@@ -49,3 +49,14 @@
 #total-viewers { font-size: 11px; color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 #updated-time { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
 #updated-time.stale { color: var(--error-red); }
+
+/* Phase 9: PiP button active state */
+#pip-player-btn.active {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+}
+.ms-pip-btn.active {
+  background: var(--accent);
+  color: #000;
+}

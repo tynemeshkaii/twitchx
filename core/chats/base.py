@@ -90,9 +90,7 @@ class BaseChatClient(ChatClient):
                         connected=False, error=f"Max reconnect attempts: {e}"
                     )
                     return
-                delay = RECONNECT_DELAYS[
-                    min(attempt - 1, len(RECONNECT_DELAYS) - 1)
-                ]
+                delay = RECONNECT_DELAYS[min(attempt - 1, len(RECONNECT_DELAYS) - 1)]
                 self._emit_status(
                     connected=False, error=f"Reconnecting in {delay}s: {e}"
                 )

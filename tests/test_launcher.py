@@ -79,9 +79,7 @@ class TestLaunchStream:
         client = _mock_platform("https://twitch.tv/xqc")
         result = launch_stream("xqc", "720p60", platform_client=client)
         assert result.success is True
-        mock_resolve.assert_called_once_with(
-            "xqc", "720p60", "streamlink", client
-        )
+        mock_resolve.assert_called_once_with("xqc", "720p60", "streamlink", client)
 
     @patch("core.launcher.check_iina", return_value=None)
     @patch("core.launcher.check_streamlink", return_value="streamlink not found")

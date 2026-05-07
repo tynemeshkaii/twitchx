@@ -62,6 +62,9 @@ function renderHotkeysSettings() {
 }
 
 function handleKeydown(e) {
+  // Phase 9: when a shortcut is being rebound, swallow all keys in capture phase
+  if (TwitchX._rebindAction) return;
+
   const tag = document.activeElement ? document.activeElement.tagName : '';
   const inInput = tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA';
   const sc = TwitchX.state.shortcuts;
@@ -69,6 +72,15 @@ function handleKeydown(e) {
   if (e.key === 'Escape') {
     if (document.getElementById('settings-overlay').classList.contains('visible')) {
       TwitchX.closeSettings(); return;
+    }
+    if (document.getElementById('player-view').classList.contains('active')) {
+      return;
+    }
+    if (!document.getElementById('channel-view').classList.contains('hidden')) {
+      TwitchX.hideChannelView(); return;
+    }
+    if (!document.getElementById('browse-view').classList.contains('hidden')) {
+      TwitchX.browseGoBack(); return;
     }
     if (TwitchX.multiState.open) { TwitchX.closeMultistreamView(); return; }
     if (document.getElementById('context-menu').style.display === 'block') {
@@ -104,16 +116,33 @@ function handleKeydown(e) {
   if (e.key === sc.refresh) { e.preventDefault(); TwitchX.doRefresh(); return; }
   if (e.key === sc.watch || e.key === 'Enter') { e.preventDefault(); TwitchX.doWatch(); return; }
 
-  if (inPlayer) {
-    if (e.key === sc.fullscreen) { e.preventDefault(); TwitchX.toggleVideoFullscreen(); return; }
-    if (e.key === sc.toggle_chat) { e.preventDefault(); TwitchX.toggleChatPanel(); return; }
-    if (e.key === sc.pip) { e.preventDefault(); TwitchX.togglePiP(TwitchX.getPlayerVideo()); return; }
-  }
-
   if (inPlayer || inMulti) {
     if (e.key === sc.volume_up)   { e.preventDefault(); TwitchX.adjustVolume(0.1);  return; }
     if (e.key === sc.volume_down) { e.preventDefault(); TwitchX.adjustVolume(-0.1); return; }
     if (e.key === sc.mute)        { e.preventDefault(); TwitchX.toggleMute();        return; }
+    if (e.key === sc.toggle_chat) {
+      e.preventDefault();
+      if (inMulti) TwitchX.toggleMsChat();
+      else TwitchX.toggleChatPanel();
+      return;
+    }
+  }
+
+  if (inPlayer) {
+    if (e.key === sc.fullscreen) { e.preventDefault(); TwitchX.toggleVideoFullscreen(); return; }
+    if (e.key === sc.pip) { e.preventDefault(); TwitchX.togglePiP(TwitchX.getPlayerVideo()); return; }
+  }
+
+  if (inMulti) {
+    if (e.key === sc.pip) {
+      e.preventDefault();
+      const focusIdx = TwitchX.multiState.audioFocus;
+      if (focusIdx >= 0) {
+        const slotEl = document.querySelector('.ms-slot[data-slot-idx="' + focusIdx + '"]');
+        if (slotEl) TwitchX.togglePiP(slotEl.querySelector('.ms-video'));
+      }
+      return;
+    }
   }
 
   if (!inPlayer && !inMulti) {

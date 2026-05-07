@@ -12,16 +12,20 @@ import httpx
 
 from core.chats.kick_chat import KickChatClient
 from core.chats.twitch_chat import TwitchChatClient
+from core.constants import WATCH_STATS_DB_NAME
 from core.platforms.kick import KickClient
 from core.platforms.twitch import TwitchClient
 from core.platforms.youtube import YouTubeClient
 from core.storage import (
+    CONFIG_DIR,
+    DEFAULT_SETTINGS,
     get_favorite_logins,
     get_platform_config,
     get_settings,
     load_config,
     update_config,
 )
+from core.watch_stats import WatchStatsDB
 
 from .auth import AuthComponent
 from .chat import ChatComponent
@@ -73,6 +77,7 @@ class TwitchXApi:
         self._launch_timer: threading.Timer | None = None
         self._launch_elapsed = 0
         self._launch_channel: str | None = None
+        self._launch_id = 0
         self._last_successful_fetch: float = 0
         self._last_youtube_fetch: float = 0
         self._last_youtube_streams: list[dict[str, Any]] = []
@@ -91,6 +96,13 @@ class TwitchXApi:
         )
         self._chat_client: TwitchChatClient | KickChatClient | None = None
         self._chat_thread: threading.Thread | None = None
+        self._watch_stats = WatchStatsDB(str(CONFIG_DIR / WATCH_STATS_DB_NAME))
+        self._active_watch_session: int | None = None
+        self._active_watch_lock = threading.Lock()
+        threading.Thread(
+            target=self._watch_stats.cleanup_old_sessions,
+            daemon=True,
+        ).start()
 
         # Restore user profile if logged in
         twitch_conf = get_platform_config(self._config, "twitch")
@@ -262,6 +274,13 @@ class TwitchXApi:
     def get_thumbnail(self, login: str, url: str) -> None:
         self._images.get_thumbnail(login, url)
 
+    # Watch Statistics
+    def get_watch_statistics(self, period: str = "today") -> str:
+        return json.dumps(self._watch_stats.get_stats_for_period(period))
+
+    def get_watch_history(self, limit: int = 20) -> str:
+        return json.dumps(self._watch_stats.get_recent_sessions(limit))
+
     # ─── Config methods (stay in orchestrator) ─────────────────
 
     def get_config(self) -> dict[str, Any]:
@@ -397,10 +416,11 @@ class TwitchXApi:
             if "keyboard_shortcuts" in parsed and isinstance(
                 parsed["keyboard_shortcuts"], dict
             ):
+                known = set(DEFAULT_SETTINGS.get("keyboard_shortcuts", {}).keys())
                 validated = {
                     k: v
                     for k, v in parsed["keyboard_shortcuts"].items()
-                    if isinstance(k, str) and isinstance(v, str) and 0 < len(v) <= 50
+                    if k in known and isinstance(v, str) and 0 < len(v) <= 50
                 }
                 st["keyboard_shortcuts"] = validated
 
@@ -471,6 +491,7 @@ class TwitchXApi:
         self._window = window
 
     def close(self) -> None:
+        self._streams._end_watch_session()
         self.stop_chat()
         self._shutdown.set()
         self.stop_polling()

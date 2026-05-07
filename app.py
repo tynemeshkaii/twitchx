@@ -64,7 +64,9 @@ class TwitchXApp:
             css_path = base_dir / href
             if css_path.exists():
                 css_content = css_path.read_text(encoding="utf-8")
-                html = html.replace(match.group(0), f"<style>\n{css_content}\n</style>", 1)
+                html = html.replace(
+                    match.group(0), f"<style>\n{css_content}\n</style>", 1
+                )
 
         # Collect JS modules in order
         js_contents: list[str] = []
@@ -75,7 +77,7 @@ class TwitchXApp:
                 js_contents.append(js_path.read_text(encoding="utf-8"))
 
         # Remove all external script tags
-        html = re.sub(r'<script src="[^"]+"></script>\s*', '', html)
+        html = re.sub(r'<script src="[^"]+"></script>\s*', "", html)
 
         # Merge into a single block — drop duplicate TwitchX bootstrap lines
         merged_parts: list[str] = []

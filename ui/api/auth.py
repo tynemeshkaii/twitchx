@@ -85,6 +85,7 @@ class AuthComponent(BaseApiComponent):
                 if avatar_url:
                     self._api._images.get_avatar(user["login"].lower())
                 self._api._data.refresh()
+                self._api._favorites.import_follows(silent=True)
             except Exception as e:
                 msg = str(e)[:80] if str(e) else "Login failed"
                 safe_msg = json.dumps(msg)
@@ -281,6 +282,7 @@ class AuthComponent(BaseApiComponent):
                 )
                 self._eval_js(f"window.onYouTubeLoginComplete({result})")
                 self._api._data.refresh()
+                self._api._favorites.youtube_import_follows(silent=True)
             except Exception as e:
                 msg = str(e)[:80] if str(e) else "YouTube login failed"
                 safe_msg = json.dumps(msg)
