@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Callable
 
 import websockets
 
@@ -15,8 +16,32 @@ logger = logging.getLogger(__name__)
 TWITCH_IRC_URL = "wss://irc-ws.chat.twitch.tv:443"
 EMOTE_URL_TEMPLATE = "https://static-cdn.jtvnw.net/emoticons/v2/{id}/default/dark/1.0"
 
-# USERNOTICE msg-id values that map to "sub"
 _SUB_MSG_IDS = {"sub", "resub", "subgift", "submysterygift", "giftpaidupgrade"}
+
+
+def parse_names_reply(line: str) -> list[str]:
+    """Parse IRC 353 (NAMES reply) into a list of usernames."""
+    if " 353 " not in line:
+        return []
+    if " :" not in line:
+        return []
+    _, trailing = line.rsplit(" :", 1)
+    users = [u.lstrip("@+") for u in trailing.strip().split() if u.strip()]
+    return users
+
+
+def parse_join_part(line: str) -> tuple[str | None, str | None]:
+    """Parse JOIN or PART line. Returns (action, username) or (None, None)."""
+    for command in ("JOIN", "PART"):
+        if f" {command} " in line or line.endswith(f" {command}"):
+            prefix_end = line.find(" ")
+            if prefix_end < 0:
+                return None, None
+            prefix = line[1:prefix_end] if line.startswith(":") else ""
+            nick = prefix.split("!")[0] if "!" in prefix else ""
+            if nick:
+                return command.lower(), nick
+    return None, None
 
 
 # ── Pure parsing functions ──────────────────────────────────────────
@@ -189,6 +214,11 @@ class TwitchChatClient(BaseChatClient):
     def __init__(self) -> None:
         super().__init__()
         self._login: str | None = None
+        self._users: set[str] = set()
+        self._user_list_callback: Callable[[list[str]], None] | None = None
+
+    def on_user_list(self, callback: Callable[[list[str]], None]) -> None:
+        self._user_list_callback = callback
 
     async def connect(
         self,
@@ -219,7 +249,7 @@ class TwitchChatClient(BaseChatClient):
                     self._ws = ws
                     await ws.send(f"PASS {password}")
                     await ws.send(f"NICK {nick}")
-                    await ws.send("CAP REQ :twitch.tv/tags twitch.tv/commands")
+                    await ws.send("CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership")
                     await ws.send(f"JOIN #{channel_id}")
 
                     self._emit_status(connected=True)
@@ -234,6 +264,23 @@ class TwitchChatClient(BaseChatClient):
                                 continue
                             if line.startswith("PING ") or line == "PING":
                                 await ws.send(line.replace("PING", "PONG", 1))
+                                continue
+                            names = parse_names_reply(line)
+                            if names:
+                                self._users.update(names)
+                                if self._user_list_callback:
+                                    self._user_list_callback(sorted(self._users))
+                                continue
+                            action, nick = parse_join_part(line)
+                            if action == "join" and nick:
+                                self._users.add(nick)
+                                if self._user_list_callback:
+                                    self._user_list_callback(sorted(self._users))
+                                continue
+                            elif action == "part" and nick:
+                                self._users.discard(nick)
+                                if self._user_list_callback:
+                                    self._user_list_callback(sorted(self._users))
                                 continue
                             # Detect login failure and fall back to anonymous
                             if (

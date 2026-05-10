@@ -4,8 +4,8 @@ import json
 import threading
 from typing import Any
 
-from core.constants import DEFAULT_IINA_PATH
-from core.launcher import launch_stream
+from core.constants import DEFAULT_IINA_PATH, DEFAULT_MPV_PATH
+from core.launcher import launch_stream, launch_stream_mpv
 from core.storage import get_settings, load_config, update_config
 from core.stream_resolver import resolve_hls_url
 
@@ -16,6 +16,12 @@ _MAX_LAUNCH_SECONDS = 20
 
 class StreamsComponent(BaseApiComponent):
     """Video playback (native, external, multistream)."""
+
+    def _low_latency_args(self, platform: str, settings: dict) -> list[str]:
+        """Return --twitch-low-latency if setting is enabled for Twitch."""
+        if platform == "twitch" and settings.get("low_latency_mode", False):
+            return ["--twitch-low-latency"]
+        return []
 
     # ── Watch session tracking ──────────────────────────────────
 
@@ -33,17 +39,17 @@ class StreamsComponent(BaseApiComponent):
         title: str = "",
         stream_type: str = "live",
     ) -> None:
-        session_id = self._api._watch_stats.start_session(
-            channel=channel,
-            platform=platform,
-            display_name=display_name,
-            title=title,
-            stream_type=stream_type,
-        )
-        if session_id is not None:
-            with self._api._active_watch_lock:
-                if self._api._active_watch_session is not None:
-                    self._api._watch_stats.end_session(self._api._active_watch_session)
+        with self._api._active_watch_lock:
+            if self._api._active_watch_session is not None:
+                self._api._watch_stats.end_session(self._api._active_watch_session)
+            session_id = self._api._watch_stats.start_session(
+                channel=channel,
+                platform=platform,
+                display_name=display_name,
+                title=title,
+                stream_type=stream_type,
+            )
+            if session_id is not None:
                 self._api._active_watch_session = session_id
 
     def _begin_launch(self, channel: str) -> int:
@@ -61,6 +67,7 @@ class StreamsComponent(BaseApiComponent):
             return False
         self._cancel_launch_timer()
         self._api._launch_channel = None
+        self._api._launch_id += 1
         return True
 
     # ── Watch ──────────────────────────────────────────────────
@@ -129,6 +136,7 @@ class StreamsComponent(BaseApiComponent):
                     quality,
                     settings.get("streamlink_path", "streamlink"),
                     platform_client=self._youtube,
+                    extra_args=self._low_latency_args(platform, settings),
                 )
                 if not self._finish_launch(launch_id):
                     return
@@ -151,15 +159,18 @@ class StreamsComponent(BaseApiComponent):
                 self._start_watch_session(
                     channel, "youtube", display_name=channel, title=title
                 )
+                live_chat_id = stream.get("live_chat_id", "") if stream else ""
                 stream_data = json.dumps(
                     {
                         "url": hls_url,
                         "channel": channel,
                         "title": title,
                         "platform": "youtube",
+                        "stream_type": "live",
                     }
                 )
                 self._eval_js(f"window.onStreamReady({stream_data})")
+                self._api._chat.start_chat(channel, "youtube", live_chat_id=live_chat_id)
                 r = json.dumps(
                     {
                         "success": True,
@@ -182,6 +193,7 @@ class StreamsComponent(BaseApiComponent):
                 quality,
                 settings.get("streamlink_path", "streamlink"),
                 platform_client=platform_client,
+                extra_args=self._low_latency_args(platform, settings),
             )
             if not self._finish_launch(launch_id):
                 return
@@ -210,6 +222,7 @@ class StreamsComponent(BaseApiComponent):
                     "channel": channel,
                     "title": title,
                     "platform": platform,
+                    "stream_type": "live",
                 }
             )
             self._eval_js(f"window.onStreamReady({stream_data})")
@@ -271,6 +284,7 @@ class StreamsComponent(BaseApiComponent):
                 quality,
                 settings.get("streamlink_path", "streamlink"),
                 platform_client=platform_client,
+                extra_args=self._low_latency_args(platform, settings),
             )
             if not self._finish_launch(launch_id):
                 return
@@ -288,7 +302,7 @@ class StreamsComponent(BaseApiComponent):
             self._api._watching_channel = channel
             self._start_watch_session(channel, platform, display_name=channel)
             stream_data = json.dumps(
-                {"url": hls_url, "channel": channel, "title": "", "platform": platform}
+                {"url": hls_url, "channel": channel, "title": "", "platform": platform, "stream_type": "live"}
             )
             self._eval_js(f"window.onStreamReady({stream_data})")
             self._api._chat.start_chat(channel, platform)
@@ -327,13 +341,28 @@ class StreamsComponent(BaseApiComponent):
                 else channel
             )
             platform_client = self._get_platform(platform)
-            result = launch_stream(
-                stream_channel,
-                quality,
-                settings.get("streamlink_path", "streamlink"),
-                settings.get("iina_path", DEFAULT_IINA_PATH),
-                platform_client=platform_client,
-            )
+            extra = self._low_latency_args(platform, settings)
+            external = settings.get("external_player", "iina")
+
+            if external == "mpv":
+                mpv_path = settings.get("mpv_path", DEFAULT_MPV_PATH)
+                result = launch_stream_mpv(
+                    stream_channel,
+                    quality,
+                    settings.get("streamlink_path", "streamlink"),
+                    mpv_path,
+                    platform_client=platform_client,
+                    extra_args=extra,
+                )
+            else:
+                result = launch_stream(
+                    stream_channel,
+                    quality,
+                    settings.get("streamlink_path", "streamlink"),
+                    settings.get("iina_path", DEFAULT_IINA_PATH),
+                    platform_client=platform_client,
+                    extra_args=extra,
+                )
             r = json.dumps(
                 {
                     "success": result.success,
@@ -376,6 +405,7 @@ class StreamsComponent(BaseApiComponent):
                 quality,
                 settings.get("streamlink_path", "streamlink"),
                 platform_client=platform_client,
+                extra_args=self._low_latency_args(platform, settings),
             )
             if not self._finish_launch(launch_id):
                 return
@@ -407,6 +437,7 @@ class StreamsComponent(BaseApiComponent):
                     "title": title,
                     "platform": platform,
                     "has_chat": with_chat,
+                    "stream_type": "vod",
                 }
             )
             self._eval_js(f"window.onStreamReady({stream_data})")
@@ -465,6 +496,7 @@ class StreamsComponent(BaseApiComponent):
                 quality,
                 settings.get("streamlink_path", "streamlink"),
                 platform_client=platform_client,
+                extra_args=self._low_latency_args(platform, settings),
             )
             payload: dict[str, Any] = {
                 "slot_idx": slot_idx,
@@ -491,6 +523,44 @@ class StreamsComponent(BaseApiComponent):
     def stop_multi(self) -> None:
         self._end_watch_session()
         self._api._chat.stop_chat()
+
+    def start_recording(self) -> None:
+        """Begin recording the currently watched channel."""
+        channel = self._api._watching_channel
+        if not channel:
+            self._eval_js(
+                "window.onRecordingState({active: false, filename: null, elapsed: 0, "
+                "error: 'Not watching any channel'})"
+            )
+            return
+        config = load_config()
+        settings = get_settings(config)
+        output_dir = settings.get("recording_path", "")
+        streamlink_path = settings.get("streamlink_path", "streamlink")
+
+        stream = self._api._data._find_live_stream(channel)
+        platform = self._api._data._stream_platform(stream) if stream else "twitch"
+        platform_client = self._get_platform(platform)
+        stream_url = platform_client.build_stream_url(channel) if platform_client else channel
+
+        err = self._api._recorder.start(
+            stream_url, channel, output_dir, streamlink_path
+        )
+        if err:
+            safe_err = json.dumps(err)
+            self._eval_js(
+                f"window.onRecordingState({{active: false, filename: null, elapsed: 0, error: {safe_err}}})"
+            )
+        else:
+            state = json.dumps(self._api._recorder.state_dict())
+            self._eval_js(f"window.onRecordingState({state})")
+
+    def stop_recording(self) -> None:
+        """Stop an active recording."""
+        self._api._recorder.stop()
+        self._eval_js(
+            "window.onRecordingState({active: false, filename: null, elapsed: 0})"
+        )
 
     # ── Launch timer ────────────────────────────────────────────
 

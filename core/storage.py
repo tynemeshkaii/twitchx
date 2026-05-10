@@ -16,6 +16,8 @@ from core.constants import (
     CONFIG_DIR_NAME,
     CONFIG_FILE_NAME,
     DEFAULT_IINA_PATH,
+    DEFAULT_MPV_PATH,
+    DEFAULT_RECORDING_DIR,
 )
 from core.utils import sanitize_kick_slug, sanitize_twitch_login, sanitize_youtube_login
 
@@ -75,12 +77,20 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "youtube_refresh_interval": 300,
     "streamlink_path": "streamlink",
     "iina_path": DEFAULT_IINA_PATH,
+    "external_player": "iina",
+    "mpv_path": DEFAULT_MPV_PATH,
+    "recording_path": DEFAULT_RECORDING_DIR,
     "notifications_enabled": True,
     "player_height": 360,
     "chat_visible": True,
     "chat_width": 340,
     "active_platform_filter": "all",
     "pip_enabled": False,
+    "low_latency_mode": False,
+    "chat_filter_sub_only": False,
+    "chat_filter_mod_only": False,
+    "chat_block_list": [],
+    "chat_anti_spam": True,
     "keyboard_shortcuts": {
         "refresh": "r",
         "watch": " ",

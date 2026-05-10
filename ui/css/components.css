@@ -1444,3 +1444,60 @@
 .stats-list-item .stats-platform-badge {
   font-size: 10px; color: var(--text-muted); margin-left: 6px;
 }
+
+/* ── Chat filter & mention highlight ──────────────────────── */
+
+.chat-msg.mention {
+  background: rgba(var(--accent-rgb, 122, 95, 212), 0.15);
+  border-left: 2px solid var(--accent);
+  padding-left: 6px;
+}
+
+#chat-filter-panel label {
+  font-size: 11px;
+  color: var(--text-primary);
+}
+
+#chat-export-menu .ctx-item {
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+#chat-export-menu .ctx-item:hover {
+  background: var(--bg-elevated);
+}
+
+#chat-userlist-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.userlist-item {
+  padding: 2px 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.userlist-item:hover {
+  background: var(--bg-elevated);
+}
+
+#emote-picker {
+  display: flex;
+  flex-direction: column;
+}
+
+#emote-grid img.emote-pick {
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 2px;
+  transition: background 0.1s;
+}
+#emote-grid img.emote-pick:hover {
+  background: var(--bg-elevated);
+}

@@ -74,6 +74,7 @@ function handleKeydown(e) {
       TwitchX.closeSettings(); return;
     }
     if (document.getElementById('player-view').classList.contains('active')) {
+      TwitchX.hidePlayerView();
       return;
     }
     if (!document.getElementById('channel-view').classList.contains('hidden')) {

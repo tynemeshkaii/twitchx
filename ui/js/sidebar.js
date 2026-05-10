@@ -183,7 +183,7 @@ function createSidebarItem(login, streamMap) {
 
   const name = document.createElement('span');
   name.className = 'name';
-  const favMeta = TwitchX.state.favoritesMeta[login] || {};
+  const favMeta = TwitchX.getFavoriteMeta(login) || {};
   name.textContent = (stream && stream.display_name) || favMeta.display_name || login;
   copy.appendChild(name);
 
@@ -333,7 +333,7 @@ function updateSidebarItem(item, login, streamMap) {
   }
 
   const nameEl = item.querySelector('.name');
-  const favMeta = TwitchX.state.favoritesMeta[login] || {};
+  const favMeta = TwitchX.getFavoriteMeta(login) || {};
   const newName = (stream && stream.display_name) || favMeta.display_name || login;
   if (nameEl.textContent !== newName) {
     nameEl.textContent = newName;

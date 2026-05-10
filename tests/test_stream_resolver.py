@@ -116,3 +116,39 @@ class TestResolveDirectMediaUrl:
         assert err == ""
         call_args = mock_run.call_args[0][0]
         assert "https://www.twitch.tv/videos/123456" in call_args
+
+
+class TestExtraArgs:
+    @patch(
+        "core.stream_resolver.shutil.which", return_value="/usr/local/bin/streamlink"
+    )
+    @patch("core.stream_resolver.subprocess.run")
+    def test_extra_args_are_passed_to_subprocess(
+        self, mock_run: MagicMock, _mock_which: MagicMock
+    ) -> None:
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=b"https://example.com/stream.m3u8\n",
+        )
+        client = _mock_platform("https://twitch.tv/xqc")
+        resolve_hls_url(
+            "xqc", "best", platform_client=client,
+            extra_args=["--twitch-low-latency"],
+        )
+        call_args = mock_run.call_args[0][0]
+        assert "--twitch-low-latency" in call_args
+
+    @patch(
+        "core.stream_resolver.shutil.which", return_value="/usr/local/bin/streamlink"
+    )
+    @patch("core.stream_resolver.subprocess.run")
+    def test_no_extra_args_by_default(
+        self, mock_run: MagicMock, _mock_which: MagicMock
+    ) -> None:
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout=b"https://example.com/stream.m3u8\n",
+        )
+        client = _mock_platform("https://twitch.tv/xqc")
+        resolve_hls_url("xqc", "best", platform_client=client)
+        call_args = mock_run.call_args[0][0]
+        assert "--twitch-low-latency" not in call_args

@@ -144,6 +144,10 @@ TwitchX._bindPlayerEvents = function() {
   if (settingsBtn) settingsBtn.addEventListener('click', TwitchX.openSettings);
   const toggleChatBtn = document.getElementById('toggle-chat-btn');
   if (toggleChatBtn) toggleChatBtn.addEventListener('click', TwitchX.toggleChatPanel);
+  const recordBtn = document.getElementById('record-btn');
+  if (recordBtn) recordBtn.addEventListener('click', TwitchX.toggleRecording);
+  const statsOverlayBtn = document.getElementById('stats-overlay-btn');
+  if (statsOverlayBtn) statsOverlayBtn.addEventListener('click', TwitchX.toggleStatsOverlay);
 };
 
 TwitchX._bindBrowseEvents = function() {
@@ -224,6 +228,111 @@ TwitchX._bindChatEvents = function() {
     TwitchX.clearChatReply();
   });
 
+  // Chat filter panel
+  var chatFilterBtn = document.getElementById('chat-filter-btn');
+  if (chatFilterBtn) chatFilterBtn.addEventListener('click', TwitchX.toggleChatFilterPanel);
+
+  ['chat-filter-sub', 'chat-filter-mod', 'chat-filter-spam'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('change', function() {
+      TwitchX.chatFilters.subOnly = document.getElementById('chat-filter-sub').checked;
+      TwitchX.chatFilters.modOnly = document.getElementById('chat-filter-mod').checked;
+      TwitchX.chatFilters.antiSpam = document.getElementById('chat-filter-spam').checked;
+      TwitchX.saveChatFilters();
+    });
+  });
+
+  var blockInput = document.getElementById('chat-blocklist-input');
+  if (blockInput) {
+    blockInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        var word = this.value.trim().toLowerCase();
+        if (word && TwitchX.chatBlockList.indexOf(word) === -1) {
+          TwitchX.chatBlockList.push(word);
+          if (TwitchX.api) TwitchX.api.save_chat_block_list(JSON.stringify(TwitchX.chatBlockList));
+        }
+        this.value = '';
+      }
+    });
+  }
+
+  // Chat export
+  var chatExportBtn = document.getElementById('chat-export-btn');
+  var chatExportMenu = document.getElementById('chat-export-menu');
+  if (chatExportBtn) {
+    chatExportBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (chatExportMenu) chatExportMenu.style.display = chatExportMenu.style.display === 'none' ? '' : 'none';
+    });
+  }
+  if (document.getElementById('chat-export-json')) {
+    document.getElementById('chat-export-json').addEventListener('click', function() {
+      if (chatExportMenu) chatExportMenu.style.display = 'none';
+      TwitchX.exportChatLog('json');
+    });
+  }
+  if (document.getElementById('chat-export-txt')) {
+    document.getElementById('chat-export-txt').addEventListener('click', function() {
+      if (chatExportMenu) chatExportMenu.style.display = 'none';
+      TwitchX.exportChatLog('txt');
+    });
+  }
+  document.addEventListener('click', function(e) {
+    if (chatExportMenu && chatExportBtn && !chatExportMenu.contains(e.target) && e.target !== chatExportBtn) {
+      chatExportMenu.style.display = 'none';
+    }
+  });
+
+  // Chat user list
+  var chatUserlistBtn = document.getElementById('chat-userlist-btn');
+  if (chatUserlistBtn) chatUserlistBtn.addEventListener('click', TwitchX.toggleChatUserList);
+  var chatUserlistSearch = document.getElementById('chat-userlist-search');
+  if (chatUserlistSearch) {
+    chatUserlistSearch.addEventListener('input', function() {
+      TwitchX.renderChatUserList(this.value.trim());
+    });
+  }
+
+  // Emote picker
+  var emotePickerBtn = document.getElementById('emote-picker-btn');
+  if (emotePickerBtn) emotePickerBtn.addEventListener('click', TwitchX.toggleEmotePicker);
+  var emoteSearch = document.getElementById('emote-search');
+  if (emoteSearch) {
+    emoteSearch.addEventListener('input', function() {
+      TwitchX.renderEmotePicker(this.value.trim());
+    });
+  }
+  document.addEventListener('click', function(e) {
+    if (TwitchX._emotePickerOpen) {
+      var picker = document.getElementById('emote-picker');
+      var btn = document.getElementById('emote-picker-btn');
+      if (picker && btn && !picker.contains(e.target) && e.target !== btn) {
+        TwitchX.closeEmotePicker();
+      }
+    }
+  });
+
+  // Mod controls
+  var chatModBtn = document.getElementById('chat-mod-btn');
+  if (chatModBtn) {
+    chatModBtn.addEventListener('click', function() {
+      var panel = document.getElementById('chat-mod-panel');
+      if (panel) panel.style.display = panel.style.display === 'none' ? '' : 'none';
+    });
+  }
+
+  function _bindModToggle(id, mode) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('change', function() {
+      var slowWait = parseInt(document.getElementById('mod-slow-wait').value, 10) || 30;
+      if (TwitchX.api) TwitchX.api.set_chat_mode(mode, this.checked, slowWait);
+    });
+  }
+  _bindModToggle('mod-emote-only', 'emote_mode');
+  _bindModToggle('mod-slow', 'slow_mode');
+
   // Chat resize
   (function() {
     const handle = document.getElementById('chat-resize-handle');
@@ -271,6 +380,10 @@ TwitchX._bindSettingsEvents = function() {
   if (resetShortcutsBtn) resetShortcutsBtn.addEventListener('click', function() {
     TwitchX.state.shortcuts = Object.assign({}, TwitchX.DEFAULT_SHORTCUTS);
     TwitchX.renderHotkeysSettings();
+  });
+  const extPlayerSelect = document.getElementById('s-external-player');
+  if (extPlayerSelect) extPlayerSelect.addEventListener('change', function() {
+    document.getElementById('s-mpv-group').style.display = this.value === 'mpv' ? '' : 'none';
   });
 
   // Settings tab switching
@@ -382,7 +495,8 @@ TwitchX._bindContextMenuEvents = function() {
     const action = e.target.dataset.action;
     if (!action || !TwitchX.ctxChannel) return;
     const ctxStream = TwitchX.state.streams.find(function(s) { return s.login === TwitchX.ctxChannel; });
-    const ctxPlat = (ctxStream && ctxStream.platform) || (TwitchX.state.favoritesMeta[TwitchX.ctxChannel] && TwitchX.state.favoritesMeta[TwitchX.ctxChannel].platform) || 'twitch';
+    const meta = TwitchX.getFavoriteMeta(TwitchX.ctxChannel);
+    const ctxPlat = (ctxStream && ctxStream.platform) || (meta && meta.platform) || 'twitch';
     if (action === 'watch') { TwitchX.selectChannel(TwitchX.ctxChannel); TwitchX.doWatch(); }
     else if (action === 'watch-external') {
       TwitchX.selectChannel(TwitchX.ctxChannel);
@@ -515,15 +629,28 @@ TwitchX._bindMultistreamEvents = function() {
     const input = document.getElementById('ms-chat-input');
     const text = input.value.trim();
     if (!text || !TwitchX.api) return;
+    const r = TwitchX.chatReplyTo;
     const requestId = 'ms-send-' + Date.now();
-    TwitchX.api.send_chat(text, null, null, null, requestId);
+    TwitchX.api.send_chat(
+      text,
+      r ? r.id : null,
+      r ? r.display : null,
+      r ? r.body : null,
+      requestId
+    );
     input.value = '';
+    if (TwitchX.clearChatReply) TwitchX.clearChatReply();
+    if (TwitchX.closeEmotePicker) TwitchX.closeEmotePicker();
   });
   const msChatInput = document.getElementById('ms-chat-input');
   if (msChatInput) msChatInput.addEventListener('keydown', function(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       document.getElementById('ms-chat-send-btn').click();
+    }
+    if (e.key === 'Escape') {
+      if (TwitchX.chatReplyTo) TwitchX.clearChatReply();
+      e.stopPropagation();
     }
   });
 

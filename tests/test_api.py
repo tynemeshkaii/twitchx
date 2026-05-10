@@ -4,7 +4,8 @@ import asyncio
 import json
 import threading
 from pathlib import Path
-from unittest.mock import patch
+from typing import Any
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -179,7 +180,7 @@ async def test_build_kick_stream_item_maps_current_public_payload() -> None:
     assert item["broadcaster_user_id"] == 21725177
 
 
-def test_save_settings_does_not_clear_existing_credentials_on_blank_fields(
+def test_save_settings_clears_credentials_when_empty(
     temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
 
@@ -197,6 +198,12 @@ def test_save_settings_does_not_clear_existing_credentials_on_blank_fields(
                 "client_id": "kick_id",
                 "client_secret": "kick_secret",
             },
+            "youtube": {
+                **DEFAULT_CONFIG["platforms"]["youtube"],
+                "api_key": "yt_key",
+                "client_id": "yt_cid",
+                "client_secret": "yt_cs",
+            },
         },
     }
     save_config(config)
@@ -212,6 +219,9 @@ def test_save_settings_does_not_clear_existing_credentials_on_blank_fields(
                 "client_secret": "",
                 "kick_client_id": "",
                 "kick_client_secret": "",
+                "youtube_api_key": "",
+                "youtube_client_id": "",
+                "youtube_client_secret": "",
                 "refresh_interval": 60,
                 "streamlink_path": "streamlink",
                 "iina_path": "/Applications/IINA.app/Contents/MacOS/iina-cli",
@@ -220,10 +230,50 @@ def test_save_settings_does_not_clear_existing_credentials_on_blank_fields(
     )
 
     stored = load_config()
-    assert stored["platforms"]["twitch"]["client_id"] == "tw_id"
-    assert stored["platforms"]["twitch"]["client_secret"] == "tw_secret"
-    assert stored["platforms"]["kick"]["client_id"] == "kick_id"
-    assert stored["platforms"]["kick"]["client_secret"] == "kick_secret"
+    assert stored["platforms"]["twitch"]["client_id"] == ""
+    assert stored["platforms"]["twitch"]["client_secret"] == ""
+    assert stored["platforms"]["kick"]["client_id"] == ""
+    assert stored["platforms"]["kick"]["client_secret"] == ""
+    assert stored["platforms"]["youtube"]["api_key"] == ""
+    assert stored["platforms"]["youtube"]["client_id"] == ""
+    assert stored["platforms"]["youtube"]["client_secret"] == ""
+
+
+def test_save_settings_partial_credential_clear(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+
+    config = {
+        **DEFAULT_CONFIG,
+        "platforms": {
+            **DEFAULT_CONFIG["platforms"],
+            "twitch": {
+                **DEFAULT_CONFIG["platforms"]["twitch"],
+                "client_id": "old_id",
+                "client_secret": "old_secret",
+            },
+        },
+    }
+    save_config(config)
+
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "start_polling", lambda interval: None)
+    monkeypatch.setattr(api, "_eval_js", lambda code: None)
+
+    api.save_settings(
+        json.dumps(
+            {
+                "client_id": "",
+                "client_secret": "new_secret",
+                "refresh_interval": 60,
+                "streamlink_path": "streamlink",
+            }
+        )
+    )
+
+    stored = load_config()
+    assert stored["platforms"]["twitch"]["client_id"] == ""
+    assert stored["platforms"]["twitch"]["client_secret"] == "new_secret"
 
 
 def test_add_channel_emits_duplicate_warning_without_refresh(
@@ -275,6 +325,7 @@ def test_watch_uses_kick_platform_for_kick_stream(
         quality: str,
         streamlink_path: str = "streamlink",
         platform_client=None,
+        extra_args=None,
     ) -> tuple[str | None, str]:
         captured["channel"] = channel
         captured["quality"] = quality
@@ -357,7 +408,7 @@ def test_watch_starts_new_session_after_ending_previous(
     monkeypatch.setattr(api, "start_chat", lambda channel, platform: None)
     monkeypatch.setattr(
         "ui.api.streams.resolve_hls_url",
-        lambda channel, quality, streamlink_path, platform_client=None: (
+        lambda channel, quality, streamlink_path, platform_client=None, extra_args=None: (
             f"https://example.com/{channel}.m3u8",
             "",
         ),
@@ -386,6 +437,7 @@ def test_watch_ignores_late_resolver_after_launch_invalidated(
         quality: str,
         streamlink_path: str = "streamlink",
         platform_client=None,
+        extra_args=None,
     ) -> tuple[str, str]:
         api._launch_id += 1
         return "https://example.com/late.m3u8", ""
@@ -414,6 +466,7 @@ def test_watch_media_resolves_original_media_url(
         quality: str,
         streamlink_path: str = "streamlink",
         platform_client=None,
+        extra_args=None,
     ) -> tuple[str, str]:
         captured["channel"] = channel
         return "https://example.com/vod.m3u8", ""
@@ -462,6 +515,7 @@ def test_watch_external_uses_kick_platform_for_kick_stream(
         streamlink_path: str = "streamlink",
         iina_path: str = "",
         platform_client=None,
+        extra_args=None,
     ) -> Result:
         captured["channel"] = channel
         captured["quality"] = quality
@@ -1079,7 +1133,7 @@ class TestAddMultiSlot:
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
         monkeypatch.setattr(
             "ui.api.streams.resolve_hls_url",
-            lambda ch, q, sl, platform_client: ("https://hls.example.com/s.m3u8", ""),
+            lambda ch, q, sl, platform_client=None, extra_args=None: ("https://hls.example.com/s.m3u8", ""),
         )
 
         api.add_multi_slot(0, "xqc", "twitch", "best")
@@ -1102,7 +1156,7 @@ class TestAddMultiSlot:
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
         monkeypatch.setattr(
             "ui.api.streams.resolve_hls_url",
-            lambda ch, q, sl, platform_client: (None, "streamlink not found"),
+            lambda ch, q, sl, platform_client=None, extra_args=None: (None, "streamlink not found"),
         )
 
         api.add_multi_slot(2, "ninja", "twitch", "720p")
@@ -1149,7 +1203,7 @@ class TestAddMultiSlot:
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
         monkeypatch.setattr(
             "ui.api.streams.resolve_hls_url",
-            lambda ch, q, sl, platform_client: ("https://hls.example.com/s.m3u8", ""),
+            lambda ch, q, sl, platform_client=None, extra_args=None: ("https://hls.example.com/s.m3u8", ""),
         )
 
         api.add_multi_slot(0, "xqc", "twitch", "best")
@@ -1167,7 +1221,7 @@ class TestAddMultiSlot:
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
 
         def fake_resolve(
-            ch: str, q: str, sl: str, platform_client=None
+            ch: str, q: str, sl: str, platform_client=None, extra_args=None
         ) -> tuple[str, str]:
             captured["platform"] = (
                 platform_client.PLATFORM_ID if platform_client else ""
@@ -1200,7 +1254,7 @@ class TestAddMultiSlot:
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
 
         def fake_resolve(
-            ch: str, q: str, sl: str, platform_client=None
+            ch: str, q: str, sl: str, platform_client=None, extra_args=None
         ) -> tuple[str, str]:
             captured["channel"] = ch
             return "https://hls.example.com/yt.m3u8", ""
@@ -1339,3 +1393,161 @@ def test_save_settings_filters_invalid_shortcut_values_and_falls_back_to_default
     assert sc.get("mute") == "m"
     assert sc.get("pip") == "p"
     assert sc.get("fullscreen") == "f"
+
+
+class TestWatchMediaStreamType:
+    def test_watch_media_emits_vod_stream_type(
+        self, run_sync, capture_eval_js, temp_config_dir
+    ) -> None:
+        from unittest.mock import patch
+
+        with patch("ui.api.streams.resolve_hls_url") as mock_resolve:
+            mock_resolve.return_value = ("https://example.com/vod.m3u8", "")
+            api = TwitchXApi()
+            api._eval_js = capture_eval_js
+            api._live_streams = []
+            api.watch_media(
+                url="https://www.twitch.tv/videos/123456",
+                quality="best",
+                platform="twitch",
+                channel="xqc",
+                title="My VOD",
+            )
+        capture_eval_js.assert_any('"stream_type": "vod"')
+
+    def test_watch_emits_live_stream_type(
+        self, run_sync, capture_eval_js, temp_config_dir
+    ) -> None:
+        from unittest.mock import patch
+
+        with patch("ui.api.streams.resolve_hls_url") as mock_resolve:
+            mock_resolve.return_value = ("https://example.com/live.m3u8", "")
+            api = TwitchXApi()
+            api._eval_js = capture_eval_js
+            api._live_streams = [{"login": "xqc", "platform": "twitch", "user_login": "xqc"}]
+            api.watch("xqc", "best")
+        capture_eval_js.assert_any('"stream_type": "live"')
+
+
+def test_start_watch_session_is_atomic_under_lock(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Concurrent _start_watch_session must not create orphaned DB sessions."""
+    import threading
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "_eval_js", lambda code: None)
+
+    call_count: list[int] = [0]
+    created_ids: list[int] = []
+    created_lock = threading.Lock()
+
+    def mock_start(*args: object, **kwargs: object) -> int:
+        with created_lock:
+            call_count[0] += 1
+            sid = call_count[0]
+            created_ids.append(sid)
+            return sid
+
+    monkeypatch.setattr(api._watch_stats, "start_session", mock_start)
+    monkeypatch.setattr(api._watch_stats, "end_session", lambda sid: None)
+
+    def worker(n: int) -> None:
+        api._streams._start_watch_session(f"ch{n}", "twitch")
+
+    t1 = threading.Thread(target=worker, args=(1,))
+    t2 = threading.Thread(target=worker, args=(2,))
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+
+    assert api._active_watch_session == call_count[0]
+
+
+def test_finish_launch_invalidates_launch_id(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """_finish_launch must increment _launch_id to prevent concurrent tick()."""
+    api = TwitchXApi()
+    monkeypatch.setattr(api._streams, "_start_launch_timer", lambda: None)
+    monkeypatch.setattr(api._streams, "_cancel_launch_timer", lambda: None)
+
+    lid = api._streams._begin_launch("test")
+    result = api._streams._finish_launch(lid)
+
+    assert result is True
+    assert api._launch_id != lid
+    assert api._launch_channel is None
+
+
+def test_finish_launch_returns_false_when_stale(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Stale _finish_launch must return False and NOT increment _launch_id."""
+    api = TwitchXApi()
+    monkeypatch.setattr(api._streams, "_start_launch_timer", lambda: None)
+    monkeypatch.setattr(api._streams, "_cancel_launch_timer", lambda: None)
+
+    lid = api._streams._begin_launch("test")
+    api._launch_id += 1
+
+    result = api._streams._finish_launch(lid)
+
+    assert result is False
+
+
+def test_async_run_closes_thread_loop(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """_async_run must call _close_thread_loop instead of bare loop.close()."""
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "_eval_js", lambda code: None)
+    monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+
+    close_calls: list[object] = []
+    monkeypatch.setattr(api, "_close_thread_loop", lambda loop: close_calls.append(loop))
+
+    async def dummy() -> None:
+        pass
+
+    api._auth._async_run(dummy())
+
+    assert len(close_calls) == 1
+
+
+def test_send_chat_forwards_reply_params(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """send_chat must forward reply context to the chat client."""
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "_eval_js", lambda code: None)
+
+    mock_client = MagicMock()
+    mock_client._loop = MagicMock()
+    mock_client._loop.is_closed.return_value = False
+    mock_client.platform = "twitch"
+    mock_client._channel = "test_channel"
+    api._chat_client = mock_client
+
+    submitted_fn: list[Any] = []
+    monkeypatch.setattr(api._send_pool, "submit", lambda fn: submitted_fn.append(fn))
+
+    api.send_chat(
+        "hello",
+        reply_to="r-123",
+        reply_display="User",
+        reply_body="original",
+        request_id="req-test",
+    )
+
+    assert len(submitted_fn) == 1
+
+    mock_future = MagicMock()
+    mock_future.result.return_value = ChatSendResult(
+        ok=True, platform="twitch", channel_id="test"
+    )
+
+    with patch("asyncio.run_coroutine_threadsafe", return_value=mock_future):
+        submitted_fn[0]()
+
+    mock_client.send_message.assert_called_once_with("hello", reply_to="r-123")

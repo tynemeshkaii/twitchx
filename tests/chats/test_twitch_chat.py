@@ -14,6 +14,8 @@ from core.chats.twitch_chat import (
     parse_badges,
     parse_emotes,
     parse_irc_message,
+    parse_join_part,
+    parse_names_reply,
     parse_tags,
 )
 
@@ -279,7 +281,7 @@ class TestTwitchChatClientConnect:
         calls = [c.args[0] for c in mock_ws.send.call_args_list]
         assert "PASS SCHMOOPIIE" in calls
         assert "NICK justinfan12345" in calls
-        assert "CAP REQ :twitch.tv/tags twitch.tv/commands" in calls
+        assert "CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership" in calls
         assert "JOIN #testchannel" in calls
 
     async def test_authenticated_connect(self) -> None:
@@ -427,3 +429,36 @@ class TestTwitchChatClientLoginFailure:
         # Status should include the "anonymous" error
         anon_statuses = [s for s in statuses if s["error"] == "anonymous"]
         assert len(anon_statuses) >= 1
+
+
+class TestParseNamesReply:
+    def test_353_message(self) -> None:
+        line = ":justinfan12345!justinfan12345@justinfan12345.tmi.twitch.tv 353 justinfan12345 = #xqc :user1 user2 user3"
+        users = parse_names_reply(line)
+        assert set(users) == {"user1", "user2", "user3"}
+
+    def test_empty_names(self) -> None:
+        line = ":server 353 bot = #xqc :"
+        assert parse_names_reply(line) == []
+
+    def test_non_353(self) -> None:
+        assert parse_names_reply("PRIVMSG #xqc :hello") == []
+
+
+class TestParseJoinPart:
+    def test_join(self) -> None:
+        line = ":newuser!newuser@newuser.tmi.twitch.tv JOIN #xqc"
+        action, user = parse_join_part(line)
+        assert action == "join"
+        assert user == "newuser"
+
+    def test_part(self) -> None:
+        line = ":goingaway!goingaway@goingaway.tmi.twitch.tv PART #xqc"
+        action, user = parse_join_part(line)
+        assert action == "part"
+        assert user == "goingaway"
+
+    def test_other(self) -> None:
+        action, user = parse_join_part("PING :tmi.twitch.tv")
+        assert action is None
+        assert user is None

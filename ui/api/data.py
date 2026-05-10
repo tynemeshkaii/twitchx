@@ -211,6 +211,7 @@ class DataComponent(BaseApiComponent):
                         twitch_users,
                         kick_streams,
                         youtube_streams,
+                        loop,
                     )
                     if twitch_error is None:
                         return
@@ -369,6 +370,7 @@ class DataComponent(BaseApiComponent):
         twitch_users: list[dict],
         kick_streams: list[dict],
         youtube_streams: list[dict],
+        loop: asyncio.AbstractEventLoop | None = None,
     ) -> None:
         self._api._last_successful_fetch = time.time()
 
@@ -438,8 +440,8 @@ class DataComponent(BaseApiComponent):
             game_name = s.get("game_name", "") or self._api._games.get(game_id, "")
             thumb_url = (
                 s.get("thumbnail_url", "")
-                .replace("{width}", "880")
-                .replace("{height}", "496")
+                .replace("{width}", "440")
+                .replace("{height}", "248")
             )
             stream_items.append(
                 {
@@ -455,7 +457,6 @@ class DataComponent(BaseApiComponent):
                 }
             )
 
-        loop = asyncio.get_event_loop()
         for s in kick_streams:
             stream_items.append(
                 loop.run_until_complete(self._kick.normalize_stream_item(s))
@@ -475,10 +476,12 @@ class DataComponent(BaseApiComponent):
         favorites_meta = {}
         for f in get_favorites(self._config):
             login = f["login"]
-            if login not in favorites_meta:
-                favorites_meta[login] = {
+            platform = f.get("platform", "twitch")
+            key = f"{platform}:{login}"
+            if key not in favorites_meta:
+                favorites_meta[key] = {
                     "display_name": f.get("display_name", login),
-                    "platform": f.get("platform", "twitch"),
+                    "platform": platform,
                     "login": login,
                 }
 

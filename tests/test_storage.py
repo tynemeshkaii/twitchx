@@ -332,6 +332,22 @@ def test_keyboard_shortcuts_in_default_settings() -> None:
     assert sc["prev_stream"] == "ArrowLeft"
 
 
+def test_default_settings_has_low_latency_mode() -> None:
+    assert "low_latency_mode" in DEFAULT_SETTINGS
+    assert DEFAULT_SETTINGS["low_latency_mode"] is False
+
+
+def test_default_settings_has_external_player() -> None:
+    assert "external_player" in DEFAULT_SETTINGS
+    assert DEFAULT_SETTINGS["external_player"] == "iina"
+    assert "mpv_path" in DEFAULT_SETTINGS
+
+
+def test_default_settings_has_recording_path() -> None:
+    assert "recording_path" in DEFAULT_SETTINGS
+    assert isinstance(DEFAULT_SETTINGS["recording_path"], str)
+
+
 def test_keyboard_shortcuts_deep_merged_from_stored(
     temp_config_dir: Path,
 ) -> None:
@@ -592,3 +608,10 @@ def test_migrate_favorites_v2_preserves_youtube_channel_id(
 
     config = load_config()
     assert config["favorites"][0]["login"] == "UCX6OQ3DkcsbYNE6H8uQQuVA"
+
+
+def test_default_settings_has_chat_filter_keys():
+    assert DEFAULT_SETTINGS.get("chat_filter_sub_only") is False
+    assert DEFAULT_SETTINGS.get("chat_filter_mod_only") is False
+    assert isinstance(DEFAULT_SETTINGS.get("chat_block_list"), list)
+    assert DEFAULT_SETTINGS.get("chat_anti_spam") is True

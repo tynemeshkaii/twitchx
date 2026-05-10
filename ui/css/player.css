@@ -21,6 +21,7 @@
   background: var(--bg-surface);
   border-left: 1px solid var(--bg-border);
   contain: layout style paint;
+  position: relative;
 }
 #chat-panel.hidden { display: none; }
 
@@ -59,4 +60,84 @@
 .ms-pip-btn.active {
   background: var(--accent);
   color: #000;
+}
+
+/* -- Recording button -- */
+#record-btn {
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s;
+}
+
+#record-btn:hover {
+  color: #e53935;
+}
+
+#record-dot {
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+/* -- Stats overlay -- */
+#stats-overlay {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0,0,0,0.72);
+  backdrop-filter: blur(6px);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+  color: #e0e0e0;
+  pointer-events: none;
+  z-index: 10;
+  min-width: 160px;
+}
+
+.stats-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  line-height: 1.8;
+}
+
+.stats-key {
+  color: #9e9e9e;
+}
+
+.stats-val {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+#stats-overlay-btn {
+  font-size: 11px;
+  padding: 2px 6px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+#stats-overlay-btn:hover {
+  color: var(--text-primary);
+}
+
+#stats-overlay-btn.active {
+  color: var(--accent);
+}
+
+/* -- VOD time display -- */
+#vod-time-display {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: ui-monospace, monospace;
+  white-space: nowrap;
+  flex-shrink: 0;
 }

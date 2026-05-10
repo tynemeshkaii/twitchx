@@ -12,10 +12,12 @@ import httpx
 
 from core.chats.kick_chat import KickChatClient
 from core.chats.twitch_chat import TwitchChatClient
+from core.chats.youtube_chat import YouTubeChatClient
 from core.constants import WATCH_STATS_DB_NAME
 from core.platforms.kick import KickClient
 from core.platforms.twitch import TwitchClient
 from core.platforms.youtube import YouTubeClient
+from core.recorder import Recorder
 from core.storage import (
     CONFIG_DIR,
     DEFAULT_SETTINGS,
@@ -94,9 +96,10 @@ class TwitchXApi:
         self._send_pool = ThreadPoolExecutor(
             max_workers=2, thread_name_prefix="twitchx-send"
         )
-        self._chat_client: TwitchChatClient | KickChatClient | None = None
+        self._chat_client: TwitchChatClient | KickChatClient | YouTubeChatClient | None = None
         self._chat_thread: threading.Thread | None = None
         self._watch_stats = WatchStatsDB(str(CONFIG_DIR / WATCH_STATS_DB_NAME))
+        self._recorder = Recorder()
         self._active_watch_session: int | None = None
         self._active_watch_lock = threading.Lock()
         threading.Thread(
@@ -244,6 +247,12 @@ class TwitchXApi:
     def stop_multi(self) -> None:
         self._streams.stop_multi()
 
+    def start_recording(self) -> None:
+        self._streams.start_recording()
+
+    def stop_recording(self) -> None:
+        self._streams.stop_recording()
+
     # Chat
     def start_chat(self, channel: str, platform: str = "twitch") -> None:
         self._chat.start_chat(channel, platform)
@@ -266,6 +275,12 @@ class TwitchXApi:
 
     def save_chat_visibility(self, visible: bool) -> None:
         self._chat.save_chat_visibility(visible)
+
+    def save_chat_block_list(self, words_json: str) -> None:
+        self._chat.save_chat_block_list(words_json)
+
+    def set_chat_mode(self, mode: str, value: bool, slow_wait: int = 30) -> None:
+        self._chat.set_chat_mode(mode, value, slow_wait)
 
     # Images
     def get_avatar(self, login: str, platform: str = "twitch") -> None:
@@ -350,6 +365,9 @@ class TwitchXApi:
             "refresh_interval": settings.get("refresh_interval", 60),
             "streamlink_path": settings.get("streamlink_path", "streamlink"),
             "iina_path": settings.get("iina_path", ""),
+            "external_player": settings.get("external_player", "iina"),
+            "mpv_path": settings.get("mpv_path", ""),
+            "recording_path": settings.get("recording_path", ""),
             "kick_client_id": kick_conf.get("client_id", ""),
             "kick_client_secret": kick_conf.get("client_secret", ""),
             "chat_visible": settings.get("chat_visible", True),
@@ -364,6 +382,11 @@ class TwitchXApi:
             "youtube_user_login": yt_conf.get("user_login", ""),
             "youtube_quota_remaining": self._youtube.quota_remaining(),
             "pip_enabled": settings.get("pip_enabled", False),
+            "low_latency_mode": settings.get("low_latency_mode", False),
+            "chat_filter_sub_only": settings.get("chat_filter_sub_only", False),
+            "chat_filter_mod_only": settings.get("chat_filter_mod_only", False),
+            "chat_block_list": settings.get("chat_block_list", []),
+            "chat_anti_spam": settings.get("chat_anti_spam", True),
             "keyboard_shortcuts": settings.get("keyboard_shortcuts", {}),
         }
 
@@ -374,13 +397,9 @@ class TwitchXApi:
             tc = cfg.get("platforms", {}).get("twitch", {})
             st = cfg.get("settings", {})
             if "client_id" in parsed:
-                new_client_id = parsed["client_id"].strip()
-                if new_client_id:
-                    tc["client_id"] = new_client_id
+                tc["client_id"] = parsed["client_id"].strip()
             if "client_secret" in parsed:
-                new_client_secret = parsed["client_secret"].strip()
-                if new_client_secret:
-                    tc["client_secret"] = new_client_secret
+                tc["client_secret"] = parsed["client_secret"].strip()
             if "quality" in parsed:
                 st["quality"] = parsed["quality"]
             if "refresh_interval" in parsed:
@@ -389,30 +408,36 @@ class TwitchXApi:
                 st["streamlink_path"] = parsed["streamlink_path"].strip()
             if "iina_path" in parsed:
                 st["iina_path"] = parsed["iina_path"].strip()
+            if "external_player" in parsed and parsed["external_player"] in ("iina", "mpv"):
+                st["external_player"] = parsed["external_player"]
+            if "mpv_path" in parsed:
+                st["mpv_path"] = parsed["mpv_path"].strip()
+            if "recording_path" in parsed:
+                st["recording_path"] = parsed["recording_path"].strip()
             kc = cfg.get("platforms", {}).get("kick", {})
             if "kick_client_id" in parsed:
-                new_kick_client_id = parsed["kick_client_id"].strip()
-                if new_kick_client_id:
-                    kc["client_id"] = new_kick_client_id
+                kc["client_id"] = parsed["kick_client_id"].strip()
             if "kick_client_secret" in parsed:
-                new_kick_client_secret = parsed["kick_client_secret"].strip()
-                if new_kick_client_secret:
-                    kc["client_secret"] = new_kick_client_secret
+                kc["client_secret"] = parsed["kick_client_secret"].strip()
             yc = cfg.get("platforms", {}).get("youtube", {})
             if "youtube_api_key" in parsed:
-                new_yt_key = parsed["youtube_api_key"].strip()
-                if new_yt_key:
-                    yc["api_key"] = new_yt_key
+                yc["api_key"] = parsed["youtube_api_key"].strip()
             if "youtube_client_id" in parsed:
-                new_yt_cid = parsed["youtube_client_id"].strip()
-                if new_yt_cid:
-                    yc["client_id"] = new_yt_cid
+                yc["client_id"] = parsed["youtube_client_id"].strip()
             if "youtube_client_secret" in parsed:
-                new_yt_cs = parsed["youtube_client_secret"].strip()
-                if new_yt_cs:
-                    yc["client_secret"] = new_yt_cs
+                yc["client_secret"] = parsed["youtube_client_secret"].strip()
             if "pip_enabled" in parsed:
                 st["pip_enabled"] = bool(parsed["pip_enabled"])
+            if "low_latency_mode" in parsed:
+                st["low_latency_mode"] = bool(parsed["low_latency_mode"])
+            if "chat_filter_sub_only" in parsed:
+                st["chat_filter_sub_only"] = bool(parsed["chat_filter_sub_only"])
+            if "chat_filter_mod_only" in parsed:
+                st["chat_filter_mod_only"] = bool(parsed["chat_filter_mod_only"])
+            if "chat_block_list" in parsed and isinstance(parsed["chat_block_list"], list):
+                st["chat_block_list"] = [str(w)[:50] for w in parsed["chat_block_list"][:100]]
+            if "chat_anti_spam" in parsed:
+                st["chat_anti_spam"] = bool(parsed["chat_anti_spam"])
             if "keyboard_shortcuts" in parsed and isinstance(
                 parsed["keyboard_shortcuts"], dict
             ):
@@ -491,6 +516,7 @@ class TwitchXApi:
         self._window = window
 
     def close(self) -> None:
+        self._recorder.stop()
         self._streams._end_watch_session()
         self.stop_chat()
         self._shutdown.set()

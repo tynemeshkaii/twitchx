@@ -17,7 +17,7 @@ VALID_USERNAME = re.compile(r"^[a-zA-Z0-9_]{1,25}$")
 TWITCH_AUTH_URL = "https://id.twitch.tv/oauth2/token"
 TWITCH_API_URL = "https://api.twitch.tv/helix"
 TWITCH_REDIRECT_URI = "http://localhost:3457/callback"
-OAUTH_SCOPE = "user:read:follows chat:read chat:edit"
+OAUTH_SCOPE = "user:read:follows chat:read chat:edit moderator:manage:chat_settings"
 
 
 class TwitchClient(BasePlatformClient):
@@ -441,6 +441,57 @@ class TwitchClient(BasePlatformClient):
             for item in items
             if item.get("id") and item.get("url")
         ]
+
+    # ── Moderation ────────────────────────────────────────────
+
+    async def set_chat_settings(
+        self,
+        broadcaster_id: str,
+        moderator_id: str,
+        *,
+        slow_mode: bool | None = None,
+        slow_mode_wait_time: int | None = None,
+        emote_mode: bool | None = None,
+        subscriber_mode: bool | None = None,
+        follower_mode: bool | None = None,
+        follower_mode_duration: int | None = None,
+    ) -> dict[str, Any]:
+        """Update chat settings for a Twitch channel.
+
+        Requires the ``moderator:manage:chat_settings`` OAuth scope.
+        Returns the updated settings dict from Helix.
+        """
+        token = await self._ensure_token()
+        tc = self._platform_config()
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Client-Id": tc["client_id"],
+            "Content-Type": "application/json",
+        }
+        params = {
+            "broadcaster_id": broadcaster_id,
+            "moderator_id": moderator_id,
+        }
+        body: dict[str, Any] = {}
+        if slow_mode is not None:
+            body["slow_mode"] = slow_mode
+        if slow_mode_wait_time is not None:
+            body["slow_mode_wait_time"] = slow_mode_wait_time
+        if emote_mode is not None:
+            body["emote_mode"] = emote_mode
+        if subscriber_mode is not None:
+            body["subscriber_mode"] = subscriber_mode
+        if follower_mode is not None:
+            body["follower_mode"] = follower_mode
+        if follower_mode_duration is not None:
+            body["follower_mode_duration"] = follower_mode_duration
+        url = f"{TWITCH_API_URL}/chat/settings"
+        client = self._get_client()
+        logger.debug("PATCH %s params=%s body=%s", url, params, body)
+        resp = await client.patch(url, headers=headers, params=params, json=body)
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get("data", [{}])[0]
 
     # ── Polymorphic helpers ────────────────────────────────────
 

@@ -51,10 +51,11 @@ window.onStreamsUpdate = function(data) {
   const playerActive = document.getElementById('player-view').classList.contains('active');
 
   // Request avatars for sidebar
-  if (!playerActive) {
+    if (!playerActive) {
     for (const fav of TwitchX.state.favorites) {
       if (!TwitchX.state.avatars[fav]) {
-        const platform = TwitchX.state.favoritesMeta[fav]?.platform || 'twitch';
+        const meta = TwitchX.getFavoriteMeta(fav);
+        const platform = (meta && meta.platform) || 'twitch';
         if (TwitchX.api) TwitchX.api.get_avatar(fav, platform);
       }
     }
@@ -65,7 +66,8 @@ window.onStreamsUpdate = function(data) {
       requestIdleCallback(function() {
         for (const fav of TwitchX.state.favorites) {
           if (!TwitchX.state.avatars[fav]) {
-            const platform = TwitchX.state.favoritesMeta[fav]?.platform || 'twitch';
+            const meta = TwitchX.getFavoriteMeta(fav);
+            const platform = (meta && meta.platform) || 'twitch';
             if (TwitchX.api) TwitchX.api.get_avatar(fav, platform);
           }
         }
@@ -204,21 +206,45 @@ window.onStreamReady = function(data) {
 
   TwitchX.state.playerPlatform = data.platform || 'twitch';
   TwitchX.state.playerHasChat = data.has_chat !== false;
+  TwitchX.state.streamType = data.stream_type || 'live';
   document.getElementById('player-channel-name').textContent = data.channel || '';
   document.getElementById('player-stream-title').textContent = data.title || '';
 
   // HLS / native video path (Twitch, Kick, YouTube via streamlink)
-  const video = document.getElementById('stream-video');
+  const video = TwitchX.getPlayerVideo();
+  if (!video) return;
   video.style.display = '';
   video.src = data.url;
   video.play().catch(function() {});
-  const iinaBtn = document.getElementById('watch-external-btn');
-  if (iinaBtn) { iinaBtn.disabled = false; iinaBtn.style.opacity = ''; }
+  const extBtn = document.getElementById('watch-external-btn');
+  if (extBtn) { extBtn.disabled = false; extBtn.style.opacity = ''; }
+  var modBtn = document.getElementById('chat-mod-btn');
+  if (modBtn) {
+    var isTwitch = data.platform === 'twitch';
+    var isBroadcaster = isTwitch && TwitchX.chatSelfLogin &&
+      TwitchX.chatSelfLogin.toLowerCase() === (data.channel || '').toLowerCase();
+    modBtn.style.display = isBroadcaster ? '' : 'none';
+  }
+
   TwitchX.showPlayerView();
 };
 
 window.onPlayerStop = function() {
+  TwitchX.state.streamType = 'live';
   TwitchX.hidePlayerView();
+};
+
+window.onRecordingState = function(data) {
+  TwitchX._recordingActive = !!data.active;
+  TwitchX.updateRecordButton();
+  if (data.error) {
+    TwitchX.setStatus('Recording error: ' + data.error, 'error');
+  } else if (data.active && data.filename) {
+    var name = data.filename.split('/').pop();
+    TwitchX.setStatus('Recording: ' + name, 'info');
+  } else {
+    TwitchX.setStatus('Recording stopped', 'info');
+  }
 };
 
 window.onPlayerState = function(data) {
@@ -273,11 +299,45 @@ window.onMultiSlotReady = function(data) {
     const container = TwitchX._getChatMessagesEl();
     if (!container) return;
 
+    function _hasBadge(msg, prefix) {
+      return msg.badges && msg.badges.some(function(b) {
+        return b.name === prefix || b.name.startsWith(prefix + '/') || b.name.startsWith(prefix + '_');
+      });
+    }
+
+    function _shouldFilter(msg) {
+      if (msg.is_system) return false;
+      if (TwitchX.chatFilters.subOnly && !_hasBadge(msg, 'subscriber') && !_hasBadge(msg, 'broadcaster')) return true;
+      if (TwitchX.chatFilters.modOnly && !_hasBadge(msg, 'moderator') && !_hasBadge(msg, 'broadcaster')) return true;
+      if (TwitchX.chatBlockList.length > 0) {
+        var lower = (msg.text || '').toLowerCase();
+        for (var bi = 0; bi < TwitchX.chatBlockList.length; bi++) {
+          if (lower.indexOf(TwitchX.chatBlockList[bi]) !== -1) return true;
+        }
+      }
+      if (TwitchX.chatFilters.antiSpam && msg.author) {
+        var prev = TwitchX.chatSpamMap[msg.author];
+        if (prev && prev === msg.text) return true;
+        TwitchX.chatSpamMap[msg.author] = msg.text;
+        if (msg.text && msg.text.length >= 10) {
+          var letters = msg.text.replace(/[^a-zA-Z]/g, '');
+          if (letters.length >= 6) {
+            var uppers = letters.replace(/[^A-Z]/g, '').length;
+            if (uppers / letters.length > 0.70) return true;
+          }
+        }
+      }
+      return false;
+    }
+
     const fragment = document.createDocumentFragment();
     const isMulti = TwitchX.multiState.open;
     const maxMsgs = isMulti ? MAX_CHAT_MESSAGES : MAX_CHAT_MESSAGES;
 
     msgs.forEach(function(msg) {
+      if (_shouldFilter(msg)) return;
+      if (TwitchX._appendChatLog) TwitchX._appendChatLog(msg);
+
       if (msg.msg_id) {
         const existing = container.querySelector('.chat-msg[data-msg-id="' + String(msg.msg_id).replace(/"/g, '\\"') + '"]');
         if (existing) return;
@@ -289,6 +349,12 @@ window.onMultiSlotReady = function(data) {
       if (msg.is_self) cls += ' self';
       el.className = cls;
       if (msg.msg_id) el.dataset.msgId = msg.msg_id;
+
+      var selfLogin = TwitchX.chatSelfLogin;
+      if (selfLogin && !msg.is_self && msg.text &&
+          msg.text.toLowerCase().indexOf(selfLogin.toLowerCase()) !== -1) {
+        el.className += ' mention';
+      }
 
       // Reply context line
       if (msg.reply_to_display && msg.reply_to_body) {
@@ -410,6 +476,7 @@ window.onChatStatus = function(status) {
   }
   TwitchX.chatAuthenticated = !!(status.authenticated);
   TwitchX.chatPlatform = status.platform || TwitchX.state.playerPlatform || 'twitch';
+  if (status.self_login) TwitchX.chatSelfLogin = status.self_login;
   const dot = document.getElementById('chat-status-dot');
   if (dot) {
     if (status.connected) {
@@ -418,15 +485,48 @@ window.onChatStatus = function(status) {
       if (TwitchX.clearChatBatch) TwitchX.clearChatBatch();
       TwitchX.clearChatMessages();
       TwitchX.chatAutoScroll = true;
+      TwitchX.loadChatFiltersFromConfig();
       const newBtn = document.getElementById('chat-new-messages');
       if (newBtn) newBtn.classList.remove('visible');
     } else {
       dot.classList.remove('connected');
       dot.title = status.error || 'Disconnected';
+      TwitchX.chatSelfLogin = '';
       TwitchX.clearChatReply();
     }
   }
   TwitchX.updateChatInput();
+};
+
+window.onThirdPartyEmotes = function(data) {
+  if (!data || !data.emotes) return;
+  Object.assign(TwitchX.thirdPartyEmotes, data.emotes);
+  TwitchX._cachedPickerEmotes = null;
+  if (TwitchX._emotePickerOpen) {
+    var searchEl = document.getElementById('emote-search');
+    TwitchX.renderEmotePicker(searchEl ? searchEl.value : '');
+  }
+};
+
+window.onChatUserList = function(data) {
+  TwitchX._chatUserList = data.users || [];
+  var countEl = document.getElementById('chat-userlist-count');
+  if (countEl) countEl.textContent = data.count || TwitchX._chatUserList.length;
+  var panel = document.getElementById('chat-userlist-panel');
+  if (panel && panel.style.display !== 'none') {
+    TwitchX.renderChatUserList('');
+  }
+};
+
+window.onChatModeChanged = function(data) {
+  if (!data.ok) {
+    TwitchX.setStatus('Chat mode error: ' + (data.error || 'unknown'), 'error');
+    return;
+  }
+  TwitchX.setStatus(
+    (data.value ? 'Enabled' : 'Disabled') + ' ' + data.mode.replace(/_/g, ' '),
+    'info'
+  );
 };
 
 window.onTestResult = function(data) {
@@ -542,7 +642,7 @@ window.onYouTubeLogout = function() {
 window.onYouTubeTestResult = function(result) {
   const tr = document.getElementById('yt-test-result');
   tr.style.display = 'block';
-  if (result.ok) {
+  if (result.success) {
     tr.textContent = '\u2713 ' + result.message;
     tr.style.color = 'var(--live-green)';
   } else {

@@ -45,6 +45,7 @@ TwitchX.state = {
   watchingChannel: null,
   playerPlatform: null,
   playerHasChat: true,
+  streamType: 'live',
   prevViewers: {},
   config: {},
   sortKey: 'viewers',
@@ -97,5 +98,15 @@ TwitchX.ctxChannel = null;
 TwitchX.channelViewSource = 'grid';
 TwitchX.channelProfile = null;
 TwitchX._rebindAction = null;
+TwitchX.thirdPartyEmotes = {};
 
 TwitchX.createChannelMediaState = createChannelMediaState;
+
+TwitchX.getFavoriteMeta = function(login) {
+  for (var key in TwitchX.state.favoritesMeta) {
+    if (TwitchX.state.favoritesMeta[key].login === login) {
+      return TwitchX.state.favoritesMeta[key];
+    }
+  }
+  return null;
+};

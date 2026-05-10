@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from core.constants import DEFAULT_IINA_PATH
+from core.constants import DEFAULT_IINA_PATH, DEFAULT_MPV_PATH
 from core.stream_resolver import resolve_hls_url
 
 if TYPE_CHECKING:
@@ -36,12 +36,20 @@ def check_iina(iina_path: str = DEFAULT_IINA_PATH) -> str | None:
     return None
 
 
+def check_mpv(mpv_path: str = DEFAULT_MPV_PATH) -> str | None:
+    """Returns an error message if mpv is not found, else None."""
+    if shutil.which(mpv_path) is None:
+        return f"mpv not found at {mpv_path}.\n\nInstall it with:\n  brew install mpv"
+    return None
+
+
 def launch_stream(
     channel: str,
     quality: str,
     streamlink_path: str = "streamlink",
     iina_path: str = DEFAULT_IINA_PATH,
     platform_client: PlatformClient | None = None,
+    extra_args: list[str] | None = None,
 ) -> LaunchResult:
     sl_err = check_streamlink(streamlink_path)
     if sl_err:
@@ -51,7 +59,7 @@ def launch_stream(
         return LaunchResult(success=False, message=iina_err)
 
     # Resolve the direct HLS URL via stream_resolver (shared with native player)
-    hls_url, err = resolve_hls_url(channel, quality, streamlink_path, platform_client)
+    hls_url, err = resolve_hls_url(channel, quality, streamlink_path, platform_client, extra_args)
 
     if not hls_url:
         return LaunchResult(
@@ -72,3 +80,36 @@ def launch_stream(
         return LaunchResult(success=True, message=f"Launched {channel} ({quality})")
     except Exception as e:
         return LaunchResult(success=False, message=f"Failed to launch IINA: {e}")
+
+
+def launch_stream_mpv(
+    channel: str,
+    quality: str,
+    streamlink_path: str = "streamlink",
+    mpv_path: str = DEFAULT_MPV_PATH,
+    platform_client: PlatformClient | None = None,
+    extra_args: list[str] | None = None,
+) -> LaunchResult:
+    sl_err = check_streamlink(streamlink_path)
+    if sl_err:
+        return LaunchResult(success=False, message=sl_err)
+    mpv_err = check_mpv(mpv_path)
+    if mpv_err:
+        return LaunchResult(success=False, message=mpv_err)
+
+    hls_url, err = resolve_hls_url(channel, quality, streamlink_path, platform_client, extra_args)
+    if not hls_url:
+        return LaunchResult(
+            success=False,
+            message=f"streamlink error: {err}" if err else "Could not resolve stream URL",
+        )
+
+    try:
+        subprocess.Popen(
+            [mpv_path, "--no-terminal", hls_url],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return LaunchResult(success=True, message=f"Launched {channel} in mpv ({quality})")
+    except Exception as e:
+        return LaunchResult(success=False, message=f"Failed to launch mpv: {e}")

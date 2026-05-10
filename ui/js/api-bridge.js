@@ -54,7 +54,8 @@ function doLogout() {
 function doBrowser() {
   if (!TwitchX.state.selectedChannel || !TwitchX.api) return;
   const selectedStream = TwitchX.state.streams.find(function(s) { return s.login === TwitchX.state.selectedChannel; });
-  const platform = (selectedStream && selectedStream.platform) || (TwitchX.state.favoritesMeta[TwitchX.state.selectedChannel] && TwitchX.state.favoritesMeta[TwitchX.state.selectedChannel].platform) || 'twitch';
+  const meta = TwitchX.getFavoriteMeta(TwitchX.state.selectedChannel);
+  const platform = (selectedStream && selectedStream.platform) || (meta && meta.platform) || 'twitch';
   TwitchX.api.open_browser(TwitchX.state.selectedChannel, platform);
 }
 

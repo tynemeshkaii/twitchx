@@ -3,7 +3,7 @@ from __future__ import annotations
 import subprocess
 from unittest.mock import MagicMock, patch
 
-from core.launcher import launch_stream
+from core.launcher import check_mpv, launch_stream, launch_stream_mpv
 from core.stream_resolver import _run_streamlink
 
 
@@ -79,7 +79,7 @@ class TestLaunchStream:
         client = _mock_platform("https://twitch.tv/xqc")
         result = launch_stream("xqc", "720p60", platform_client=client)
         assert result.success is True
-        mock_resolve.assert_called_once_with("xqc", "720p60", "streamlink", client)
+        mock_resolve.assert_called_once_with("xqc", "720p60", "streamlink", client, None)
 
     @patch("core.launcher.check_iina", return_value=None)
     @patch("core.launcher.check_streamlink", return_value="streamlink not found")
@@ -102,5 +102,50 @@ class TestLaunchStream:
     ) -> None:
         client = _mock_platform("https://twitch.tv/xqc")
         result = launch_stream("xqc", "best", platform_client=client)
+        assert result.success is False
+        assert "not found" in result.message.lower()
+
+
+class TestCheckMpv:
+    @patch("core.launcher.shutil.which", return_value="/opt/homebrew/bin/mpv")
+    def test_mpv_found(self, _mock_which: MagicMock) -> None:
+        assert check_mpv("/opt/homebrew/bin/mpv") is None
+
+    @patch("core.launcher.shutil.which", return_value=None)
+    def test_mpv_not_found(self, _mock_which: MagicMock) -> None:
+        err = check_mpv("/opt/homebrew/bin/mpv")
+        assert err is not None
+        assert "not found" in err.lower()
+
+
+class TestLaunchStreamMpv:
+    @patch("core.launcher.check_mpv", return_value=None)
+    @patch("core.launcher.check_streamlink", return_value=None)
+    @patch("core.launcher.resolve_hls_url")
+    @patch("core.launcher.subprocess.Popen")
+    def test_mpv_success(
+        self,
+        mock_popen: MagicMock,
+        mock_resolve: MagicMock,
+        _mock_check_sl: MagicMock,
+        _mock_check_mpv: MagicMock,
+    ) -> None:
+        mock_resolve.return_value = ("https://example.com/stream.m3u8", "")
+        client = _mock_platform("https://twitch.tv/xqc")
+        result = launch_stream_mpv("xqc", "best", platform_client=client)
+        assert result.success is True
+        mock_popen.assert_called_once()
+        call_args = mock_popen.call_args[0][0]
+        assert "https://example.com/stream.m3u8" in call_args
+
+    @patch("core.launcher.check_mpv", return_value="mpv not found")
+    @patch("core.launcher.check_streamlink", return_value=None)
+    def test_mpv_missing(
+        self,
+        _mock_check_sl: MagicMock,
+        _mock_check_mpv: MagicMock,
+    ) -> None:
+        client = _mock_platform("https://twitch.tv/xqc")
+        result = launch_stream_mpv("xqc", "best", platform_client=client)
         assert result.success is False
         assert "not found" in result.message.lower()

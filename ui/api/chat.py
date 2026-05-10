@@ -5,11 +5,14 @@ import contextlib
 import json
 import logging
 import threading
+from typing import Any
 
 from core.chat import ChatMessage, ChatSendResult, ChatStatus
 from core.chats.kick_chat import KickChatClient
 from core.chats.twitch_chat import TwitchChatClient
-from core.storage import get_platform_config, update_config
+from core.chats.youtube_chat import YouTubeChatClient
+from core.storage import CONFIG_DIR, get_platform_config, update_config
+from core.third_party_emotes import fetch_channel_emotes
 
 from ._base import BaseApiComponent
 
@@ -21,7 +24,7 @@ class ChatComponent(BaseApiComponent):
 
     # ── Start / Stop ────────────────────────────────────────────
 
-    def start_chat(self, channel: str, platform: str = "twitch") -> None:
+    def start_chat(self, channel: str, platform: str = "twitch", live_chat_id: str | None = None) -> None:
         self.stop_chat()
 
         if platform == "twitch":
@@ -32,6 +35,14 @@ class ChatComponent(BaseApiComponent):
             twitch_client = TwitchChatClient()
             twitch_client.on_message(self._on_chat_message)
             twitch_client.on_status(self._on_chat_status)
+
+            def _on_user_list(users: list[str]) -> None:
+                payload = json.dumps({"count": len(users), "users": users[:500]})
+                self._eval_js(f"window.onChatUserList({payload})")
+
+            if hasattr(twitch_client, "on_user_list"):
+                twitch_client.on_user_list(_on_user_list)  # type: ignore[arg-type]
+
             self._api._chat_client = twitch_client
 
             def run_chat() -> None:
@@ -59,6 +70,32 @@ class ChatComponent(BaseApiComponent):
 
             self._api._chat_thread = threading.Thread(target=run_chat, daemon=True)
             self._api._chat_thread.start()
+
+            # Fetch third-party emotes for this Twitch channel in a background thread
+            def _fetch_emotes() -> None:
+                try:
+                    twitch_client_ref = self._platforms.get("twitch")
+                    twitch_user_id = ""
+                    if twitch_client_ref:
+                        emote_loop = asyncio.new_event_loop()
+                        try:
+                            asyncio.set_event_loop(emote_loop)
+                            users = emote_loop.run_until_complete(twitch_client_ref.get_users([channel]))
+                            if users:
+                                twitch_user_id = str(users[0].get("id", ""))
+                        except Exception:
+                            pass
+                        finally:
+                            emote_loop.close()
+                    cache_dir = str(CONFIG_DIR / "emotes")
+                    emote_map = fetch_channel_emotes(channel, twitch_user_id, cache_dir)
+                    if emote_map and not self._shutdown.is_set():
+                        payload = json.dumps({"channel": channel, "emotes": emote_map})
+                        self._eval_js(f"window.onThirdPartyEmotes({payload})")
+                except Exception:
+                    pass
+
+            threading.Thread(target=_fetch_emotes, daemon=True).start()
 
         elif platform == "kick":
             kick_conf = get_platform_config(self._config, "kick")
@@ -135,6 +172,57 @@ class ChatComponent(BaseApiComponent):
                     loop.close()
 
             self._api._chat_thread = threading.Thread(target=run_kick_chat, daemon=True)
+            self._api._chat_thread.start()
+
+        elif platform == "youtube":
+            yt_client = self._youtube
+            if not yt_client:
+                self._on_chat_status(
+                    ChatStatus(
+                        connected=False,
+                        platform="youtube",
+                        channel_id=channel,
+                        error="YouTube client not available",
+                    )
+                )
+                return
+
+            yt_chat_client = YouTubeChatClient(yt_client)
+            yt_chat_client.on_message(self._on_chat_message)
+            yt_chat_client.on_status(self._on_chat_status)
+            self._api._chat_client = yt_chat_client
+
+            yt_conf = get_platform_config(self._config, "youtube")
+            token = yt_conf.get("access_token") or None
+
+            def run_youtube_chat() -> None:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                yt_chat_client._loop = loop
+                try:
+                    loop.run_until_complete(
+                        yt_chat_client.connect(
+                            channel,
+                            token=token,
+                            live_chat_id=live_chat_id,
+                        )
+                    )
+                except Exception as exc:
+                    logger.warning("YouTube chat connect failed: %s", exc)
+                    self._on_chat_status(
+                        ChatStatus(
+                            connected=False,
+                            platform="youtube",
+                            channel_id=channel,
+                            error=str(exc)[:120],
+                            authenticated=bool(token),
+                        )
+                    )
+                finally:
+                    yt_chat_client._loop = None
+                    loop.close()
+
+            self._api._chat_thread = threading.Thread(target=run_youtube_chat, daemon=True)
             self._api._chat_thread.start()
 
         else:
@@ -239,6 +327,45 @@ class ChatComponent(BaseApiComponent):
 
     # ── Persistence ──────────────────────────────────────────────
 
+    def set_chat_mode(self, mode: str, value: bool, slow_wait: int = 30) -> None:
+        """Set a Twitch chat mode (slow_mode, emote_mode, subscriber_mode, follower_mode).
+
+        Only works if the logged-in user is the broadcaster of the watched channel.
+        """
+        twitch_conf = get_platform_config(self._config, "twitch")
+        user_id = twitch_conf.get("user_id", "")
+        if not user_id:
+            self._eval_js("window.onChatModeChanged({ok: false, error: 'Not logged in to Twitch'})")
+            return
+
+        channel = self._api._watching_channel
+        if not channel:
+            self._eval_js("window.onChatModeChanged({ok: false, error: 'Not watching any channel'})")
+            return
+
+        def _do() -> None:
+            loop = asyncio.new_event_loop()
+            try:
+                twitch = self._get_platform("twitch")
+                kwargs: dict[str, Any] = {mode: value}
+                if mode == "slow_mode" and value:
+                    kwargs["slow_mode_wait_time"] = slow_wait
+                ok = loop.run_until_complete(
+                    twitch.set_chat_settings(
+                        broadcaster_id=user_id,
+                        moderator_id=user_id,
+                        **kwargs,
+                    )
+                )
+                payload = json.dumps({"ok": ok, "mode": mode, "value": value})
+            except Exception as exc:
+                payload = json.dumps({"ok": False, "error": str(exc)[:100]})
+            finally:
+                loop.close()
+            self._eval_js(f"window.onChatModeChanged({payload})")
+
+        threading.Thread(target=_do, daemon=True).start()
+
     def save_chat_width(self, width: int) -> None:
         clamped = max(250, min(500, width))
 
@@ -250,6 +377,21 @@ class ChatComponent(BaseApiComponent):
     def save_chat_visibility(self, visible: bool) -> None:
         def _apply(cfg: dict) -> None:
             cfg.get("settings", {})["chat_visible"] = visible
+
+        self._config = update_config(_apply)
+
+    def save_chat_block_list(self, words_json: str) -> None:
+        try:
+            words = json.loads(words_json)
+            if not isinstance(words, list):
+                return
+        except (ValueError, TypeError):
+            return
+
+        def _apply(cfg: dict) -> None:
+            cfg.get("settings", {})["chat_block_list"] = [
+                str(w).strip().lower()[:50] for w in words[:100] if str(w).strip()
+            ]
 
         self._config = update_config(_apply)
 
@@ -287,6 +429,8 @@ class ChatComponent(BaseApiComponent):
         self._eval_js(f"window.onChatMessage({data})")
 
     def _on_chat_status(self, status: ChatStatus) -> None:
+        platform_conf = get_platform_config(self._config, status.platform)
+        self_login = platform_conf.get("user_login", "")
         data = json.dumps(
             {
                 "connected": status.connected,
@@ -294,6 +438,7 @@ class ChatComponent(BaseApiComponent):
                 "channel_id": status.channel_id,
                 "error": status.error,
                 "authenticated": status.authenticated,
+                "self_login": self_login,
             }
         )
         self._eval_js(f"window.onChatStatus({data})")

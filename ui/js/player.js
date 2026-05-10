@@ -77,11 +77,27 @@ function showPlayerView() {
   const video = getPlayerVideo();
   if (video && !video._pipEventsBound) _bindPiPEvents(video);
 
+  var recordBtn = document.getElementById('record-btn');
+  if (recordBtn) recordBtn.style.display = 'inline-flex';
+  var statsBtn = document.getElementById('stats-overlay-btn');
+  if (statsBtn) statsBtn.style.display = 'inline-flex';
+
+  TwitchX.stopVodTimeDisplay();
+  TwitchX.stopVideoHealthMonitor();
+  TwitchX.stopFpsMonitor();
+  TwitchX.stopFrozenMonitor();
+  TwitchX.stopProactiveReset();
+
+  if (TwitchX.state.streamType === 'vod') {
+    TwitchX.startVodTimeDisplay();
+  } else {
+    TwitchX.startVideoHealthMonitor();
+    TwitchX.startFpsMonitor();
+    TwitchX.startFrozenMonitor();
+    TwitchX.startProactiveReset();
+  }
+
   TwitchX.renderSidebar();
-  TwitchX.startVideoHealthMonitor();
-  TwitchX.startFpsMonitor();
-  TwitchX.startFrozenMonitor();
-  TwitchX.startProactiveReset();
 }
 
 function hidePlayerView() {
@@ -89,6 +105,18 @@ function hidePlayerView() {
   TwitchX.stopFpsMonitor();
   TwitchX.stopFrozenMonitor();
   TwitchX.stopProactiveReset();
+  TwitchX.stopVodTimeDisplay();
+  TwitchX.hideStatsOverlay();
+  TwitchX.thirdPartyEmotes = {};
+
+  if (TwitchX._recordingActive && TwitchX.api) TwitchX.api.stop_recording();
+  TwitchX._recordingActive = false;
+  var recordBtn = document.getElementById('record-btn');
+  if (recordBtn) { recordBtn.style.display = 'none'; recordBtn.style.color = ''; }
+  var recordDot = document.getElementById('record-dot');
+  if (recordDot) recordDot.style.display = 'none';
+  var statsBtn = document.getElementById('stats-overlay-btn');
+  if (statsBtn) statsBtn.style.display = 'none';
 
   // Cancel any pending gentle reset to prevent orphaned shadow videos
   if (TwitchX._gentleResetInProgress) {
@@ -139,9 +167,9 @@ function hidePlayerView() {
   _bindPiPEvents(fresh);
   TwitchX._playerVideo = null;
 
-  // Restore IINA button
-  const iinaBtn = document.getElementById('watch-external-btn');
-  if (iinaBtn) { iinaBtn.disabled = false; iinaBtn.style.opacity = ''; }
+  // Restore external player button
+  const extBtn = document.getElementById('watch-external-btn');
+  if (extBtn) { extBtn.disabled = false; extBtn.style.opacity = ''; }
 
   // Clear chat
   TwitchX.clearChatMessages();
@@ -609,3 +637,170 @@ TwitchX.isVideoFullscreen = isVideoFullscreen;
 TwitchX.isVideoPiP = isVideoPiP;
 TwitchX._bindPiPEvents = _bindPiPEvents;
 TwitchX.softResetVideo = softResetVideo;
+
+/* ── Recording ──────────────────────────────────────── */
+
+TwitchX._recordingActive = false;
+
+function toggleRecording() {
+  if (!TwitchX.api) return;
+  if (TwitchX._recordingActive) {
+    TwitchX.api.stop_recording();
+  } else {
+    TwitchX.api.start_recording();
+  }
+}
+
+function updateRecordButton() {
+  var btn = document.getElementById('record-btn');
+  var dot = document.getElementById('record-dot');
+  if (!btn) return;
+  if (TwitchX._recordingActive) {
+    btn.textContent = '\u25a0 Stop REC';
+    btn.style.color = '#e53935';
+    if (dot) dot.style.display = '';
+  } else {
+    btn.textContent = '\u25cf REC';
+    btn.style.color = '';
+    if (dot) dot.style.display = 'none';
+  }
+}
+
+TwitchX.toggleRecording = toggleRecording;
+TwitchX.updateRecordButton = updateRecordButton;
+
+/* ── Stats Overlay ──────────────────────────────────── */
+
+TwitchX._statsOverlayActive = false;
+TwitchX._statsRafId = null;
+TwitchX._statsDroppedBaseline = 0;
+TwitchX._statsTotalBaseline = 0;
+
+function updateStatsOverlay() {
+  if (!TwitchX._statsOverlayActive) return;
+  var video = getPlayerVideo();
+  if (!video || !video.src) {
+    TwitchX._statsRafId = requestAnimationFrame(updateStatsOverlay);
+    return;
+  }
+
+  var latency = '--';
+  if (video.seekable && video.seekable.length > 0) {
+    var edge = video.seekable.end(video.seekable.length - 1);
+    var lag = edge - video.currentTime;
+    latency = lag >= 0 ? lag.toFixed(1) + 's' : '--';
+  }
+
+  var buffer = '--';
+  if (video.buffered && video.buffered.length > 0) {
+    var ahead = video.buffered.end(video.buffered.length - 1) - video.currentTime;
+    buffer = ahead >= 0 ? ahead.toFixed(1) + 's' : '--';
+  }
+
+  var dropped = '--';
+  if (typeof video.getVideoPlaybackQuality === 'function') {
+    var q = video.getVideoPlaybackQuality();
+    var d = q.droppedVideoFrames - TwitchX._statsDroppedBaseline;
+    var t = q.totalVideoFrames - TwitchX._statsTotalBaseline;
+    if (t > 0) {
+      dropped = d + ' (' + ((d / t) * 100).toFixed(1) + '%)';
+    }
+  }
+
+  var resolution = '--';
+  if (video.videoWidth && video.videoHeight) {
+    resolution = video.videoWidth + '\u00d7' + video.videoHeight;
+  }
+
+  var el = function(id) { return document.getElementById(id); };
+  if (el('so-latency')) el('so-latency').textContent = latency;
+  if (el('so-buffer'))  el('so-buffer').textContent  = buffer;
+  if (el('so-dropped')) el('so-dropped').textContent = dropped;
+  if (el('so-resolution')) el('so-resolution').textContent = resolution;
+
+  TwitchX._statsRafId = requestAnimationFrame(function() {
+    setTimeout(updateStatsOverlay, 500);
+  });
+}
+
+function showStatsOverlay() {
+  TwitchX._statsOverlayActive = true;
+  var overlay = document.getElementById('stats-overlay');
+  var btn = document.getElementById('stats-overlay-btn');
+  if (overlay) overlay.style.display = '';
+  if (btn) btn.classList.add('active');
+  var video = getPlayerVideo();
+  if (video && typeof video.getVideoPlaybackQuality === 'function') {
+    var q = video.getVideoPlaybackQuality();
+    TwitchX._statsDroppedBaseline = q.droppedVideoFrames;
+    TwitchX._statsTotalBaseline   = q.totalVideoFrames;
+  }
+  updateStatsOverlay();
+}
+
+function hideStatsOverlay() {
+  TwitchX._statsOverlayActive = false;
+  if (TwitchX._statsRafId) {
+    cancelAnimationFrame(TwitchX._statsRafId);
+    TwitchX._statsRafId = null;
+  }
+  var overlay = document.getElementById('stats-overlay');
+  var btn = document.getElementById('stats-overlay-btn');
+  if (overlay) overlay.style.display = 'none';
+  if (btn) btn.classList.remove('active');
+}
+
+function toggleStatsOverlay() {
+  if (TwitchX._statsOverlayActive) {
+    hideStatsOverlay();
+  } else {
+    showStatsOverlay();
+  }
+}
+
+TwitchX.toggleStatsOverlay = toggleStatsOverlay;
+TwitchX.hideStatsOverlay = hideStatsOverlay;
+
+/* ── VOD Mode ───────────────────────────────────────── */
+
+TwitchX._vodTimer = null;
+
+function formatVideoTime(seconds) {
+  if (!isFinite(seconds) || seconds < 0) return '--:--';
+  var s = Math.floor(seconds);
+  var h = Math.floor(s / 3600);
+  var m = Math.floor((s % 3600) / 60);
+  var sec = s % 60;
+  var pad = function(n) { return n < 10 ? '0' + n : String(n); };
+  if (h > 0) return h + ':' + pad(m) + ':' + pad(sec);
+  return m + ':' + pad(sec);
+}
+
+function startVodTimeDisplay() {
+  stopVodTimeDisplay();
+  var el = document.getElementById('vod-time-display');
+  if (el) el.style.display = '';
+  TwitchX._vodTimer = setInterval(function() {
+    var video = getPlayerVideo();
+    var display = document.getElementById('vod-time-display');
+    if (!display) return;
+    if (!video || !video.src) return;
+    var cur = formatVideoTime(video.currentTime);
+    var dur = isFinite(video.duration) && video.duration > 0
+      ? formatVideoTime(video.duration)
+      : '--:--';
+    display.textContent = cur + ' / ' + dur;
+  }, 1000);
+}
+
+function stopVodTimeDisplay() {
+  if (TwitchX._vodTimer) {
+    clearInterval(TwitchX._vodTimer);
+    TwitchX._vodTimer = null;
+  }
+  var el = document.getElementById('vod-time-display');
+  if (el) { el.style.display = 'none'; el.textContent = ''; }
+}
+
+TwitchX.startVodTimeDisplay = startVodTimeDisplay;
+TwitchX.stopVodTimeDisplay  = stopVodTimeDisplay;

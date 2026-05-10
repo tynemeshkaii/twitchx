@@ -138,6 +138,10 @@ function openSettings() {
   document.getElementById('s-client-secret').value = config.client_secret || '';
   document.getElementById('s-streamlink').value = config.streamlink_path || 'streamlink';
   document.getElementById('s-iina').value = config.iina_path || '/Applications/IINA.app/Contents/MacOS/iina-cli';
+  document.getElementById('s-mpv').value = config.mpv_path || '/opt/homebrew/bin/mpv';
+  var extPlayer = config.external_player || 'iina';
+  document.getElementById('s-external-player').value = extPlayer;
+  document.getElementById('s-mpv-group').style.display = extPlayer === 'mpv' ? '' : 'none';
   document.getElementById('s-interval').value = String(config.refresh_interval || 60);
   document.getElementById('s-kick-client-id').value = config.kick_client_id || '';
   document.getElementById('s-kick-client-secret').value = config.kick_client_secret || '';
@@ -166,6 +170,7 @@ function openSettings() {
     TwitchX.state.shortcuts = Object.assign({}, TwitchX.DEFAULT_SHORTCUTS, config.keyboard_shortcuts);
   }
   document.getElementById('s-pip-enabled').checked = !!config.pip_enabled;
+  document.getElementById('s-low-latency').checked = !!config.low_latency_mode;
   TwitchX.renderHotkeysSettings();
   document.querySelectorAll('.settings-tab').forEach(function(b) { b.classList.remove('active'); });
   document.querySelectorAll('.settings-panel').forEach(function(p) { p.classList.remove('active'); });
@@ -227,8 +232,12 @@ function saveSettings() {
     youtube_api_key: document.getElementById('yt-api-key').value.trim(),
     youtube_client_id: document.getElementById('yt-client-id').value.trim(),
     youtube_client_secret: document.getElementById('yt-client-secret').value.trim(),
+    external_player: document.getElementById('s-external-player').value,
+    mpv_path: document.getElementById('s-mpv').value.trim(),
     keyboard_shortcuts: Object.assign({}, TwitchX.state.shortcuts),
     pip_enabled: pipEnabled,
+    low_latency_mode: document.getElementById('s-low-latency').checked,
+    recording_path: document.getElementById('s-recording-path').value.trim(),
   };
   TwitchX.state.pipEnabled = pipEnabled;
   const pipBtn = document.getElementById('pip-player-btn');

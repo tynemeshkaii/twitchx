@@ -162,7 +162,7 @@ class YouTubeClient(BasePlatformClient):
             if (
                 yc.get("access_token")
                 and yc.get("token_expires_at", 0)
-                > asyncio.get_running_loop().time() + 60
+                > time.time() + 60
             ):
                 return yc["access_token"]
             if yc.get("refresh_token"):
@@ -244,6 +244,7 @@ class YouTubeClient(BasePlatformClient):
             "platform": "youtube",
             "video_id": item.get("id", ""),
             "channel_id": snippet.get("channelId", ""),
+            "live_chat_id": details.get("activeLiveChatId", ""),
             "category_id": snippet.get("categoryId", ""),
         }
 
@@ -865,4 +866,5 @@ class YouTubeClient(BasePlatformClient):
             "platform": "youtube",
             "video_id": raw.get("video_id", ""),
             "channel_id": raw.get("channel_id", ""),
+            "live_chat_id": raw.get("live_chat_id", ""),
         }

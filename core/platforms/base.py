@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+import time
 from typing import Any
 
 import httpx
@@ -26,9 +27,9 @@ class BasePlatformClient(PlatformClient):
     PLATFORM_ID: str = ""
     PLATFORM_NAME: str = ""
 
-    # --- Per-event-loop httpx client pooling ---
-    _loop_clients: dict[asyncio.AbstractEventLoop, httpx.AsyncClient] = {}
-    _token_locks: dict[asyncio.AbstractEventLoop, asyncio.Lock] = {}
+    # --- Per-event-loop httpx client pooling (keyed by (loop, PLATFORM_ID)) ---
+    _loop_clients: dict[tuple[asyncio.AbstractEventLoop, str], httpx.AsyncClient] = {}
+    _token_locks: dict[tuple[asyncio.AbstractEventLoop, str], asyncio.Lock] = {}
     _loop_state_lock = threading.Lock()
 
     def __init__(self) -> None:
@@ -58,24 +59,26 @@ class BasePlatformClient(PlatformClient):
 
     def _get_client(self) -> httpx.AsyncClient:
         loop = asyncio.get_running_loop()
+        key = (loop, self.PLATFORM_ID)
         with self._loop_state_lock:
-            client = self._loop_clients.get(loop)
+            client = self._loop_clients.get(key)
             if client is None:
                 client = httpx.AsyncClient(
                     timeout=httpx.Timeout(self._client_timeout()),
                     headers=self._client_headers(),
                 )
-                self._loop_clients[loop] = client
+                self._loop_clients[key] = client
             return client
 
     # --- Per-loop token lock ---
     def _get_token_lock(self) -> asyncio.Lock:
         loop = asyncio.get_running_loop()
+        key = (loop, self.PLATFORM_ID)
         with self._loop_state_lock:
-            lock = self._token_locks.get(loop)
+            lock = self._token_locks.get(key)
             if lock is None:
                 lock = asyncio.Lock()
-                self._token_locks[loop] = lock
+                self._token_locks[key] = lock
             return lock
 
     # --- Cleanup ---
@@ -84,9 +87,10 @@ class BasePlatformClient(PlatformClient):
 
     async def close_loop_resources(self) -> None:
         loop = asyncio.get_running_loop()
+        key = (loop, self.PLATFORM_ID)
         with self._loop_state_lock:
-            client = self._loop_clients.pop(loop, None)
-            self._token_locks.pop(loop, None)
+            client = self._loop_clients.pop(key, None)
+            self._token_locks.pop(key, None)
         if client is not None:
             await client.aclose()
 
@@ -107,7 +111,7 @@ class BasePlatformClient(PlatformClient):
             if (
                 platform_cfg.get("access_token")
                 and platform_cfg.get("token_expires_at", 0)
-                > asyncio.get_running_loop().time() + 60
+                > time.time() + 60
             ):
                 return platform_cfg["access_token"]
             if platform_cfg.get("refresh_token"):

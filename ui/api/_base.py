@@ -89,7 +89,7 @@ class BaseApiComponent:
             except Exception as e:
                 self._handle_async_error(e)
             finally:
-                loop.close()
+                self._close_thread_loop(loop)
 
         self._run_in_thread(_runner)
 
