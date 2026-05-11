@@ -63,7 +63,7 @@ function buildChannelMediaMeta(item, tab) {
   if (dateText) parts.push(dateText);
   if (durationText) parts.push(durationText);
   if (item.views) {
-    parts.push(formatViewers(item.views) + (tab === 'clips' ? ' views' : ' views'));
+    parts.push(formatViewers(item.views) + ' views');
   }
   return parts.join(' \u2022 ');
 }
@@ -75,3 +75,30 @@ TwitchX.setStatus = setStatus;
 TwitchX.formatMediaDate = formatMediaDate;
 TwitchX.formatDuration = formatDuration;
 TwitchX.buildChannelMediaMeta = buildChannelMediaMeta;
+
+function viewFadeIn(el, showClass) {
+  el.classList.add(showClass);
+  el.style.opacity = '0';
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      el.style.opacity = '';
+    });
+  });
+}
+
+function viewFadeOut(el, hideClass, onDone) {
+  el.style.opacity = '0';
+  var done = false;
+  function finish() {
+    if (done) return;
+    done = true;
+    el.style.opacity = '';
+    el.classList.add(hideClass);
+    if (onDone) onDone();
+  }
+  el.addEventListener('transitionend', finish, { once: true });
+  setTimeout(finish, 250);
+}
+
+TwitchX.viewFadeIn = viewFadeIn;
+TwitchX.viewFadeOut = viewFadeOut;

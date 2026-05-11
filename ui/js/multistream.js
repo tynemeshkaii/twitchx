@@ -10,7 +10,14 @@ function openMultistreamView() {
   document.getElementById('channel-view').classList.add('hidden');
   document.getElementById('toolbar').classList.add('hidden');
   document.getElementById('stream-grid').classList.add('hidden');
-  document.getElementById('multistream-view').classList.remove('hidden');
+  var mv = document.getElementById('multistream-view');
+  mv.classList.remove('hidden');
+  mv.style.opacity = '0';
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      mv.style.opacity = '';
+    });
+  });
   TwitchX.startMultiHealthMonitor();
 }
 
@@ -28,9 +35,17 @@ function closeMultistreamView() {
   document.getElementById('main').classList.remove('ms-sidebar-open');
   document.getElementById('multistream-view').classList.remove('ms-sidebar-open');
   document.getElementById('multistream-view').classList.add('hidden');
+  document.getElementById('multistream-view').style.opacity = '';
   document.getElementById('ms-chat-panel').classList.add('hidden');
   document.getElementById('toolbar').classList.remove('hidden');
-  document.getElementById('stream-grid').classList.remove('hidden');
+  var grid = document.getElementById('stream-grid');
+  grid.classList.remove('hidden');
+  grid.style.opacity = '0';
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      grid.style.opacity = '';
+    });
+  });
   document.getElementById('ms-chat-messages').replaceChildren();
   const btn = document.getElementById('ms-sidebar-btn');
   if (btn) btn.classList.remove('active');
@@ -76,9 +91,9 @@ function _clearMultiSlot(idx) {
     const pipBtn = slotEl.querySelector('.ms-pip-btn');
     _bindSlotPiPEvents(fresh, pipBtn);
   }
-  slotEl.querySelector('.ms-slot-active').style.display = 'none';
-  slotEl.querySelector('.ms-slot-empty').style.display = '';
-  slotEl.querySelector('.ms-add-form').style.display = 'none';
+  slotEl.querySelector('.ms-slot-active').classList.add('hidden');
+  slotEl.querySelector('.ms-slot-empty').classList.remove('hidden');
+  slotEl.querySelector('.ms-add-form').classList.add('hidden');
   slotEl.classList.remove('audio-focus', 'chat-focus');
   delete slotEl.dataset._lastTime;
   delete slotEl.dataset._frozenCount;
@@ -90,12 +105,12 @@ function addMultiSlot(idx, channel, platform) {
   TwitchX.multiState.slots[idx] = { channel: channel, platform: platform, quality: quality, title: '' };
   const slotEl = document.querySelector('.ms-slot[data-slot-idx="' + idx + '"]');
   if (!slotEl) return;
-  slotEl.querySelector('.ms-slot-empty').style.display = 'none';
-  slotEl.querySelector('.ms-add-form').style.display = 'none';
+  slotEl.querySelector('.ms-slot-empty').classList.add('hidden');
+  slotEl.querySelector('.ms-add-form').classList.add('hidden');
   const active = slotEl.querySelector('.ms-slot-active');
-  active.style.display = 'block';
-  active.querySelector('.ms-loading').style.display = '';
-  active.querySelector('.ms-error-msg').style.display = 'none';
+  active.classList.remove('hidden');
+  active.querySelector('.ms-loading').classList.remove('hidden');
+  active.querySelector('.ms-error-msg').classList.add('hidden');
   const msVideo = active.querySelector('.ms-video');
   if (msVideo) msVideo.muted = true;
   if (TwitchX.api) TwitchX.api.add_multi_slot(idx, channel, platform, quality);
@@ -208,11 +223,34 @@ function _createMultiSlot(idx) {
   span.textContent = 'Add Stream';
   addBtn.appendChild(span);
   empty.appendChild(addBtn);
+
+  empty.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    slot.classList.add('drag-over');
+  });
+  empty.addEventListener('dragleave', function(e) {
+    // Only remove if leaving the slot entirely (not entering a child)
+    if (!slot.contains(e.relatedTarget)) {
+      slot.classList.remove('drag-over');
+    }
+  });
+  empty.addEventListener('drop', function(e) {
+    e.preventDefault();
+    slot.classList.remove('drag-over');
+    try {
+      var data = JSON.parse(e.dataTransfer.getData('text/plain'));
+      if (data && data.login) {
+        addMultiSlot(idx, data.login, data.platform || 'twitch');
+      }
+    } catch (_) {}
+  });
+
   slot.appendChild(empty);
 
   const form = document.createElement('div');
-  form.className = 'ms-add-form';
-  form.style.display = 'none';
+  form.className = 'ms-add-form hidden';
+
   const input = document.createElement('input');
   input.className = 'ms-add-input';
   input.type = 'text';
@@ -257,7 +295,10 @@ function _createMultiSlot(idx) {
 
   const loading = document.createElement('div');
   loading.className = 'ms-loading';
-  loading.textContent = 'Loading stream...';
+  const spinner = document.createElement('span');
+  spinner.className = 'ms-spinner';
+  loading.appendChild(spinner);
+  loading.appendChild(document.createTextNode('Loading stream...'));
   active.appendChild(loading);
   const errEl = document.createElement('div');
   errEl.className = 'ms-error-msg';

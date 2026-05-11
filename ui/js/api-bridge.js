@@ -16,9 +16,9 @@ function callApi(name) {
 
 function showUserProfile(user) {
   TwitchX.state.currentUser = user;
-  document.getElementById('login-btn').style.display = 'none';
+  document.getElementById('login-btn').classList.add('hidden');
   const info = document.getElementById('user-info');
-  info.style.display = 'flex';
+  info.classList.remove('hidden');
   document.getElementById('user-display-name').textContent = user.display_name;
   const avatar = document.getElementById('user-avatar');
   avatar.dataset.login = (user.login || '').toLowerCase();
@@ -29,22 +29,22 @@ function showUserProfile(user) {
 
 function hideUserProfile() {
   TwitchX.state.currentUser = null;
-  document.getElementById('login-btn').style.display = 'block';
-  document.getElementById('user-info').style.display = 'none';
+  document.getElementById('login-btn').classList.remove('hidden');
+  document.getElementById('user-info').classList.add('hidden');
 }
 
 function showKickProfile(user) {
   TwitchX.state.kickUser = user;
-  document.getElementById('kick-login-sidebar-btn').style.display = 'none';
+  document.getElementById('kick-login-sidebar-btn').classList.add('hidden');
   const info = document.getElementById('kick-user-info');
-  info.style.display = 'flex';
+  info.classList.remove('hidden');
   document.getElementById('kick-user-name').textContent = user.display_name || user.login;
 }
 
 function hideKickProfile() {
   TwitchX.state.kickUser = null;
-  document.getElementById('kick-login-sidebar-btn').style.display = 'block';
-  document.getElementById('kick-user-info').style.display = 'none';
+  document.getElementById('kick-login-sidebar-btn').classList.remove('hidden');
+  document.getElementById('kick-user-info').classList.add('hidden');
 }
 
 function doLogout() {
@@ -54,8 +54,8 @@ function doLogout() {
 function doBrowser() {
   if (!TwitchX.state.selectedChannel || !TwitchX.api) return;
   const selectedStream = TwitchX.state.streams.find(function(s) { return s.login === TwitchX.state.selectedChannel; });
-  const meta = TwitchX.getFavoriteMeta(TwitchX.state.selectedChannel);
-  const platform = (selectedStream && selectedStream.platform) || (meta && meta.platform) || 'twitch';
+  const platform = (selectedStream && selectedStream.platform) || 'twitch';
+  const meta = TwitchX.getFavoriteMeta(TwitchX.state.selectedChannel, platform);
   TwitchX.api.open_browser(TwitchX.state.selectedChannel, platform);
 }
 
@@ -81,7 +81,7 @@ window.addEventListener('pywebviewready', function() {
     }
     TwitchX.state.pipEnabled = !!(config && config.pip_enabled);
     const pipBtn = document.getElementById('pip-player-btn');
-    if (pipBtn) pipBtn.style.display = TwitchX.state.pipEnabled ? '' : 'none';
+    if (pipBtn) pipBtn.classList.toggle('hidden', !TwitchX.state.pipEnabled);
   } catch(e) {
     setTimeout(function() {
       if (TwitchX.api) {

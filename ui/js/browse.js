@@ -4,7 +4,14 @@ const TwitchX = window.TwitchX;
 function showBrowseView() {
   document.getElementById('toolbar').classList.add('hidden');
   document.getElementById('stream-grid').classList.add('hidden');
-  document.getElementById('browse-view').classList.remove('hidden');
+  var view = document.getElementById('browse-view');
+  view.classList.remove('hidden');
+  view.style.opacity = '0';
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      view.style.opacity = '';
+    });
+  });
   TwitchX.state.browseMode = 'categories';
   TwitchX.state.browseCategory = null;
   TwitchX.state.browsePlatformFilter = 'all';
@@ -20,9 +27,17 @@ function showBrowseView() {
 
 function hideBrowseView() {
   document.getElementById('browse-view').classList.add('hidden');
+  document.getElementById('browse-view').style.opacity = '';
   if (document.getElementById('player-view').classList.contains('active')) return;
   document.getElementById('toolbar').classList.remove('hidden');
-  document.getElementById('stream-grid').classList.remove('hidden');
+  var grid = document.getElementById('stream-grid');
+  grid.classList.remove('hidden');
+  grid.style.opacity = '0';
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      grid.style.opacity = '';
+    });
+  });
   TwitchX.renderGrid();
 }
 
@@ -55,8 +70,14 @@ function setBrowsePlatform(btn, platform) {
 }
 
 function loadBrowseCategories() {
-  document.getElementById('browse-categories-grid').replaceChildren();
-  document.getElementById('browse-loading').classList.remove('hidden');
+  var grid = document.getElementById('browse-categories-grid');
+  grid.replaceChildren();
+  for (var i = 0; i < 12; i++) {
+    var s = document.createElement('div');
+    s.className = 'skeleton skeleton-browse-card';
+    grid.appendChild(s);
+  }
+  document.getElementById('browse-loading').classList.add('hidden');
   document.getElementById('browse-empty').classList.add('hidden');
   if (TwitchX.api) TwitchX.api.get_browse_categories(TwitchX.state.browsePlatformFilter);
 }
@@ -68,8 +89,13 @@ function _triggerBrowseTopStreams(category) {
   document.getElementById('browse-back-btn').classList.remove('hidden');
   document.getElementById('browse-categories-grid').classList.add('hidden');
   document.getElementById('browse-streams-grid').replaceChildren();
+  for (var si = 0; si < 8; si++) {
+    var s = document.createElement('div');
+    s.className = 'skeleton skeleton-stream-card';
+    document.getElementById('browse-streams-grid').appendChild(s);
+  }
   document.getElementById('browse-streams-grid').classList.remove('hidden');
-  document.getElementById('browse-loading').classList.remove('hidden');
+  document.getElementById('browse-loading').classList.add('hidden');
   document.getElementById('browse-empty').classList.add('hidden');
   if (TwitchX.api) {
     TwitchX.api.get_browse_top_streams(

@@ -20,7 +20,7 @@
     <aside id="sidebar">
       <div id="profile-area">
         <button id="login-btn" class="login-btn">Login with Twitch</button>
-        <div id="user-info" class="platform-user-info" style="display:none">
+        <div id="user-info" class="platform-user-info hidden">
           <img id="user-avatar" class="platform-user-avatar" src="" alt="">
           <div class="platform-user-details">
             <div id="user-display-name" class="platform-user-name"></div>
@@ -33,7 +33,7 @@
       </div>
       <div id="kick-profile-area">
         <button id="kick-login-sidebar-btn" class="login-btn">Login with Kick</button>
-        <div id="kick-user-info" class="platform-user-info" style="display:none">
+        <div id="kick-user-info" class="platform-user-info hidden">
           <div class="platform-user-details">
             <div id="kick-user-name" class="platform-user-name"></div>
             <div class="platform-user-actions">
@@ -78,6 +78,7 @@
           <option value="alpha">Alphabetical</option>
         </select>
         <input id="filter-input" placeholder="Filter by game...">
+        <button id="grid-toggle-btn" class="bar-btn" title="Switch to list view" aria-label="Toggle grid/list view">&#8801;</button>
       </div>
       <div id="stream-grid"></div>
       <div id="empty-state">
@@ -100,7 +101,7 @@
           <div id="browse-categories-grid" class="browse-grid"></div>
           <div id="browse-streams-grid" class="browse-grid browse-streams-grid hidden"></div>
           <div id="browse-loading" class="browse-loading hidden">Loading...</div>
-          <div id="browse-empty" class="browse-empty hidden">No results found.</div>
+          <div id="browse-empty" class="browse-empty hidden">No categories found.</div>
         </div>
       </div>
 
@@ -178,19 +179,19 @@
         <div id="player-header">
           <span id="player-channel-name"></span>
           <span id="player-stream-title"></span>
-          <span id="vod-time-display" style="display:none;font-size:12px;color:var(--text-muted);font-family:ui-monospace,monospace;"></span>
+          <span id="vod-time-display" class="hidden"></span>
           <div id="player-header-actions">
-            <button id="stats-overlay-btn" title="Stream Stats" aria-label="Stream Stats" style="display:none;">&#128202; Stats</button>
-            <button id="record-btn" title="Start/Stop Recording" aria-label="Record" style="display:none;">&#9679; REC</button>
+            <button id="stats-overlay-btn" class="player-header-btn hidden" title="Stream Stats" aria-label="Stream Stats">&#128202; Stats</button>
+            <button id="record-btn" class="player-header-btn hidden" title="Start/Stop Recording" aria-label="Record">&#9679; REC</button>
             <button id="toggle-chat-btn" title="Toggle Chat (C)" aria-label="Toggle Chat">&#128172;</button>
-            <button id="pip-player-btn" title="Picture-in-Picture (P)" aria-label="Picture in Picture" style="display:none;">&#10697; PiP</button>
+            <button id="pip-player-btn" class="player-header-btn hidden" title="Picture-in-Picture (P)" aria-label="Picture in Picture">&#10697; PiP</button>
             <button id="fullscreen-player-btn" title="Fullscreen (F)" aria-label="Fullscreen">&#9974;</button>
             <button id="close-player-btn" aria-label="Close Player">&#10005; Close</button>
           </div>
         </div>
         <div id="player-content">
           <video id="stream-video" autoplay controls playsinline></video>
-          <div id="stats-overlay" style="display:none;">
+          <div id="stats-overlay" class="hidden">
             <div class="stats-row"><span class="stats-key">Latency</span><span class="stats-val" id="so-latency">--</span></div>
             <div class="stats-row"><span class="stats-key">Buffer</span><span class="stats-val" id="so-buffer">--</span></div>
             <div class="stats-row"><span class="stats-key">Dropped</span><span class="stats-val" id="so-dropped">--</span></div>
@@ -201,39 +202,40 @@
             <div id="chat-header">
               <span id="chat-title">Chat</span>
               <span id="chat-status-dot"></span>
-              <button id="chat-filter-btn" title="Chat Filters" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--text-muted);padding:2px 4px;">&#9878;</button>
-              <button id="chat-export-btn" title="Export Chat Log" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--text-muted);padding:2px 4px;">&#128190;</button>
-              <button id="chat-userlist-btn" title="Chat Users" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--text-muted);padding:2px 4px;">
+              <span id="chat-status-text"></span>
+              <button id="chat-filter-btn" class="chat-header-btn" title="Chat Filters">&#9878;</button>
+              <button id="chat-export-btn" class="chat-header-btn" title="Export Chat Log">&#128190;</button>
+              <button id="chat-userlist-btn" class="chat-header-btn" title="Chat Users">
                 &#128101; <span id="chat-userlist-count">0</span>
               </button>
-              <button id="chat-mod-btn" title="Chat Controls" style="display:none;background:none;border:none;cursor:pointer;font-size:12px;color:var(--text-muted);padding:2px 4px;">&#128737; Mod</button>
+              <button id="chat-mod-btn" class="chat-header-btn hidden" title="Chat Controls">&#128737; Mod</button>
             </div>
-            <div id="chat-filter-panel" style="display:none;padding:6px 8px;background:var(--bg-elevated);border-bottom:1px solid var(--border);font-size:11px;">
-              <label style="display:flex;align-items:center;gap:4px;margin-bottom:4px;cursor:pointer;">
+            <div id="chat-filter-panel" class="hidden chat-filter-panel">
+              <label class="filter-row">
                 <input type="checkbox" id="chat-filter-sub"> Sub-only
               </label>
-              <label style="display:flex;align-items:center;gap:4px;margin-bottom:4px;cursor:pointer;">
+              <label class="filter-row">
                 <input type="checkbox" id="chat-filter-mod"> Mod-only
               </label>
-              <label style="display:flex;align-items:center;gap:4px;margin-bottom:4px;cursor:pointer;">
+              <label class="filter-row">
                 <input type="checkbox" id="chat-filter-spam" checked> Hide spam/caps
               </label>
-              <div style="margin-top:4px;">
-                <input id="chat-blocklist-input" type="text" placeholder="Add blocked word…" style="width:100%;font-size:11px;padding:2px 4px;background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);">
+              <div class="mt-1">
+                <input id="chat-blocklist-input" type="text" placeholder="Add blocked word…" class="chat-filter-input">
               </div>
             </div>
-            <div id="chat-userlist-panel" style="display:none;height:150px;overflow:hidden;flex-direction:column;border-bottom:1px solid var(--border);">
-              <input id="chat-userlist-search" type="text" placeholder="Search users…" style="width:100%;padding:4px 8px;border:none;border-bottom:1px solid var(--border);background:var(--bg-elevated);color:var(--text-primary);font-size:11px;box-sizing:border-box;">
-              <div id="chat-userlist-items" style="overflow-y:auto;flex:1;padding:4px 0;"></div>
+            <div id="chat-userlist-panel" class="hidden chat-userlist-panel">
+              <input id="chat-userlist-search" type="text" placeholder="Search users…" class="userlist-search">
+              <div id="chat-userlist-items" class="userlist-items"></div>
             </div>
-            <div id="chat-mod-panel" style="display:none;padding:6px 8px;background:var(--bg-elevated);border-bottom:1px solid var(--border);font-size:11px;">
-              <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">Broadcaster controls (Twitch only)</div>
-              <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;cursor:pointer;">
+            <div id="chat-mod-panel" class="hidden chat-mod-panel">
+              <div class="mod-panel-hint">Broadcaster controls (Twitch only)</div>
+              <label class="mod-row">
                 <input type="checkbox" id="mod-emote-only"> Emote-only mode
               </label>
-              <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;cursor:pointer;">
+              <label class="mod-row">
                 <input type="checkbox" id="mod-slow"> Slow mode
-                <select id="mod-slow-wait" style="font-size:11px;padding:1px 2px;margin-left:4px;">
+                <select id="mod-slow-wait" class="mod-select">
                   <option value="10">10s</option>
                   <option value="30" selected>30s</option>
                   <option value="60">60s</option>
@@ -241,7 +243,7 @@
                 </select>
               </label>
             </div>
-            <div id="chat-export-menu" style="display:none;position:absolute;right:8px;top:28px;background:var(--bg-overlay);border:1px solid var(--border);border-radius:var(--radius-sm);z-index:50;overflow:hidden;">
+            <div id="chat-export-menu" class="hidden chat-export-menu">
               <div class="ctx-item" id="chat-export-json">Export as JSON</div>
               <div class="ctx-item" id="chat-export-txt">Export as TXT</div>
             </div>
@@ -253,12 +255,12 @@
               <span class="reply-body" id="chat-reply-body"></span>
               <button class="reply-close" id="chat-reply-close">&times;</button>
             </div>
-            <div id="emote-picker" style="display:none;position:absolute;bottom:50px;left:0;right:0;height:200px;background:var(--bg-overlay);border-top:1px solid var(--border);overflow:hidden;flex-direction:column;z-index:20;">
-              <input id="emote-search" type="text" placeholder="Search emotes…" style="width:100%;padding:6px 8px;border:none;border-bottom:1px solid var(--border);background:var(--bg-elevated);color:var(--text-primary);font-size:12px;box-sizing:border-box;">
-              <div id="emote-grid" style="overflow-y:auto;padding:6px;display:flex;flex-wrap:wrap;gap:2px;align-content:flex-start;flex:1;"></div>
+            <div id="emote-picker" class="hidden emote-picker">
+              <input id="emote-search" type="text" placeholder="Search emotes…" class="emote-search">
+              <div id="emote-grid" class="emote-grid"></div>
             </div>
             <div id="chat-input-area">
-              <button id="emote-picker-btn" title="Emotes" style="background:none;border:none;cursor:pointer;font-size:16px;padding:2px 4px;color:var(--text-muted);flex-shrink:0;">&#128512;</button>
+              <button id="emote-picker-btn" class="emote-picker-btn" title="Emotes">&#128512;</button>
               <input id="chat-input" type="text" placeholder="Send a message..." maxlength="500" disabled />
               <button id="chat-send-btn" disabled>Send</button>
             </div>
@@ -279,15 +281,16 @@
       <option value="audio_only">Audio only</option>
     </select>
     <button id="watch-btn">&#9654; Watch</button>
-    <button id="stop-player-btn" style="display:none;" title="Stop playback" aria-label="Stop">&#9632; Stop</button>
+    <button id="stop-player-btn" class="hidden" title="Stop playback" aria-label="Stop">&#9632; Stop</button>
     <button id="watch-external-btn" title="Open in External Player" aria-label="Open in External Player">&#8599; Ext.</button>
     <button class="bar-btn" id="browser-btn" title="Open in browser" aria-label="Open in Browser">&#127760;</button>
     <span id="live-dot">&#9679;</span>
-    <span id="record-dot" style="display:none;color:#e53935;font-size:11px;font-weight:700;margin-left:4px;">&#9679; REC</span>
+    <span id="record-dot" class="hidden record-dot">&#9679; REC</span>
     <span id="status-text"></span>
     <span id="total-viewers"></span>
     <span id="updated-time"></span>
     <button class="bar-btn" id="refresh-btn" title="Refresh (R)" aria-label="Refresh">&#8635;</button>
+    <button class="bar-btn" id="mini-mode-btn" title="Mini mode" aria-label="Toggle mini mode">&#9633;</button>
     <button class="bar-btn" id="settings-btn" title="Settings (&#8984;,)" aria-label="Settings">&#9881;</button>
   </div>
 </div>
@@ -301,7 +304,16 @@
   <div class="ctx-item" data-action="profile">&#128100; View Channel</div>
   <div class="ctx-item" data-action="copy">&#128203; Copy URL</div>
   <div class="ctx-item" data-action="favorite">&#9733; Add to Favorites</div>
+  <div class="ctx-item" data-action="pin">&#128204; Pin to top</div>
   <div class="ctx-item" data-action="remove">&#10005; Remove</div>
+</div>
+
+<!-- Command Palette -->
+<div id="palette-overlay" class="hidden" role="dialog" aria-label="Command palette" aria-modal="true">
+  <div id="palette-modal">
+    <input id="palette-input" type="text" placeholder="Search channels and commands..." autocomplete="off" spellcheck="false">
+    <div id="palette-results" role="listbox"></div>
+  </div>
 </div>
 
 <!-- Settings overlay -->
@@ -336,7 +348,7 @@
           <option value="mpv">mpv</option>
         </select>
       </div>
-      <div class="setting-group" id="s-mpv-group" style="display:none;">
+      <div class="setting-group hidden" id="s-mpv-group">
         <label>mpv Path</label>
         <input id="s-mpv" type="text" autocomplete="off">
       </div>
@@ -350,14 +362,18 @@
       </div>
       <div class="setting-group">
         <label>Twitch Low-Latency Mode</label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+        <label class="checkbox-row">
           <input type="checkbox" id="s-low-latency"> Enable low-latency HLS (Twitch only)
         </label>
-        <p style="font-size:11px;color:var(--text-muted);margin:4px 0 0;">Reduces stream delay. Requires streamlink &ge;6.x and Twitch support.</p>
+        <p class="setting-hint">Reduces stream delay. Requires streamlink &ge;6.x and Twitch support.</p>
       </div>
       <div class="setting-group">
         <label>Recording Directory</label>
         <input id="s-recording-path" type="text" autocomplete="off">
+      </div>
+      <div class="setting-group">
+        <label>Accent Color</label>
+        <div id="accent-swatches" class="accent-swatches"></div>
       </div>
     </div>
 
@@ -402,11 +418,11 @@
         Kick's API does not currently expose followed channels for import, so Kick favorites still need to be added manually via search or direct slug.
       </div>
       <div id="kick-login-area" class="setting-group">
-        <button id="kick-login-btn" style="width:100%;height:36px;background:var(--accent);color:white;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Login with Kick</button>
+        <button id="kick-login-btn" class="oauth-login-btn">Login with Kick</button>
       </div>
-      <div id="kick-user-area" class="setting-group" style="display:none;">
-        <div id="kick-user-display" style="font-size:13px;color:var(--text-primary);margin-bottom:8px;"></div>
-        <a id="kick-logout-settings-link" style="font-size:12px;color:var(--text-muted);cursor:pointer;text-decoration:none;">Logout from Kick</a>
+      <div id="kick-user-area" class="setting-group hidden">
+        <div id="kick-user-display" class="setting-user-display"></div>
+        <a id="kick-logout-settings-link" class="logout-link">Logout from Kick</a>
       </div>
       <div class="settings-btns">
         <button id="kick-test-btn">Test Kick Connection</button>
@@ -437,31 +453,31 @@
         Client ID + Secret required for login and subscription import
       </div>
       <div id="yt-login-area" class="setting-group">
-        <button id="yt-login-btn" style="width:100%;height:36px;background:var(--accent);color:white;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">Connect YouTube Account</button>
+        <button id="yt-login-btn" class="oauth-login-btn">Connect YouTube Account</button>
       </div>
-      <div id="yt-user-area" class="setting-group" style="display:none;">
-        <div id="yt-display-name" style="font-size:13px;color:var(--text-primary);margin-bottom:4px;"></div>
-        <div id="yt-quota-display" style="font-size:12px;color:var(--text-muted);margin-bottom:8px;"></div>
-        <button id="yt-import-btn" style="width:100%;height:32px;background:var(--bg-elevated);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:6px;">Import Subscriptions</button>
-        <a id="yt-logout-btn" style="font-size:12px;color:var(--text-muted);cursor:pointer;text-decoration:none;">Logout from YouTube</a>
+      <div id="yt-user-area" class="setting-group hidden">
+        <div id="yt-display-name" class="setting-user-display mb-1"></div>
+        <div id="yt-quota-display" class="setting-quota-display"></div>
+        <button id="yt-import-btn" class="import-btn">Import Subscriptions</button>
+        <a id="yt-logout-btn" class="logout-link">Logout from YouTube</a>
       </div>
       <div class="settings-btns">
         <button id="yt-test-btn">Test YouTube Connection</button>
       </div>
-      <div id="yt-test-result" style="display:none;font-size:12px;margin-top:8px;text-align:center;"></div>
+      <div id="yt-test-result" class="hidden test-result"></div>
     </div>
 
     <!-- Hotkeys panel -->
     <div class="settings-panel" id="settings-panel-hotkeys">
       <div class="setting-group">
         <label>Keyboard Shortcuts</label>
-        <p style="font-size:11px;color:var(--text-muted);margin:4px 0 10px;">Click a key badge to rebind it. Press Esc to cancel.</p>
-        <table id="hotkeys-table" style="width:100%;border-collapse:collapse;"></table>
-        <button id="reset-shortcuts-btn" style="margin-top:10px;font-size:12px;padding:4px 10px;background:var(--bg-elevated);color:var(--text-secondary);border:1px solid var(--bg-border);border-radius:var(--radius-sm);cursor:pointer;">Reset to Defaults</button>
+        <p class="setting-hint setting-hint-spaced">Click a key badge to rebind it. Press Esc to cancel.</p>
+        <table id="hotkeys-table" class="hotkeys-table"></table>
+        <button id="reset-shortcuts-btn" class="reset-btn">Reset to Defaults</button>
       </div>
-      <div class="setting-group" style="margin-top:4px;">
+      <div class="setting-group mt-1">
         <label>Picture-in-Picture</label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+        <label class="checkbox-row">
           <input type="checkbox" id="s-pip-enabled"> Show PiP button in player header
         </label>
       </div>
@@ -469,8 +485,8 @@
 
     <!-- Statistics panel -->
     <div class="settings-panel" id="settings-panel-statistics">
-      <div id="stats-loading" style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px;">Loading statistics...</div>
-      <div id="stats-content" style="display:none;">
+      <div id="stats-loading" class="stats-loading">Loading statistics...</div>
+      <div id="stats-content" class="hidden">
         <div class="setting-group">
           <label>Today</label>
           <div id="stats-today" class="stats-grid">
@@ -494,7 +510,7 @@
         </div>
         <div class="setting-group">
           <label>All Time</label>
-          <div class="stats-grid" style="grid-template-columns:1fr 1fr;">
+          <div class="stats-grid stats-grid-cols-2">
             <div class="stat-card">
               <span class="stat-value" id="stat-total-time">--</span>
               <span class="stat-label">Total watch time</span>
@@ -534,6 +550,7 @@
 <script src="js/settings.js"></script>
 <script src="js/context-menu.js"></script>
 <script src="js/keyboard.js"></script>
+<script src="js/palette.js"></script>
 <script src="js/callbacks.js"></script>
 <script src="js/init.js"></script>
 </body>

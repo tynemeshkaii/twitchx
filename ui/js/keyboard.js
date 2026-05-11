@@ -70,6 +70,10 @@ function handleKeydown(e) {
   const sc = TwitchX.state.shortcuts;
 
   if (e.key === 'Escape') {
+    if (!document.getElementById('palette-overlay').classList.contains('hidden')) {
+      if (TwitchX.closePalette) TwitchX.closePalette();
+      return;
+    }
     if (document.getElementById('settings-overlay').classList.contains('visible')) {
       TwitchX.closeSettings(); return;
     }
@@ -84,11 +88,11 @@ function handleKeydown(e) {
       TwitchX.browseGoBack(); return;
     }
     if (TwitchX.multiState.open) { TwitchX.closeMultistreamView(); return; }
-    if (document.getElementById('context-menu').style.display === 'block') {
-      document.getElementById('context-menu').style.display = 'none'; return;
+    if (!document.getElementById('context-menu').classList.contains('hidden')) {
+      document.getElementById('context-menu').classList.add('hidden'); return;
     }
-    if (document.getElementById('search-dropdown').style.display === 'block') {
-      document.getElementById('search-dropdown').style.display = 'none'; return;
+    if (!document.getElementById('search-dropdown').classList.contains('hidden')) {
+      document.getElementById('search-dropdown').classList.add('hidden'); return;
     }
     TwitchX.state.selectedChannel = null;
     document.querySelectorAll('.stream-card').forEach(function(c) { c.classList.remove('selected'); });
@@ -109,6 +113,11 @@ function handleKeydown(e) {
   }
   if (e.metaKey && e.key === ',') {
     e.preventDefault(); TwitchX.openSettings(); return;
+  }
+  if (e.metaKey && e.key === 'k') {
+    e.preventDefault();
+    if (TwitchX.openPalette) TwitchX.openPalette();
+    return;
   }
 
   // Single-key shortcuts — skip if any modifier is held

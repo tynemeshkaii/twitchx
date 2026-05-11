@@ -44,10 +44,12 @@ make check   # lint + test (перед коммитом)
 | `core/launcher.py` | `launch_stream()`, `launch_stream_mpv()` | Принимает `PlatformClient` instance, поддержка IINA и mpv |
 | `core/recorder.py` | `Recorder` — менеджер записи стримов | start/stop/state_dict через streamlink subprocess |
 | `ui/api/` | Python↔JS bridge (7 модулей) | См. §5 |
-| `ui/index.html` | Shell (~414 строк) | pywebview 6.x требует inline ресурсов |
+| `ui/index.html` | Shell (~557 строк) | pywebview 6.x требует inline ресурсов |
 | `ui/css/` | 6 CSS-модулей | См. §3.1 |
-| `ui/js/` | 14 JS-модулей | См. §3.2 |
+| `ui/js/` | 15 JS-модулей | См. §3.2 |
+| `ui/js/palette.js` | Command Palette module | `openPalette`, `closePalette`, `renderPaletteResults` |
 | `tests/` | Pytest suite | `conftest.py` с фикстурами |
+| `tests/test_uiux_settings.py` | Tests for accent_color and settings API | §8 |
 
 ---
 
@@ -97,7 +99,7 @@ TwitchChatClient / KickChatClient / YouTubeChatClient
 - **Favorites:** список `{login, platform, display_name}`.
 - **Миграция:** v1 flat config → v2 автоматически при первой загрузке.
 - **Merge-on-load:** недостающие ключи заполняются из `DEFAULT_CONFIG`, приложение никогда не падает на устаревшем формате.
-- **Новые ключи settings:** `low_latency_mode` (bool), `external_player` ("iina"|"mpv"), `mpv_path` (str), `recording_path` (str), `chat_filter_sub_only` (bool), `chat_filter_mod_only` (bool), `chat_anti_spam` (bool), `chat_block_list` (list[str]).
+- **Новые ключи settings:** `accent_color` (str, hex), `low_latency_mode` (bool), `external_player` ("iina"|"mpv"), `mpv_path` (str), `recording_path` (str), `chat_filter_sub_only` (bool), `chat_filter_mod_only` (bool), `chat_anti_spam` (bool), `chat_block_list` (list[str]).
 - **`save_settings()`** — сохраняет только присутствующие в `parsed` ключи. Пустые строки очищают credential-поля (client_id, client_secret, api_key). Ранее игнорировались через `if new_value:` guard.
 - **Важно:** из фоновых потоков используйте **локальный** `config = load_config()`, никогда не записывайте в `self._config` из треда (race condition с polling thread).
 
@@ -109,14 +111,16 @@ TwitchChatClient / KickChatClient / YouTubeChatClient
 
 | File | Зона ответственности |
 |------|---------------------|
-| `tokens.css` | CSS custom properties (`:root`) |
+| `tokens.css` | CSS custom properties (`:root`) — full design token system: spacing scale, typography scale, border tokens, shadow tokens, z-index scale, animation tokens, accent variants |
 | `reset.css` | Base resets, scrollbar, accessibility media queries |
-| `layout.css` | `#app`, `#main`, `#sidebar`, `#content`, `#toolbar` |
-| `components.css` | Buttons, inputs, cards, badges, sidebar sections, chat messages |
-| `views.css` | `#player-view`, `#browse-view`, `#channel-view`, `#multistream-view` |
+| `layout.css` | `#app`, `#main`, `#sidebar`, `#content`, `#toolbar`, mini mode (`.mini` class rules) |
+| `components.css` | Buttons, inputs, cards, badges, sidebar sections, chat messages, accent swatches, list-mode grid, pin badge, palette overlay, drag-to-multistream, skeleton classes (`.skeleton`, `.skeleton-card`, `.skeleton-thumb`, `.skeleton-text`, `.skeleton-browse-card`, `.skeleton-stream-card`), spinner (`.ms-spinner`), overlay transitions (settings scale+fade, context-menu scale+opacity, search dropdown slide+fade), connecting indicator, chat status text |
+| `views.css` | `#player-view`, `#browse-view`, `#channel-view`, `#multistream-view` — все с `opacity` transition для fade in/out |
 | `player.css` | `#player-bar`, `#chat-panel`, `#chat-resize-handle`, `#live-dot`, PiP button active states |
 
 **Containment:** `#player-view`, `#player-content`, `#chat-panel` имеют `contain: layout style paint` для изоляции пересчётов от видео-композитинга.
+
+**View Transition Pattern:** `display: none` нельзя анимировать через CSS transitions. Используется двухфазный JS-паттерн: 1) установить `display: flex/grid` → `requestAnimationFrame` → установить `opacity: ''` (появление); 2) установить `opacity: 0` → `transitionend`/`setTimeout 250ms` → `display: none` (скрытие). `prefers-reduced-motion: reduce` в reset.css обнуляет все transition-duration.
 
 ### 3.2 JS Module Dependency & Load Order
 
@@ -124,28 +128,31 @@ TwitchChatClient / KickChatClient / YouTubeChatClient
 
 Порядок загрузки:
 ```
-state → utils → api-bridge → render → sidebar → player → multistream → browse → channel → chat → settings → context-menu → keyboard → callbacks → init
+state → utils → api-bridge → render → sidebar → player → multistream → browse → channel → chat → settings → context-menu → keyboard → palette → callbacks → init
 ```
 
 | File | Ответственность |
 |------|-----------------|
-| `state.js` | `TwitchX.state`, `TwitchX.multiState`, shortcuts, chat state, `TwitchX.getFavoriteMeta(login)` — helper для поиска меты по bare login в compound-ключевом `favoritesMeta` |
-| `utils.js` | `truncate`, `formatViewers`, `formatUptime`, `setStatus` |
+| `state.js` | `TwitchX.state`, `TwitchX.multiState`, shortcuts, chat state, `TwitchX.getFavoriteMeta(login, platform)` — helper для поиска меты в compound-ключевом `favoritesMeta`. Если `platform` передан — прямой lookup по compound key `"platform:login"`; если нет — fallback перебор по `login`. Также: `TwitchX.state.gridMode`, `TwitchX.state.pinnedStreams`, `loadPinnedStreams/savePinnedStreams/isPinned/togglePin` |
+| `utils.js` | `truncate`, `formatViewers`, `formatUptime`, `setStatus`, `viewFadeIn`/`viewFadeOut` — двухфазный show/hide helper для анимированных переходов |
 | `api-bridge.js` | `pywebviewready`, `TwitchX.api`, profile helpers |
-| `render.js` | `renderGrid`, `createStreamCard`, `createOnboardingCard` |
-| `sidebar.js` | `renderSidebar`, diff-based updates, layout logic |
+| `render.js` | `renderGrid`, `createStreamCard`, `createOnboardingCard`. Grid/list-mode toggle via `list-mode` CSS class. Pinned-first sort in `getFilteredSortedStreams`. Pin badge rendering in `createStreamCard`. `showSkeletonGrid`/`hideSkeletonGrid` — 8 skeleton карточек при первой загрузке. |
+| `sidebar.js` | `renderSidebar`, diff-based updates, layout logic, `getChannelPlatform` helper, drag-to-multistream (`draggable=true`, `dragstart`/`dragend` events) |
 | `player.js` | Video lifecycle, health monitors, fullscreen, gentle reset, recording toggle, stats overlay, VOD time display |
-| `multistream.js` | Slot management, audio/chat focus, health monitor |
+| `multistream.js` | Slot management, audio/chat focus, health monitor, `dragover`/`dragleave`/`drop` handlers на `.ms-slot-empty` для drag-to-multistream |
 | `browse.js` | `showBrowseView`, breadcrumb nav (`Following > Browse > Category`), category/top-stream loading |
 | `channel.js` | `showChannelView`, tabs, media cards, follow/watch actions |
 | `chat.js` | `submitChatMessage`, `renderChatEmotes`, reply handling, chat filters, log export, emote picker, user list |
-| `settings.js` | `openSettings`, `saveSettings`, connection tests |
-| `context-menu.js` | `showContextMenu`, `showSidebarContextMenu` |
-| `keyboard.js` | `handleKeydown`, shortcut rebinding, hotkeys (player + multistream scopes), duplicate-key confirm-swap |
+| `settings.js` | `openSettings`, `saveSettings`, connection tests, `ACCENT_PALETTE` constant, `applyAccentColor()`, accent swatch rendering |
+| `context-menu.js` | `showContextMenu`, `showSidebarContextMenu`, pin item show/hide and label update |
+| `keyboard.js` | `handleKeydown`, shortcut rebinding, hotkeys (player + multistream scopes), duplicate-key confirm-swap, Cmd+K → palette, Escape priority for palette |
+| `palette.js` | Command Palette module: `openPalette`, `closePalette`, `renderPaletteResults`, `handlePaletteKeydown` |
 | `callbacks.js` | Все `window.on*` — thin proxies к `TwitchX.*`, chat batching (`flushChatBatch`), `_shouldFilter`, `_hasBadge`, `onThirdPartyEmotes`, `onChatUserList`, `onChatModeChanged` |
-| `init.js` | `DOMContentLoaded`, `_bind*()` wiring, uptime interval |
+| `init.js` | `DOMContentLoaded`, `_bind*()` wiring, uptime interval. `toggleMiniMode`/`applyMiniMode`, `_bindPaletteEvents`, grid toggle binding, mini btn binding, accent/ mini/grid/pinned restore на старте, skeleton init при наличии favorites |
 
 **pywebview 6.x Constraint:** модули не загружаются через отдельные `<script src="...">`. `app.py._inline_resources()` мержит все JS в **один** inline `<script>` блок и CSS в inline `<style>`. Только `state.js` содержит `window.TwitchX = window.TwitchX || {};`, остальные используют `const TwitchX = window.TwitchX;`.
+
+**⚠️ ВАЖНО:** все новые JS-модули **обязаны** использовать `const TwitchX = window.TwitchX;` (не `var`). `_inline_resources()` ищет точную строку `"window.TwitchX = window.TwitchX || {};\nconst TwitchX = window.TwitchX;"` для замены во всех файлах кроме первого. `var` не совпадает с паттерном, остаётся в скрипте и вызывает `SyntaxError: Identifier 'TwitchX' has already been declared`. Это ломает весь inline-скрипт.
 
 ### 3.3 Video Player Lifecycle (Player.js)
 
@@ -339,6 +346,77 @@ state → utils → api-bridge → render → sidebar → player → multistream
 - `save_chat_block_list()` — принимает JSON-массив слов, сохраняет с `.strip().lower()` и лимитом 100×50.
 - Multistream чат (`#ms-chat-send-btn`, `#ms-chat-input`) в `init.js` зеркалирует `submitChatMessage()` — читает `TwitchX.chatReplyTo`, передаёт reply-параметры в `send_chat()` и вызывает `clearChatReply()` после отправки. `Escape` на `ms-chat-input` отменяет reply.
 
+### 3.6 Grid/List View Toggle (Render.js)
+
+- `TwitchX.state.gridMode` — `"grid"` (default) или `"list"`, персистент через `localStorage('twitchx.grid_mode')`.
+- Кнопка `#grid-toggle-btn` в `#toolbar` переключает режим. Иконка меняется: `≡` (grid) / `⊞` (list).
+- List-mode CSS (`#stream-grid.list-mode`): `grid-template-columns: 1fr`, карточки горизонтальные (80px thumb, row layout).
+- `createStreamCard()` добавляет класс `.list-mode` на карточку при `gridMode === 'list'`.
+
+### 3.7 Pinned Streams (State.js + Render.js)
+
+- `TwitchX.state.pinnedStreams: Set<string>` — compound keys `"platform:login"`.
+- `loadPinnedStreams()` / `savePinnedStreams()` — `localStorage('twitchx.pinned')`.
+- `isPinned(platform, login)` / `togglePin(platform, login)` — проверка/переключение + `renderGrid()`.
+- `getFilteredSortedStreams()` — pinned-first сортировка: `sortGroup(pinned).concat(sortGroup(rest))`.
+- `createStreamCard()` — бейдж `.pin-badge` (📌) в absolute top-left.
+- Контекстное меню: пункт `"📌 Pin to top"` / `"📌 Unpin"`. `ctxPlatForPin` определяется через `stream.platform` или `favoritesMeta`.
+
+### 3.8 Command Palette (Palette.js)
+
+- Новый модуль `ui/js/palette.js`. Вызов: `Cmd+K` (`e.metaKey && e.key === 'k'`).
+- Оверлей `#palette-overlay` (z-index: 3000, backdrop-filter blur).
+- Три секции: **Live Now** (до 5 каналов), **Favorites** (до 3 offline), **Commands**.
+- Навигация: `↓`/`↑` (активный элемент `.palette-active`), `Enter` (execute), `Escape` (закрыть).
+- `PALETTE_COMMANDS` — статический массив: Refresh, Settings, Browse, Toggle Chat, Stop Player, Toggle Mini Mode.
+- `palette.js` загружается после `keyboard.js` и перед `callbacks.js`.
+
+### 3.9 Drag to Multistream (Sidebar.js → Multistream.js)
+
+- `getChannelPlatform(login)` — helper для определения платформы по `login` (streams → favoritesMeta → fallback `'twitch'`).
+- `createSidebarItem()`: `item.draggable = true`, `dragstart` → `dataTransfer.setData('text/plain', JSON.stringify({login, platform}))`, `effectAllowed = 'copy'`. Авто-открытие multistream view если закрыт.
+- `_createMultiSlot()`: `dragover` (preventDefault + dropEffect='copy' + `.drag-over` class), `dragleave` (удаляет класс, если покинул slot), `drop` (JSON.parse → `addMultiSlot`).
+- CSS: `.channel-item.dragging { opacity: 0.45 }`, `.ms-slot.drag-over .ms-slot-empty { background: var(--accent-dim); outline: 2px dashed var(--accent); }`
+
+### 3.10 Mini Mode (Layout.css + Init.js)
+
+- CSS: `#app.mini #content { display: none !important }`, `#app.mini #sidebar { width: 100%; max-width: none }`, скрывает browse-nav, search, kick-profile.
+- Кнопка `#mini-mode-btn` в `#player-bar` (рядом с settings).
+- `toggleMiniMode()` — toggle класс `.mini` на `#app`, персистит в `localStorage('twitchx.mini')`.
+- `applyMiniMode()` — восстанавливает состояние на `DOMContentLoaded`.
+- Иконки: `□` (normal), `◣` (mini).
+
+### 3.11 View Transitions & Loading States (Phase 3)
+
+**CSS Architecture (`ui/css/tokens.css`, `views.css`, `components.css`):**
+- `--duration-view: 0.18s`, `--ease-view: cubic-bezier(0.25, 0.1, 0.25, 1)` в tokens.css.
+- Все content views (`#player-view`, `#browse-view`, `#channel-view`, `#multistream-view`, `#stream-grid`, `#empty-state`) имеют `opacity` + `transition: opacity var(--duration-view) var(--ease-view)`.
+- Двухфазный JS-паттерн: появление — `display: flex/grid` → `requestAnimationFrame` → `opacity: 1`; скрытие — `opacity: 0` → `transitionend`/fallback 250ms → `display: none`.
+
+**Overlay transitions:**
+- `#settings-overlay`: backdrop fade + `#settings-modal` scale (0.97→1) с ease-spring.
+- `#context-menu`: scale (0.95→1) + opacity, класс `.menu-visible` (BUGFIX: убран `display: none` в базовом CSS, который не позволял контекстному меню показываться).
+- `#search-dropdown`: slide (translateY 4px) + fade, класс `.visible`.
+
+**Skeleton loading (`ui/css/components.css`, `ui/js/render.js`, `ui/js/browse.js`, `ui/js/channel.js`):**
+- `@keyframes skeleton-shimmer` — gradient sweep анимация (200% background-size).
+- `.skeleton`, `.skeleton-card`, `.skeleton-thumb`, `.skeleton-text`, `.skeleton-avatar`, `.skeleton-browse-card` (3:4 ratio), `.skeleton-stream-card` (16:9 ratio).
+- Stream grid: `showSkeletonGrid()` — 8 skeleton cards при `DOMContentLoaded` если есть favorites; `hideSkeletonGrid()` — вызов из `onStreamsUpdate`.
+- Browse: 12 skeleton 3:4 cards для categories, 8 skeleton 16:9 cards для top streams.
+- Channel: skeleton-avatar + skeleton-text для profile; skeleton-stream-card для media tabs (VODs/Clips).
+- Multistream: `.ms-spinner` (CSS-only rotating ring) внутри `.ms-loading` вместо голого текста.
+
+**Chat status indicator (`ui/js/callbacks.js`, `ui/css/components.css`):**
+- `#chat-status-dot` — зелёный (connected), серый (disconnected), жёлтый pulsing (connecting через класс `.connecting` + `@keyframes pulse`).
+- `#chat-status-text` — отображает "Disconnected" или текст ошибки при потере соединения.
+- Empty state "No messages yet" в `clearChatMessages()`.
+
+**Empty states (`ui/index.html`, `ui/js/callbacks.js`):**
+- Browse categories: "No categories found."
+- Browse streams: "No streams found for this category."
+- Search dropdown: "No channels found" (внутри `#search-dropdown` с `.visible` классом).
+- Multistream empty slots: визуальная подсказка "+ Add Stream" через `.ms-add-btn`.
+
 ---
 
 ## 4. Backend Reference (core/)
@@ -475,7 +553,7 @@ state → utils → api-bridge → render → sidebar → player → multistream
 ### 6.1 Platform Identity
 - **YouTube channel IDs (`UCxxxx…`)** — case-sensitive. Никогда не lower-case. `remove_channel`, favorite lookups, live-cache checks и multistream lookup — exact-case comparison для YouTube.
 - Для live stream comparisons используй `DataComponent._stream_matches_channel()`, а не ручной `.lower()`. `DataComponent._stream_login()` сохраняет case для YouTube и lower-case только для Twitch/Kick.
-- **`favorites_meta` использует compound keys `"platform:login"`** (не bare `login`). Предотвращает перезапись метаданных при одинаковом логине на разных платформах. JS использует `TwitchX.getFavoriteMeta(login)` для lookup по bare login через values. `context-menu.js` использует compound key `"youtube:" + login` напрямую для offline-Youtube гварда.
+- **`favorites_meta` использует compound keys `"platform:login"`** (не bare `login`). Предотвращает перезапись метаданных при одинаковом логине на разных платформах. JS использует `TwitchX.getFavoriteMeta(login, platform)` — если `platform` передан, прямой lookup по compound key; если нет — fallback перебор по `login`. `context-menu.js` использует compound key `"youtube:" + login` напрямую для offline-Youtube гварда.
 - **Kick `channel_id`** — integer в raw API. Всегда приводить `str()` в `_normalize_channel_info_to_profile`.
 
 ### 6.2 Multistream Display
@@ -527,6 +605,10 @@ state → utils → api-bridge → render → sidebar → player → multistream
 | 2026-05-10 | Phase 3 fixes | Watch session race, save_settings ignores empty values, launch timer leak | `_start_watch_session()` — `start_session()` перенесён внутрь `_active_watch_lock` (streams.py:42). `save_settings()` — убраны `if new_value:` guard'ы для всех credential-полей; пустые строки очищают ключи (__init__.py:397–442). `_finish_launch()` — добавлен `_launch_id += 1` для инвалидации concurrent `tick()` (streams.py:70). Тесты: `test_save_settings_clears_credentials_when_empty`, `test_start_watch_session_is_atomic_under_lock`, `test_finish_launch_invalidates_launch_id`. | ✅ Active |
 | 2026-05-10 | Phase 4 data layer | Debug audit Phase 4: favorites_meta collision при одинаковых login на разных платформах; deprecated asyncio.get_event_loop(); unresolved placeholder thumbnail_url | `favorites_meta` ключи → `"platform:login"` (compound). Добавлен `TwitchX.getFavoriteMeta(login)` в JS для lookup. `asyncio.get_event_loop()` → переданный `loop` параметр. Twitch thumbnail_url: 440×248 вместо 880×496. | ✅ Active |
 | 2026-05-10 | Phase 5 | Debug audit Phase 5: multistream reply context, Escape no-op, httpx client leak | `send_chat` reply params в multistream (init.js), Escape → `hidePlayerView()` (keyboard.js), `_async_run` → `_close_thread_loop(loop)` (_base.py). Тесты: `test_async_run_closes_thread_loop`, `test_send_chat_forwards_reply_params`. | ✅ Active |
+| 2026-05-11 | Phase 15 | UI/UX upgrades: accent color picker, grid/list toggle, pinned streams, command palette, drag-to-multistream, mini mode | Шесть фич: `accent_color` в storage/config/config API; grid/list mode с list-mode CSS; pinned streams (compound keys + localStorage + pinned-first sort); `ui/js/palette.js` (Cmd+K); drag (dataTransfer) в multistream; mini mode (`.mini` class). Tests: `tests/test_uiux_settings.py`. Bugfix: `var TwitchX` → `const TwitchX` в palette.js для inline merge. 436 tests pass. | ✅ Active |
+| 2026-05-11 | Phase 16 | UI/UX Phase 1: bugfixes, design token system, token application | 4 бага: `word`→`code` в chat.js, `var(--border)`→`var(--border-default)`, бесполезный тернарник в utils.js, `getFavoriteMeta` теперь принимает `platform`. Расширены design tokens: spacing/typography/border/shadow/z-index/animation/accent variants. Токены применены ко всем 6 CSS-файлам (font-size, z-index, durations, padding/margin/gap, border rgba, box-shadow). | ✅ Active |
+| 2026-05-11 | Phase 2 | Inline styles размазаны по HTML и JS (54 inline style="" в index.html, 207 style.display в JS) | Единый `.hidden { display: none !important; }` в reset.css. CSS-классы для chat panels, emote picker, player bar, settings. 54 inline style="" удалены из index.html. JS `style.display` → `classList.toggle('hidden')` во всех модулях (api-bridge, chat, context-menu, init, keyboard, multistream, render, settings, callbacks, player, channel). Удалены дублирующие `.hidden` из CSS. Utility-классы: `.text-muted`, `.text-sm`, `.checkbox-row`, `.setting-hint`, `.mt-1`, `.mb-1`. | ✅ Active |
+| 2026-05-11 | Phase 3 | View transitions мгновенные (display:none), скелетоны отсутствуют, пустые состояния без подсказок | `--duration-view`/`--ease-view` токены. Двухфазный JS-паттерн (display → rAF → opacity) для fade-in всех content views. Overlay transitions: settings (scale+fade), context-menu (scale+opacity, BUGFIX: `display:none` → `.menu-visible`), search dropdown (slide+fade). Скелетоны: `skeleton-card`, `skeleton-browse-card`, `skeleton-stream-card` с shimmer анимацией. `showSkeletonGrid()`/`hideSkeletonGrid()` в render.js. Browse/channel skeletons. Chat: `#chat-status-text`, `.connecting` pulse, empty state "No messages yet". Empty states для browse/search. 436 tests pass. | ✅ Active |
 
 ## 8. Testing Guide
 
@@ -618,6 +700,21 @@ def test_my_feature(temp_config_dir, run_sync, capture_eval_js):
 | «Multistream reply не работает» | §3.5, init.js | `ms-chat-send-btn` handler читает `TwitchX.chatReplyTo` и передаёт reply params в `send_chat()`? После отправки вызывает `clearChatReply()`? |
 | «httpx клиенты утекают / растёт потребление памяти» | §5.2, _base.py | `_async_run` вызывает `_close_thread_loop(loop)` в `finally`? Не bare `loop.close()`? |
 | «Escape не закрывает плеер» | §6.4, keyboard.js | `player-view.active` branch вызывает `TwitchX.hidePlayerView()` вместо bare `return`? |
+| «Cmd+K не открывает palette» | §3.8, palette.js | `palette.js` загружен после `keyboard.js`? `TwitchX.openPalette` определён? `e.metaKey && e.key === 'k'` в `handleKeydown`? |
+| «Приложение полностью ломается после изменений JS» | §3.2, app.py | `var TwitchX` в новом модуле вместо `const` — `_inline_resources()` не заменяет `var`, возникает `SyntaxError: Identifier 'TwitchX' has already been declared` в едином inline-блоке. |
+| «List mode не применяется» | §3.6, render.js | `TwitchX.state.gridMode === 'list'`? `#stream-grid.list-mode` CSS загружен? |
+| «Pin не сохраняется после перезагрузки» | §3.7, state.js | `localStorage('twitchx.pinned')`? `loadPinnedStreams()` в DOMContentLoaded? |
+| «Drag в multistream не работает» | §3.9, sidebar.js | `item.draggable = true`? `dataTransfer.setData('text/plain', ...)`? `drop` handler парсит JSON? |
+| «Mini mode сам включается при старте» | §3.10, init.js | `localStorage.getItem('twitchx.mini') === '1'`? Сбрось localStorage или удали ключ. |
+| «Accent color не применяется при старте» | §3.2, settings.js | `localStorage.getItem('twitchx.accent')`? `TwitchX.applyAccentColor` определён и вызывается в `DOMContentLoaded`? |
+| «Accent swatch не показывает текущий цвет» | §3.2, settings.js | `config.accent_color` приходит от `get_full_config_for_settings()`? `openSettings()` рендерит swatches с классом `active`? |
+| «Design tokens не работают / CSS переменные undefined» | §3.1, tokens.css | Проверить что `tokens.css` загружен первым в `_inline_resources()`. Все токены объявлены в `:root`. Имена с `var(--space-*)` / `var(--font-*)` / `var(--z-*)` и т.д. корректны. |
+| «View transition не срабатывает / пропадает мгновенно» | §3.11 | Проверить двухфазный паттерн: `style.display` установлен до `opacity` transition. `transitionend` не сработает если opacity уже 0 — fallback `setTimeout(250ms)` в `viewFadeOut` обязателен. |
+| «Context menu не появляется» | §3.11, context-menu.js | BUGFIX: базовый CSS `#context-menu` больше не имеет `display: none`. Используется класс `.menu-visible` для показа. Проверить что `showContextMenu` добавляет `menu-visible`, а `_bindContextMenuEvents` убирает его. |
+| «Search dropdown не появляется» | §3.11, init.js | Используется `.visible` класс вместо `.hidden`. Проверить что `onSearchResults` добавляет `dd.classList.add('visible')`. |
+| «Skeleton не появляется при старте» | §3.11, init.js | `showSkeletonGrid()` вызывается в `DOMContentLoaded` только если `TwitchX.state.favorites.length > 0`. Проверить что favorites загружены к этому моменту. |
+| «Skeleton не исчезает после загрузки данных» | §3.11, callbacks.js | `hideSkeletonGrid()` вызывается в `onStreamsUpdate`. Проверить что `.skeleton-card` элементы в `#stream-grid` удаляются. |
+| «Chat status text не отображается» | §3.11, index.html | `#chat-status-text` добавлен в HTML рядом с `#chat-status-dot`. Пустой по умолчанию, заполняется в `onChatStatus` при disconnected. |
 
 ---
 

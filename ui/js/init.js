@@ -36,6 +36,7 @@ document.addEventListener('keydown', function(e) {
 }, true);
 
 document.addEventListener('DOMContentLoaded', function() {
+  TwitchX.loadPinnedStreams();
   TwitchX._bindSidebarEvents();
   TwitchX._bindToolbarEvents();
   TwitchX._bindPlayerEvents();
@@ -47,7 +48,33 @@ document.addEventListener('DOMContentLoaded', function() {
   TwitchX._bindKeyboardEvents();
   TwitchX._bindGlobalEvents();
   TwitchX._bindMultistreamEvents();
+  TwitchX._bindPaletteEvents();
   TwitchX._initMultistreamSlots();
+
+  // Apply saved accent color immediately from localStorage cache
+  (function() {
+    var saved = localStorage.getItem('twitchx.accent') || '#FF9F0A';
+    if (TwitchX.applyAccentColor) TwitchX.applyAccentColor(saved);
+  })();
+
+  // Restore saved grid mode
+  (function() {
+    var saved = localStorage.getItem('twitchx.grid_mode') || 'grid';
+    TwitchX.state.gridMode = saved;
+    var btn = document.getElementById('grid-toggle-btn');
+    if (btn) {
+      btn.title = saved === 'list' ? 'Switch to grid view' : 'Switch to list view';
+      btn.innerHTML = saved === 'list' ? '\u229E' : '\u2261';
+    }
+  })();
+
+  // Apply saved mini mode
+  TwitchX.applyMiniMode();
+
+  // Show skeleton grid while waiting for first data
+  if (TwitchX.state.favorites && TwitchX.state.favorites.length > 0) {
+    TwitchX.showSkeletonGrid();
+  }
 });
 
 TwitchX._bindSidebarEvents = function() {
@@ -82,7 +109,7 @@ TwitchX._bindSidebarEvents = function() {
       clearTimeout(TwitchX.state.searchDebounce);
       if (!query) {
         TwitchX.state.searchResults = [];
-        document.getElementById('search-dropdown').style.display = 'none';
+        document.getElementById('search-dropdown').classList.remove('visible');
         return;
       }
       TwitchX.state.searchDebounce = setTimeout(function() {
@@ -109,6 +136,14 @@ TwitchX._bindToolbarEvents = function() {
   });
   const browseNavBtn = document.getElementById('browse-nav-btn');
   if (browseNavBtn) browseNavBtn.addEventListener('click', TwitchX.showBrowseView);
+  var gridToggleBtn = document.getElementById('grid-toggle-btn');
+  if (gridToggleBtn) gridToggleBtn.addEventListener('click', function() {
+    TwitchX.state.gridMode = TwitchX.state.gridMode === 'grid' ? 'list' : 'grid';
+    localStorage.setItem('twitchx.grid_mode', TwitchX.state.gridMode);
+    gridToggleBtn.title = TwitchX.state.gridMode === 'list' ? 'Switch to grid view' : 'Switch to list view';
+    gridToggleBtn.innerHTML = TwitchX.state.gridMode === 'list' ? '\u229E' : '\u2261';
+    TwitchX.renderGrid();
+  });
 };
 
 TwitchX._bindPlayerEvents = function() {
@@ -148,6 +183,8 @@ TwitchX._bindPlayerEvents = function() {
   if (recordBtn) recordBtn.addEventListener('click', TwitchX.toggleRecording);
   const statsOverlayBtn = document.getElementById('stats-overlay-btn');
   if (statsOverlayBtn) statsOverlayBtn.addEventListener('click', TwitchX.toggleStatsOverlay);
+  var miniBtn = document.getElementById('mini-mode-btn');
+  if (miniBtn) miniBtn.addEventListener('click', TwitchX.toggleMiniMode);
 };
 
 TwitchX._bindBrowseEvents = function() {
@@ -263,24 +300,24 @@ TwitchX._bindChatEvents = function() {
   if (chatExportBtn) {
     chatExportBtn.addEventListener('click', function(e) {
       e.stopPropagation();
-      if (chatExportMenu) chatExportMenu.style.display = chatExportMenu.style.display === 'none' ? '' : 'none';
+      if (chatExportMenu) chatExportMenu.classList.toggle('hidden');
     });
   }
   if (document.getElementById('chat-export-json')) {
     document.getElementById('chat-export-json').addEventListener('click', function() {
-      if (chatExportMenu) chatExportMenu.style.display = 'none';
+      if (chatExportMenu) chatExportMenu.classList.add('hidden');
       TwitchX.exportChatLog('json');
     });
   }
   if (document.getElementById('chat-export-txt')) {
     document.getElementById('chat-export-txt').addEventListener('click', function() {
-      if (chatExportMenu) chatExportMenu.style.display = 'none';
+      if (chatExportMenu) chatExportMenu.classList.add('hidden');
       TwitchX.exportChatLog('txt');
     });
   }
   document.addEventListener('click', function(e) {
     if (chatExportMenu && chatExportBtn && !chatExportMenu.contains(e.target) && e.target !== chatExportBtn) {
-      chatExportMenu.style.display = 'none';
+      chatExportMenu.classList.add('hidden');
     }
   });
 
@@ -318,7 +355,7 @@ TwitchX._bindChatEvents = function() {
   if (chatModBtn) {
     chatModBtn.addEventListener('click', function() {
       var panel = document.getElementById('chat-mod-panel');
-      if (panel) panel.style.display = panel.style.display === 'none' ? '' : 'none';
+      if (panel) panel.classList.toggle('hidden');
     });
   }
 
@@ -383,7 +420,7 @@ TwitchX._bindSettingsEvents = function() {
   });
   const extPlayerSelect = document.getElementById('s-external-player');
   if (extPlayerSelect) extPlayerSelect.addEventListener('change', function() {
-    document.getElementById('s-mpv-group').style.display = this.value === 'mpv' ? '' : 'none';
+    document.getElementById('s-mpv-group').classList.toggle('hidden', this.value !== 'mpv');
   });
 
   // Settings tab switching
@@ -455,12 +492,12 @@ TwitchX._bindSettingsEvents = function() {
 
   // YouTube login/logout/import
   const ytLoginBtn = document.getElementById('yt-login-btn');
-  if (ytLoginBtn) ytLoginBtn.addEventListener('click', function() {
+    if (ytLoginBtn) ytLoginBtn.addEventListener('click', function() {
     const cid = document.getElementById('yt-client-id').value.trim();
     const cs = document.getElementById('yt-client-secret').value.trim();
     if (!cid || !cs) {
       const fb = document.getElementById('yt-test-result');
-      fb.style.display = 'block';
+      fb.classList.remove('hidden');
       fb.style.color = 'var(--error-red)';
       fb.textContent = 'YouTube Client ID and Secret are required';
       return;
@@ -481,7 +518,7 @@ TwitchX._bindSettingsEvents = function() {
   if (ytTestBtn) ytTestBtn.addEventListener('click', function() {
     if (!TwitchX.api) return;
     const tr = document.getElementById('yt-test-result');
-    tr.style.display = 'block';
+    tr.classList.remove('hidden');
     tr.textContent = 'Testing...';
     tr.style.color = 'var(--text-muted)';
     document.getElementById('yt-test-btn').disabled = true;
@@ -495,8 +532,8 @@ TwitchX._bindContextMenuEvents = function() {
     const action = e.target.dataset.action;
     if (!action || !TwitchX.ctxChannel) return;
     const ctxStream = TwitchX.state.streams.find(function(s) { return s.login === TwitchX.ctxChannel; });
-    const meta = TwitchX.getFavoriteMeta(TwitchX.ctxChannel);
-    const ctxPlat = (ctxStream && ctxStream.platform) || (meta && meta.platform) || 'twitch';
+    const ctxPlat = (ctxStream && ctxStream.platform) || 'twitch';
+    const meta = TwitchX.getFavoriteMeta(TwitchX.ctxChannel, ctxPlat);
     if (action === 'watch') { TwitchX.selectChannel(TwitchX.ctxChannel); TwitchX.doWatch(); }
     else if (action === 'watch-external') {
       TwitchX.selectChannel(TwitchX.ctxChannel);
@@ -511,6 +548,11 @@ TwitchX._bindContextMenuEvents = function() {
     }
     else if (action === 'favorite') { if (TwitchX.api) TwitchX.api.add_channel(TwitchX.ctxChannel, ctxPlat); }
     else if (action === 'remove') { if (TwitchX.api) TwitchX.api.remove_channel(TwitchX.ctxChannel, ctxPlat); }
+    else if (action === 'pin') {
+      var pinItem = contextMenu.querySelector('[data-action="pin"]');
+      var pinPlat = pinItem ? (pinItem.dataset.pinPlatform || 'twitch') : 'twitch';
+      TwitchX.togglePin(pinPlat, TwitchX.ctxChannel);
+    }
     else if (action === 'multistream') {
       const emptyIdx = TwitchX.multiState.slots.indexOf(null);
       if (emptyIdx !== -1) {
@@ -518,19 +560,56 @@ TwitchX._bindContextMenuEvents = function() {
         TwitchX.addMultiSlot(emptyIdx, TwitchX.ctxChannel, ctxPlat);
       }
     }
-    document.getElementById('context-menu').style.display = 'none';
+    document.getElementById('context-menu').classList.remove('menu-visible');
+    document.getElementById('context-menu').classList.add('hidden');
     TwitchX.ctxChannel = null;
   });
 
   // Hide context menu on click outside
   document.addEventListener('click', function() {
     const menu = document.getElementById('context-menu');
-    if (menu && menu.style.display !== 'none') menu.style.display = 'none';
+    if (menu && menu.classList.contains('menu-visible')) {
+      menu.classList.remove('menu-visible');
+      menu.classList.add('hidden');
+    }
   });
 };
 
 TwitchX._bindKeyboardEvents = function() {
   document.addEventListener('keydown', TwitchX.handleKeydown);
+};
+
+TwitchX.toggleMiniMode = function() {
+  var isMini = document.getElementById('app').classList.toggle('mini');
+  localStorage.setItem('twitchx.mini', isMini ? '1' : '0');
+  var btn = document.getElementById('mini-mode-btn');
+  if (btn) {
+    btn.title = isMini ? 'Exit mini mode' : 'Mini mode';
+    btn.innerHTML = isMini ? '\u25E3' : '\u25A1';
+  }
+};
+
+TwitchX.applyMiniMode = function() {
+  var saved = localStorage.getItem('twitchx.mini') === '1';
+  if (saved) {
+    document.getElementById('app').classList.add('mini');
+    var btn = document.getElementById('mini-mode-btn');
+    if (btn) { btn.title = 'Exit mini mode'; btn.innerHTML = '\u25E3'; }
+  }
+};
+
+TwitchX._bindPaletteEvents = function() {
+  var overlay = document.getElementById('palette-overlay');
+  if (overlay) overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) TwitchX.closePalette();
+  });
+  var input = document.getElementById('palette-input');
+  if (input) {
+    input.addEventListener('input', function() {
+      TwitchX.renderPaletteResults(this.value);
+    });
+    input.addEventListener('keydown', TwitchX.handlePaletteKeydown);
+  }
 };
 
 TwitchX._bindGlobalEvents = function() {
@@ -554,8 +633,8 @@ TwitchX._bindMultistreamEvents = function() {
     if (addBtn) {
       const slot = parseInt(addBtn.dataset.slot, 10);
       const slotEl = document.querySelector('.ms-slot[data-slot-idx="' + slot + '"]');
-      slotEl.querySelector('.ms-slot-empty').style.display = 'none';
-      slotEl.querySelector('.ms-add-form').style.display = 'flex';
+      slotEl.querySelector('.ms-slot-empty').classList.add('hidden');
+      slotEl.querySelector('.ms-add-form').classList.remove('hidden');
       slotEl.querySelector('.ms-add-input').focus();
       return;
     }
@@ -568,8 +647,8 @@ TwitchX._bindMultistreamEvents = function() {
       if (channel) {
         TwitchX.addMultiSlot(slot, channel, platform);
       } else {
-        slotEl.querySelector('.ms-add-form').style.display = 'none';
-        slotEl.querySelector('.ms-slot-empty').style.display = '';
+        slotEl.querySelector('.ms-add-form').classList.add('hidden');
+        slotEl.querySelector('.ms-slot-empty').classList.remove('hidden');
       }
       return;
     }
@@ -577,8 +656,8 @@ TwitchX._bindMultistreamEvents = function() {
     if (cancelBtn) {
       const slot = parseInt(cancelBtn.dataset.slot, 10);
       const slotEl = document.querySelector('.ms-slot[data-slot-idx="' + slot + '"]');
-      slotEl.querySelector('.ms-add-form').style.display = 'none';
-      slotEl.querySelector('.ms-slot-empty').style.display = '';
+      slotEl.querySelector('.ms-add-form').classList.add('hidden');
+      slotEl.querySelector('.ms-slot-empty').classList.remove('hidden');
       return;
     }
     const audioBtn = e.target.closest('.ms-audio-btn');
@@ -618,8 +697,8 @@ TwitchX._bindMultistreamEvents = function() {
     if (channel) {
       TwitchX.addMultiSlot(idx, channel, platform);
     } else {
-      slotEl.querySelector('.ms-add-form').style.display = 'none';
-      slotEl.querySelector('.ms-slot-empty').style.display = '';
+      slotEl.querySelector('.ms-add-form').classList.add('hidden');
+      slotEl.querySelector('.ms-slot-empty').classList.remove('hidden');
     }
   });
 

@@ -89,7 +89,7 @@ function renderChatEmotes(parent, text, emotes) {
           return e.start <= end && e.end >= start;
         });
         if (!overlaps) {
-          all.push({ code: word, url: url, start: start, end: end });
+          all.push({ code: code, url: url, start: start, end: end });
         }
       }
     }
@@ -127,6 +127,11 @@ function clearChatMessages() {
     while (container.firstChild) {
       container.removeChild(container.firstChild);
     }
+    var emptyEl = document.createElement('div');
+    emptyEl.className = 'chat-empty-state';
+    emptyEl.style.cssText = 'text-align:center;padding:20px;color:var(--text-muted);font-size:12px;';
+    emptyEl.textContent = 'No messages yet';
+    container.appendChild(emptyEl);
   }
   if (TwitchX.multiState.open) {
     const msContainer = document.getElementById('ms-chat-messages');
@@ -193,8 +198,8 @@ function saveChatFilters() {
 function toggleChatFilterPanel() {
   var panel = document.getElementById('chat-filter-panel');
   if (!panel) return;
-  var opening = panel.style.display === 'none';
-  panel.style.display = opening ? '' : 'none';
+  var opening = panel.classList.contains('hidden');
+  panel.classList.toggle('hidden', !opening);
   if (opening) loadChatFiltersFromConfig();
 }
 
@@ -313,7 +318,7 @@ function openEmotePicker() {
   TwitchX._emotePickerOpen = true;
   TwitchX._cachedPickerEmotes = null;
   var picker = document.getElementById('emote-picker');
-  if (picker) picker.style.display = 'flex';
+  if (picker) picker.classList.remove('hidden');
   var searchEl = document.getElementById('emote-search');
   if (searchEl) { searchEl.value = ''; searchEl.focus(); }
   renderEmotePicker('');
@@ -322,7 +327,7 @@ function openEmotePicker() {
 function closeEmotePicker() {
   TwitchX._emotePickerOpen = false;
   var picker = document.getElementById('emote-picker');
-  if (picker) picker.style.display = 'none';
+  if (picker) picker.classList.add('hidden');
 }
 
 function toggleEmotePicker() {
@@ -358,8 +363,8 @@ function renderChatUserList(filter) {
 function toggleChatUserList() {
   var panel = document.getElementById('chat-userlist-panel');
   if (!panel) return;
-  var open = panel.style.display !== 'none';
-  panel.style.display = open ? 'none' : '';
+  var open = !panel.classList.contains('hidden');
+  panel.classList.toggle('hidden', open);
   if (!open) renderChatUserList('');
 }
 

@@ -2,22 +2,34 @@ window.TwitchX = window.TwitchX || {};
 const TwitchX = window.TwitchX;
 
 function getFilteredSortedStreams() {
-  let streams = TwitchX.state.streams.slice();
+  var streams = TwitchX.state.streams.slice();
   if (TwitchX.state.activePlatformFilter !== 'all') {
     streams = streams.filter(function(s) { return s.platform === TwitchX.state.activePlatformFilter; });
   }
   if (TwitchX.state.filterText) {
-    const ft = TwitchX.state.filterText.toLowerCase();
+    var ft = TwitchX.state.filterText.toLowerCase();
     streams = streams.filter(function(s) { return s.game.toLowerCase().indexOf(ft) !== -1; });
   }
-  if (TwitchX.state.sortKey === 'viewers') {
-    streams.sort(function(a, b) { return b.viewers - a.viewers; });
-  } else if (TwitchX.state.sortKey === 'recent') {
-    streams.sort(function(a, b) { return new Date(b.started_at) - new Date(a.started_at); });
-  } else if (TwitchX.state.sortKey === 'alpha') {
-    streams.sort(function(a, b) { return a.display_name.localeCompare(b.display_name); });
+
+  var pinned = streams.filter(function(s) {
+    return TwitchX.isPinned(s.platform || 'twitch', s.login);
+  });
+  var rest = streams.filter(function(s) {
+    return !TwitchX.isPinned(s.platform || 'twitch', s.login);
+  });
+
+  function sortGroup(arr) {
+    if (TwitchX.state.sortKey === 'viewers') {
+      arr.sort(function(a, b) { return b.viewers - a.viewers; });
+    } else if (TwitchX.state.sortKey === 'recent') {
+      arr.sort(function(a, b) { return new Date(b.started_at) - new Date(a.started_at); });
+    } else if (TwitchX.state.sortKey === 'alpha') {
+      arr.sort(function(a, b) { return a.display_name.localeCompare(b.display_name); });
+    }
+    return arr;
   }
-  return streams;
+
+  return sortGroup(pinned).concat(sortGroup(rest));
 }
 
 function renderGrid() {
@@ -30,12 +42,13 @@ function renderGrid() {
   if (TwitchX.multiState.open) return;
 
   const grid = document.getElementById('stream-grid');
+  grid.classList.toggle('list-mode', TwitchX.state.gridMode === 'list');
   const empty = document.getElementById('empty-state');
   const streams = getFilteredSortedStreams();
 
   // Empty states
   if (TwitchX.state.favorites.length === 0 && !TwitchX.state.hasCredentials) {
-    grid.style.display = 'none';
+    grid.classList.add('hidden');
     empty.classList.add('visible');
     empty.querySelector('.empty-icon').textContent = '\u26A1';
     empty.querySelector('.empty-title').textContent = 'Welcome to TwitchX';
@@ -54,7 +67,7 @@ function renderGrid() {
   }
 
   if (TwitchX.state.favorites.length === 0 && TwitchX.state.hasCredentials) {
-    grid.style.display = 'none';
+    grid.classList.add('hidden');
     empty.classList.add('visible');
     empty.querySelector('.empty-icon').textContent = '\uD83D\uDCFA';
     empty.querySelector('.empty-title').textContent = 'No favorites yet';
@@ -63,7 +76,7 @@ function renderGrid() {
   }
 
   if (streams.length === 0 && TwitchX.state.favorites.length > 0) {
-    grid.style.display = 'none';
+    grid.classList.add('hidden');
     empty.classList.add('visible');
     empty.querySelector('.empty-icon').textContent = '\uD83D\uDE34';
     empty.querySelector('.empty-title').textContent = 'All quiet right now';
@@ -72,7 +85,7 @@ function renderGrid() {
   }
 
   empty.classList.remove('visible');
-  grid.style.display = 'grid';
+  grid.classList.remove('hidden');
 
   // Diff-based update
   const existingLogins = new Set();
@@ -133,6 +146,7 @@ function createStreamCard(s) {
   card.dataset.login = s.login;
   card.dataset.started = s.started_at;
   card.dataset.platform = s.platform || 'twitch';
+  if (TwitchX.state.gridMode === 'list') card.classList.add('list-mode');
 
   // Thumb area
   const thumb = document.createElement('div');
@@ -167,6 +181,14 @@ function createStreamCard(s) {
   uptime.className = 'uptime-badge';
   uptime.textContent = TwitchX.formatUptime(s.started_at);
   thumb.appendChild(uptime);
+
+  if (TwitchX.isPinned(s.platform || 'twitch', s.login)) {
+    var pinBadge = document.createElement('span');
+    pinBadge.className = 'pin-badge';
+    pinBadge.textContent = '\uD83D\uDCCC';
+    pinBadge.title = 'Pinned';
+    thumb.appendChild(pinBadge);
+  }
 
   card.appendChild(thumb);
 
@@ -230,5 +252,36 @@ function createOnboardingCard(stepNum, stepText) {
 
 TwitchX.getFilteredSortedStreams = getFilteredSortedStreams;
 TwitchX.renderGrid = renderGrid;
+
+function showSkeletonGrid() {
+  var grid = document.getElementById('stream-grid');
+  var empty = document.getElementById('empty-state');
+  empty.classList.remove('visible');
+  grid.classList.remove('hidden');
+  grid.replaceChildren();
+  for (var i = 0; i < 8; i++) {
+    var card = document.createElement('div');
+    card.className = 'skeleton-card';
+    var thumb = document.createElement('div');
+    thumb.className = 'skeleton skeleton-thumb';
+    card.appendChild(thumb);
+    var line1 = document.createElement('div');
+    line1.className = 'skeleton skeleton-text skeleton-text-medium';
+    card.appendChild(line1);
+    var line2 = document.createElement('div');
+    line2.className = 'skeleton skeleton-text skeleton-text-short';
+    card.appendChild(line2);
+    grid.appendChild(card);
+  }
+}
+
+function hideSkeletonGrid() {
+  var grid = document.getElementById('stream-grid');
+  var skeletons = grid.querySelectorAll('.skeleton-card');
+  if (skeletons.length > 0) grid.replaceChildren();
+}
+
+TwitchX.showSkeletonGrid = showSkeletonGrid;
+TwitchX.hideSkeletonGrid = hideSkeletonGrid;
 TwitchX.createStreamCard = createStreamCard;
 TwitchX.createOnboardingCard = createOnboardingCard;

@@ -43,14 +43,14 @@ function _bindPiPEvents(video) {
 /* ── Player view ────────────────────────────────────────── */
 
 function showPlayerView() {
-  document.getElementById('toolbar').style.display = 'none';
-  document.getElementById('stream-grid').style.display = 'none';
-  document.getElementById('empty-state').style.display = 'none';
-  document.getElementById('player-view').classList.add('active');
+  document.getElementById('toolbar').classList.add('hidden');
+  document.getElementById('stream-grid').classList.add('hidden');
+  document.getElementById('empty-state').classList.add('hidden');
+  TwitchX.viewFadeIn(document.getElementById('player-view'), 'active');
 
   TwitchX.state.watchingChannel = TwitchX.state.selectedChannel;
   document.getElementById('watch-btn').classList.add('active');
-  document.getElementById('stop-player-btn').style.display = 'inline-flex';
+  document.getElementById('stop-player-btn').classList.remove('hidden');
   document.getElementById('live-dot').classList.add('visible');
 
   const chatPanel = document.getElementById('chat-panel');
@@ -58,18 +58,18 @@ function showPlayerView() {
   const toggleBtn = document.getElementById('toggle-chat-btn');
   if (!TwitchX.state.playerHasChat) {
     chatPanel.classList.add('hidden');
-    if (chatHandle) chatHandle.style.display = 'none';
-    if (toggleBtn) toggleBtn.style.display = 'none';
+    if (chatHandle) chatHandle.classList.add('hidden');
+    if (toggleBtn) toggleBtn.classList.add('hidden');
   } else {
-    if (toggleBtn) toggleBtn.style.display = '';
+    if (toggleBtn) toggleBtn.classList.remove('hidden');
     const cfg = TwitchX.api ? TwitchX.api.get_full_config_for_settings() : null;
     if (cfg && cfg.chat_width) chatPanel.style.width = cfg.chat_width + 'px';
     if (cfg && cfg.chat_visible === false) {
       chatPanel.classList.add('hidden');
-      if (chatHandle) chatHandle.style.display = 'none';
+      if (chatHandle) chatHandle.classList.add('hidden');
     } else {
       chatPanel.classList.remove('hidden');
-      if (chatHandle) chatHandle.style.display = '';
+      if (chatHandle) chatHandle.classList.remove('hidden');
     }
   }
   updateChatInput();
@@ -78,9 +78,9 @@ function showPlayerView() {
   if (video && !video._pipEventsBound) _bindPiPEvents(video);
 
   var recordBtn = document.getElementById('record-btn');
-  if (recordBtn) recordBtn.style.display = 'inline-flex';
+  if (recordBtn) recordBtn.classList.remove('hidden');
   var statsBtn = document.getElementById('stats-overlay-btn');
-  if (statsBtn) statsBtn.style.display = 'inline-flex';
+  if (statsBtn) statsBtn.classList.remove('hidden');
 
   TwitchX.stopVodTimeDisplay();
   TwitchX.stopVideoHealthMonitor();
@@ -112,11 +112,11 @@ function hidePlayerView() {
   if (TwitchX._recordingActive && TwitchX.api) TwitchX.api.stop_recording();
   TwitchX._recordingActive = false;
   var recordBtn = document.getElementById('record-btn');
-  if (recordBtn) { recordBtn.style.display = 'none'; recordBtn.style.color = ''; }
+  if (recordBtn) { recordBtn.classList.add('hidden'); recordBtn.style.color = ''; }
   var recordDot = document.getElementById('record-dot');
-  if (recordDot) recordDot.style.display = 'none';
+  if (recordDot) recordDot.classList.add('hidden');
   var statsBtn = document.getElementById('stats-overlay-btn');
-  if (statsBtn) statsBtn.style.display = 'none';
+  if (statsBtn) statsBtn.classList.add('hidden');
 
   // Cancel any pending gentle reset to prevent orphaned shadow videos
   if (TwitchX._gentleResetInProgress) {
@@ -177,8 +177,16 @@ function hidePlayerView() {
   if (TwitchX.api) TwitchX.api.stop_chat();
 
   document.getElementById('player-view').classList.remove('active');
-  document.getElementById('toolbar').style.display = '';
-  document.getElementById('stream-grid').style.display = '';
+  document.getElementById('player-view').style.opacity = '';
+  document.getElementById('toolbar').classList.remove('hidden');
+  var grid = document.getElementById('stream-grid');
+  grid.classList.remove('hidden');
+  grid.style.opacity = '0';
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      grid.style.opacity = '';
+    });
+  });
 
   TwitchX.state.watchingChannel = null;
   TwitchX.state.playerPlatform = null;
@@ -187,9 +195,9 @@ function hidePlayerView() {
   TwitchX.chatAuthenticated = false;
   TwitchX.state.playerState = 'idle';
   document.getElementById('watch-btn').classList.remove('active');
-  document.getElementById('stop-player-btn').style.display = 'none';
+  document.getElementById('stop-player-btn').classList.add('hidden');
   document.getElementById('live-dot').classList.remove('visible');
-  document.getElementById('toggle-chat-btn').style.display = '';
+  document.getElementById('toggle-chat-btn').classList.remove('hidden');
   TwitchX.setStatus('', 'info');
   TwitchX.renderGrid();
   TwitchX.renderSidebar();
@@ -297,7 +305,7 @@ function toggleChatPanel() {
   const panel = document.getElementById('chat-panel');
   const handle = document.getElementById('chat-resize-handle');
   panel.classList.toggle('hidden');
-  if (handle) handle.style.display = panel.classList.contains('hidden') ? 'none' : '';
+  if (handle) handle.classList.toggle('hidden', panel.classList.contains('hidden'));
   if (TwitchX.api) TwitchX.api.save_chat_visibility(!panel.classList.contains('hidden'));
 }
 
@@ -658,11 +666,11 @@ function updateRecordButton() {
   if (TwitchX._recordingActive) {
     btn.textContent = '\u25a0 Stop REC';
     btn.style.color = '#e53935';
-    if (dot) dot.style.display = '';
+    if (dot) dot.classList.remove('hidden');
   } else {
     btn.textContent = '\u25cf REC';
     btn.style.color = '';
-    if (dot) dot.style.display = 'none';
+    if (dot) dot.classList.add('hidden');
   }
 }
 
@@ -727,7 +735,7 @@ function showStatsOverlay() {
   TwitchX._statsOverlayActive = true;
   var overlay = document.getElementById('stats-overlay');
   var btn = document.getElementById('stats-overlay-btn');
-  if (overlay) overlay.style.display = '';
+  if (overlay) overlay.classList.remove('hidden');
   if (btn) btn.classList.add('active');
   var video = getPlayerVideo();
   if (video && typeof video.getVideoPlaybackQuality === 'function') {
@@ -746,7 +754,7 @@ function hideStatsOverlay() {
   }
   var overlay = document.getElementById('stats-overlay');
   var btn = document.getElementById('stats-overlay-btn');
-  if (overlay) overlay.style.display = 'none';
+  if (overlay) overlay.classList.add('hidden');
   if (btn) btn.classList.remove('active');
 }
 
@@ -779,7 +787,7 @@ function formatVideoTime(seconds) {
 function startVodTimeDisplay() {
   stopVodTimeDisplay();
   var el = document.getElementById('vod-time-display');
-  if (el) el.style.display = '';
+  if (el) el.classList.remove('hidden');
   TwitchX._vodTimer = setInterval(function() {
     var video = getPlayerVideo();
     var display = document.getElementById('vod-time-display');
@@ -799,7 +807,7 @@ function stopVodTimeDisplay() {
     TwitchX._vodTimer = null;
   }
   var el = document.getElementById('vod-time-display');
-  if (el) { el.style.display = 'none'; el.textContent = ''; }
+  if (el) { el.classList.add('hidden'); el.textContent = ''; }
 }
 
 TwitchX.startVodTimeDisplay = startVodTimeDisplay;

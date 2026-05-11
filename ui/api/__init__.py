@@ -38,6 +38,15 @@ from .streams import StreamsComponent
 
 logger = logging.getLogger(__name__)
 
+_ACCENT_PALETTE = {
+    "#FF9F0A",
+    "#BF5AF2",
+    "#0A84FF",
+    "#30D158",
+    "#FF453A",
+    "#FF2D55",
+}
+
 
 class TwitchXApi:
     """Python↔JS bridge. Orchestrates sub-components, owns shared state.
@@ -388,6 +397,7 @@ class TwitchXApi:
             "chat_block_list": settings.get("chat_block_list", []),
             "chat_anti_spam": settings.get("chat_anti_spam", True),
             "keyboard_shortcuts": settings.get("keyboard_shortcuts", {}),
+            "accent_color": settings.get("accent_color", "#FF9F0A"),
         }
 
     def save_settings(self, data: str) -> None:
@@ -448,6 +458,8 @@ class TwitchXApi:
                     if k in known and isinstance(v, str) and 0 < len(v) <= 50
                 }
                 st["keyboard_shortcuts"] = validated
+            if "accent_color" in parsed and parsed["accent_color"] in _ACCENT_PALETTE:
+                st["accent_color"] = parsed["accent_color"]
 
         self._config = update_config(_apply)
 

@@ -91,6 +91,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "chat_filter_mod_only": False,
     "chat_block_list": [],
     "chat_anti_spam": True,
+    "accent_color": "#FF9F0A",
     "keyboard_shortcuts": {
         "refresh": "r",
         "watch": " ",

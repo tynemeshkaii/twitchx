@@ -75,6 +75,37 @@ TwitchX.state = {
   },
   shortcuts: Object.assign({}, TwitchX.DEFAULT_SHORTCUTS),
   pipEnabled: false,
+  gridMode: 'grid',
+};
+
+TwitchX.state.pinnedStreams = new Set();
+
+TwitchX.loadPinnedStreams = function() {
+  try {
+    var raw = localStorage.getItem('twitchx.pinned');
+    TwitchX.state.pinnedStreams = new Set(raw ? JSON.parse(raw) : []);
+  } catch (e) {
+    TwitchX.state.pinnedStreams = new Set();
+  }
+};
+
+TwitchX.savePinnedStreams = function() {
+  localStorage.setItem('twitchx.pinned', JSON.stringify(Array.from(TwitchX.state.pinnedStreams)));
+};
+
+TwitchX.isPinned = function(platform, login) {
+  return TwitchX.state.pinnedStreams.has(platform + ':' + login);
+};
+
+TwitchX.togglePin = function(platform, login) {
+  var key = platform + ':' + login;
+  if (TwitchX.state.pinnedStreams.has(key)) {
+    TwitchX.state.pinnedStreams.delete(key);
+  } else {
+    TwitchX.state.pinnedStreams.add(key);
+  }
+  TwitchX.savePinnedStreams();
+  TwitchX.renderGrid();
 };
 
 TwitchX.multiState = {
@@ -102,7 +133,11 @@ TwitchX.thirdPartyEmotes = {};
 
 TwitchX.createChannelMediaState = createChannelMediaState;
 
-TwitchX.getFavoriteMeta = function(login) {
+TwitchX.getFavoriteMeta = function(login, platform) {
+  if (platform) {
+    var key = platform + ':' + login;
+    return TwitchX.state.favoritesMeta[key] || null;
+  }
   for (var key in TwitchX.state.favoritesMeta) {
     if (TwitchX.state.favoritesMeta[key].login === login) {
       return TwitchX.state.favoritesMeta[key];

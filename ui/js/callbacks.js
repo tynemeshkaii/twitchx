@@ -8,10 +8,12 @@ window.onStreamsUpdate = function(data) {
   TwitchX.state.liveSet = new Set(data.live_set || []);
   TwitchX.state.userAvatars = data.user_avatars || {};
 
+  if (TwitchX.hideSkeletonGrid) TwitchX.hideSkeletonGrid();
+
   // Phase 9: keep PiP button visibility in sync with server config
   TwitchX.state.pipEnabled = data.pip_enabled === true;
   const pipBtn = document.getElementById('pip-player-btn');
-  if (pipBtn) pipBtn.style.display = TwitchX.state.pipEnabled ? '' : 'none';
+  if (pipBtn) pipBtn.classList.toggle('hidden', !TwitchX.state.pipEnabled);
 
   // Compute viewer trends
   const newStreams = data.streams || [];
@@ -100,9 +102,20 @@ window.onStreamsUpdate = function(data) {
 window.onSearchResults = function(results) {
   TwitchX.state.searchResults = results || [];
   const dd = document.getElementById('search-dropdown');
+  while (dd.firstChild) dd.removeChild(dd.firstChild);
   if (!results || results.length === 0) {
-    dd.style.display = 'none';
-    while (dd.firstChild) dd.removeChild(dd.firstChild);
+    var emptyRow = document.createElement('div');
+    emptyRow.className = 'search-result';
+    var emptyInfo = document.createElement('div');
+    emptyInfo.className = 'sr-info';
+    var emptyName = document.createElement('div');
+    emptyName.className = 'sr-name';
+    emptyName.style.cssText = 'color:var(--text-muted);';
+    emptyName.textContent = 'No channels found';
+    emptyInfo.appendChild(emptyName);
+    emptyRow.appendChild(emptyInfo);
+    dd.appendChild(emptyRow);
+    dd.classList.add('visible');
     return;
   }
   // Build search results using safe DOM methods
@@ -153,13 +166,13 @@ window.onSearchResults = function(results) {
     row.appendChild(addBtn);
     row.addEventListener('click', function() {
       TwitchX.addChannelDirect(r.login, r.platform || 'twitch', r.display_name);
-      dd.style.display = 'none';
+      dd.classList.remove('visible');
       TwitchX.state.searchResults = [];
       document.getElementById('search-input').value = '';
     });
     dd.appendChild(row);
   });
-  dd.style.display = 'block';
+  dd.classList.add('visible');
 };
 
 window.onLoginComplete = function(user) {
@@ -213,7 +226,6 @@ window.onStreamReady = function(data) {
   // HLS / native video path (Twitch, Kick, YouTube via streamlink)
   const video = TwitchX.getPlayerVideo();
   if (!video) return;
-  video.style.display = '';
   video.src = data.url;
   video.play().catch(function() {});
   const extBtn = document.getElementById('watch-external-btn');
@@ -223,7 +235,7 @@ window.onStreamReady = function(data) {
     var isTwitch = data.platform === 'twitch';
     var isBroadcaster = isTwitch && TwitchX.chatSelfLogin &&
       TwitchX.chatSelfLogin.toLowerCase() === (data.channel || '').toLowerCase();
-    modBtn.style.display = isBroadcaster ? '' : 'none';
+    modBtn.classList.toggle('hidden', !isBroadcaster);
   }
 
   TwitchX.showPlayerView();
@@ -263,9 +275,9 @@ window.onMultiSlotReady = function(data) {
   const errEl = active.querySelector('.ms-error-msg');
 
   if (data.error) {
-    loading.style.display = 'none';
+    loading.classList.add('hidden');
     errEl.textContent = data.error;
-    errEl.style.display = 'flex';
+    errEl.classList.remove('hidden');
     return;
   }
 
@@ -273,8 +285,8 @@ window.onMultiSlotReady = function(data) {
   video.src = data.url;
   video.muted = (TwitchX.multiState.audioFocus !== idx);
   video.play().catch(function() {});
-  loading.style.display = 'none';
-  errEl.style.display = 'none';
+  loading.classList.add('hidden');
+  errEl.classList.add('hidden');
 
   active.querySelector('.ms-channel-name').textContent = data.channel || '';
   active.querySelector('.ms-platform-badge').textContent =
@@ -478,10 +490,13 @@ window.onChatStatus = function(status) {
   TwitchX.chatPlatform = status.platform || TwitchX.state.playerPlatform || 'twitch';
   if (status.self_login) TwitchX.chatSelfLogin = status.self_login;
   const dot = document.getElementById('chat-status-dot');
+  var statusText = document.getElementById('chat-status-text');
   if (dot) {
     if (status.connected) {
+      dot.classList.remove('connecting');
       dot.classList.add('connected');
       dot.title = status.authenticated ? 'Connected' : 'Connected (read-only)';
+      if (statusText) statusText.textContent = '';
       if (TwitchX.clearChatBatch) TwitchX.clearChatBatch();
       TwitchX.clearChatMessages();
       TwitchX.chatAutoScroll = true;
@@ -490,7 +505,9 @@ window.onChatStatus = function(status) {
       if (newBtn) newBtn.classList.remove('visible');
     } else {
       dot.classList.remove('connected');
+      dot.classList.remove('connecting');
       dot.title = status.error || 'Disconnected';
+      if (statusText) statusText.textContent = status.error ? status.error : 'Disconnected';
       TwitchX.chatSelfLogin = '';
       TwitchX.clearChatReply();
     }
@@ -513,7 +530,7 @@ window.onChatUserList = function(data) {
   var countEl = document.getElementById('chat-userlist-count');
   if (countEl) countEl.textContent = data.count || TwitchX._chatUserList.length;
   var panel = document.getElementById('chat-userlist-panel');
-  if (panel && panel.style.display !== 'none') {
+  if (panel && !panel.classList.contains('hidden')) {
     TwitchX.renderChatUserList('');
   }
 };
@@ -547,8 +564,8 @@ window.onSettingsSaved = function() {
 
 window.onKickLoginComplete = function(data) {
   TwitchX.state.kickScopes = data.scopes || TwitchX.state.kickScopes || '';
-  document.getElementById('kick-login-area').style.display = 'none';
-  document.getElementById('kick-user-area').style.display = 'block';
+  document.getElementById('kick-login-area').classList.add('hidden');
+  document.getElementById('kick-user-area').classList.remove('hidden');
   document.getElementById('kick-user-display').textContent = 'Logged in as ' + (data.display_name || data.login);
   const fb = document.getElementById('settings-feedback');
   if ((TwitchX.state.kickScopes || '').split(/\s+/).indexOf('chat:write') === -1) {
@@ -581,8 +598,8 @@ window.onKickNeedsCredentials = function() {
 
 window.onKickLogout = function() {
   TwitchX.state.kickScopes = '';
-  document.getElementById('kick-login-area').style.display = 'block';
-  document.getElementById('kick-user-area').style.display = 'none';
+  document.getElementById('kick-login-area').classList.remove('hidden');
+  document.getElementById('kick-user-area').classList.add('hidden');
   document.getElementById('kick-user-display').textContent = '';
   const fb = document.getElementById('settings-feedback');
   fb.textContent = 'Logged out from Kick';
@@ -604,8 +621,8 @@ window.onKickTestResult = function(data) {
 };
 
 window.onYouTubeLoginComplete = function(data) {
-  document.getElementById('yt-login-area').style.display = 'none';
-  document.getElementById('yt-user-area').style.display = 'block';
+  document.getElementById('yt-login-area').classList.add('hidden');
+  document.getElementById('yt-user-area').classList.remove('hidden');
   document.getElementById('yt-display-name').textContent = 'Logged in as ' + (data.display_name || data.login);
   document.getElementById('yt-quota-display').textContent = 'Quota remaining: ' + (data.youtube_quota_remaining != null ? data.youtube_quota_remaining : '?');
   const fb = document.getElementById('settings-feedback');
@@ -630,8 +647,8 @@ window.onYouTubeNeedsCredentials = function() {
 };
 
 window.onYouTubeLogout = function() {
-  document.getElementById('yt-login-area').style.display = 'block';
-  document.getElementById('yt-user-area').style.display = 'none';
+  document.getElementById('yt-login-area').classList.remove('hidden');
+  document.getElementById('yt-user-area').classList.add('hidden');
   document.getElementById('yt-display-name').textContent = '';
   document.getElementById('yt-quota-display').textContent = '';
   const fb = document.getElementById('settings-feedback');
@@ -641,7 +658,7 @@ window.onYouTubeLogout = function() {
 
 window.onYouTubeTestResult = function(result) {
   const tr = document.getElementById('yt-test-result');
-  tr.style.display = 'block';
+  tr.classList.remove('hidden');
   if (result.success) {
     tr.textContent = '\u2713 ' + result.message;
     tr.style.color = 'var(--live-green)';
@@ -655,14 +672,14 @@ window.onYouTubeTestResult = function(result) {
 window.onYouTubeImportComplete = function(data) {
   const count = data && typeof data === 'object' ? data.added : data;
   const tr = document.getElementById('yt-test-result');
-  tr.style.display = 'block';
+  tr.classList.remove('hidden');
   tr.textContent = '\u2713 Imported ' + count + ' subscriptions';
   tr.style.color = 'var(--live-green)';
 };
 
 window.onYouTubeImportError = function(msg) {
   const tr = document.getElementById('yt-test-result');
-  tr.style.display = 'block';
+  tr.classList.remove('hidden');
   tr.textContent = '\u2717 Import failed: ' + msg;
   tr.style.color = 'var(--error-red)';
 };
@@ -701,7 +718,9 @@ window.onBrowseCategories = function(categories) {
   const grid = document.getElementById('browse-categories-grid');
   grid.replaceChildren();
   if (!categories || !categories.length) {
-    document.getElementById('browse-empty').classList.remove('hidden');
+    var emptyEl = document.getElementById('browse-empty');
+    emptyEl.textContent = 'No categories found.';
+    emptyEl.classList.remove('hidden');
     return;
   }
   categories.forEach(function(cat) {
@@ -749,7 +768,9 @@ window.onBrowseTopStreams = function(payload) {
   const grid = document.getElementById('browse-streams-grid');
   grid.replaceChildren();
   if (!payload || !payload.streams || !payload.streams.length) {
-    document.getElementById('browse-empty').classList.remove('hidden');
+    var emptyEl = document.getElementById('browse-empty');
+    emptyEl.textContent = 'No streams found for this category.';
+    emptyEl.classList.remove('hidden');
     return;
   }
   payload.streams.forEach(function(stream) {

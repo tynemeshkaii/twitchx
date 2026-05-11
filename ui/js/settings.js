@@ -1,6 +1,24 @@
 window.TwitchX = window.TwitchX || {};
 const TwitchX = window.TwitchX;
 
+const ACCENT_PALETTE = [
+  { value: '#FF9F0A', hover: '#E8920A', dim: 'rgba(255,159,10,0.10)',  label: 'Amber' },
+  { value: '#BF5AF2', hover: '#A84ADE', dim: 'rgba(191,90,242,0.10)', label: 'Purple' },
+  { value: '#0A84FF', hover: '#0070E0', dim: 'rgba(10,132,255,0.10)', label: 'Blue' },
+  { value: '#30D158', hover: '#28B94D', dim: 'rgba(48,209,88,0.10)',  label: 'Green' },
+  { value: '#FF453A', hover: '#E03C31', dim: 'rgba(255,69,58,0.10)',  label: 'Red' },
+  { value: '#FF2D55', hover: '#E02849', dim: 'rgba(255,45,85,0.10)',  label: 'Pink' },
+];
+
+function applyAccentColor(color) {
+  var entry = ACCENT_PALETTE.find(function(p) { return p.value === color; }) || ACCENT_PALETTE[0];
+  var root = document.documentElement;
+  root.style.setProperty('--accent', entry.value);
+  root.style.setProperty('--accent-hover', entry.hover);
+  root.style.setProperty('--accent-dim', entry.dim);
+  localStorage.setItem('twitchx.accent', entry.value);
+}
+
 function formatDuration(seconds) {
   if (!seconds || seconds < 0) return '0m';
   if (seconds < 60) return seconds + 's';
@@ -116,8 +134,8 @@ function renderWatchStats(stats) {
     topContainer.appendChild(emptyMsg);
   }
 
-  document.getElementById('stats-loading').style.display = 'none';
-  document.getElementById('stats-content').style.display = 'block';
+  document.getElementById('stats-loading').classList.add('hidden');
+  document.getElementById('stats-content').classList.remove('hidden');
 }
 
 function loadWatchStatistics() {
@@ -141,45 +159,64 @@ function openSettings() {
   document.getElementById('s-mpv').value = config.mpv_path || '/opt/homebrew/bin/mpv';
   var extPlayer = config.external_player || 'iina';
   document.getElementById('s-external-player').value = extPlayer;
-  document.getElementById('s-mpv-group').style.display = extPlayer === 'mpv' ? '' : 'none';
+  document.getElementById('s-mpv-group').classList.toggle('hidden', extPlayer !== 'mpv');
   document.getElementById('s-interval').value = String(config.refresh_interval || 60);
   document.getElementById('s-kick-client-id').value = config.kick_client_id || '';
   document.getElementById('s-kick-client-secret').value = config.kick_client_secret || '';
   if (config.kick_display_name) {
-    document.getElementById('kick-login-area').style.display = 'none';
-    document.getElementById('kick-user-area').style.display = 'block';
+    document.getElementById('kick-login-area').classList.add('hidden');
+    document.getElementById('kick-user-area').classList.remove('hidden');
     document.getElementById('kick-user-display').textContent = 'Logged in as ' + config.kick_display_name;
   } else {
-    document.getElementById('kick-login-area').style.display = 'block';
-    document.getElementById('kick-user-area').style.display = 'none';
+    document.getElementById('kick-login-area').classList.remove('hidden');
+    document.getElementById('kick-user-area').classList.add('hidden');
   }
   document.getElementById('yt-api-key').value = config.youtube_api_key || '';
   document.getElementById('yt-client-id').value = config.youtube_client_id || '';
   document.getElementById('yt-client-secret').value = config.youtube_client_secret || '';
   if (config.youtube_display_name) {
-    document.getElementById('yt-login-area').style.display = 'none';
-    document.getElementById('yt-user-area').style.display = 'block';
+    document.getElementById('yt-login-area').classList.add('hidden');
+    document.getElementById('yt-user-area').classList.remove('hidden');
     document.getElementById('yt-display-name').textContent = 'Logged in as ' + config.youtube_display_name;
     document.getElementById('yt-quota-display').textContent = 'Quota remaining: ' + (config.youtube_quota_remaining != null ? config.youtube_quota_remaining : '?');
   } else {
-    document.getElementById('yt-login-area').style.display = 'block';
-    document.getElementById('yt-user-area').style.display = 'none';
+    document.getElementById('yt-login-area').classList.remove('hidden');
+    document.getElementById('yt-user-area').classList.add('hidden');
   }
-  document.getElementById('yt-test-result').style.display = 'none';
+  document.getElementById('yt-test-result').classList.add('hidden');
   if (config.keyboard_shortcuts) {
     TwitchX.state.shortcuts = Object.assign({}, TwitchX.DEFAULT_SHORTCUTS, config.keyboard_shortcuts);
   }
   document.getElementById('s-pip-enabled').checked = !!config.pip_enabled;
   document.getElementById('s-low-latency').checked = !!config.low_latency_mode;
+  var currentAccent = config.accent_color || '#FF9F0A';
+  var swatchContainer = document.getElementById('accent-swatches');
+  if (swatchContainer) {
+    swatchContainer.replaceChildren();
+    ACCENT_PALETTE.forEach(function(p) {
+      var btn = document.createElement('button');
+      btn.className = 'accent-swatch' + (p.value === currentAccent ? ' active' : '');
+      btn.style.background = p.value;
+      btn.title = p.label;
+      btn.dataset.color = p.value;
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.accent-swatch').forEach(function(s) { s.classList.remove('active'); });
+        btn.classList.add('active');
+        applyAccentColor(p.value);
+      });
+      swatchContainer.appendChild(btn);
+    });
+  }
   TwitchX.renderHotkeysSettings();
   document.querySelectorAll('.settings-tab').forEach(function(b) { b.classList.remove('active'); });
   document.querySelectorAll('.settings-panel').forEach(function(p) { p.classList.remove('active'); });
   document.querySelector('.settings-tab[data-tab="general"]').classList.add('active');
   document.getElementById('settings-panel-general').classList.add('active');
-  document.getElementById('stats-loading').style.display = 'block';
-  document.getElementById('stats-content').style.display = 'none';
+  document.getElementById('stats-loading').classList.remove('hidden');
+  document.getElementById('stats-content').classList.add('hidden');
   document.getElementById('settings-feedback').textContent = '';
   document.getElementById('settings-overlay').classList.add('visible');
+  document.getElementById('settings-overlay').style.opacity = '';
 }
 
 function openSettingsToTab(tab) {
@@ -221,6 +258,8 @@ function testConnection() {
 
 function saveSettings() {
   const pipEnabled = document.getElementById('s-pip-enabled').checked;
+  var activeSwatchEl = document.querySelector('.accent-swatch.active');
+  var accentColor = activeSwatchEl ? activeSwatchEl.dataset.color : '#FF9F0A';
   const data = {
     client_id: document.getElementById('s-client-id').value.trim(),
     client_secret: document.getElementById('s-client-secret').value.trim(),
@@ -238,13 +277,16 @@ function saveSettings() {
     pip_enabled: pipEnabled,
     low_latency_mode: document.getElementById('s-low-latency').checked,
     recording_path: document.getElementById('s-recording-path').value.trim(),
+    accent_color: accentColor,
   };
   TwitchX.state.pipEnabled = pipEnabled;
   const pipBtn = document.getElementById('pip-player-btn');
-  if (pipBtn) pipBtn.style.display = pipEnabled ? '' : 'none';
+  if (pipBtn) pipBtn.classList.toggle('hidden', !pipEnabled);
   if (TwitchX.api) TwitchX.api.save_settings(JSON.stringify(data));
 }
 
+TwitchX.ACCENT_PALETTE = ACCENT_PALETTE;
+TwitchX.applyAccentColor = applyAccentColor;
 TwitchX.openSettings = openSettings;
 TwitchX.openSettingsToTab = openSettingsToTab;
 TwitchX.closeSettings = closeSettings;

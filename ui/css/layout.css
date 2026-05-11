@@ -52,9 +52,23 @@
 #toolbar {
   height: 38px; background: var(--bg-surface);
   border-bottom: 1px solid var(--bg-border);
-  display: flex; align-items: center; padding: 0 12px; gap: 8px;
+  display: flex; align-items: center; padding: 0 var(--space-12); gap: var(--space-8);
   flex-shrink: 0;
 }
 #toolbar.hidden { display: none; }
 
 #browse-nav-wrapper { padding: 0 8px 6px; }
+
+/* ── Mini Mode ──────────────────────────────────────────── */
+#app.mini #content {
+  display: none !important;
+}
+#app.mini #sidebar {
+  width: 100%;
+  max-width: none;
+  border-right: none;
+  min-width: 0;
+}
+#app.mini #browse-nav-wrapper { display: none; }
+#app.mini #search-area { display: none; }
+#app.mini #kick-profile-area { display: none; }

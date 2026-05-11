@@ -183,7 +183,7 @@ function createSidebarItem(login, streamMap) {
 
   const name = document.createElement('span');
   name.className = 'name';
-  const favMeta = TwitchX.getFavoriteMeta(login) || {};
+  const favMeta = TwitchX.getFavoriteMeta(login, stream && stream.platform) || {};
   name.textContent = (stream && stream.display_name) || favMeta.display_name || login;
   copy.appendChild(name);
 
@@ -214,6 +214,22 @@ function createSidebarItem(login, streamMap) {
       e.preventDefault();
       TwitchX.selectChannel(login);
     }
+  });
+
+  // Drag to multistream
+  item.draggable = true;
+  item.addEventListener('dragstart', function(e) {
+    var platform = getChannelPlatform(login);
+    e.dataTransfer.setData('text/plain', JSON.stringify({ login: login, platform: platform }));
+    e.dataTransfer.effectAllowed = 'copy';
+    item.classList.add('dragging');
+    // Auto-open multistream view so the user sees drop zones
+    if (!TwitchX.multiState.open) {
+      TwitchX.openMultistreamView();
+    }
+  });
+  item.addEventListener('dragend', function() {
+    item.classList.remove('dragging');
   });
 
   return item;
@@ -333,7 +349,7 @@ function updateSidebarItem(item, login, streamMap) {
   }
 
   const nameEl = item.querySelector('.name');
-  const favMeta = TwitchX.getFavoriteMeta(login) || {};
+  const favMeta = TwitchX.getFavoriteMeta(login, stream && stream.platform) || {};
   const newName = (stream && stream.display_name) || favMeta.display_name || login;
   if (nameEl.textContent !== newName) {
     nameEl.textContent = newName;
@@ -539,6 +555,17 @@ function renderSidebar() {
 
 // Initialize sidebar sections from localStorage on load
 TwitchX.state.sidebarSections = loadSidebarSections();
+
+function getChannelPlatform(login) {
+  var stream = TwitchX.state.streams.find(function(s) { return s.login === login; });
+  if (stream && stream.platform) return stream.platform;
+  var plats = ['twitch', 'kick', 'youtube'];
+  for (var i = 0; i < plats.length; i++) {
+    if (TwitchX.state.favoritesMeta[plats[i] + ':' + login]) return plats[i];
+  }
+  return 'twitch';
+}
+TwitchX.getChannelPlatform = getChannelPlatform;
 
 TwitchX.loadSidebarSections = loadSidebarSections;
 TwitchX.saveSidebarSections = saveSidebarSections;

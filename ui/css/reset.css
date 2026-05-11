@@ -23,16 +23,16 @@ body {
 /* Skip to main content — visible on focus, hidden otherwise */
 .skip-link {
   position: absolute;
-  top: 8px; left: 8px;
-  z-index: 1000;
-  padding: 8px 16px;
+  top: var(--space-8); left: var(--space-8);
+  z-index: var(--z-modal);
+  padding: var(--space-8) var(--space-16);
   background: var(--accent);
   color: #0A0A0C;
   border-radius: var(--radius-sm);
-  font-size: 13px; font-weight: 600;
+  font-size: var(--font-md); font-weight: 600;
   text-decoration: none;
   transform: translateY(-120%);
-  transition: transform 0.15s ease;
+  transition: transform var(--duration-fast) ease;
 }
 .skip-link:focus { transform: translateY(0); }
 
@@ -66,6 +66,9 @@ body {
     border-width: 2px;
   }
 }
+
+/* ── Global utilities ──────────────────────────────────── */
+.hidden { display: none !important; }
 
 /* ── Scrollbar ──────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; }

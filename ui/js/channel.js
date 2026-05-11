@@ -49,7 +49,7 @@ function addChannel() {
     TwitchX.api.add_channel(loginToAdd, targetPlatform, displayToAdd);
     input.value = '';
     TwitchX.state.searchResults = [];
-    document.getElementById('search-dropdown').style.display = 'none';
+    document.getElementById('search-dropdown').classList.remove('visible');
   }
 }
 
@@ -219,6 +219,12 @@ function showChannelView(login, platform, source) {
   }
 
   document.getElementById('channel-view').classList.remove('hidden');
+  document.getElementById('channel-view').style.opacity = '0';
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      document.getElementById('channel-view').style.opacity = '';
+    });
+  });
   document.getElementById('channel-loading').classList.remove('hidden');
   document.getElementById('channel-profile-card').style.opacity = '0';
   document.getElementById('channel-header-title').textContent = login;
@@ -244,11 +250,19 @@ function showChannelView(login, platform, source) {
 
 function hideChannelView() {
   document.getElementById('channel-view').classList.add('hidden');
+  document.getElementById('channel-view').style.opacity = '';
   if (TwitchX.channelViewSource === 'browse') {
     document.getElementById('browse-view').classList.remove('hidden');
   } else {
     document.getElementById('toolbar').classList.remove('hidden');
-    document.getElementById('stream-grid').classList.remove('hidden');
+    var grid = document.getElementById('stream-grid');
+    grid.classList.remove('hidden');
+    grid.style.opacity = '0';
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        grid.style.opacity = '';
+      });
+    });
     TwitchX.renderGrid();
   }
 }
