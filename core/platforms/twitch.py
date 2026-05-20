@@ -227,6 +227,7 @@ class TwitchClient(BasePlatformClient):
                 cfg.get("platforms", {}).get("twitch", {})["access_token"] = ""
 
             self._config = update_config(_clear_token)
+            tc = self._platform_config()
             if tc.get("token_type") == "user" and tc.get("refresh_token"):
                 token = await self.refresh_user_token()
             else:
