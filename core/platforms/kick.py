@@ -71,10 +71,9 @@ class KickClient(BasePlatformClient):
             kc["oauth_state"] = state
 
         self._config = update_config(_apply)
-        kc = self._platform_config()
         params: dict[str, str] = {
             "response_type": "code",
-            "client_id": kc.get("client_id", ""),
+            "client_id": self._effective_creds()[0],
             "redirect_uri": KICK_REDIRECT_URI,
             "scope": OAUTH_SCOPE,
             "state": state,
@@ -88,11 +87,12 @@ class KickClient(BasePlatformClient):
         """Exchange authorization code + PKCE verifier for tokens."""
         self._reload_config()
         kc = self._platform_config()
+        cid, csec = self._effective_creds()
         resp = await self._get_client().post(
             f"{KICK_AUTH_URL}/oauth/token",
             data={
-                "client_id": kc.get("client_id", ""),
-                "client_secret": kc.get("client_secret", ""),
+                "client_id": cid,
+                "client_secret": csec,
                 "code": code,
                 "code_verifier": kc.get("pkce_verifier", ""),
                 "grant_type": "authorization_code",
@@ -113,7 +113,7 @@ class KickClient(BasePlatformClient):
         resp = await self._get_client().post(
             f"{KICK_AUTH_URL}/oauth/token",
             data={
-                "client_id": kc.get("client_id", ""),
+                "client_id": self._effective_creds()[0],
                 "refresh_token": kc.get("refresh_token", ""),
                 "grant_type": "refresh_token",
             },
