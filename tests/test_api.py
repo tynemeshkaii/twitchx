@@ -1515,6 +1515,48 @@ def test_async_run_closes_thread_loop(
     assert len(close_calls) == 1
 
 
+def test_get_config_has_credentials_true_even_with_empty_config(
+    temp_config_dir: Path,
+) -> None:
+    """has_credentials must be True even when no custom credentials are configured."""
+    api = TwitchXApi()
+    config = api.get_config()
+    assert config["has_credentials"] is True
+
+
+def test_get_config_has_credentials_not_dependent_on_custom_fields(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """has_credentials must not change if user clears their custom client_id."""
+    api = TwitchXApi()
+
+    def _clear(cfg: dict) -> None:
+        cfg["platforms"]["twitch"]["client_id"] = ""
+        cfg["platforms"]["twitch"]["client_secret"] = ""
+        cfg["platforms"]["kick"]["client_id"] = ""
+        cfg["platforms"]["kick"]["client_secret"] = ""
+        cfg["platforms"]["youtube"]["api_key"] = ""
+        cfg["platforms"]["youtube"]["client_id"] = ""
+        cfg["platforms"]["youtube"]["client_secret"] = ""
+
+    update_config(_clear)
+    api = TwitchXApi()
+    assert api.get_config()["has_credentials"] is True
+
+
+def test_get_full_config_exposes_bundled_flags(
+    temp_config_dir: Path,
+) -> None:
+    """get_full_config_for_settings() must include *_using_bundled flags."""
+    api = TwitchXApi()
+    config = api.get_full_config_for_settings()
+    # With empty config, all should be using bundled
+    assert config["twitch_using_bundled"] is True
+    assert config["kick_using_bundled"] is True
+    assert config["youtube_using_bundled_oauth"] is True
+    assert config["youtube_using_bundled_api_key"] is True
+
+
 def test_send_chat_forwards_reply_params(
     temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

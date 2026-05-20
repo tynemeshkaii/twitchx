@@ -322,11 +322,7 @@ class TwitchXApi:
             "client_id": twitch_conf.get("client_id", "")[:8] + "..."
             if twitch_conf.get("client_id")
             else "",
-            "has_credentials": bool(
-                (twitch_conf.get("client_id") and twitch_conf.get("client_secret"))
-                or (kick_conf.get("client_id") and kick_conf.get("client_secret"))
-                or (yt_conf.get("api_key"))
-            ),
+            "has_credentials": True,  # bundled credentials always available
             "quality": settings.get("quality", "best"),
             "refresh_interval": settings.get("refresh_interval", 60),
             "favorites": all_favs,
@@ -398,6 +394,16 @@ class TwitchXApi:
             "chat_anti_spam": settings.get("chat_anti_spam", True),
             "keyboard_shortcuts": settings.get("keyboard_shortcuts", {}),
             "accent_color": settings.get("accent_color", "#FF9F0A"),
+            "twitch_using_bundled": not bool(
+                twitch_conf.get("client_id") and twitch_conf.get("client_secret")
+            ),
+            "kick_using_bundled": not bool(
+                kick_conf.get("client_id") and kick_conf.get("client_secret")
+            ),
+            "youtube_using_bundled_oauth": not bool(
+                yt_conf.get("client_id") and yt_conf.get("client_secret")
+            ),
+            "youtube_using_bundled_api_key": not bool(yt_conf.get("api_key")),
         }
 
     def save_settings(self, data: str) -> None:
