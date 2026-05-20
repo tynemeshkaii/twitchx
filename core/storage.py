@@ -39,6 +39,7 @@ DEFAULT_PLATFORM_TWITCH: dict[str, Any] = {
     "user_id": "",
     "user_login": "",
     "user_display_name": "",
+    "pkce_verifier": "",
 }
 
 DEFAULT_PLATFORM_KICK: dict[str, Any] = {

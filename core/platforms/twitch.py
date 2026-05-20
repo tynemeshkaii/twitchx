@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
 import logging
+import os
 import re
 import time
 from typing import Any
@@ -18,6 +21,16 @@ TWITCH_AUTH_URL = "https://id.twitch.tv/oauth2/token"
 TWITCH_API_URL = "https://api.twitch.tv/helix"
 TWITCH_REDIRECT_URI = "http://localhost:3457/callback"
 OAUTH_SCOPE = "user:read:follows chat:read chat:edit moderator:manage:chat_settings"
+
+
+def _generate_code_verifier(length: int = 64) -> str:
+    raw = os.urandom(length)
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+
+def _generate_code_challenge(verifier: str) -> str:
+    digest = hashlib.sha256(verifier.encode("ascii")).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 
 class TwitchClient(BasePlatformClient):
@@ -43,31 +56,27 @@ class TwitchClient(BasePlatformClient):
             return await self._refresh_app_token()
 
     async def _refresh_app_token(self) -> str:
-        tc = self._platform_config()
-        client_id = tc.get("client_id", "")
-        client_secret = tc.get("client_secret", "")
-        if not client_id or not client_secret:
-            raise ValueError(
-                "Twitch Client ID and Secret are required. Set them in Settings."
-            )
+        cid, csec = self._effective_creds()
+        if not cid or not csec:
+            raise ValueError("Twitch credentials unavailable.")
         resp = await self._get_client().post(
             TWITCH_AUTH_URL,
             data={
-                "client_id": client_id,
-                "client_secret": client_secret,
+                "client_id": cid,
+                "client_secret": csec,
                 "grant_type": "client_credentials",
             },
         )
         resp.raise_for_status()
         data = resp.json()
         token = data["access_token"]
-        expires_in = data.get("expires_in", 3600)
-        expires_at = int(time.time()) + expires_in
+        expires_at = int(time.time()) + data.get("expires_in", 3600)
 
         def _apply(cfg: dict) -> None:
             tc = cfg.get("platforms", {}).get("twitch", {})
             tc["access_token"] = token
             tc["token_expires_at"] = expires_at
+            tc["token_type"] = "app"
 
         self._config = update_config(_apply)
         return token
@@ -76,13 +85,22 @@ class TwitchClient(BasePlatformClient):
 
     def get_auth_url(self) -> str:
         self._reload_config()
-        tc = self._platform_config()
+        verifier = _generate_code_verifier()
+        challenge = _generate_code_challenge(verifier)
+
+        def _apply(cfg: dict) -> None:
+            cfg.get("platforms", {}).get("twitch", {})["pkce_verifier"] = verifier
+
+        self._config = update_config(_apply)
+        cid, _ = self._effective_creds()
         params = urlencode(
             {
-                "client_id": tc["client_id"],
+                "client_id": cid,
                 "redirect_uri": TWITCH_REDIRECT_URI,
                 "response_type": "code",
                 "scope": OAUTH_SCOPE,
+                "code_challenge": challenge,
+                "code_challenge_method": "S256",
                 "force_verify": "false",
             }
         )
@@ -91,26 +109,33 @@ class TwitchClient(BasePlatformClient):
     async def exchange_code(self, code: str) -> dict[str, Any]:
         self._reload_config()
         tc = self._platform_config()
+        cid, _ = self._effective_creds()
         resp = await self._get_client().post(
             TWITCH_AUTH_URL,
             data={
-                "client_id": tc["client_id"],
-                "client_secret": tc["client_secret"],
+                "client_id": cid,
                 "code": code,
+                "code_verifier": tc.get("pkce_verifier", ""),
                 "grant_type": "authorization_code",
                 "redirect_uri": TWITCH_REDIRECT_URI,
             },
         )
         resp.raise_for_status()
+
+        def _clear_verifier(cfg: dict) -> None:
+            cfg.get("platforms", {}).get("twitch", {})["pkce_verifier"] = ""
+
+        self._config = update_config(_clear_verifier)
         return resp.json()
 
     async def refresh_user_token(self) -> str:
         tc = self._platform_config()
+        cid, csec = self._effective_creds()
         resp = await self._get_client().post(
             TWITCH_AUTH_URL,
             data={
-                "client_id": tc["client_id"],
-                "client_secret": tc["client_secret"],
+                "client_id": cid,
+                "client_secret": csec,
                 "refresh_token": tc["refresh_token"],
                 "grant_type": "refresh_token",
             },
@@ -177,10 +202,10 @@ class TwitchClient(BasePlatformClient):
         params: Any = None,
     ) -> Any:
         token = await self._ensure_token()
-        tc = self._platform_config()
+        cid, _ = self._effective_creds()
         headers = {
             "Authorization": f"Bearer {token}",
-            "Client-Id": tc["client_id"],
+            "Client-Id": cid,
         }
         url = f"{TWITCH_API_URL}{endpoint}"
         logger.debug("GET %s params=%s", url, params)
@@ -462,10 +487,10 @@ class TwitchClient(BasePlatformClient):
         Returns the updated settings dict from Helix.
         """
         token = await self._ensure_token()
-        tc = self._platform_config()
+        cid, _ = self._effective_creds()
         headers = {
             "Authorization": f"Bearer {token}",
-            "Client-Id": tc["client_id"],
+            "Client-Id": cid,
             "Content-Type": "application/json",
         }
         params = {

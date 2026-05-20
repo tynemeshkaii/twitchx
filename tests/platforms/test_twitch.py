@@ -204,6 +204,74 @@ class TestGetChannelInfo:
         assert result["is_live"] is False
 
 
+def test_get_auth_url_includes_pkce_params(temp_config_dir):
+    """get_auth_url() must include code_challenge and code_challenge_method."""
+    from core.platforms.twitch import TwitchClient
+    client = TwitchClient()
+    url = client.get_auth_url()
+    assert "code_challenge=" in url
+    assert "code_challenge_method=S256" in url
+    assert "code_verifier" not in url  # verifier stays local, never in URL
+
+
+def test_get_auth_url_stores_pkce_verifier(temp_config_dir):
+    """get_auth_url() must persist pkce_verifier to config."""
+    from core.platforms.twitch import TwitchClient
+    from core.storage import load_config
+    client = TwitchClient()
+    client.get_auth_url()
+    cfg = load_config()
+    verifier = cfg.get("platforms", {}).get("twitch", {}).get("pkce_verifier", "")
+    assert len(verifier) >= 43  # RFC 7636 minimum verifier length
+
+
+def test_get_auth_url_uses_effective_client_id(temp_config_dir):
+    """get_auth_url() uses bundled client_id when config is empty."""
+    import core.credentials as creds
+    from core.platforms.twitch import TwitchClient
+    client = TwitchClient()
+    url = client.get_auth_url()
+    assert creds.TWITCH_CLIENT_ID in url
+
+
+import pytest
+
+@pytest.mark.asyncio
+async def test_exchange_code_sends_code_verifier_not_secret(temp_config_dir):
+    """exchange_code() must send code_verifier, not client_secret."""
+    from core.platforms.twitch import TwitchClient
+    from core.storage import update_config
+    from unittest.mock import MagicMock, AsyncMock
+    import json
+
+    def _set_verifier(cfg):
+        cfg["platforms"]["twitch"]["pkce_verifier"] = "test_verifier_abc123xyz456def789"
+    update_config(_set_verifier)
+
+    client = TwitchClient()
+    captured = {}
+
+    async def mock_post(url, data=None, **kwargs):
+        if data:
+            captured.update(data)
+        resp = MagicMock()
+        resp.raise_for_status = MagicMock(return_value=None)
+        resp.status_code = 200
+        resp.json = MagicMock(return_value={
+            "access_token": "tok", "refresh_token": "ref", "expires_in": 3600
+        })
+        return resp
+
+    mock_http_client = MagicMock()
+    mock_http_client.post = mock_post
+    client._get_client = lambda: mock_http_client
+    await client.exchange_code("auth_code_xyz")
+
+    assert captured.get("code_verifier") == "test_verifier_abc123xyz456def789"
+    assert "client_secret" not in captured
+    assert captured.get("code") == "auth_code_xyz"
+
+
 class TestChannelMedia:
     def test_get_channel_vods_returns_normalized_archives(self) -> None:
         client = TwitchClient()
