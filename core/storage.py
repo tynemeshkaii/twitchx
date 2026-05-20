@@ -70,6 +70,7 @@ DEFAULT_PLATFORM_YOUTUBE: dict[str, Any] = {
     "user_display_name": "",
     "daily_quota_used": 0,
     "quota_reset_date": "",
+    "pkce_verifier": "",
 }
 
 DEFAULT_SETTINGS: dict[str, Any] = {

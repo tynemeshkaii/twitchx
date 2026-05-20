@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
 import logging
+import os
 import re
 import threading
 import time
@@ -25,6 +28,16 @@ YOUTUBE_RSS_URL = "https://www.youtube.com/feeds/videos.xml"
 OAUTH_SCOPE = "https://www.googleapis.com/auth/youtube.readonly"
 
 VALID_CHANNEL_ID = re.compile(r"^UC[\w-]{22}$")
+
+
+def _generate_code_verifier(length: int = 64) -> str:
+    raw = os.urandom(length)
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+
+def _generate_code_challenge(verifier: str) -> str:
+    digest = hashlib.sha256(verifier.encode("ascii")).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 DAILY_QUOTA_LIMIT = 10_000
 
@@ -152,6 +165,11 @@ class YouTubeClient(BasePlatformClient):
         """Return the number of remaining YouTube Data API quota units for today."""
         return self._quota.remaining()
 
+    def _effective_api_key(self) -> str:
+        """Return api_key from config, or bundled default."""
+        from core import credentials as _creds
+        return self._platform_config().get("api_key", "") or _creds.YOUTUBE_API_KEY
+
     # ── Token management ─────────────────────────────────────
 
     async def _ensure_token(self) -> str | None:
@@ -190,7 +208,7 @@ class YouTubeClient(BasePlatformClient):
         elif auth_required:
             raise ValueError("YouTube authentication required but no valid token.")
         else:
-            api_key = self._platform_config().get("api_key", "")
+            api_key = self._effective_api_key()
             if not api_key:
                 raise ValueError("YouTube API key required. Set it in Settings.")
             query["key"] = api_key
@@ -585,46 +603,62 @@ class YouTubeClient(BasePlatformClient):
     # ── OAuth ────────────────────────────────────────────────
 
     def get_auth_url(self) -> str:
-        """Generate Google OAuth authorization URL."""
+        """Generate Google OAuth authorization URL with PKCE."""
         self._reload_config()
-        yc = self._platform_config()
+        verifier = _generate_code_verifier()
+        challenge = _generate_code_challenge(verifier)
+
+        def _apply(cfg: dict) -> None:
+            cfg.get("platforms", {}).get("youtube", {})["pkce_verifier"] = verifier
+
+        self._config = update_config(_apply)
+        cid, _ = self._effective_creds()
         params = {
-            "client_id": yc.get("client_id", ""),
+            "client_id": cid,
             "redirect_uri": YOUTUBE_REDIRECT_URI,
             "response_type": "code",
             "scope": OAUTH_SCOPE,
             "access_type": "offline",
             "prompt": "consent",
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
         }
         return f"{YOUTUBE_AUTH_URL}?{urlencode(params)}"
 
     async def exchange_code(self, code: str) -> dict[str, Any]:
-        """Exchange authorization code for tokens."""
+        """Exchange authorization code for tokens using PKCE verifier."""
         self._reload_config()
         yc = self._platform_config()
+        cid, _ = self._effective_creds()
         client = self._get_client()
         resp = await client.post(
             YOUTUBE_TOKEN_URL,
             data={
-                "client_id": yc.get("client_id", ""),
-                "client_secret": yc.get("client_secret", ""),
+                "client_id": cid,
                 "code": code,
+                "code_verifier": yc.get("pkce_verifier", ""),
                 "grant_type": "authorization_code",
                 "redirect_uri": YOUTUBE_REDIRECT_URI,
             },
         )
         resp.raise_for_status()
+
+        def _clear_verifier(cfg: dict) -> None:
+            cfg.get("platforms", {}).get("youtube", {})["pkce_verifier"] = ""
+
+        self._config = update_config(_clear_verifier)
         return resp.json()
 
     async def refresh_user_token(self) -> str:
         """Refresh the OAuth token. Clears auth state on failure."""
         yc = self._platform_config()
+        cid, csec = self._effective_creds()
         client = self._get_client()
         resp = await client.post(
             YOUTUBE_TOKEN_URL,
             data={
-                "client_id": yc.get("client_id", ""),
-                "client_secret": yc.get("client_secret", ""),
+                "client_id": cid,
+                "client_secret": csec,
                 "refresh_token": yc.get("refresh_token", ""),
                 "grant_type": "refresh_token",
             },

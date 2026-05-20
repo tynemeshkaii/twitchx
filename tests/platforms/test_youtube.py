@@ -621,26 +621,23 @@ class TestChannelMedia:
 
 
 class TestOAuth:
-    def test_get_auth_url_contains_required_params(self) -> None:
+    def test_get_auth_url_contains_required_params(self, temp_config_dir) -> None:
+        from core.storage import update_config
         from core.platforms.youtube import YouTubeClient
 
+        # Set a custom client_id so it overrides the bundled credential.
+        def _set(cfg):
+            cfg["platforms"]["youtube"]["client_id"] = "test-client-id"
+        update_config(_set)
+
         client = YouTubeClient()
-        client._config = {
-            "platforms": {
-                "youtube": {
-                    "client_id": "test-client-id",
-                    "client_secret": "secret",
-                    "api_key": "",
-                }
-            }
-        }
-        # Prevent _reload_config from overwriting the test config with disk state.
-        client._reload_config = lambda: None
         url = client.get_auth_url()
         assert "accounts.google.com" in url
         assert "test-client-id" in url
         assert "localhost" in url
         assert "youtube.readonly" in url
+        assert "code_challenge=" in url
+        assert "code_challenge_method=S256" in url
 
 
 class TestGetFollowedChannels:
@@ -903,3 +900,75 @@ class TestResolveStreamUrl:
 
         assert result["url"] == "dQw4w9WgXcQ"
         assert result["playback_type"] == "youtube_embed"
+
+
+# ── PKCE + _effective_api_key ─────────────────────────────────
+
+
+def test_get_auth_url_includes_pkce_params(temp_config_dir):
+    from core.platforms.youtube import YouTubeClient
+    client = YouTubeClient()
+    url = client.get_auth_url()
+    assert "code_challenge=" in url
+    assert "code_challenge_method=S256" in url
+
+
+def test_get_auth_url_stores_pkce_verifier(temp_config_dir):
+    from core.platforms.youtube import YouTubeClient
+    from core.storage import load_config
+    client = YouTubeClient()
+    client.get_auth_url()
+    verifier = load_config().get("platforms", {}).get("youtube", {}).get("pkce_verifier", "")
+    assert len(verifier) >= 43
+
+
+def test_effective_api_key_returns_bundled_when_config_empty(temp_config_dir):
+    import core.credentials as creds
+    from core.platforms.youtube import YouTubeClient
+    client = YouTubeClient()
+    assert client._effective_api_key() == creds.YOUTUBE_API_KEY
+
+
+def test_effective_api_key_returns_config_when_set(temp_config_dir):
+    from core.platforms.youtube import YouTubeClient
+    from core.storage import update_config
+    def _set(cfg):
+        cfg["platforms"]["youtube"]["api_key"] = "my_personal_key"
+    update_config(_set)
+    client = YouTubeClient()
+    assert client._effective_api_key() == "my_personal_key"
+
+
+import pytest
+
+@pytest.mark.asyncio
+async def test_exchange_code_sends_code_verifier_not_secret(temp_config_dir):
+    from core.platforms.youtube import YouTubeClient
+    from core.storage import update_config
+    from unittest.mock import MagicMock
+
+    def _set_verifier(cfg):
+        cfg["platforms"]["youtube"]["pkce_verifier"] = "yt_verifier_xyz_abc_123_def456"
+    update_config(_set_verifier)
+
+    client = YouTubeClient()
+    captured = {}
+
+    async def mock_post(url, data=None, **kwargs):
+        if data:
+            captured.update(data)
+        resp = MagicMock()
+        resp.raise_for_status = MagicMock(return_value=None)
+        resp.status_code = 200
+        resp.json = MagicMock(return_value={
+            "access_token": "tok", "refresh_token": "ref", "expires_in": 3600
+        })
+        return resp
+
+    mock_http_client = MagicMock()
+    mock_http_client.post = mock_post
+    client._get_client = lambda: mock_http_client
+    await client.exchange_code("yt_auth_code")
+
+    assert captured.get("code_verifier") == "yt_verifier_xyz_abc_123_def456"
+    assert "client_secret" not in captured
