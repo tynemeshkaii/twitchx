@@ -882,3 +882,17 @@ window.onChannelMedia = function(payload) {
   };
   TwitchX.renderChannelMediaTab(payload.tab);
 };
+
+window.onYouTubeQuotaWarning = function(data) {
+  if (data.level === 'critical') {
+    TwitchX.showToast(
+      'YouTube API quota nearly exhausted (' + data.remaining + ' units left). Add a personal API key in Settings → YouTube.',
+      'error'
+    );
+  } else {
+    TwitchX.showToast(
+      'YouTube quota at 80% (' + data.remaining + ' units left). Consider adding a personal API key in Settings → YouTube.',
+      'warn'
+    );
+  }
+};

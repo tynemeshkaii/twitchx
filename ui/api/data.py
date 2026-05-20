@@ -60,6 +60,8 @@ def _aggregate_categories(
 class DataComponent(BaseApiComponent):
     """Polling, refresh, browse, channel profiles."""
 
+    _quota_warn_fired: bool = False
+
     # ── Polling infrastructure ──────────────────────────────────
 
     def restart_polling(self) -> None:
@@ -556,6 +558,25 @@ class DataComponent(BaseApiComponent):
 
         self._run_in_thread(do_notify)
 
+    # ── YouTube quota warning ────────────────────────────────────
+
+    def _check_youtube_quota_warning(self) -> None:
+        remaining = self._youtube.quota_remaining()
+        if remaining <= 500:  # 95%+ used — always fire (no dedup)
+            self._eval_js(
+                "window.onYouTubeQuotaWarning("
+                + json.dumps({"remaining": remaining, "level": "critical"})
+                + ")"
+            )
+        elif remaining <= 2000:  # 80%+ used — fire once per session
+            if not self._quota_warn_fired:
+                self._quota_warn_fired = True
+                self._eval_js(
+                    "window.onYouTubeQuotaWarning("
+                    + json.dumps({"remaining": remaining, "level": "warn"})
+                    + ")"
+                )
+
     # ── Browse ─────────────────────────────────────────────────
 
     def get_browse_categories(self, platform_filter: str = "all") -> None:
@@ -620,6 +641,7 @@ class DataComponent(BaseApiComponent):
                 self._close_thread_loop(loop)
         merged = _aggregate_categories(results)
         self._eval_js(f"window.onBrowseCategories({json.dumps(merged)})")
+        self._check_youtube_quota_warning()
 
     def get_browse_top_streams(
         self,
@@ -694,6 +716,7 @@ class DataComponent(BaseApiComponent):
         all_streams.sort(key=lambda s: s.get("viewers", 0), reverse=True)
         payload = {"category": category_name, "streams": all_streams[:40]}
         self._eval_js(f"window.onBrowseTopStreams({json.dumps(payload)})")
+        self._check_youtube_quota_warning()
 
     # ── Channel profile ─────────────────────────────────────────
 

@@ -224,6 +224,9 @@ class TwitchXApi:
     ) -> None:
         self._data.get_channel_media(login, platform, tab)
 
+    def _check_youtube_quota_warning(self) -> None:
+        self._data._check_youtube_quota_warning()
+
     # Streams
     def watch(self, channel: str, quality: str) -> None:
         self._streams.watch(channel, quality)
