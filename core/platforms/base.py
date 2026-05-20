@@ -10,8 +10,20 @@ from typing import Any
 
 import httpx
 
+from core import credentials as _bundled_creds
 from core.platform import PlatformClient
 from core.storage import get_platform_config, load_config
+
+_BUNDLED_CLIENT_IDS: dict[str, str] = {
+    "twitch": _bundled_creds.TWITCH_CLIENT_ID,
+    "kick": _bundled_creds.KICK_CLIENT_ID,
+    "youtube": _bundled_creds.YOUTUBE_CLIENT_ID,
+}
+_BUNDLED_CLIENT_SECRETS: dict[str, str] = {
+    "twitch": _bundled_creds.TWITCH_CLIENT_SECRET,
+    "kick": _bundled_creds.KICK_CLIENT_SECRET,
+    "youtube": _bundled_creds.YOUTUBE_CLIENT_SECRET,
+}
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +56,13 @@ class BasePlatformClient(PlatformClient):
     def _platform_config(self) -> dict[str, Any]:
         """Return platform-specific config section (e.g. config.platforms.twitch)."""
         return get_platform_config(self._config, self.PLATFORM_ID)
+
+    def _effective_creds(self) -> tuple[str, str]:
+        """Return (client_id, client_secret): config override or bundled fallback."""
+        cfg = self._platform_config()
+        cid = cfg.get("client_id", "") or _BUNDLED_CLIENT_IDS.get(self.PLATFORM_ID, "")
+        csec = cfg.get("client_secret", "") or _BUNDLED_CLIENT_SECRETS.get(self.PLATFORM_ID, "")
+        return cid, csec
 
     # --- Per-loop httpx client ---
     def _client_headers(self) -> dict[str, str]:
