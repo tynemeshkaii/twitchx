@@ -589,14 +589,6 @@ window.onKickLoginError = function(msg) {
   TwitchX.setStatus('Kick login: ' + msg, 'error');
 };
 
-window.onKickNeedsCredentials = function() {
-  TwitchX.openSettingsToTab('kick');
-  const fb = document.getElementById('settings-feedback');
-  fb.textContent = 'Enter Kick Client ID and Secret, then click Login';
-  fb.style.color = 'var(--warn-yellow)';
-  TwitchX.setStatus('Kick credentials required — opening Settings', 'warn');
-};
-
 window.onKickLogout = function() {
   TwitchX.state.kickUser = null;
   TwitchX.state.kickScopes = '';
@@ -639,14 +631,6 @@ window.onYouTubeLoginError = function(msg) {
   fb.textContent = '\u2717 YouTube login failed: ' + msg;
   fb.style.color = 'var(--error-red)';
   TwitchX.setStatus('YouTube login: ' + msg, 'error');
-};
-
-window.onYouTubeNeedsCredentials = function() {
-  TwitchX.openSettingsToTab('youtube');
-  const fb = document.getElementById('settings-feedback');
-  fb.textContent = 'Enter YouTube Client ID and Secret, then click Connect';
-  fb.style.color = 'var(--warn-yellow)';
-  TwitchX.setStatus('YouTube credentials required \u2014 opening Settings', 'warn');
 };
 
 window.onYouTubeLogout = function() {
