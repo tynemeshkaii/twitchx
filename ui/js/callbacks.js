@@ -563,6 +563,7 @@ window.onSettingsSaved = function() {
 };
 
 window.onKickLoginComplete = function(data) {
+  TwitchX.state.kickUser = { login: data.login, display_name: data.display_name };
   TwitchX.state.kickScopes = data.scopes || TwitchX.state.kickScopes || '';
   document.getElementById('kick-login-area').classList.add('hidden');
   document.getElementById('kick-user-area').classList.remove('hidden');
@@ -597,6 +598,7 @@ window.onKickNeedsCredentials = function() {
 };
 
 window.onKickLogout = function() {
+  TwitchX.state.kickUser = null;
   TwitchX.state.kickScopes = '';
   document.getElementById('kick-login-area').classList.remove('hidden');
   document.getElementById('kick-user-area').classList.add('hidden');
@@ -621,6 +623,7 @@ window.onKickTestResult = function(data) {
 };
 
 window.onYouTubeLoginComplete = function(data) {
+  TwitchX.state.youtubeUser = { login: data.login, display_name: data.display_name };
   document.getElementById('yt-login-area').classList.add('hidden');
   document.getElementById('yt-user-area').classList.remove('hidden');
   document.getElementById('yt-display-name').textContent = 'Logged in as ' + (data.display_name || data.login);
@@ -647,6 +650,7 @@ window.onYouTubeNeedsCredentials = function() {
 };
 
 window.onYouTubeLogout = function() {
+  TwitchX.state.youtubeUser = null;
   document.getElementById('yt-login-area').classList.remove('hidden');
   document.getElementById('yt-user-area').classList.add('hidden');
   document.getElementById('yt-display-name').textContent = '';

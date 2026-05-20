@@ -58,6 +58,7 @@ TwitchX.state = {
   userAvatars: {},
   kickUser: null,
   kickScopes: '',
+  youtubeUser: null,
   playerState: 'idle',
   playerChannel: null,
   playerTitle: '',

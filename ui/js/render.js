@@ -47,26 +47,47 @@ function renderGrid() {
   const streams = getFilteredSortedStreams();
 
   // Empty states
-  if (TwitchX.state.favorites.length === 0 && !TwitchX.state.hasCredentials) {
+  var anyLoggedIn = TwitchX.state.currentUser || TwitchX.state.kickUser || TwitchX.state.youtubeUser;
+  if (TwitchX.state.favorites.length === 0 && !anyLoggedIn) {
     grid.classList.add('hidden');
     empty.classList.add('visible');
     empty.querySelector('.empty-icon').textContent = '\u26A1';
     empty.querySelector('.empty-title').textContent = 'Welcome to TwitchX';
-    const sub = empty.querySelector('.empty-subtitle');
+    var sub = empty.querySelector('.empty-subtitle');
     while (sub.firstChild) sub.removeChild(sub.firstChild);
-    const card1 = createOnboardingCard('Step 1', 'Open Settings and enter your Twitch API credentials');
-    const card2 = createOnboardingCard('Step 2', 'Add your favorite channels using the search bar');
-    const btn = document.createElement('button');
-    btn.className = 'onboarding-btn';
-    btn.textContent = 'Open Settings';
-    btn.addEventListener('click', TwitchX.openSettings);
-    sub.appendChild(card1);
-    sub.appendChild(card2);
-    sub.appendChild(btn);
+
+    var welcomeMsg = document.createElement('p');
+    welcomeMsg.className = 'onboarding-desc';
+    welcomeMsg.textContent = 'Log in to see your followed channels, or add channels manually via the search bar.';
+    sub.appendChild(welcomeMsg);
+
+    var loginBtnsWrap = document.createElement('div');
+    loginBtnsWrap.className = 'onboarding-login-btns';
+
+    [
+      { label: 'Login with Twitch', fn: function() { if (TwitchX.api) TwitchX.api.login(); } },
+      { label: 'Login with Kick',   fn: function() { if (TwitchX.api) TwitchX.api.kick_login(); } },
+      { label: 'Connect YouTube',   fn: function() { if (TwitchX.api) TwitchX.api.youtube_login(); } }
+    ].forEach(function(item) {
+      var b = document.createElement('button');
+      b.className = 'onboarding-btn';
+      b.textContent = item.label;
+      b.addEventListener('click', item.fn);
+      loginBtnsWrap.appendChild(b);
+    });
+
+    sub.appendChild(loginBtnsWrap);
+
+    var orMsg = document.createElement('p');
+    orMsg.className = 'onboarding-desc';
+    orMsg.style.marginTop = '12px';
+    orMsg.textContent = 'Or use the search bar to add channels without logging in.';
+    sub.appendChild(orMsg);
+
     return;
   }
 
-  if (TwitchX.state.favorites.length === 0 && TwitchX.state.hasCredentials) {
+  if (TwitchX.state.favorites.length === 0) {
     grid.classList.add('hidden');
     empty.classList.add('visible');
     empty.querySelector('.empty-icon').textContent = '\uD83D\uDCFA';
