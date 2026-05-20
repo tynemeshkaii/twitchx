@@ -1539,6 +1539,7 @@ def test_get_config_has_credentials_not_dependent_on_custom_fields(
         cfg["platforms"]["youtube"]["client_id"] = ""
         cfg["platforms"]["youtube"]["client_secret"] = ""
 
+    from core.storage import update_config
     update_config(_clear)
     api = TwitchXApi()
     assert api.get_config()["has_credentials"] is True
