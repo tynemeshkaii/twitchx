@@ -10,7 +10,7 @@ import httpx
 from core.oauth_server import wait_for_oauth_code
 from core.platforms.kick import OAUTH_SCOPE as KICK_OAUTH_SCOPE
 from core.platforms.youtube import YOUTUBE_API_URL
-from core.storage import get_platform_config, update_config
+from core.storage import update_config
 
 from ._base import BaseApiComponent
 
@@ -21,12 +21,6 @@ class AuthComponent(BaseApiComponent):
     # ── Twitch ──────────────────────────────────────────────────
 
     def login(self) -> None:
-        twitch_conf = self._get_twitch_config()
-        if not twitch_conf.get("client_id") or not twitch_conf.get("client_secret"):
-            self._eval_js(
-                'window.onLoginError("Set API credentials in Settings first")'
-            )
-            return
         auth_url = self._twitch.get_auth_url()
         self._api._data.stop_polling()
         self._eval_js(
@@ -114,7 +108,6 @@ class AuthComponent(BaseApiComponent):
     # ── Kick ────────────────────────────────────────────────────
 
     def kick_login(self, client_id: str = "", client_secret: str = "") -> None:
-        kick_conf = self._get_kick_config()
         if client_id.strip() and client_secret.strip():
             cid = client_id.strip()
             csec = client_secret.strip()
@@ -125,10 +118,6 @@ class AuthComponent(BaseApiComponent):
                 kc["client_secret"] = csec
 
             self._config = update_config(_save_creds)
-            kick_conf = self._get_kick_config()
-        if not kick_conf.get("client_id") or not kick_conf.get("client_secret"):
-            self._eval_js("window.onKickNeedsCredentials()")
-            return
         auth_url = self._kick.get_auth_url()
         self._api._data.stop_polling()
         self._eval_js(
@@ -214,7 +203,6 @@ class AuthComponent(BaseApiComponent):
     # ── YouTube ─────────────────────────────────────────────────
 
     def youtube_login(self, client_id: str = "", client_secret: str = "") -> None:
-        yt_conf = self._get_youtube_config()
         if client_id.strip() and client_secret.strip():
             cid = client_id.strip()
             csec = client_secret.strip()
@@ -225,10 +213,6 @@ class AuthComponent(BaseApiComponent):
                 yc["client_secret"] = csec
 
             self._config = update_config(_save_creds)
-            yt_conf = self._get_youtube_config()
-        if not yt_conf.get("client_id") or not yt_conf.get("client_secret"):
-            self._eval_js("window.onYouTubeNeedsCredentials()")
-            return
         auth_url = self._youtube.get_auth_url()
         self._api._data.stop_polling()
         self._eval_js(
@@ -308,14 +292,17 @@ class AuthComponent(BaseApiComponent):
 
     # ── Connection tests ────────────────────────────────────────
 
-    def test_connection(self, client_id: str, client_secret: str) -> None:
+    def test_connection(self, client_id: str = "", client_secret: str = "") -> None:
+        cid = client_id.strip() or self._twitch._effective_creds()[0]
+        csec = client_secret.strip() or self._twitch._effective_creds()[1]
+
         def do_test() -> None:
             try:
                 resp = httpx.post(
                     "https://id.twitch.tv/oauth2/token",
                     data={
-                        "client_id": client_id.strip(),
-                        "client_secret": client_secret.strip(),
+                        "client_id": cid,
+                        "client_secret": csec,
                         "grant_type": "client_credentials",
                     },
                     timeout=10,
@@ -337,14 +324,17 @@ class AuthComponent(BaseApiComponent):
 
         self._run_in_thread(do_test)
 
-    def kick_test_connection(self, client_id: str, client_secret: str) -> None:
+    def kick_test_connection(self, client_id: str = "", client_secret: str = "") -> None:
+        cid = client_id.strip() or self._kick._effective_creds()[0]
+        csec = client_secret.strip() or self._kick._effective_creds()[1]
+
         def do_test() -> None:
             try:
                 resp = httpx.post(
                     "https://id.kick.com/oauth/token",
                     data={
-                        "client_id": client_id.strip(),
-                        "client_secret": client_secret.strip(),
+                        "client_id": cid,
+                        "client_secret": csec,
                         "grant_type": "client_credentials",
                     },
                     timeout=10,
@@ -367,9 +357,8 @@ class AuthComponent(BaseApiComponent):
         self._run_in_thread(do_test)
 
     def youtube_test_connection(self, api_key: str = "") -> None:
-        if not api_key:
-            api_key = get_platform_config(self._config, "youtube").get("api_key", "")
-        if not api_key:
+        effective_key = api_key.strip() or self._youtube._effective_api_key()
+        if not effective_key:
             self._eval_js(
                 "window.onYouTubeTestResult("
                 + json.dumps({"success": False, "message": "No API key configured"})
@@ -384,7 +373,7 @@ class AuthComponent(BaseApiComponent):
                     params={
                         "part": "snippet",
                         "id": "dQw4w9WgXcQ",
-                        "key": api_key.strip(),
+                        "key": effective_key,
                     },
                     timeout=10,
                 )

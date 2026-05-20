@@ -1551,3 +1551,76 @@ def test_send_chat_forwards_reply_params(
         submitted_fn[0]()
 
     mock_client.send_message.assert_called_once_with("hello", reply_to="r-123")
+
+
+class TestLoginWithoutCustomCredentials:
+    """login(), kick_login(), and youtube_login() must not fire credential-missing
+    error callbacks when config credentials are empty (bundled credentials are used)."""
+
+    def test_twitch_login_does_not_emit_credential_error(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """login() with no stored credentials must NOT emit onLoginError about credentials."""
+        api = TwitchXApi()
+        emitted: list[str] = []
+
+        monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+        monkeypatch.setattr(api._data, "stop_polling", lambda: None)
+        monkeypatch.setattr(api._data, "restart_polling", lambda: None)
+
+        monkeypatch.setattr("ui.api.auth.webbrowser.open", lambda url: None)
+        monkeypatch.setattr("ui.api.auth.wait_for_oauth_code", lambda: None)
+
+        api.login()
+
+        credential_error_calls = [
+            c for c in emitted if "Set API credentials" in c
+        ]
+        assert credential_error_calls == [], (
+            f"login() emitted credential-missing error: {credential_error_calls}"
+        )
+
+    def test_kick_login_does_not_emit_needs_credentials(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """kick_login() with no stored credentials must NOT emit onKickNeedsCredentials."""
+        api = TwitchXApi()
+        emitted: list[str] = []
+
+        monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+        monkeypatch.setattr(api._data, "stop_polling", lambda: None)
+        monkeypatch.setattr(api._data, "restart_polling", lambda: None)
+
+        monkeypatch.setattr("ui.api.auth.webbrowser.open", lambda url: None)
+        monkeypatch.setattr("ui.api.auth.wait_for_oauth_code", lambda: None)
+
+        api.kick_login()
+
+        needs_creds_calls = [c for c in emitted if "onKickNeedsCredentials" in c]
+        assert needs_creds_calls == [], (
+            f"kick_login() emitted onKickNeedsCredentials: {needs_creds_calls}"
+        )
+
+    def test_youtube_login_does_not_emit_needs_credentials(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """youtube_login() with no stored credentials must NOT emit onYouTubeNeedsCredentials."""
+        api = TwitchXApi()
+        emitted: list[str] = []
+
+        monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+        monkeypatch.setattr(api._data, "stop_polling", lambda: None)
+        monkeypatch.setattr(api._data, "restart_polling", lambda: None)
+
+        monkeypatch.setattr("ui.api.auth.webbrowser.open", lambda url: None)
+        monkeypatch.setattr("ui.api.auth.wait_for_oauth_code", lambda: None)
+
+        api.youtube_login()
+
+        needs_creds_calls = [c for c in emitted if "onYouTubeNeedsCredentials" in c]
+        assert needs_creds_calls == [], (
+            f"youtube_login() emitted onYouTubeNeedsCredentials: {needs_creds_calls}"
+        )
