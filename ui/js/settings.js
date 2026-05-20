@@ -207,6 +207,26 @@ function openSettings() {
       swatchContainer.appendChild(btn);
     });
   }
+  // Auto-expand advanced sections if user already has custom credentials set
+  if (config.twitch_using_bundled === false) {
+    var tAdv = document.getElementById('twitch-advanced-section');
+    var tToggle = document.getElementById('twitch-advanced-toggle');
+    if (tAdv) tAdv.classList.remove('hidden');
+    if (tToggle) tToggle.textContent = 'Hide custom credentials ▴';
+  }
+  if (config.kick_using_bundled === false) {
+    var kAdv = document.getElementById('kick-advanced-section');
+    var kToggle = document.getElementById('kick-advanced-toggle');
+    if (kAdv) kAdv.classList.remove('hidden');
+    if (kToggle) kToggle.textContent = 'Hide custom credentials ▴';
+  }
+  if (config.youtube_using_bundled_oauth === false || config.youtube_using_bundled_api_key === false) {
+    var yAdv = document.getElementById('yt-advanced-section');
+    var yToggle = document.getElementById('yt-advanced-toggle');
+    if (yAdv) yAdv.classList.remove('hidden');
+    if (yToggle) yToggle.textContent = 'Hide personal credentials ▴';
+  }
+
   TwitchX.renderHotkeysSettings();
   document.querySelectorAll('.settings-tab').forEach(function(b) { b.classList.remove('active'); });
   document.querySelectorAll('.settings-panel').forEach(function(p) { p.classList.remove('active'); });

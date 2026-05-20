@@ -1856,3 +1856,21 @@
   animation: pulse 1.8s infinite;
   background: var(--warn-yellow);
 }
+
+.bundled-app-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--live-green);
+  font-weight: 500;
+}
+.bundled-app-badge svg { flex-shrink: 0; }
+
+.toggle-link {
+  color: var(--text-muted);
+  text-decoration: none;
+  cursor: pointer;
+  font-size: 12px;
+}
+.toggle-link:hover { color: var(--text-secondary); }

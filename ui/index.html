@@ -379,20 +379,29 @@
 
     <!-- Twitch panel -->
     <div class="settings-panel" id="settings-panel-twitch">
-      <div class="setting-group">
-        <label>Client ID</label>
-        <input id="s-client-id" type="text" autocomplete="off">
-      </div>
-      <div class="setting-group">
-        <label>Client Secret</label>
-        <div class="secret-row">
-          <input id="s-client-secret" type="password" autocomplete="off">
-          <button class="eye-btn" id="eye-toggle-btn">&#128065;</button>
+      <div id="twitch-bundled-status" class="setting-group">
+        <div class="bundled-app-badge">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 4L6.5 11 3 7.5"/></svg>
+          Using TwitchX built-in app
         </div>
+        <p class="setting-hint">No setup required. <a id="twitch-advanced-toggle" class="toggle-link" href="#">Use custom credentials &#9662;</a></p>
       </div>
-      <div class="oauth-note">
-        OAuth Redirect URL (add to dev.twitch.tv/console):<br>
-        http://localhost:3457/callback
+      <div id="twitch-advanced-section" class="hidden">
+        <div class="setting-group">
+          <label>Client ID</label>
+          <input id="s-client-id" type="text" autocomplete="off" placeholder="Leave blank to use built-in">
+        </div>
+        <div class="setting-group">
+          <label>Client Secret</label>
+          <div class="secret-row">
+            <input id="s-client-secret" type="password" autocomplete="off" placeholder="Leave blank to use built-in">
+            <button class="eye-btn" id="eye-toggle-btn" aria-label="Toggle visibility"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="8" cy="8" rx="6.5" ry="4.5"/><circle cx="8" cy="8" r="2"/></svg></button>
+          </div>
+        </div>
+        <div class="oauth-note">
+          OAuth Redirect URL (add to dev.twitch.tv/console):<br>
+          http://localhost:3457/callback
+        </div>
       </div>
       <div class="settings-btns">
         <button id="test-btn">Test Connection</button>
@@ -401,21 +410,30 @@
 
     <!-- Kick panel -->
     <div class="settings-panel" id="settings-panel-kick">
-      <div class="setting-group">
-        <label>Kick Client ID</label>
-        <input id="s-kick-client-id" type="text" autocomplete="off">
-      </div>
-      <div class="setting-group">
-        <label>Kick Client Secret</label>
-        <div class="secret-row">
-          <input id="s-kick-client-secret" type="password" autocomplete="off">
-          <button class="eye-btn" id="kick-eye-toggle-btn">&#128065;</button>
+      <div id="kick-bundled-status" class="setting-group">
+        <div class="bundled-app-badge">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 4L6.5 11 3 7.5"/></svg>
+          Using TwitchX built-in app
         </div>
+        <p class="setting-hint">No setup required. <a id="kick-advanced-toggle" class="toggle-link" href="#">Use custom credentials &#9662;</a></p>
       </div>
-      <div class="oauth-note">
-        Kick OAuth uses the same callback URL:<br>
-        http://localhost:3457/callback<br><br>
-        Kick's API does not currently expose followed channels for import, so Kick favorites still need to be added manually via search or direct slug.
+      <div id="kick-advanced-section" class="hidden">
+        <div class="setting-group">
+          <label>Kick Client ID</label>
+          <input id="s-kick-client-id" type="text" autocomplete="off" placeholder="Leave blank to use built-in">
+        </div>
+        <div class="setting-group">
+          <label>Kick Client Secret</label>
+          <div class="secret-row">
+            <input id="s-kick-client-secret" type="password" autocomplete="off" placeholder="Leave blank to use built-in">
+            <button class="eye-btn" id="kick-eye-toggle-btn" aria-label="Toggle visibility"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="8" cy="8" rx="6.5" ry="4.5"/><circle cx="8" cy="8" r="2"/></svg></button>
+          </div>
+        </div>
+        <div class="oauth-note">
+          Kick OAuth uses the same callback URL:<br>
+          http://localhost:3457/callback<br><br>
+          Kick's API does not currently expose followed channels for import, so Kick favorites still need to be added manually via search or direct slug.
+        </div>
       </div>
       <div id="kick-login-area" class="setting-group">
         <button id="kick-login-btn" class="oauth-login-btn">Login with Kick</button>
@@ -431,26 +449,35 @@
 
     <!-- YouTube panel -->
     <div class="settings-panel" id="settings-panel-youtube">
-      <div class="setting-group">
-        <label>YouTube API Key</label>
-        <div class="secret-row">
-          <input id="yt-api-key" type="password" autocomplete="off">
-          <button class="eye-btn" id="yt-api-key-eye-btn">&#128065;</button>
+      <div id="yt-bundled-status" class="setting-group">
+        <div class="bundled-app-badge">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 4L6.5 11 3 7.5"/></svg>
+          Using TwitchX built-in app
         </div>
+        <p class="setting-hint">No setup required. <a id="yt-advanced-toggle" class="toggle-link" href="#">Use personal API key / credentials &#9662;</a></p>
       </div>
-      <div class="setting-group">
-        <label>Client ID</label>
-        <input id="yt-client-id" type="text" autocomplete="off">
-      </div>
-      <div class="setting-group">
-        <label>Client Secret</label>
-        <div class="secret-row">
-          <input id="yt-client-secret" type="password" autocomplete="off">
-          <button class="eye-btn" id="yt-client-secret-eye-btn">&#128065;</button>
+      <div id="yt-advanced-section" class="hidden">
+        <div class="setting-group">
+          <label>YouTube API Key</label>
+          <div class="secret-row">
+            <input id="yt-api-key" type="password" autocomplete="off" placeholder="Leave blank to use built-in">
+            <button class="eye-btn" id="yt-api-key-eye-btn" aria-label="Toggle visibility"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="8" cy="8" rx="6.5" ry="4.5"/><circle cx="8" cy="8" r="2"/></svg></button>
+          </div>
         </div>
-      </div>
-      <div class="oauth-note">
-        Client ID + Secret required for login and subscription import
+        <div class="setting-group">
+          <label>OAuth Client ID</label>
+          <input id="yt-client-id" type="text" autocomplete="off" placeholder="Leave blank to use built-in">
+        </div>
+        <div class="setting-group">
+          <label>OAuth Client Secret</label>
+          <div class="secret-row">
+            <input id="yt-client-secret" type="password" autocomplete="off" placeholder="Leave blank to use built-in">
+            <button class="eye-btn" id="yt-client-secret-eye-btn" aria-label="Toggle visibility"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="8" cy="8" rx="6.5" ry="4.5"/><circle cx="8" cy="8" r="2"/></svg></button>
+          </div>
+        </div>
+        <div class="oauth-note">
+          Client ID + Secret required for login and subscription import
+        </div>
       </div>
       <div id="yt-login-area" class="setting-group">
         <button id="yt-login-btn" class="oauth-login-btn">Connect YouTube Account</button>

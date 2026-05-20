@@ -524,6 +524,28 @@ TwitchX._bindSettingsEvents = function() {
     document.getElementById('yt-test-btn').disabled = true;
     TwitchX.api.youtube_test_connection();
   });
+
+  TwitchX._bindAdvancedToggles();
+};
+
+TwitchX._bindAdvancedToggles = function() {
+  function _makeToggle(toggleId, sectionId, showText, hideText) {
+    var btn = document.getElementById(toggleId);
+    if (!btn) return;
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      var section = document.getElementById(sectionId);
+      if (!section) return;
+      var isHidden = section.classList.toggle('hidden');
+      btn.textContent = isHidden ? showText : hideText;
+    });
+  }
+  _makeToggle('twitch-advanced-toggle', 'twitch-advanced-section',
+    'Use custom credentials ▾', 'Hide custom credentials ▴');
+  _makeToggle('kick-advanced-toggle', 'kick-advanced-section',
+    'Use custom credentials ▾', 'Hide custom credentials ▴');
+  _makeToggle('yt-advanced-toggle', 'yt-advanced-section',
+    'Use personal API key / credentials ▾', 'Hide personal credentials ▴');
 };
 
 TwitchX._bindContextMenuEvents = function() {
