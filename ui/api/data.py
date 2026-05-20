@@ -60,7 +60,9 @@ def _aggregate_categories(
 class DataComponent(BaseApiComponent):
     """Polling, refresh, browse, channel profiles."""
 
-    _quota_warn_fired: bool = False
+    def __init__(self, parent: Any) -> None:
+        super().__init__(parent)
+        self._quota_warn_fired: bool = False
 
     # ── Polling infrastructure ──────────────────────────────────
 
