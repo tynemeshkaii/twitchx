@@ -154,7 +154,7 @@ class YouTubeClient(BasePlatformClient):
         if resp.status_code == 403:
             try:
                 body = resp.json()
-            except Exception:
+            except (ValueError, KeyError):
                 raise ValueError("YouTube API quota exceeded") from None
             errors = body.get("error", {}).get("errors", [])
             for err in errors:
@@ -278,7 +278,7 @@ class YouTubeClient(BasePlatformClient):
                 )
                 return []
             return parse_rss_video_ids(resp.text)
-        except Exception as e:
+        except (httpx.HTTPError, OSError, ValueError) as e:
             logger.debug("RSS fetch failed for %s: %s", channel_id, e)
             return []
 
@@ -340,7 +340,7 @@ class YouTubeClient(BasePlatformClient):
                         channel_id = stream["login"]
                         if channel_id and VALID_CHANNEL_ID.match(channel_id):
                             self._live_video_ids[channel_id] = stream["video_id"]
-            except Exception as e:
+            except (httpx.HTTPError, ValueError, KeyError) as e:
                 logger.warning("YouTube videos.list failed: %s", e)
 
         return live_streams
@@ -513,7 +513,7 @@ class YouTubeClient(BasePlatformClient):
                 for item in data.get("items", [])
                 if item.get("id", {}).get("channelId")
             ]
-        except Exception as e:
+        except (httpx.HTTPError, ValueError, KeyError) as e:
             logger.warning("YouTube search failed: %s", e)
             return []
 

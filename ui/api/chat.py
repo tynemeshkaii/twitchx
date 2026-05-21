@@ -7,6 +7,8 @@ import logging
 import threading
 from typing import Any
 
+import httpx
+
 from core.chat import ChatMessage, ChatSendResult, ChatStatus
 from core.chats.kick_chat import KickChatClient
 from core.chats.twitch_chat import TwitchChatClient
@@ -83,8 +85,8 @@ class ChatComponent(BaseApiComponent):
                             users = emote_loop.run_until_complete(twitch_client_ref.get_users([channel]))
                             if users:
                                 twitch_user_id = str(users[0].get("id", ""))
-                        except Exception:
-                            pass
+                        except (httpx.HTTPError, OSError, ValueError) as exc:
+                            logger.debug("Failed to resolve Twitch user ID for emotes: %s", exc)
                         finally:
                             emote_loop.close()
                     cache_dir = str(CONFIG_DIR / "emotes")
@@ -92,8 +94,8 @@ class ChatComponent(BaseApiComponent):
                     if emote_map and not self._shutdown.is_set():
                         payload = json.dumps({"channel": channel, "emotes": emote_map})
                         self._eval_js(f"window.onThirdPartyEmotes({payload})")
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("Third-party emote fetch failed for %s: %s", channel, exc)
 
             threading.Thread(target=_fetch_emotes, daemon=True).start()
 
@@ -159,6 +161,7 @@ class ChatComponent(BaseApiComponent):
                         )
                     )
                 except Exception as exc:
+                    logger.warning("Kick chat connect failed: %s", exc)
                     self._on_chat_status(
                         ChatStatus(
                             connected=False,
@@ -277,7 +280,8 @@ class ChatComponent(BaseApiComponent):
             )
             try:
                 result = future.result(timeout=5)
-            except Exception:
+            except Exception as exc:
+                logger.warning("Chat send failed for %s: %s", platform, exc)
                 result = ChatSendResult(
                     ok=False,
                     platform=platform,
@@ -359,6 +363,7 @@ class ChatComponent(BaseApiComponent):
                 )
                 payload = json.dumps({"ok": ok, "mode": mode, "value": value})
             except Exception as exc:
+                logger.warning("set_chat_mode failed: %s", exc)
                 payload = json.dumps({"ok": False, "error": str(exc)[:100]})
             finally:
                 loop.close()

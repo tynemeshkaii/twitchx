@@ -77,12 +77,13 @@ TwitchX.formatDuration = formatDuration;
 TwitchX.buildChannelMediaMeta = buildChannelMediaMeta;
 
 function viewFadeIn(el, showClass) {
-  el.classList.add(showClass);
   el.style.opacity = '0';
+  el.classList.add(showClass);
   requestAnimationFrame(function() {
-    requestAnimationFrame(function() {
-      el.style.opacity = '';
-    });
+    el.style.opacity = '';
+    el.addEventListener('transitionend', function handler() {
+      el.removeEventListener('transitionend', handler);
+    }, { once: true });
   });
 }
 

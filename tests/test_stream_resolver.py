@@ -35,14 +35,18 @@ class TestResolveHlsUrl:
     def test_quality_fallback(
         self, mock_run: MagicMock, _mock_which: MagicMock
     ) -> None:
-        mock_run.side_effect = [
-            MagicMock(returncode=1, stderr=b"quality not available"),
-            MagicMock(returncode=0, stdout=b"https://example.com/best.m3u8\n"),
-        ]
+        # streamlink now receives "720p60,best" in a single call so it handles
+        # quality fallback internally — no second subprocess invocation.
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout=b"https://example.com/best.m3u8\n"
+        )
         client = _mock_platform("https://twitch.tv/xqc")
         url, err = resolve_hls_url("xqc", "720p60", platform_client=client)
         assert url == "https://example.com/best.m3u8"
-        assert mock_run.call_count == 2
+        assert mock_run.call_count == 1
+        # Verify that the quality argument includes the fallback
+        cmd = mock_run.call_args[0][0]
+        assert "720p60,best" in cmd
 
     @patch(
         "core.stream_resolver.shutil.which", return_value="/usr/local/bin/streamlink"
@@ -69,11 +73,13 @@ class TestResolveHlsUrl:
     def test_all_qualities_fail(
         self, mock_run: MagicMock, _mock_which: MagicMock
     ) -> None:
+        # Single call with "720p60,best" — if streamlink can't find any quality, fail once
         mock_run.return_value = MagicMock(returncode=1, stderr=b"No streams found")
         client = _mock_platform("https://twitch.tv/xqc")
         url, err = resolve_hls_url("xqc", "720p60", platform_client=client)
         assert url is None
         assert err != ""
+        assert mock_run.call_count == 1
 
 
 class TestResolveKickHlsUrl:

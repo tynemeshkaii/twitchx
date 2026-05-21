@@ -318,8 +318,8 @@ class KickChatClient(BaseChatClient):
                     },
                     json=body,
                 )
-        except Exception:
-            logger.warning("Failed to send Kick chat message", exc_info=True)
+        except (httpx.HTTPError, OSError) as exc:
+            logger.warning("Failed to send Kick chat message: %s", exc)
             return ChatSendResult(
                 ok=False,
                 platform="kick",

@@ -1671,12 +1671,13 @@ class TestLoginWithoutCustomCredentials:
 
 def test_quota_warn_toast_fires_at_80_percent(temp_config_dir):
     """onYouTubeQuotaWarning must be emitted when quota_remaining <= 2000 (80%+ used)."""
-    from ui.api import TwitchXApi
     from unittest.mock import patch
+
+    from ui.api import TwitchXApi
 
     api = TwitchXApi()
     emitted = []
-    api._eval_js = lambda s: emitted.append(s)
+    api._eval_js = lambda code: emitted.append(code)
 
     with patch.object(api._youtube, 'quota_remaining', return_value=1500):
         api._check_youtube_quota_warning()
@@ -1686,12 +1687,13 @@ def test_quota_warn_toast_fires_at_80_percent(temp_config_dir):
 
 def test_quota_warn_not_fired_when_plenty_remaining(temp_config_dir):
     """onYouTubeQuotaWarning must NOT be emitted when plenty of quota remains."""
-    from ui.api import TwitchXApi
     from unittest.mock import patch
+
+    from ui.api import TwitchXApi
 
     api = TwitchXApi()
     emitted = []
-    api._eval_js = lambda s: emitted.append(s)
+    api._eval_js = lambda code: emitted.append(code)
 
     with patch.object(api._youtube, 'quota_remaining', return_value=8000):
         api._check_youtube_quota_warning()
@@ -1701,13 +1703,14 @@ def test_quota_warn_not_fired_when_plenty_remaining(temp_config_dir):
 
 def test_quota_critical_fires_at_95_percent(temp_config_dir):
     """onYouTubeQuotaWarning with level=critical must be emitted at <= 500 remaining."""
-    from ui.api import TwitchXApi
-    from unittest.mock import patch
     import json
+    from unittest.mock import patch
+
+    from ui.api import TwitchXApi
 
     api = TwitchXApi()
     emitted = []
-    api._eval_js = lambda s: emitted.append(s)
+    api._eval_js = lambda code: emitted.append(code)
 
     with patch.object(api._youtube, 'quota_remaining', return_value=400):
         api._check_youtube_quota_warning()

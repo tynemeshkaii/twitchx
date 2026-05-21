@@ -63,7 +63,7 @@ class Recorder:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-        except Exception as e:
+        except OSError as e:
             return f"Failed to start recording: {e}"
 
         with self._lock:

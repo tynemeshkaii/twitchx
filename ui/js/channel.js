@@ -218,12 +218,10 @@ function showChannelView(login, platform, source) {
     document.getElementById('stream-grid').classList.add('hidden');
   }
 
-  document.getElementById('channel-view').classList.remove('hidden');
   document.getElementById('channel-view').style.opacity = '0';
+  document.getElementById('channel-view').classList.remove('hidden');
   requestAnimationFrame(function() {
-    requestAnimationFrame(function() {
-      document.getElementById('channel-view').style.opacity = '';
-    });
+    document.getElementById('channel-view').style.opacity = '';
   });
   document.getElementById('channel-loading').classList.remove('hidden');
   document.getElementById('channel-profile-card').style.opacity = '0';
@@ -256,12 +254,10 @@ function hideChannelView() {
   } else {
     document.getElementById('toolbar').classList.remove('hidden');
     var grid = document.getElementById('stream-grid');
-    grid.classList.remove('hidden');
     grid.style.opacity = '0';
+    grid.classList.remove('hidden');
     requestAnimationFrame(function() {
-      requestAnimationFrame(function() {
-        grid.style.opacity = '';
-      });
+      grid.style.opacity = '';
     });
     TwitchX.renderGrid();
   }

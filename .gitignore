@@ -1,2 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Environments
+.env*
+.venv*/
+.venv_test/
+
+# macOS
+.DS_Store
+
+# Coverage / testing
+.coverage
+htmlcov/
+
+# Project-specific
+core/credentials.py
+.superpowers/
 .worktrees/
 docs/**

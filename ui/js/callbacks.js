@@ -28,6 +28,18 @@ window.onStreamsUpdate = function(data) {
   }
   TwitchX.state.streams = newStreams;
 
+  // Detect offline→online transitions for notification badges
+  if (!TwitchX._prevLiveSet) TwitchX._prevLiveSet = new Set();
+  var newLive = new Set(data.live_set || []);
+  var badgeLogins = [];
+  newLive.forEach(function(login) {
+    if (!TwitchX._prevLiveSet.has(login)) {
+      badgeLogins.push(login);
+    }
+  });
+  TwitchX._prevLiveSet = newLive;
+  TwitchX._notifBadgeLogins = badgeLogins;
+
   TwitchX.renderGrid();
   TwitchX.renderSidebar();
 
@@ -104,18 +116,8 @@ window.onSearchResults = function(results) {
   const dd = document.getElementById('search-dropdown');
   while (dd.firstChild) dd.removeChild(dd.firstChild);
   if (!results || results.length === 0) {
-    var emptyRow = document.createElement('div');
-    emptyRow.className = 'search-result';
-    var emptyInfo = document.createElement('div');
-    emptyInfo.className = 'sr-info';
-    var emptyName = document.createElement('div');
-    emptyName.className = 'sr-name';
-    emptyName.style.cssText = 'color:var(--text-muted);';
-    emptyName.textContent = 'No channels found';
-    emptyInfo.appendChild(emptyName);
-    emptyRow.appendChild(emptyInfo);
-    dd.appendChild(emptyRow);
-    dd.classList.add('visible');
+    dd.classList.remove('visible');
+    while (dd.firstChild) dd.removeChild(dd.firstChild);
     return;
   }
   // Build search results using safe DOM methods
@@ -177,27 +179,29 @@ window.onSearchResults = function(results) {
 
 window.onLoginComplete = function(user) {
   TwitchX.showUserProfile(user);
-  TwitchX.setStatus('Logged in as ' + user.display_name, 'success');
+  TwitchX.showToast('Logged in as ' + user.display_name, 'success');
 };
 
 window.onLoginError = function(msg) {
-  TwitchX.setStatus('Login error: ' + msg, 'error');
+  TwitchX.showToast('Login error: ' + msg, 'error');
 };
 
 window.onLogout = function() {
   TwitchX.hideUserProfile();
-  TwitchX.setStatus('Logged out', 'info');
+  TwitchX.showToast('Logged out', 'info');
 };
 
 window.onImportComplete = function(data) {
-  TwitchX.setStatus('Imported ' + data.added + ' channel' + (data.added !== 1 ? 's' : ''), 'success');
+  TwitchX.showToast('Imported ' + data.added + ' channel' + (data.added !== 1 ? 's' : ''), 'success');
 };
 
 window.onImportError = function(msg) {
-  TwitchX.setStatus('Import error: ' + msg, 'error');
+  TwitchX.showToast('Import error: ' + msg, 'error');
 };
 
 window.onLaunchResult = function(data) {
+  var loader = document.getElementById('stream-loader');
+  if (loader) loader.classList.add('hidden');
   if (data.success) {
     TwitchX.state.watchingChannel = data.channel;
     TwitchX.setStatus(data.message, 'success');
@@ -210,12 +214,16 @@ window.onLaunchResult = function(data) {
 
 window.onLaunchProgress = function(data) {
   TwitchX.setStatus('Launching ' + data.channel + '... (' + data.elapsed + 's)', 'warn');
+  var loader = document.getElementById('stream-loader');
+  if (loader) loader.classList.remove('hidden');
 };
 
 window.onStreamReady = function(data) {
   // Clear stale chat messages from the previous stream before switching
   TwitchX.clearChatMessages();
   if (TwitchX.clearChatBatch) TwitchX.clearChatBatch();
+  var loader = document.getElementById('stream-loader');
+  if (loader) loader.classList.add('hidden');
 
   TwitchX.state.playerPlatform = data.platform || 'twitch';
   TwitchX.state.playerHasChat = data.has_chat !== false;
@@ -224,10 +232,15 @@ window.onStreamReady = function(data) {
   document.getElementById('player-stream-title').textContent = data.title || '';
 
   // HLS / native video path (Twitch, Kick, YouTube via streamlink)
+  // Cancel any in-flight gentle reset so the new src lands on the correct element.
+  if (TwitchX.cancelGentleReset) TwitchX.cancelGentleReset();
   const video = TwitchX.getPlayerVideo();
   if (!video) return;
   video.src = data.url;
-  video.play().catch(function() {});
+  video.play().catch(function(e) {
+    console.warn('[Player] video.play() rejected:', e && e.message || e);
+    TwitchX.setStatus('Playback blocked — click to resume', 'warn');
+  });
   const extBtn = document.getElementById('watch-external-btn');
   if (extBtn) { extBtn.disabled = false; extBtn.style.opacity = ''; }
   var modBtn = document.getElementById('chat-mod-btn');
@@ -243,19 +256,23 @@ window.onStreamReady = function(data) {
 
 window.onPlayerStop = function() {
   TwitchX.state.streamType = 'live';
+  var loader = document.getElementById('stream-loader');
+  if (loader) loader.classList.add('hidden');
+  TwitchX._hidePlayerFromPython = true;
   TwitchX.hidePlayerView();
+  TwitchX._hidePlayerFromPython = false;
 };
 
 window.onRecordingState = function(data) {
   TwitchX._recordingActive = !!data.active;
   TwitchX.updateRecordButton();
   if (data.error) {
-    TwitchX.setStatus('Recording error: ' + data.error, 'error');
+    TwitchX.showToast('Recording error: ' + data.error, 'error');
   } else if (data.active && data.filename) {
     var name = data.filename.split('/').pop();
     TwitchX.setStatus('Recording: ' + name, 'info');
   } else {
-    TwitchX.setStatus('Recording stopped', 'info');
+    TwitchX.showToast('Recording stopped', 'info');
   }
 };
 
@@ -284,13 +301,16 @@ window.onMultiSlotReady = function(data) {
   const video = active.querySelector('.ms-video');
   video.src = data.url;
   video.muted = (TwitchX.multiState.audioFocus !== idx);
-  video.play().catch(function() {});
+  video.play().catch(function(e) {
+    console.warn('[Multistream] slot', idx, 'video.play() rejected:', e && e.message || e);
+  });
   loading.classList.add('hidden');
   errEl.classList.add('hidden');
 
   active.querySelector('.ms-channel-name').textContent = data.channel || '';
-  active.querySelector('.ms-platform-badge').textContent =
-    (data.platform || '').charAt(0).toUpperCase();
+  var badge = active.querySelector('.ms-platform-badge');
+  badge.className = 'ms-platform-badge ' + (data.platform || 'twitch');
+  badge.textContent = (data.platform || '').charAt(0).toUpperCase();
   if (data.title) TwitchX.multiState.slots[idx].title = data.title;
 
   if (TwitchX.multiState.audioFocus === -1) TwitchX.setAudioFocus(idx);
@@ -380,6 +400,18 @@ window.onMultiSlotReady = function(data) {
         el.appendChild(ctx);
       }
 
+      // Timestamp (hidden by default, shown when TwitchX.chatTimestamps is true)
+      var tsEl = document.createElement('span');
+      tsEl.className = 'msg-time';
+      if (msg.timestamp) {
+        try { tsEl.textContent = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
+        catch(e) { tsEl.textContent = '--:--:--'; }
+      } else {
+        tsEl.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      }
+      if (TwitchX.chatTimestamps) tsEl.style.display = 'inline';
+      el.appendChild(tsEl);
+
       for (let i = 0; i < msg.badges.length; i++) {
         const badge = msg.badges[i];
         if (badge.icon_url) {
@@ -410,7 +442,7 @@ window.onMultiSlotReady = function(data) {
         const replyBtn = document.createElement('button');
         replyBtn.className = 'reply-btn';
         replyBtn.title = 'Reply';
-        replyBtn.textContent = '\u21A9';
+        replyBtn.innerHTML = TwitchX.renderIcon('reply', 14);
         replyBtn.addEventListener('click', function(e) {
           e.stopPropagation();
           TwitchX.setChatReply(msg.msg_id, msg.author_display, msg.text);
@@ -428,7 +460,7 @@ window.onMultiSlotReady = function(data) {
     }
 
     if (TwitchX._getChatAutoScroll()) {
-      container.scrollTop = container.scrollHeight;
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
     } else {
       const btn = TwitchX._getChatNewMsgEl();
       if (btn) btn.classList.add('visible');
@@ -462,7 +494,7 @@ window.onChatSendResult = function(result) {
   if (result.request_id) delete TwitchX.chatPendingSends[result.request_id];
   if (result.ok) return;
 
-  TwitchX.setStatus(result.error || 'Failed to send chat message', 'error');
+  TwitchX.showToast(result.error || 'Failed to send chat message', 'error');
   const input = document.getElementById(TwitchX.multiState.open ? 'ms-chat-input' : 'chat-input');
   if (input && !input.value && pending && pending.text) {
     input.value = pending.text;
@@ -537,10 +569,10 @@ window.onChatUserList = function(data) {
 
 window.onChatModeChanged = function(data) {
   if (!data.ok) {
-    TwitchX.setStatus('Chat mode error: ' + (data.error || 'unknown'), 'error');
+    TwitchX.showToast('Chat mode error: ' + (data.error || 'unknown'), 'error');
     return;
   }
-  TwitchX.setStatus(
+  TwitchX.showToast(
     (data.value ? 'Enabled' : 'Disabled') + ' ' + data.mode.replace(/_/g, ' '),
     'info'
   );
@@ -549,10 +581,10 @@ window.onChatModeChanged = function(data) {
 window.onTestResult = function(data) {
   const fb = document.getElementById('settings-feedback');
   if (data.success) {
-    fb.textContent = '\u2713 ' + data.message;
+    fb.innerHTML = TwitchX.renderIcon('check', 14) + ' ' + data.message;
     fb.style.color = 'var(--live-green)';
   } else {
-    fb.textContent = '\u2717 ' + data.message;
+    fb.innerHTML = TwitchX.renderIcon('cross', 14) + ' ' + data.message;
     fb.style.color = 'var(--error-red)';
   }
   document.getElementById('test-btn').disabled = false;
@@ -572,11 +604,11 @@ window.onKickLoginComplete = function(data) {
   if ((TwitchX.state.kickScopes || '').split(/\s+/).indexOf('chat:write') === -1) {
     fb.textContent = 'Kick login succeeded, but granted scopes are: ' + (TwitchX.state.kickScopes || 'user:read channel:read');
     fb.style.color = 'var(--warn-yellow)';
-    TwitchX.setStatus('Kick login is missing chat:write, so chat stays read-only', 'warn');
+    TwitchX.showToast('Kick login is missing chat:write, so chat stays read-only', 'warn');
   } else {
-    fb.textContent = '\u2713 Kick login successful';
+    fb.innerHTML = TwitchX.renderIcon('check', 14) + ' Kick login successful';
     fb.style.color = 'var(--live-green)';
-    TwitchX.setStatus('Logged in to Kick as ' + (data.display_name || data.login), 'success');
+    TwitchX.showToast('Logged in to Kick as ' + (data.display_name || data.login), 'success');
   }
   TwitchX.showKickProfile(data);
   TwitchX.updateChatInput();
@@ -584,9 +616,9 @@ window.onKickLoginComplete = function(data) {
 
 window.onKickLoginError = function(msg) {
   const fb = document.getElementById('settings-feedback');
-  fb.textContent = '\u2717 Kick login failed: ' + msg;
+  fb.innerHTML = TwitchX.renderIcon('cross', 14) + ' Kick login failed: ' + msg;
   fb.style.color = 'var(--error-red)';
-  TwitchX.setStatus('Kick login: ' + msg, 'error');
+  TwitchX.showToast('Kick login: ' + msg, 'error');
 };
 
 window.onKickLogout = function() {
@@ -605,10 +637,10 @@ window.onKickLogout = function() {
 window.onKickTestResult = function(data) {
   const fb = document.getElementById('settings-feedback');
   if (data.success) {
-    fb.textContent = '\u2713 ' + data.message;
+    fb.innerHTML = TwitchX.renderIcon('check', 14) + ' ' + data.message;
     fb.style.color = 'var(--live-green)';
   } else {
-    fb.textContent = '\u2717 ' + data.message;
+    fb.innerHTML = TwitchX.renderIcon('cross', 14) + ' ' + data.message;
     fb.style.color = 'var(--error-red)';
   }
   document.getElementById('kick-test-btn').disabled = false;
@@ -621,16 +653,16 @@ window.onYouTubeLoginComplete = function(data) {
   document.getElementById('yt-display-name').textContent = 'Logged in as ' + (data.display_name || data.login);
   document.getElementById('yt-quota-display').textContent = 'Quota remaining: ' + (data.youtube_quota_remaining != null ? data.youtube_quota_remaining : '?');
   const fb = document.getElementById('settings-feedback');
-  fb.textContent = '\u2713 YouTube login successful';
+  fb.innerHTML = TwitchX.renderIcon('check', 14) + ' YouTube login successful';
   fb.style.color = 'var(--live-green)';
-  TwitchX.setStatus('Logged in to YouTube as ' + (data.display_name || data.login), 'success');
+  TwitchX.showToast('Logged in to YouTube as ' + (data.display_name || data.login), 'success');
 };
 
 window.onYouTubeLoginError = function(msg) {
   const fb = document.getElementById('settings-feedback');
-  fb.textContent = '\u2717 YouTube login failed: ' + msg;
+  fb.innerHTML = TwitchX.renderIcon('cross', 14) + ' YouTube login failed: ' + msg;
   fb.style.color = 'var(--error-red)';
-  TwitchX.setStatus('YouTube login: ' + msg, 'error');
+  TwitchX.showToast('YouTube login: ' + msg, 'error');
 };
 
 window.onYouTubeLogout = function() {
@@ -648,10 +680,10 @@ window.onYouTubeTestResult = function(result) {
   const tr = document.getElementById('yt-test-result');
   tr.classList.remove('hidden');
   if (result.success) {
-    tr.textContent = '\u2713 ' + result.message;
+    tr.innerHTML = TwitchX.renderIcon('check', 14) + ' ' + result.message;
     tr.style.color = 'var(--live-green)';
   } else {
-    tr.textContent = '\u2717 ' + result.message;
+    tr.innerHTML = TwitchX.renderIcon('cross', 14) + ' ' + result.message;
     tr.style.color = 'var(--error-red)';
   }
   document.getElementById('yt-test-btn').disabled = false;
@@ -661,14 +693,14 @@ window.onYouTubeImportComplete = function(data) {
   const count = data && typeof data === 'object' ? data.added : data;
   const tr = document.getElementById('yt-test-result');
   tr.classList.remove('hidden');
-  tr.textContent = '\u2713 Imported ' + count + ' subscriptions';
+  tr.innerHTML = TwitchX.renderIcon('check', 14) + ' Imported ' + count + ' subscriptions';
   tr.style.color = 'var(--live-green)';
 };
 
 window.onYouTubeImportError = function(msg) {
   const tr = document.getElementById('yt-test-result');
   tr.classList.remove('hidden');
-  tr.textContent = '\u2717 Import failed: ' + msg;
+  tr.innerHTML = TwitchX.renderIcon('cross', 14) + ' Import failed: ' + msg;
   tr.style.color = 'var(--error-red)';
 };
 
@@ -713,7 +745,8 @@ window.onBrowseCategories = function(categories) {
   }
   categories.forEach(function(cat) {
     const card = document.createElement('div');
-    card.className = 'browse-category-card';
+    card.className = 'browse-category-card card-enter';
+    card.addEventListener('animationend', function() { card.classList.remove('card-enter'); }, { once: true });
     card.onclick = function() { TwitchX._triggerBrowseTopStreams(cat); };
 
     const img = document.createElement('img');
@@ -763,7 +796,8 @@ window.onBrowseTopStreams = function(payload) {
   }
   payload.streams.forEach(function(stream) {
     const card = document.createElement('div');
-    card.className = 'browse-stream-card';
+    card.className = 'browse-stream-card card-enter';
+    card.addEventListener('animationend', function() { card.classList.remove('card-enter'); }, { once: true });
 
     if (stream.platform !== 'youtube') {
       card.onclick = function() {
@@ -842,7 +876,9 @@ window.onChannelProfile = function(profile) {
     ? TwitchX.formatViewers(profile.followers) + ' followers'
     : '';
 
-  document.getElementById('channel-bio').textContent = profile.bio || '';
+  var bioEl = document.getElementById('channel-bio');
+  bioEl.textContent = profile.bio || '';
+  bioEl.classList.toggle('hidden', !profile.bio);
 
   const avatarEl = document.getElementById('channel-avatar');
   if (profile.avatar_url) {

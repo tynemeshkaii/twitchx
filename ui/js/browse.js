@@ -5,12 +5,10 @@ function showBrowseView() {
   document.getElementById('toolbar').classList.add('hidden');
   document.getElementById('stream-grid').classList.add('hidden');
   var view = document.getElementById('browse-view');
-  view.classList.remove('hidden');
   view.style.opacity = '0';
+  view.classList.remove('hidden');
   requestAnimationFrame(function() {
-    requestAnimationFrame(function() {
-      view.style.opacity = '';
-    });
+    view.style.opacity = '';
   });
   TwitchX.state.browseMode = 'categories';
   TwitchX.state.browseCategory = null;
@@ -31,12 +29,10 @@ function hideBrowseView() {
   if (document.getElementById('player-view').classList.contains('active')) return;
   document.getElementById('toolbar').classList.remove('hidden');
   var grid = document.getElementById('stream-grid');
-  grid.classList.remove('hidden');
   grid.style.opacity = '0';
+  grid.classList.remove('hidden');
   requestAnimationFrame(function() {
-    requestAnimationFrame(function() {
-      grid.style.opacity = '';
-    });
+    grid.style.opacity = '';
   });
   TwitchX.renderGrid();
 }

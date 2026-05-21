@@ -131,7 +131,7 @@ class YouTubeChatClient(BaseChatClient):
         else:
             try:
                 chat_id = await self._resolve_live_chat_id(channel_id)
-            except Exception as e:
+            except (ValueError, KeyError, OSError) as e:
                 logger.warning("Failed to resolve YouTube live chat ID: %s", e)
                 self._emit_status(
                     connected=False,
@@ -156,6 +156,7 @@ class YouTubeChatClient(BaseChatClient):
             except StopReconnect:
                 break
             except Exception as e:
+                logger.warning("YouTube chat poll error (attempt %d): %s", attempt + 1, e)
                 if not self._running:
                     break
                 attempt += 1

@@ -8,7 +8,6 @@ import subprocess
 import sys
 import threading
 import time
-import traceback
 from datetime import datetime
 from typing import Any
 
@@ -248,7 +247,7 @@ class DataComponent(BaseApiComponent):
                         )
                         return
                 except Exception as e:
-                    traceback.print_exc()
+                    logger.exception("Fetch data failed")
                     msg = str(e)[:80] if str(e) else "Unknown error"
                     safe_msg = json.dumps(msg)
                     self._eval_js(
@@ -461,15 +460,18 @@ class DataComponent(BaseApiComponent):
                 }
             )
 
-        for s in kick_streams:
-            stream_items.append(
-                loop.run_until_complete(self._kick.normalize_stream_item(s))
-            )
+        if loop is not None:
+            for s in kick_streams:
+                stream_items.append(
+                    loop.run_until_complete(self._kick.normalize_stream_item(s))
+                )
 
-        for s in youtube_streams:
-            stream_items.append(
-                loop.run_until_complete(self._youtube.normalize_stream_item(s))
-            )
+            for s in youtube_streams:
+                stream_items.append(
+                    loop.run_until_complete(
+                        self._youtube.normalize_stream_item(s)
+                    )
+                )
 
         self._live_streams = stream_items
 
@@ -570,14 +572,13 @@ class DataComponent(BaseApiComponent):
                 + json.dumps({"remaining": remaining, "level": "critical"})
                 + ")"
             )
-        elif remaining <= 2000:  # 80%+ used — fire once per session
-            if not self._quota_warn_fired:
-                self._quota_warn_fired = True
-                self._eval_js(
-                    "window.onYouTubeQuotaWarning("
-                    + json.dumps({"remaining": remaining, "level": "warn"})
-                    + ")"
-                )
+        elif remaining <= 2000 and not self._quota_warn_fired:
+            self._quota_warn_fired = True
+            self._eval_js(
+                "window.onYouTubeQuotaWarning("
+                + json.dumps({"remaining": remaining, "level": "warn"})
+                + ")"
+            )
 
     # ── Browse ─────────────────────────────────────────────────
 

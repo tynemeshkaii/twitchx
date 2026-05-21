@@ -622,8 +622,8 @@ class TestChannelMedia:
 
 class TestOAuth:
     def test_get_auth_url_contains_required_params(self, temp_config_dir) -> None:
-        from core.storage import update_config
         from core.platforms.youtube import YouTubeClient
+        from core.storage import update_config
 
         # Set a custom client_id so it overrides the bundled credential.
         def _set(cfg):
@@ -941,11 +941,13 @@ def test_effective_api_key_returns_config_when_set(temp_config_dir):
 
 import pytest
 
+
 @pytest.mark.asyncio
 async def test_exchange_code_sends_code_verifier_not_secret(temp_config_dir):
+    from unittest.mock import MagicMock
+
     from core.platforms.youtube import YouTubeClient
     from core.storage import update_config
-    from unittest.mock import MagicMock
 
     def _set_verifier(cfg):
         cfg["platforms"]["youtube"]["pkce_verifier"] = "yt_verifier_xyz_abc_123_def456"

@@ -159,6 +159,8 @@ TwitchX._setChatAutoScroll = _setChatAutoScroll;
 
 /* ── Chat filter state ──────────────────────────────────── */
 
+TwitchX.chatTimestamps = false;
+
 TwitchX.chatFilters = {
   subOnly: false,
   modOnly: false,
@@ -370,3 +372,22 @@ function toggleChatUserList() {
 
 TwitchX.toggleChatUserList = toggleChatUserList;
 TwitchX.renderChatUserList = renderChatUserList;
+
+/* ── Chat scroll shadow ────────────────────────────────── */
+function updateChatScrollShadow() {
+  var msgs = document.getElementById('chat-messages');
+  var shadow = document.getElementById('chat-shadow-top');
+  if (!msgs || !shadow) return;
+  shadow.classList.toggle('visible', msgs.scrollTop > 0);
+}
+
+function initChatScrollShadow() {
+  var msgs = document.getElementById('chat-messages');
+  if (msgs) {
+    msgs.addEventListener('scroll', updateChatScrollShadow);
+    updateChatScrollShadow();
+  }
+}
+
+TwitchX.updateChatScrollShadow = updateChatScrollShadow;
+TwitchX.initChatScrollShadow = initChatScrollShadow;

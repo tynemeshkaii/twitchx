@@ -122,7 +122,7 @@ def _get_json(url: str, timeout: float = 8.0) -> Any:
         resp = httpx.get(url, timeout=timeout, follow_redirects=True)
         resp.raise_for_status()
         return resp.json()
-    except Exception as exc:
+    except (httpx.HTTPError, OSError, ValueError) as exc:
         logger.debug("Third-party emote fetch failed %s: %s", url, exc)
         return None
 
@@ -143,7 +143,8 @@ def _load_cache(path: Path) -> dict[str, str] | None:
         if time.time() - data.get("_fetched_at", 0) > EMOTE_CACHE_TTL:
             return None
         return {k: v for k, v in data.items() if k != "_fetched_at"}
-    except Exception:
+    except (OSError, json.JSONDecodeError, ValueError, KeyError) as exc:
+        logger.debug("Emote cache load failed for %s: %s", path, exc)
         return None
 
 

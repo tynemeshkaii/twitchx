@@ -11,7 +11,7 @@ from core.stream_resolver import resolve_hls_url
 
 from ._base import BaseApiComponent
 
-_MAX_LAUNCH_SECONDS = 20
+_MAX_LAUNCH_SECONDS = 35
 
 
 class StreamsComponent(BaseApiComponent):
@@ -86,10 +86,15 @@ class StreamsComponent(BaseApiComponent):
         platform = self._api._data._stream_platform(stream) if stream else "twitch"
 
         safe_ch = json.dumps(channel)
-        if (
-            self._api._watching_channel
-            and self._api._watching_channel.lower() == channel.lower()
-        ):
+        _watching = self._api._watching_channel
+        _already = (
+            _watching is not None and (
+                _watching == channel  # exact-case for YouTube UC IDs
+                if platform == "youtube"
+                else _watching.lower() == channel.lower()
+            )
+        )
+        if _already:
             self._eval_js(
                 f"window.onStatusUpdate({{text: 'Already watching ' + {safe_ch}, type: 'info'}})"
             )
@@ -244,6 +249,17 @@ class StreamsComponent(BaseApiComponent):
         self._api._watching_channel = None
         self._eval_js("window.onPlayerStop()")
 
+    def notify_player_hidden(self) -> None:
+        """Clear Python-side player state when JS hides the player without going through stop_player.
+
+        Called by hidePlayerView() in cases where the player is dismissed directly from JS
+        (Escape key, opening multistream) rather than via api.stop_player().
+        Does not emit onPlayerStop to avoid re-entering hidePlayerView.
+        """
+        self._end_watch_session()
+        self._api._chat.stop_chat()
+        self._api._watching_channel = None
+
     def watch_direct(self, channel: str, platform: str, quality: str) -> None:
         if not channel:
             return
@@ -263,10 +279,15 @@ class StreamsComponent(BaseApiComponent):
 
         self._config = update_config(_save_quality)
         safe_ch = json.dumps(channel)
-        if (
-            self._api._watching_channel
-            and self._api._watching_channel.lower() == channel.lower()
-        ):
+        _watching = self._api._watching_channel
+        _already = (
+            _watching is not None and (
+                _watching == channel
+                if platform == "youtube"
+                else _watching.lower() == channel.lower()
+            )
+        )
+        if _already:
             self._eval_js(
                 f"window.onStatusUpdate({{text: 'Already watching ' + {safe_ch}, type: 'info'}})"
             )
@@ -332,6 +353,18 @@ class StreamsComponent(BaseApiComponent):
                 f"window.onLaunchResult({{success: false, message: {safe_ch} + ' is offline', channel: {safe_ch}}})"
             )
             return
+
+        if platform == "youtube":
+            video_id = stream.get("video_id", "") if stream else ""
+            if not video_id:
+                safe_ch = json.dumps(channel)
+                r = json.dumps({
+                    "success": False,
+                    "message": "No live video found for this YouTube channel",
+                    "channel": channel,
+                })
+                self._eval_js(f"window.onLaunchResult({r})")
+                return
 
         def do_launch() -> None:
             settings = get_settings(self._config)

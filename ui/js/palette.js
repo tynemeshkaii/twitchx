@@ -2,15 +2,15 @@ window.TwitchX = window.TwitchX || {};
 const TwitchX = window.TwitchX;
 
 var PALETTE_COMMANDS = [
-  { label: 'Refresh Streams',     icon: '\u21BB', hint: 'R',   action: function() { TwitchX.doRefresh(); } },
-  { label: 'Open Settings',       icon: '\u2699', hint: '\u2318,', action: function() { TwitchX.openSettings(); } },
-  { label: 'Browse Categories',   icon: '\uD83D\uDCFA', hint: '', action: function() { TwitchX.showBrowseView(); } },
-  { label: 'Toggle Chat',         icon: '\uD83D\uDCAC', hint: 'C', action: function() {
+  { label: 'Refresh Streams',     icon: 'refresh', hint: 'R',   action: function() { TwitchX.doRefresh(); } },
+  { label: 'Open Settings',       icon: 'settings', hint: '\u2318,', action: function() { TwitchX.openSettings(); } },
+  { label: 'Browse Categories',   icon: 'tv', hint: '', action: function() { TwitchX.showBrowseView(); } },
+  { label: 'Toggle Chat',         icon: 'chat', hint: 'C', action: function() {
     if (TwitchX.multiState.open) TwitchX.toggleMsChat();
     else TwitchX.toggleChatPanel();
   }},
-  { label: 'Stop Player',         icon: '\u23F9', hint: '', action: function() { if (TwitchX.api) TwitchX.api.stop_player(); } },
-  { label: 'Toggle Mini Mode',    icon: '\uD83D\uDDD5', hint: '', action: function() { TwitchX.toggleMiniMode(); } },
+  { label: 'Stop Player',         icon: 'stop', hint: '', action: function() { if (TwitchX.api) TwitchX.api.stop_player(); } },
+  { label: 'Toggle Mini Mode',    icon: 'minimize', hint: '', action: function() { TwitchX.toggleMiniMode(); } },
 ];
 
 TwitchX._paletteActiveIdx = -1;
@@ -39,7 +39,7 @@ function _buildPaletteItem(icon, label, hint, action) {
 
   var iconEl = document.createElement('span');
   iconEl.className = 'palette-item-icon';
-  iconEl.textContent = icon;
+  iconEl.innerHTML = TwitchX.renderIcon(icon, 16);
 
   var labelEl = document.createElement('span');
   labelEl.className = 'palette-item-label';
@@ -85,7 +85,7 @@ function renderPaletteResults(query) {
     container.appendChild(liveHeader);
     liveMatches.forEach(function(s) {
       var item = _buildPaletteItem(
-        '\uD83D\uDD34',
+        'live-dot',
         s.display_name,
         TwitchX.formatViewers(s.viewers) + ' viewers',
         function() { TwitchX.selectChannel(s.login); TwitchX.doWatch(); }
@@ -113,7 +113,7 @@ function renderPaletteResults(query) {
     favMatches.forEach(function(login) {
       var meta = TwitchX.state.favoritesMeta[login] || {};
       var displayName = meta.display_name || login;
-      var item = _buildPaletteItem('\u2605', displayName, 'Offline', function() {
+      var item = _buildPaletteItem('star', displayName, 'Offline', function() {
         TwitchX.selectChannel(login);
       });
       container.appendChild(item);

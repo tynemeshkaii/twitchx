@@ -87,6 +87,7 @@ class BaseApiComponent:
             try:
                 loop.run_until_complete(coro)
             except Exception as e:
+                logger.warning("Async run failed: %s", e)
                 self._handle_async_error(e)
             finally:
                 self._close_thread_loop(loop)

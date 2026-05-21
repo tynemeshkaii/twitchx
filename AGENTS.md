@@ -44,10 +44,13 @@ make check   # lint + test (перед коммитом)
 | `core/launcher.py` | `launch_stream()`, `launch_stream_mpv()` | Принимает `PlatformClient` instance, поддержка IINA и mpv |
 | `core/recorder.py` | `Recorder` — менеджер записи стримов | start/stop/state_dict через streamlink subprocess |
 | `ui/api/` | Python↔JS bridge (7 модулей) | См. §5 |
-| `ui/index.html` | Shell (~557 строк) | pywebview 6.x требует inline ресурсов |
+| `ui/index.html` | Shell (~414 строк) | pywebview 6.x требует inline ресурсов |
 | `ui/css/` | 6 CSS-модулей | См. §3.1 |
-| `ui/js/` | 15 JS-модулей | См. §3.2 |
+| `ui/js/` | 18 JS-модулей | См. §3.2 |
+| `ui/js/focus.js` | Focus management a11y module | `focusReturn`, `activateFocusTrap`, `handleArrowNav` |
+| `ui/js/icons.js` | SVG icon system | `TwitchX.icon(name, size)` — 44 stroke-based иконки |
 | `ui/js/palette.js` | Command Palette module | `openPalette`, `closePalette`, `renderPaletteResults` |
+| `ui/js/toast.js` | Toast notification system | `showToast`, `dismissToast`, `clearToasts` — slide-in уведомления с авто-dismiss |
 | `tests/` | Pytest suite | `conftest.py` с фикстурами |
 | `tests/test_uiux_settings.py` | Tests for accent_color and settings API | §8 |
 
@@ -111,16 +114,16 @@ TwitchChatClient / KickChatClient / YouTubeChatClient
 
 | File | Зона ответственности |
 |------|---------------------|
-| `tokens.css` | CSS custom properties (`:root`) — full design token system: spacing scale, typography scale, border tokens, shadow tokens, z-index scale, animation tokens, accent variants |
-| `reset.css` | Base resets, scrollbar, accessibility media queries |
-| `layout.css` | `#app`, `#main`, `#sidebar`, `#content`, `#toolbar`, mini mode (`.mini` class rules) |
-| `components.css` | Buttons, inputs, cards, badges, sidebar sections, chat messages, accent swatches, list-mode grid, pin badge, palette overlay, drag-to-multistream, skeleton classes (`.skeleton`, `.skeleton-card`, `.skeleton-thumb`, `.skeleton-text`, `.skeleton-browse-card`, `.skeleton-stream-card`), spinner (`.ms-spinner`), overlay transitions (settings scale+fade, context-menu scale+opacity, search dropdown slide+fade), connecting indicator, chat status text |
+| `tokens.css` | CSS custom properties (`:root`) — full design token system: spacing scale, typography scale, border tokens, shadow tokens, z-index scale, animation tokens, accent variants, micro-interaction tokens (`--scale-press`, `--highlight-press`), toast notification tokens, scroll shadow tokens, icon sizing tokens (`--icon-sm`, `--icon-md`), platform brand colors (`--platform-twitch`, `--platform-kick`, `--platform-youtube`) |
+| `reset.css` | Base resets, scrollbar, `.sr-only` utility class, `.hidden` (`display: none !important`) глобальный класс, accessibility media queries (`prefers-reduced-motion`, `prefers-contrast`) |
+| `layout.css` | `#app`, `#main`, `#sidebar`, `#content`, `#toolbar`, mini mode (`.mini` class rules), sidebar scroll shadow (`.section-body::before` sticky pseudo-element) |
+| `components.css` | Buttons, inputs, cards, badges, sidebar sections, chat messages, accent swatches, list-mode grid, pin badge, palette overlay, drag-to-multistream, skeleton classes (`.skeleton`, `.skeleton-card`, `.skeleton-thumb`, `.skeleton-text`, `.skeleton-browse-card`, `.skeleton-stream-card`), spinner (`.ms-spinner`, `.player-spinner`), overlay transitions (settings scale+fade, context-menu scale+opacity, search dropdown slide+fade), connecting indicator, chat status text, chat scroll shadow (`#chat-shadow-top`), toast notifications (`#toast-container`, `.toast`, `.toast--success/error/info/warn`), button press feedback (`button:active { transform: scale(0.96) }`), missing hover states. **Phase 6:** sidebar watching indicator (`.watching`), sidebar tooltip (`#sidebar-tooltip`), sidebar notification badge (`.notif-dot`, `.notif-badge`), sidebar collapsible mode (`.collapsed-sidebar`), chat timestamps (`.msg-time`), hotkey capturing/idle classes (`.hotkey-capturing`, `.hotkey-idle`), compact stats (`.stats-grid.compact`, `.stat-card.compact`), context menu animation fix (`visibility`/`opacity`/`scale` вместо `display:none`). **Phase 7:** SVG icon sizing rules (`.bar-btn svg`, `.ctx-item svg`, `.toast-icon svg`), multistream badge platform colors (`.ms-platform-badge.twitch/kick/youtube`), performance containment (`contain: layout style paint` на `#stream-grid`, `#chat-messages`), `will-change: transform` на `.channel-item`. **Phase 2:** utility-классы (`.text-muted`, `.text-sm`, `.flex-center`, `.gap-sm`, `.mt-1`, `.mb-1`), settings helpers (`.checkbox-row`, `.setting-hint`, `.oauth-login-btn`, `.setting-user-display`, `.setting-quota-display`, `.import-btn`, `.logout-link`, `.test-result`, `.hotkeys-table`, `.reset-btn`, `.stats-loading`, `.stats-grid-cols-2`) |
 | `views.css` | `#player-view`, `#browse-view`, `#channel-view`, `#multistream-view` — все с `opacity` transition для fade in/out |
-| `player.css` | `#player-bar`, `#chat-panel`, `#chat-resize-handle`, `#live-dot`, PiP button active states |
+| `player.css` | `#player-bar`, `#chat-panel`, `#chat-resize-handle`, `#live-dot`, PiP button active states, stream loader (`#stream-loader`, `#stream-loader-bar`), player loading spinner (`#player-loader`, `.player-spinner`). **Phase 6:** `bar-group` wrappers + separators, volume slider (`#volume-slider`, `#mute-btn`), VOD seek bar (`#seek-bar-container`, `#seek-bar`), buffer visualization (`#buffer-bar`, `#buffer-loaded`, `#buffer-position`), fullscreen auto-hide (`.fs-hidden`). **Phase 2:** chat panel CSS classes (`.chat-filter-panel`, `.chat-userlist-panel`, `.chat-mod-panel`, `.chat-export-menu`, `.emote-picker`), chat header buttons (`.chat-header-btn`), player header buttons (`.player-header-btn`), emote picker (`.emote-search`, `.emote-grid`, `.emote-picker-btn`), recording dot (`.record-dot`), VOD time display (`.vod-time-display`) |
 
-**Containment:** `#player-view`, `#player-content`, `#chat-panel` имеют `contain: layout style paint` для изоляции пересчётов от видео-композитинга.
+**Containment:** `#player-view`, `#player-content`, `#chat-panel` имеют `contain: layout style paint` для изоляции пересчётов от видео-композитинга. **Phase 7:** добавлено `contain: layout style paint` на `#stream-grid` и `#chat-messages`, а также `content-visibility: auto` на `#stream-grid` для off-screen оптимизации. `will-change: transform` добавлен на `.channel-item`.
 
-**View Transition Pattern:** `display: none` нельзя анимировать через CSS transitions. Используется двухфазный JS-паттерн: 1) установить `display: flex/grid` → `requestAnimationFrame` → установить `opacity: ''` (появление); 2) установить `opacity: 0` → `transitionend`/`setTimeout 250ms` → `display: none` (скрытие). `prefers-reduced-motion: reduce` в reset.css обнуляет все transition-duration.
+**View Transition Pattern:** `display: none` нельзя анимировать через CSS transitions. Используется двухфазный JS-паттерн: 1) установить `opacity: 0` → установить `display: flex/grid` → `requestAnimationFrame` → сбросить `opacity` (появление); 2) установить `opacity: 0` → `transitionend`/`setTimeout 250ms` → `display: none` (скрытие). **ВАЖНО:** `opacity: 0` устанавливается строго **до** изменения `display`, иначе CSS transition от `opacity: 1→0` вызовет микро-вспышку. Один `requestAnimationFrame` достаточен (двойной rAF добавляет лишний кадр задержки). `prefers-reduced-motion: reduce` в reset.css обнуляет все transition-duration.
 
 ### 3.2 JS Module Dependency & Load Order
 
@@ -128,17 +131,19 @@ TwitchChatClient / KickChatClient / YouTubeChatClient
 
 Порядок загрузки:
 ```
-state → utils → api-bridge → render → sidebar → player → multistream → browse → channel → chat → settings → context-menu → keyboard → palette → callbacks → init
+state → utils → icons → api-bridge → render → sidebar → player → multistream → browse → channel → chat → settings → context-menu → keyboard → palette → toast → callbacks → init
 ```
 
 | File | Ответственность |
 |------|-----------------|
 | `state.js` | `TwitchX.state`, `TwitchX.multiState`, shortcuts, chat state, `TwitchX.getFavoriteMeta(login, platform)` — helper для поиска меты в compound-ключевом `favoritesMeta`. Если `platform` передан — прямой lookup по compound key `"platform:login"`; если нет — fallback перебор по `login`. Также: `TwitchX.state.gridMode`, `TwitchX.state.pinnedStreams`, `loadPinnedStreams/savePinnedStreams/isPinned/togglePin` |
 | `utils.js` | `truncate`, `formatViewers`, `formatUptime`, `setStatus`, `viewFadeIn`/`viewFadeOut` — двухфазный show/hide helper для анимированных переходов |
+| `focus.js` | Focus management a11y module | `focusReturn`, `activateFocusTrap`/`deactivateFocusTrap`, `handleArrowNav` |
+| `icons.js` | SVG icon system | `TwitchX.icon(name, size)` — 44 stroke-based иконки (16×16 viewBox, 1.5px stroke, `currentColor`). Используется через `innerHTML` для замены текстовых символов на inline SVG. |
 | `api-bridge.js` | `pywebviewready`, `TwitchX.api`, profile helpers |
 | `render.js` | `renderGrid`, `createStreamCard`, `createOnboardingCard`. Grid/list-mode toggle via `list-mode` CSS class. Pinned-first sort in `getFilteredSortedStreams`. Pin badge rendering in `createStreamCard`. `showSkeletonGrid`/`hideSkeletonGrid` — 8 skeleton карточек при первой загрузке. |
-| `sidebar.js` | `renderSidebar`, diff-based updates, layout logic, `getChannelPlatform` helper, drag-to-multistream (`draggable=true`, `dragstart`/`dragend` events) |
-| `player.js` | Video lifecycle, health monitors, fullscreen, gentle reset, recording toggle, stats overlay, VOD time display |
+| `sidebar.js` | `renderSidebar`, diff-based updates, layout logic, `getChannelPlatform` helper, drag-to-multistream (`draggable=true`, `dragstart`/`dragend` events). **Phase 6:** `.watching` class при `watchingChannel`, `_setupSidebarTooltip()` c 400ms debounce + thumbnail preview, `_updateNotifBadges()` для offline→online переходов |
+| `player.js` | Video lifecycle, health monitors, fullscreen, gentle reset, recording toggle, stats overlay, VOD time display. **Phase 6:** `syncVolumeSlider()`/`_handleVolumeSliderInput()`/`_handleMuteBtnClick()` — volume slider + mute toggle, `_updateBufferBar()` — buffer visualization в stats overlay rAF-цикле, `startVodSeekBar()`/`stopVodSeekBar()`/`_handleSeekBar*()` — VOD seek bar с time tooltip, `_startFullscreenAutoHide()`/`_stopFullscreenAutoHide()`/`_watchFullscreenChanges()` — auto-hide controls в fullscreen через `webkitpresentationmodechanged` |
 | `multistream.js` | Slot management, audio/chat focus, health monitor, `dragover`/`dragleave`/`drop` handlers на `.ms-slot-empty` для drag-to-multistream |
 | `browse.js` | `showBrowseView`, breadcrumb nav (`Following > Browse > Category`), category/top-stream loading |
 | `channel.js` | `showChannelView`, tabs, media cards, follow/watch actions |
@@ -147,8 +152,9 @@ state → utils → api-bridge → render → sidebar → player → multistream
 | `context-menu.js` | `showContextMenu`, `showSidebarContextMenu`, pin item show/hide and label update |
 | `keyboard.js` | `handleKeydown`, shortcut rebinding, hotkeys (player + multistream scopes), duplicate-key confirm-swap, Cmd+K → palette, Escape priority for palette |
 | `palette.js` | Command Palette module: `openPalette`, `closePalette`, `renderPaletteResults`, `handlePaletteKeydown` |
-| `callbacks.js` | Все `window.on*` — thin proxies к `TwitchX.*`, chat batching (`flushChatBatch`), `_shouldFilter`, `_hasBadge`, `onThirdPartyEmotes`, `onChatUserList`, `onChatModeChanged` |
-| `init.js` | `DOMContentLoaded`, `_bind*()` wiring, uptime interval. `toggleMiniMode`/`applyMiniMode`, `_bindPaletteEvents`, grid toggle binding, mini btn binding, accent/ mini/grid/pinned restore на старте, skeleton init при наличии favorites |
+| `toast.js` | Toast notification system: `showToast`, `dismissToast`, `clearToasts` — slide-in уведомления с авто-dismiss, стопка до 5, клик-to-dismiss, 4 типа (success/error/info/warn) |
+| `callbacks.js` | Все `window.on*` — thin proxies к `TwitchX.*`, chat batching (`flushChatBatch`), `_shouldFilter`, `_hasBadge`, `onThirdPartyEmotes`, `onChatUserList`, `onChatModeChanged`. Transient-сообщения (логин, импорт, ошибки, credentials) используют `showToast()` вместо `setStatus()` |
+| `init.js` | `DOMContentLoaded`, `_bind*()` wiring, uptime interval. `toggleMiniMode`/`applyMiniMode`, `_bindPaletteEvents`, grid toggle binding, mini btn binding, accent/ mini/grid/pinned restore на старте, skeleton init при наличии favorites. **Phase 6:** bindings для volume slider (`#mute-btn`, `#volume-slider`), VOD seek bar (`#seek-bar`), chat timestamp toggle (`#chat-timestamp-btn`), sidebar collapse (`#sidebar-collapse-btn`), stats compact toggle (`#stats-compact-toggle`). `_watchFullscreenChanges()` для fullscreen auto-hide. Восстановление `collapsed-sidebar` и `chat_timestamps` из localStorage.
 
 **pywebview 6.x Constraint:** модули не загружаются через отдельные `<script src="...">`. `app.py._inline_resources()` мержит все JS в **один** inline `<script>` блок и CSS в inline `<style>`. Только `state.js` содержит `window.TwitchX = window.TwitchX || {};`, остальные используют `const TwitchX = window.TwitchX;`.
 
@@ -218,14 +224,16 @@ state → utils → api-bridge → render → sidebar → player → multistream
 
 #### Health Monitors
 - **`checkVideoHealth()`** — каждые 60 с:
-  - Live-edge drift: `currentTime` отстаёт от `seekable.end` на >120 с → `seekTo(liveEdge)`.
-  - Buffer accumulation: `buffered.end - currentTime > 180` с → `gentleResetVideo('buffer-overflow')`.
+  - **Dropped frames monitor** (первая проверка): `video.getVideoPlaybackQuality()` — если `droppedVideoFrames / totalVideoFrames > 5%` и всего >300 кадров → `gentleResetVideo('dropped-frames')`. Детектирует деградацию VideoToolbox-декодера на отдельном потоке, которую rAF-монитор не видит.
+  - **Live-edge drift:** `currentTime` отстаёт от `seekable.end` на >30 с → `video.currentTime = liveEdge - 2`. Плотный порог, чтобы SourceBuffer не управлял одновременно старыми и новыми сегментами.
+  - **Forward buffer overflow:** `buffered.end - currentTime > 60` с → `gentleResetVideo('buffer-overflow')`. Консервативно (живому HLS нужно макс 15-30s впереди), предотвращает накопление сегментов в памяти.
+  - **Total buffer span overflow:** `buffered.end - buffered.start > 120` с → `gentleResetVideo('buffer-total-overflow')`. Старые проигранные сегменты также занимают место в SourceBuffer.
 - **`checkFrozenVideo()`** — каждые 10 с:
   - Если `currentTime` не изменился 10 с при `!paused && readyState >= 2` → `gentleResetVideo('frozen')`.
 - **FPS Monitor** — `requestAnimationFrame` loop:
   - Пропускает замер при `document.hidden`, `paused`, `readyState < 2`.
-  - Порог: кадр >66 мс (<15 FPS) **подряд** ~5 с → `gentleResetVideo('fps')`.
-- **Proactive Reset** — `gentleResetVideo('proactive')` каждые 30 мин (self-rescheduling `setTimeout`).
+  - Порог: кадр >66 мс (<15 FPS) **подряд** ~5 с → `gentleResetVideo('fps-drop')`. *Примечание: этот монитор может упустить деградацию декодера; используй dropped frames monitor как первичный сигнал.*
+- **Proactive Reset** — `gentleResetVideo('proactive')` каждые 15 мин (self-rescheduling `setTimeout`). Предотвращает накопление SourceBuffer-буферов до критического состояния.
 
 **Все reset-пути логируют:** `console.log('[VideoHealth]', reason, src, currentTime)`.
 
@@ -258,6 +266,34 @@ state → utils → api-bridge → render → sidebar → player → multistream
 - Baseline dropped frames сбрасывается при показе оверлея через `getVideoPlaybackQuality()`.
 - Кнопка `#stats-overlay-btn` в `#player-header-actions`.
 
+#### Volume Slider
+- Видимый `<input type="range" id="volume-slider">` + кнопка `#mute-btn` в `bar-group--audio`.
+- `syncVolumeSlider(video)` синхронизирует UI с keyboard изменениями.
+- `_handleVolumeSliderInput()` → `video.volume = value/100`.
+- `_handleMuteBtnClick()` → `toggleMute()` + иконка.
+- `getActiveVideo()` работает и для multistream.
+- Volume group показывается только при активном плеере (syncVolumeSlider(null) скрывает).
+
+#### Buffer Visualization Bar
+- `#buffer-bar` (3px анимация) внизу `#player-content`, над `#player-bar`.
+- `_updateBufferBar(video)` читает `video.buffered` → ширина `#buffer-loaded` процентом от `duration`.
+- Для VOD: `#buffer-position` показывает `currentTime / duration`.
+- Интегрирована в rAF цикл `updateStatsOverlay()`.
+
+#### VOD Seek Bar
+- `#seek-bar-container` (абсолютно, top: -6px) поверх `#player-bar`, показывается только для VOD.
+- `<input type="range" id="seek-bar">` + `#seek-tooltip` с форматом HH:MM:SS.
+- `startVodSeekBar()` — `setInterval(250ms)` обновляет `seek.value` из `video.currentTime / video.duration`.
+- `stopVodSeekBar()` — скрывает контейнер.
+- `_handleSeekBarInput()` обновляет tooltip при `mousemove`/`input`.
+- `_handleSeekBarChange()` выполняет `video.currentTime = frac * duration`.
+
+#### Fullscreen Auto-hide
+- Phase 6: mousemove → controls visible → 3s timer → `.fs-hidden` скрывает `#player-bar` и `#player-header`.
+- `_startFullscreenAutoHide()`: по входу в fullscreen (W3C API или WebKit native).
+- `_stopFullscreenAutoHide()`: по выходу + при `hidePlayerView()`.
+- `_watchFullscreenChanges()`: слушает `fullscreenchange`/`webkitfullscreenchange` на document + `webkitpresentationmodechanged` на video (через `_bindPiPEvents`).
+
 ### 3.4 Sidebar Lifecycle (Sidebar.js)
 
 **Diff-based rendering** — полная перестройка заменена на in-place updates:
@@ -265,7 +301,13 @@ state → utils → api-bridge → render → sidebar → player → multistream
 - Если состав не изменился → `updateSidebarItem()` обновляет только текст/classes/src.
 - Если состав изменился → перестраивается только затронутая секция.
 - `applySidebarLayout()` отложен через `requestAnimationFrame`.
-- `updateSidebarItem()` обновляет `aria-label` и кеширует `dataset._lastViewers`.
+- `updateSidebarItem()` обновляет `aria-label` и кеширует `dataset._lastViewers`. **Phase 6:** также обновляет `.watching` класс.
+
+**Phase 6 дополнения:**
+- **Watching indicator:** `.channel-item.watching` — акцентный левый border (3px), accent-tinted имя, пульсирующий dot. `_matchWatching(login)` сравнивает case-insensitive для Twitch/Kick, exact для YouTube (через `TwitchX.state.watchingChannel`).
+- **Hover tooltip:** `_setupSidebarTooltip(item, login, streamMap)` — 400ms debounce, показ `#sidebar-tooltip` с thumbnail (`tooltip-thumb`), названием (`tooltip-title`), игрой (`tooltip-game`), зрителями (`tooltip-viewers`). Clamping to viewport. Скрывается при `mouseleave`.
+- **Notification badge:** `TwitchX._notifBadgeLogins` — список новых online каналов. `_updateNotifBadges()` показывает `.notif-dot` на элементах + `.notif-badge` счётчик в `#favorites-header`. Сбрасывается при клике/ререндере.
+- **Collapsible mode (icons-only):** `#sidebar.collapsed-sidebar` — `width: 56px`, скрывает profile, tabs, text, search, browse. Только avatar + live-dot. Кнопка `#sidebar-collapse-btn` в `#favorites-header`. Состояние в `localStorage('twitchx.sidebar.collapsed')`.
 
 ### 3.5 Chat Lifecycle (Chat.js + Callbacks)
 
@@ -334,6 +376,10 @@ state → utils → api-bridge → render → sidebar → player → multistream
 
 **Background throttle:** когда `player-view` активен, аватарки/тамбнейлы откладываются через `requestIdleCallback` (timeout 2 с) или пропускаются.
 
+**Phase 6 чат-апгрейды:**
+- **Timestamps toggle:** `#chat-timestamp-btn` в `#chat-header`. При `TwitchX.chatTimestamps === true` каждое сообщение получает `<span class="msg-time">HH:MM:SS</span>`. Состояние в `localStorage('twitchx.chat_timestamps')`.
+- **Smooth scroll:** `scrollTo({ behavior: 'smooth' })` вместо `scrollTop = scrollHeight` в `flushChatBatch()` и `#chat-new-messages` click handler.
+
 **Python side:**
 - `send_chat` → `_send_pool` (`ThreadPoolExecutor(max_workers=2)`), не raw threads.
 - `send_chat` принимает `reply_to`, `reply_display`, `reply_body` для echo-рендеринга отправленного сообщения с reply-контекстом.
@@ -349,9 +395,7 @@ state → utils → api-bridge → render → sidebar → player → multistream
 ### 3.6 Grid/List View Toggle (Render.js)
 
 - `TwitchX.state.gridMode` — `"grid"` (default) или `"list"`, персистент через `localStorage('twitchx.grid_mode')`.
-- Кнопка `#grid-toggle-btn` в `#toolbar` переключает режим. Иконка меняется: `≡` (grid) / `⊞` (list).
-- List-mode CSS (`#stream-grid.list-mode`): `grid-template-columns: 1fr`, карточки горизонтальные (80px thumb, row layout).
-- `createStreamCard()` добавляет класс `.list-mode` на карточку при `gridMode === 'list'`.
+- Кнопка `#grid-toggle-btn` в `#toolbar` переключает режим. Иконка меняется: SVG grid (с пунктирными вертикальными линиями) / SVG list (горизонтальные линии). **Phase 7:** заменены текстовые символы `≡`/`⊞` на inline SVG через `TwitchX.renderIcon()`.
 
 ### 3.7 Pinned Streams (State.js + Render.js)
 
@@ -384,7 +428,7 @@ state → utils → api-bridge → render → sidebar → player → multistream
 - Кнопка `#mini-mode-btn` в `#player-bar` (рядом с settings).
 - `toggleMiniMode()` — toggle класс `.mini` на `#app`, персистит в `localStorage('twitchx.mini')`.
 - `applyMiniMode()` — восстанавливает состояние на `DOMContentLoaded`.
-- Иконки: `□` (normal), `◣` (mini).
+- Иконки: SVG minimize (normal), SVG mini-exit (active). **Phase 7:** заменены текстовые символы `□`/`◣` на inline SVG через `TwitchX.renderIcon()`.
 
 ### 3.11 View Transitions & Loading States (Phase 3)
 
@@ -394,8 +438,8 @@ state → utils → api-bridge → render → sidebar → player → multistream
 - Двухфазный JS-паттерн: появление — `display: flex/grid` → `requestAnimationFrame` → `opacity: 1`; скрытие — `opacity: 0` → `transitionend`/fallback 250ms → `display: none`.
 
 **Overlay transitions:**
-- `#settings-overlay`: backdrop fade + `#settings-modal` scale (0.97→1) с ease-spring.
-- `#context-menu`: scale (0.95→1) + opacity, класс `.menu-visible` (BUGFIX: убран `display: none` в базовом CSS, который не позволял контекстному меню показываться).
+- `#settings-overlay`: backdrop fade + `#settings-modal` scale (0.97→1) с ease-spring. **ВАЖНО:** `display: none` заменён на `visibility: hidden; opacity: 0; pointer-events: none` с `transition: visibility 0s var(--duration-view)`, иначе CSS transition на opacity не срабатывает (visibility скрывается с задержкой после завершения opacity transition).
+- `#context-menu`: scale (0.95→1) + opacity, класс `.menu-visible` (BUGFIX: `display:none` → `visibility/opacity/transform` с `transition`, двухфазный rAF-паттерн в JS для корректной анимации).
 - `#search-dropdown`: slide (translateY 4px) + fade, класс `.visible`.
 
 **Skeleton loading (`ui/css/components.css`, `ui/js/render.js`, `ui/js/browse.js`, `ui/js/channel.js`):**
@@ -416,6 +460,38 @@ state → utils → api-bridge → render → sidebar → player → multistream
 - Browse streams: "No streams found for this category."
 - Search dropdown: "No channels found" (внутри `#search-dropdown` с `.visible` классом).
 - Multistream empty slots: визуальная подсказка "+ Add Stream" через `.ms-add-btn`.
+
+### 3.12 Micro-interactions & Feedback (Phase 4)
+
+**Button press feedback (`ui/css/components.css`, `ui/css/tokens.css`):**
+- `--scale-press: 0.96` токен в tokens.css.
+- Глобальное CSS-правило `button:not(:disabled):active { transform: scale(var(--scale-press)) }` покрывает все кнопки приложения (`.login-btn`, `.bar-btn`, `.player-header-btn`, `.onboarding-btn`, `.browse-back-btn`, `.channel-follow-btn`, `.channel-watch-btn`, `.ms-confirm-btn`, `.ms-cancel-btn`, `#watch-btn.active`, `#stop-player-btn`, `#chat-send-btn`, `#ms-chat-send-btn` и др.).
+- `.channel-item:active { background: var(--highlight-press); transform: scale(0.98) }` — подсветка при клике на элементы боковой панели.
+- Добавлены недостающие hover-состояния: `.ms-confirm-btn:hover { opacity: 0.9 }`, `.ms-cancel-btn:hover { border-color; color }`, `.chat-header-btn:hover`, `.emote-picker-btn:hover`, `#ms-chat-send-btn:hover`.
+
+**Toast notification system (`ui/js/toast.js`, `ui/css/components.css`, `ui/index.html`):**
+- `TwitchX.showToast(message, type)` — создаёт slide-in тост с 4 типами: `success` (зелёный), `error` (красный), `info` (серый), `warn` (жёлтый).
+- Анимация: `transform: translateX(120%) → translateX(0)` c `ease-spring` + `opacity`, выход через `translateY(-8px)` + `opacity`.
+- Auto-dismiss через 4 секунды (`--toast-duration`), отмена по клику.
+- `#toast-container` (fixed, z-index: 2000, right-top) — стопка до 5 тостов, pointer-events:none/delegation.
+- Все transient-сообщения (`"Logged in as X"`, `"Login error"`, `"Imported N channels"`, `"Recording stopped"`, `"Chat mode error"`, `"Kick/YouTube credentials required"` и др.) маршрутизируются через `showToast()`. Постоянная/загрузочная информация остаётся в `setStatus()` (счётчик каналов, `"Launching X..."`, `"Recording: X"`, `"Volume: N%"`).
+
+**Stream loader bar (`ui/css/player.css`, `ui/js/callbacks.js`, `ui/index.html`):**
+- Indeterminate progress bar в `#player-bar` (`#stream-loader` + `#stream-loader-bar`).
+- Анимация: `@keyframes loader-slide` — полоса бесконечно скользит слева направо.
+- Показывается при `onLaunchProgress`, скрывается при `onStreamReady`, `onLaunchResult`, `onPlayerStop`.
+
+**Player loading spinner (`ui/css/player.css`, `ui/js/player.js`, `ui/index.html`):**
+- `#player-loader` с `.player-spinner` центрирован в `#player-content`.
+- Показывается в `showPlayerView()`, скрывается по событиям `playing`/`error` на `<video>` (fallback 15s).
+- Использует `@keyframes spin` (rotating ring, 0.8s).
+
+**Scroll shadows (`ui/css/layout.css`, `ui/css/components.css`, `ui/js/sidebar.js`, `ui/js/chat.js`):**
+- Sidebar (`.section-body::before`): `position: sticky` псевдо-элемент на каждом `.section-body`. При прокрутке `.section-body.scrolled::before` показывает градиентную тень через `background: linear-gradient(to bottom, ...)`.
+- Chat (`#chat-shadow-top`): `position: sticky` внутри `#chat-messages`. При `scrollTop > 0` переключается класс `.visible`, раскрывая shadow через `height` transition.
+- JS: `updateSidebarScrollShadow()` проверяет `scrollTop > 0` на каждом `.section-body` и переключает `.scrolled`. `updateChatScrollShadow()` делает то же для `#chat-messages`.
+- `--scroll-shadow-size: 16px`, `--scroll-shadow-color: rgba(0, 0, 0, 0.45)`.
+- Инициализация в `_bindGlobalEvents()` (init.js), ребайндинг прямых `scroll`-слушателей на `.section-body` при каждом `renderSidebar()` через `initSidebarScrollShadow()`.
 
 ---
 
@@ -557,15 +633,62 @@ state → utils → api-bridge → render → sidebar → player → multistream
 - **Kick `channel_id`** — integer в raw API. Всегда приводить `str()` в `_normalize_channel_info_to_profile`.
 
 ### 6.2 Multistream Display
-- Показывать slot: `element.style.display = 'block'` — **никогда** `style.display = ''`. Очистка inline style отдаёт управление CSS, а `.ms-slot-active { display: none }` — default.
+- Показывать slot: `element.classList.remove('hidden')` — всегда используйте `.hidden` класс вместо `style.display`. `.ms-slot-active { display: none }` — default.
 - WKWebView проигрывает audio на `<video>` даже когда parent имеет `display: none`.
 
 ### 6.3 Browse & Quota
 - Browse cache: `~/.config/twitchx/cache/browse_cache.json`, TTL 10 мин.
 - YouTube: `get_categories()` = 1 unit, `get_top_streams()` = 100 units. При исчерпании quota — silent `[]`.
 
+### 3.13 Accessibility (Phase 5)
+
+**ARIA roles & landmarks (static в `ui/index.html`):**
+- **Navigation:** `<nav id="sidebar" aria-label="Channel navigation">` вместо `<aside>`.
+- **Main:** `role="main"` на `#content`.
+- **Dialog:** `role="dialog" aria-modal="true" aria-labelledby="settings-title"` на `#settings-overlay`. Фон (`#main`, `#player-bar`) получает `aria-hidden="true"` при открытии, снимается при закрытии.
+- **Tab patterns (4 группы):** `role="tablist"` + `role="tab" aria-selected="true/false"` + `role="tabpanel"` на platform-tabs, browse-platform-tabs, channel-tabs, settings-tabs.
+- **Menu:** `role="menu" aria-label="Channel actions"` на `#context-menu`. Каждый `.ctx-item` — `role="menuitem" tabindex="-1"`.
+- **Toolbar:** `role="toolbar" aria-label="Stream controls"` на `#player-bar`.
+- **Combobox/Listbox:** `role="combobox" aria-expanded="false" aria-controls="search-dropdown" aria-autocomplete="list"` на `#search-input`. `role="listbox" aria-label="Search results"` на `#search-dropdown`.
+- **Live regions:** `role="log" aria-live="polite" aria-label="Chat messages"` на `#chat-messages` и `#ms-chat-messages`. `role="status" aria-live="polite"` на `#status-text`.
+- **Progressbar:** `role="progressbar" aria-label="Loading stream"` на `#stream-loader-bar`.
+- **Video:** `aria-label="Live stream video"` на `#stream-video`.
+
+**Icon-only кнопки с `aria-label`:** `#add-btn` ("Add channel"), `#chat-filter-btn`, `#chat-export-btn`, `#chat-userlist-btn`, `#chat-mod-btn`, `#chat-reply-close`, `#emote-picker-btn`, `#close-settings`, 4 eye-toggle buttons.
+
+**Screen-reader-only текст (класс `.sr-only`):**
+- `#live-dot` содержит `<span class="sr-only" id="live-dot-sr" aria-live="assertive">` для анонса воспроизведения.
+- `#record-dot` содержит `<span class="sr-only">Recording active</span>`.
+- Создаётся динамически `#chat-status-text-sr` в `onChatStatus` для SR-анонса статуса чата.
+
+**Focus management (`ui/js/focus.js`):**
+- `TwitchX.focusReturn.save()` / `restore()` — запоминает `document.activeElement` перед открытием overlay и возвращает туда фокус при закрытии. Используется для settings overlay (не для context-menu — его действия меняют глобальное состояние, focus return конфликтует с открытием плеера/канала).
+- `TwitchX.activateFocusTrap(container)` / `deactivateFocusTrap()` — цикличный Tab-ловушка внутри контейнера. Используется для settings и context-menu.
+- `TwitchX.handleArrowNav(e, container, selector)` — ArrowDown/ArrowUp/Home/End навигация по элементам внутри контейнера. Используется в context-menu и search dropdown. **Известное поведение:** при `currentIndex === -1` (ни один элемент не сфокусирован) ArrowDown → первый элемент, ArrowUp → последний.
+
+**Keyboard navigation:**
+- **Context menu:** ArrowUp/ArrowDown для навигации, Enter для активации, Home/End для границ. Escape закрывает через `TwitchX.closeContextMenu()` (без focus return — действия меняют глобальное состояние). Tab-ловушка через focus trap.
+- **Search dropdown:** ArrowUp/ArrowDown для навигации, Enter для выбора результата (`e.preventDefault()` обязателен). Каждый результат имеет `role="option"` и `id="search-result-N"`.
+- **Escape priority (обновлён):** settings → player → channel → browse → multistream → context menu → search dropdown.
+
+**Color contrast (WCAG AA):**
+- `--text-muted` повышен с `#6E6E73` (3.7:1, fail) до `#8A8A95` (4.5:1+ на bg-base, pass).
+- Добавлен `--text-muted-elevated: #99999F` для текста на `--bg-elevated`.
+- Добавлен `--error-red-bright: #FF6961` для AA на elevated.
+- `@media (prefers-contrast: more)` boost: `--text-muted: #AEAEB2`, `--accent: #FFB340`.
+- Bordertoken: `--border: var(--bg-border)` консолидирован.
+
+**Dynamic ARIA (JS):**
+- `settings.js`: `openSettings()` — `aria-selected` на табах, `aria-hidden` на фоне, focus trap. `closeSettings()` — очистка, focus return.
+- `init.js`: все 4 группы табов обновляют `aria-selected` при переключении. Platform-tabs, browse-platform-tabs, channel-tabs, settings-tabs.
+- `callbacks.js`: `onSearchResults` — `role="option"` + `aria-expanded` на input. `onChatStatus` — динамический sr-only элемент. `onStreamReady`/`onPlayerStop` — обновление `#live-dot-sr`.
+- `render.js`: `aria-label` на `#stream-grid` с количеством.
+- `callbacks.js:onStreamsUpdate`: `aria-label` на `#channel-list` с количеством избранных/live.
+
 ### 6.4 UI Safety
 - **DOM safety:** весь динамический контент через `document.createElement()` + `textContent`. Никакого `innerHTML` с user data.
+- **Исключение:** `TwitchX.renderIcon()` использует `innerHTML` для вставки SVG иконок — это допустимо, так как SVG-строки полностью статичны (контролируются кодом, не пользователем).
+- **Visibility toggles:** используйте `.hidden` (`classList.toggle('hidden')` / `add('hidden')` / `remove('hidden')`) вместо манипуляций `style.display`. `.hidden { display: none !important }` определён глобально в `reset.css`. Для элементов, скрытых через CSS `opacity`/`transform` (search-dropdown, context-menu), используйте соответствующий класс (`.visible`, `.menu-visible`) вместо `.hidden`.
 - **Escape key priority:** Settings overlay → player view → channel view → browse view → multistream view → context menu → search dropdown. Всегда закрывать верхний слой первым. Escape в player view вызывает `TwitchX.hidePlayerView()`.
 - **renderGrid guards:** возвращает early, если открыт `#browse-view` или `#multistream-view` (prevent poller от восстановления `stream-grid` display).
 
@@ -606,9 +729,16 @@ state → utils → api-bridge → render → sidebar → player → multistream
 | 2026-05-10 | Phase 4 data layer | Debug audit Phase 4: favorites_meta collision при одинаковых login на разных платформах; deprecated asyncio.get_event_loop(); unresolved placeholder thumbnail_url | `favorites_meta` ключи → `"platform:login"` (compound). Добавлен `TwitchX.getFavoriteMeta(login)` в JS для lookup. `asyncio.get_event_loop()` → переданный `loop` параметр. Twitch thumbnail_url: 440×248 вместо 880×496. | ✅ Active |
 | 2026-05-10 | Phase 5 | Debug audit Phase 5: multistream reply context, Escape no-op, httpx client leak | `send_chat` reply params в multistream (init.js), Escape → `hidePlayerView()` (keyboard.js), `_async_run` → `_close_thread_loop(loop)` (_base.py). Тесты: `test_async_run_closes_thread_loop`, `test_send_chat_forwards_reply_params`. | ✅ Active |
 | 2026-05-11 | Phase 15 | UI/UX upgrades: accent color picker, grid/list toggle, pinned streams, command palette, drag-to-multistream, mini mode | Шесть фич: `accent_color` в storage/config/config API; grid/list mode с list-mode CSS; pinned streams (compound keys + localStorage + pinned-first sort); `ui/js/palette.js` (Cmd+K); drag (dataTransfer) в multistream; mini mode (`.mini` class). Tests: `tests/test_uiux_settings.py`. Bugfix: `var TwitchX` → `const TwitchX` в palette.js для inline merge. 436 tests pass. | ✅ Active |
-| 2026-05-11 | Phase 16 | UI/UX Phase 1: bugfixes, design token system, token application | 4 бага: `word`→`code` в chat.js, `var(--border)`→`var(--border-default)`, бесполезный тернарник в utils.js, `getFavoriteMeta` теперь принимает `platform`. Расширены design tokens: spacing/typography/border/shadow/z-index/animation/accent variants. Токены применены ко всем 6 CSS-файлам (font-size, z-index, durations, padding/margin/gap, border rgba, box-shadow). | ✅ Active |
+| 2026-05-12 | Phase 16 | UI/UX Phase 1: bugfixes, design token system, token application | 4 бага: `word`→`code` в chat.js, `var(--border)`→`var(--border-default)`, бесполезный тернарник в utils.js, `getFavoriteMeta` теперь принимает `platform`. Расширены design tokens: spacing/typography/border/shadow/z-index/animation/accent variants. Токены применены ко всем 6 CSS-файлам (font-size, z-index, durations, padding/margin/gap, border rgba, box-shadow). **Debug audit:** 4 доп. бага (0.1s→duration-fast, 0.3s→duration-slow, z-index:300→var(--z-overlay), box-shadow→var(--shadow-lg)). 436 tests pass. | ✅ Active |
 | 2026-05-11 | Phase 2 | Inline styles размазаны по HTML и JS (54 inline style="" в index.html, 207 style.display в JS) | Единый `.hidden { display: none !important; }` в reset.css. CSS-классы для chat panels, emote picker, player bar, settings. 54 inline style="" удалены из index.html. JS `style.display` → `classList.toggle('hidden')` во всех модулях (api-bridge, chat, context-menu, init, keyboard, multistream, render, settings, callbacks, player, channel). Удалены дублирующие `.hidden` из CSS. Utility-классы: `.text-muted`, `.text-sm`, `.checkbox-row`, `.setting-hint`, `.mt-1`, `.mb-1`. | ✅ Active |
-| 2026-05-11 | Phase 3 | View transitions мгновенные (display:none), скелетоны отсутствуют, пустые состояния без подсказок | `--duration-view`/`--ease-view` токены. Двухфазный JS-паттерн (display → rAF → opacity) для fade-in всех content views. Overlay transitions: settings (scale+fade), context-menu (scale+opacity, BUGFIX: `display:none` → `.menu-visible`), search dropdown (slide+fade). Скелетоны: `skeleton-card`, `skeleton-browse-card`, `skeleton-stream-card` с shimmer анимацией. `showSkeletonGrid()`/`hideSkeletonGrid()` в render.js. Browse/channel skeletons. Chat: `#chat-status-text`, `.connecting` pulse, empty state "No messages yet". Empty states для browse/search. 436 tests pass. | ✅ Active |
+| 2026-05-11 | Phase 3 | View transitions мгновенные (display:none), скелетоны отсутствуют, пустые состояния без подсказок | `--duration-view`/`--ease-view` токены. Двухфазный JS-паттерн (display → rAF → opacity) для fade-in всех content views. Overlay transitions: settings (scale+fade), context-menu (scale+opacity, BUGFIX: `display:none` → `.menu-visible`), search dropdown (slide+fade). Скелетоны: `skeleton-card`, `skeleton-browse-card`, `skeleton-stream-card` с shimmer анимацией. `showSkeletonGrid()`/`hideSkeletonGrid()` в render.js. Browse/channel skeletons. Chat: `#chat-status-text`, `.connecting` pulse, empty state "No messages yet". Empty states для browse/search. **Debug audit:** 8 багов (opacity после display change → микро-вспышка; двойной rAF → лишний кадр; settings-overlay `display:none` убивал transition; лишний `style.opacity` в settings.js). 436 tests pass. | ✅ Active |
+| 2026-05-11 | Phase 4 (Micro-interactions) | Нет обратной связи кнопок, нет тостов, индикаторов прогресса, теней прокрутки | `--scale-press`/`--highlight-press` токены + глобальное `button:active { transform: scale(0.96) }`. `ui/js/toast.js` с `showToast()` — 4 типа, slide-in, auto-dismiss. Transient-сообщения заменены с `setStatus` на `showToast`. Stream loader bar (`#stream-loader`) в `#player-bar`. Player loading spinner (`#player-loader`, `.player-spinner`) с fallback. Scroll shadows: sidebar `.section-body::before` (sticky pseudo) + chat `#chat-shadow-top` (sticky). | ✅ Active |
+| 2026-05-12 | Phase 4 debug audit | 8 багов: `toast.js` использовал несуществующий `renderIcon()`, overflow тостов мог удалять лишний, `#chat-shadow-top` позиционирован неверно (sibling вместо child), `box-shadow: inset` на `height: 0` невидим, `#sidebar-shadow-top` неверный контейнер, scroll-делегация может не сработать, renderSidebar не ребайндил слушатели, `hidePlayerView` не прятал player-loader | Исправлено: `toast.js` → Unicode icons + live `children.length`; chat shadow → `position: sticky` внутри `#chat-messages`; sidebar shadow → `::before` на `.section-body`; scroll-слушатели → прямые, с ребайндингом после render; player-loader → скрывается в `hidePlayerView()`. 436 tests pass. | ✅ Active |
+| 2026-05-11 | Phase 5 (Accessibility) | Нет ARIA landmarks, нет focus management, text-muted fails WCAG AA | ARIA roles (navigation, main, dialog, toolbar, tablist, menu, log, combobox). `ui/js/focus.js` (focusTrap, focusReturn, arrowNav). `.sr-only` utility + dynamic announcements. `--text-muted` #6E6E73→#8A8A95 (AA pass). Icon-only кнопки с `aria-label`. Keyboard navigation в context-menu и search dropdown. Focus trap для settings overlay и context menu. | ✅ Active |
+| 2026-05-12 | Phase 5 debug audit | Три бага после первой реализации: (1) `handleArrowNav` ArrowUp при `currentIndex === -1` переводил на предпоследний пункт вместо последнего; (2) missing `e.preventDefault()` в Enter-обработчике search dropdown; (3) `focusReturn.restore()` в `closeContextMenu()` перебивал фокус после view-changing actions (Watch, Profile) | (1) `currentIndex <= 0 ? length-1 : currentIndex-1`; (2) добавлен `e.preventDefault()` перед `activeResult.click()`; (3) убраны `focusReturn.save/restore` из контекстного меню — действия меняют глобальное состояние, focus return не применяется. | ✅ Active |
+| 2026-05-11 | Phase 6 | Component Polish: player bar grouping, volume slider, buffer bar, seek bar, fullscreen auto-hide | 5 плеерных фич: bar grouping (`.bar-group` wrappers + separators), volume slider (`#volume-slider` + mute toggle), buffer viz (`#buffer-bar`/`#buffer-loaded`), VOD seek bar (`#seek-bar` + tooltip), fullscreen auto-hide (`.fs-hidden` + `webkitpresentationmodechanged`). 4 sidebar фичи: watching indicator (`.watching`), hover tooltip (`#sidebar-tooltip`), notification badge (`.notif-dot`/`.notif-badge`), collapsible mode (`.collapsed-sidebar`). 4 chat фичи: timestamps toggle (`.msg-time`), smooth scroll (`scrollTo({behavior:'smooth'})`), emote picker responsive (max-height), reply compactness. 3 settings modal фичи: unsaved changes warning (`_settingsSnapshot` + `confirm()`), `hotkey-capturing`/`hotkey-idle` CSS classes, compact stat cards toggle. Context menu: animation fix (`visibility`/`opacity`/`scale` + rAF two-phase show), `closeContextMenu()` refactor. Debug audit: 8 bugs fixed (text-muted WCAG AA, key name alignment, webkitpresentationmodechanged bubbling, missing CSS/export, hidePlayerView cleanup). | ✅ Active |
+| 2026-05-12 | Phase 7 | Visual Refinement: SVG icon system, platform branding, selection styling, CSS performance | `ui/js/icons.js` с 44 stroke-based SVG иконками (16×16, 1.5px, `currentColor`). Все текстовые символы (⚙, ✕, ▶ и др.) заменены на inline SVG через `TwitchX.renderIcon()`. `--platform-twitch/kick/youtube` токены. `::selection` с accent tint. `contain: layout style paint` + `content-visibility: auto` на `#stream-grid`. `will-change: transform` на `.channel-item`. | ✅ Active |
+| 2026-05-18 | Health Monitor Optimization | FPS drops при длительном просмотре (>20 мин) из-за накопления SourceBuffer в WKWebView | **Buffer management:** forward threshold 180s→60s (live HLS нужно максимум 30s буфера), добавлен total span check (>120s → reset). **Live edge drift:** 120s→30s (меньше дрейф = меньше SourceBuffer). **Proactive reset:** 30min→15min (упреждение деградации). **Decoder monitoring:** добавлен dropped frames check (`video.getVideoPlaybackQuality()` > 5% drop rate), детектирует VideoToolbox-деградацию которую rAF miss'ит. Инициализация `_droppedFramesBaseline` в `startVideoHealthMonitor()`. | ✅ Active |
 
 ## 8. Testing Guide
 
@@ -700,6 +830,7 @@ def test_my_feature(temp_config_dir, run_sync, capture_eval_js):
 | «Multistream reply не работает» | §3.5, init.js | `ms-chat-send-btn` handler читает `TwitchX.chatReplyTo` и передаёт reply params в `send_chat()`? После отправки вызывает `clearChatReply()`? |
 | «httpx клиенты утекают / растёт потребление памяти» | §5.2, _base.py | `_async_run` вызывает `_close_thread_loop(loop)` в `finally`? Не bare `loop.close()`? |
 | «Escape не закрывает плеер» | §6.4, keyboard.js | `player-view.active` branch вызывает `TwitchX.hidePlayerView()` вместо bare `return`? |
+| «Escape не закрывает context menu» | §3.13, keyboard.js | Проверить что Escape priority не блокируется вышестоящим слоем. `closeContextMenu()` вызывает `deactivateFocusTrap()` и скрывает меню. |
 | «Cmd+K не открывает palette» | §3.8, palette.js | `palette.js` загружен после `keyboard.js`? `TwitchX.openPalette` определён? `e.metaKey && e.key === 'k'` в `handleKeydown`? |
 | «Приложение полностью ломается после изменений JS» | §3.2, app.py | `var TwitchX` в новом модуле вместо `const` — `_inline_resources()` не заменяет `var`, возникает `SyntaxError: Identifier 'TwitchX' has already been declared` в едином inline-блоке. |
 | «List mode не применяется» | §3.6, render.js | `TwitchX.state.gridMode === 'list'`? `#stream-grid.list-mode` CSS загружен? |
@@ -709,13 +840,396 @@ def test_my_feature(temp_config_dir, run_sync, capture_eval_js):
 | «Accent color не применяется при старте» | §3.2, settings.js | `localStorage.getItem('twitchx.accent')`? `TwitchX.applyAccentColor` определён и вызывается в `DOMContentLoaded`? |
 | «Accent swatch не показывает текущий цвет» | §3.2, settings.js | `config.accent_color` приходит от `get_full_config_for_settings()`? `openSettings()` рендерит swatches с классом `active`? |
 | «Design tokens не работают / CSS переменные undefined» | §3.1, tokens.css | Проверить что `tokens.css` загружен первым в `_inline_resources()`. Все токены объявлены в `:root`. Имена с `var(--space-*)` / `var(--font-*)` / `var(--z-*)` и т.д. корректны. |
+| «Focus trap не работает в settings» | §3.13, focus.js | `TwitchX.activateFocusTrap()` вызывается в `openSettings()`. `#settings-modal` должен содержать focusable элементы (кнопки, инпуты). Focus trap обходит `tabindex="-1"` — использует `[role="menuitem"]`. Проверить что `deactivateFocusTrap()` вызывается в `closeSettings()`. |
+| «Focus не возвращается при закрытии overlay» | §3.13, focus.js | `TwitchX.focusReturn.save()` должен вызываться перед открытием. `focusReturn.restore()` при закрытии. Проверить что `previous` не занулён до restore. |
+| «Keyboard nav в context-menu не работает» | §3.13, keyboard.js | ArrowDown/ArrowUp обрабатываются в `handleKeydown` до Escape chain. Enter на активном `.ctx-item` вызывает `.click()`. Проверить что `role="menuitem"` установлен. |
+| «Search dropdown keyboard nav не работает» | §3.13, keyboard.js | ArrowDown/ArrowUp обрабатываются до escape chain. Результаты должны иметь `role="option"` и быть focusable. `activeResult.click()` срабатывает на Enter. |
+| «Скринридер не объявляет смену стрима» | §3.13, callbacks.js | `onStreamReady` обновляет `#live-dot-sr` с `aria-live="assertive"`. `onPlayerStop` сбрасывает. Проверить что `#live-dot-sr` есть в DOM. |
+| «SR не объявляет статус чата» | §3.13, callbacks.js | `onChatStatus` создаёт и обновляет `#chat-status-text-sr` с `aria-live="polite"`. Проверить что элемент существует после первого вызова. |
 | «View transition не срабатывает / пропадает мгновенно» | §3.11 | Проверить двухфазный паттерн: `style.display` установлен до `opacity` transition. `transitionend` не сработает если opacity уже 0 — fallback `setTimeout(250ms)` в `viewFadeOut` обязателен. |
-| «Context menu не появляется» | §3.11, context-menu.js | BUGFIX: базовый CSS `#context-menu` больше не имеет `display: none`. Используется класс `.menu-visible` для показа. Проверить что `showContextMenu` добавляет `menu-visible`, а `_bindContextMenuEvents` убирает его. |
 | «Search dropdown не появляется» | §3.11, init.js | Используется `.visible` класс вместо `.hidden`. Проверить что `onSearchResults` добавляет `dd.classList.add('visible')`. |
 | «Skeleton не появляется при старте» | §3.11, init.js | `showSkeletonGrid()` вызывается в `DOMContentLoaded` только если `TwitchX.state.favorites.length > 0`. Проверить что favorites загружены к этому моменту. |
 | «Skeleton не исчезает после загрузки данных» | §3.11, callbacks.js | `hideSkeletonGrid()` вызывается в `onStreamsUpdate`. Проверить что `.skeleton-card` элементы в `#stream-grid` удаляются. |
 | «Chat status text не отображается» | §3.11, index.html | `#chat-status-text` добавлен в HTML рядом с `#chat-status-dot`. Пустой по умолчанию, заполняется в `onChatStatus` при disconnected. |
+| «Тосты не появляются» | §3.12, toast.js | `toast.js` загружен после `palette.js` и перед `callbacks.js`? `#toast-container` есть в HTML? `showToast()` определён на `TwitchX`? |
+| «Stream loader bar не показывается» | §3.12, callbacks.js | `onLaunchProgress` показывает `#stream-loader`? `onStreamReady`/`onLaunchResult`/`onPlayerStop` скрывают? |
+| «Player spinner не исчезает» | §3.12, player.js | `showPlayerView()` показывает `#player-loader`; `playing`/`error` события на `<video>` скрывают с fallback 15s. Проверить отсутствие видео события. |
+| «Scroll shadow не появляется» | §3.12, sidebar.js/chat.js | `initSidebarScrollShadow()`/`initChatScrollShadow()` вызывается в `_bindGlobalEvents()`? `scroll` обработчик привязан к `.section-body` через делегирование на `#channel-list`? |
+| «Тост не закрывается по клику» | §3.12, toast.js | `el.addEventListener('click', ...)` на каждом тосте вызывает `dismissToast`. Проверить что `pointer-events: auto` на `.toast`. |
+| «Volume slider не показывает» | §3.3, player.js | `syncVolumeSlider(video)` вызывается в `showPlayerView()`? `#volume-group` должен быть `.hidden` если нет видео. |
+| «Volume slider не синхронизируется с keyboard» | §3.3, player.js | `adjustVolume()` вызывает `syncVolumeSlider(video)`. `getActiveVideo()` работает для main и multistream. |
+| «Fullscreen auto-hide не срабатывает» | §3.3, player.js | `_watchFullscreenChanges()` вызывается в `DOMContentLoaded`. `webkitpresentationmodechanged` биндится на video через `_bindPiPEvents`. Проверить `#player-bar.fs-hidden` CSS. |
+| «VOD seek bar не показывается» | §3.3, player.js | `startVodSeekBar()` вызывается в `showPlayerView()` только при `streamType === 'vod'`. `video.duration` может быть `NaN` на старте — `seek` interval ждёт. |
+| «Sidebar watching indicator не появился» | §3.4, sidebar.js | `_matchWatching(login)` сравнивает с `TwitchX.state.watchingChannel`. Проверить что `renderSidebar()` вызывается после `onStreamReady`. |
+| «Sidebar tooltip не появляется» | §3.4, sidebar.js | `_setupSidebarTooltip()` — только для live стримов (есть в `streamMap`). Thumbnail через `stream.thumbnail_url`. Debounce 400ms. |
+| «Sidebar notification badge не показывает» | §3.4, callbacks.js | `TwitchX._notifBadgeLogins` заполняется в `onStreamsUpdate` при offline→online переходе. `_updateNotifBadges()` вызывается после `renderSidebar`. |
+| «Collapsed sidebar сам включается» | §3.4, init.js | `localStorage.getItem('twitchx.sidebar.collapsed') === '1'`? Сбросить. |
+| «Chat timestamps не отображаются» | §3.5, callbacks.js | `TwitchX.chatTimestamps` — localStorage в init.js. Только новые сообщения получают timestamp (через `<span class="msg-time">`). |
+| «Smooth scroll не срабатывает» | §3.5, callbacks.js | `behavior: 'smooth'` требует WKWebView поддержку. `prefers-reduced-motion` использует instant. |
+| «Context menu не появляется» | §3.11, context-menu.js | BUGFIX: базовый CSS `#context-menu` больше не имеет `display:none`. Используется класс `.menu-visible` для показа. Проверить что `showContextMenu` добавляет `menu-visible`, а `_bindContextMenuEvents` убирает его. |
+| «Settings не предупреждает о несохранённых» | §6.4, settings.js | `_settingsSnapshot` устанавливается в `openSettings()`. `_isSettingsDirty()` сравнивает `JSON.stringify(_readAllFormValues())`. Accent и shortcuts отслеживаются. |
+| «SVG иконки не отображаются / невидимы» | §7.1, icons.js | Проверить что `fill="currentColor"` или `fill` явно указан для элементов внутри SVG (родитель имеет `fill="none"`). `record`, `live-dot`, `info`, `warn` требуют `fill="currentColor" stroke="none"` на кругах. |
+| «Grid-toggle иконка не меняется при клике» | §3.6, init.js | `gridToggleBtn.innerHTML` устанавливается в `_bindToolbarEvents()`. Проверить что `TwitchX.renderIcon()` возвращает корректный SVG для `grid-toggle`/`list-toggle`.
 
 ---
 
 *Archive: предыдущая версия файла сохранена как `AGENTS.md.archive`.*
+
+---
+
+## 10. Visual Design Enhancements (Session: 2026-05-20)
+
+### Overview
+Conducted comprehensive visual design analysis and implemented 26+ improvements across CSS tokens, layout, components, animations, and JavaScript to enhance the UI's polish, clarity, and visual hierarchy. All changes maintain backward compatibility and pass the full test suite (462 tests).
+
+### Design Principles Applied
+- **Contrast & Readability**: Upgraded `--text-secondary` from `#8E8E93` to `#AEAEB2` (WCAG AA compliance)
+- **Legibility Floor**: Increased `--font-xs` from `10px` to `11px` for 1x screen readability
+- **Depth & Layering**: Enhanced shadows and added glassmorphism effects
+- **Motion & Feedback**: Staggered entrance animations and smooth transitions
+- **Color Harmony**: Gradient accents and glow effects for interactive states
+
+### Detailed Changes
+
+#### 10.1 CSS Tokens (`ui/css/tokens.css`)
+**Purpose**: Foundation layer for all design changes. Updated tokens ensure consistent application of improvements across all components.
+
+| Token | Old Value | New Value | Rationale |
+|-------|-----------|-----------|-----------|
+| `--text-secondary` | `#8E8E93` | `#AEAEB2` | Better contrast ratio for secondary text (WCAG AA) |
+| `--font-xs` | `10px` | `11px` | Minimum readable size on non-retina displays |
+| `--tracking-tight` | — | `-0.02em` | Letter spacing for compact layouts |
+| `--tracking-snug` | — | `-0.01em` | Slight negative spacing for tighter appearance |
+| `--tracking-normal` | — | `0` | Default neutral spacing |
+| `--tracking-wide` | — | `0.04em` | Loose spacing for headers/emphasis |
+| `--leading-tight` | — | `1.2` | Compact line height for dense content |
+| `--leading-normal` | — | `1.4` | Default comfortable line height |
+| `--leading-relaxed` | — | `1.6` | Spacious line height for readability |
+
+**Files modified**: `ui/css/tokens.css`
+
+#### 10.2 Frosted Glass Effects
+**Purpose**: Modern glassmorphism for depth and elegance while maintaining usability.
+
+**Toolbar** (`ui/css/layout.css`):
+```css
+#toolbar {
+  background: rgba(28, 28, 30, 0.82);
+  backdrop-filter: blur(20px) saturate(180%);
+  /* Replaces solid background for frosted appearance */
+}
+```
+
+**Player Bar** (`ui/css/player.css`):
+```css
+#player-bar {
+  background: rgba(28, 28, 30, 0.82);
+  backdrop-filter: blur(20px) saturate(180%);
+  /* Matches toolbar for visual cohesion */
+}
+```
+
+**Platform Badge** (`ui/css/components.css`):
+```css
+.platform-badge {
+  border-radius: 999px; /* Pill shape instead of circle */
+  backdrop-filter: blur(8px);
+  /* Subtle glass effect on badge */
+}
+```
+
+**Files modified**: `ui/css/layout.css`, `ui/css/player.css`, `ui/css/components.css`
+
+#### 10.3 Dynamic Slider Fills (CSS Variables)
+**Purpose**: Visual feedback showing progress/volume without JavaScript-heavy bar renders.
+
+**Volume Slider** (`ui/css/player.css`):
+```css
+#volume-slider {
+  background: linear-gradient(to right,
+    var(--accent) 0%,
+    var(--accent) var(--volume-pct, 70%),
+    var(--border-subtle) var(--volume-pct, 70%),
+    var(--border-subtle) 100%);
+}
+```
+
+**Seek Bar** (`ui/css/player.css`):
+```css
+#seek-bar {
+  background: linear-gradient(to right,
+    var(--accent) 0%,
+    var(--accent) var(--seek-pct, 0%),
+    var(--border-subtle) var(--seek-pct, 0%),
+    var(--border-subtle) 100%);
+}
+```
+
+**JavaScript synchronization** (`ui/js/player.js`):
+- `syncVolumeSlider()`: Updates `--volume-pct` CSS variable in real-time
+- `startVodSeekBar()`: Updates `--seek-pct` CSS variable on VOD progress
+- Removes need for DOM structure changes; pure CSS gradients
+
+**Files modified**: `ui/css/player.css`, `ui/js/player.js`
+
+#### 10.4 Stream Card Enhancements
+**Purpose**: Improved visual feedback and depth for the primary interactive element.
+
+**Hover Transform**:
+```css
+.stream-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+  /* Was 0 4px 16px; upgraded for depth */
+}
+```
+
+**Thumbnail Overlay & Gradient**:
+```css
+.card-thumb::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(to top,
+    rgba(0, 0, 0, 0.45) 0%,
+    transparent 45%);
+  /* Darkens bottom, preserves thumbnail */
+}
+
+.stream-card:hover .thumb-img {
+  transform: scale(1.04); /* Subtle zoom on hover */
+}
+```
+
+**Live Badge Pulsing Effect**:
+```css
+.live-badge::before {
+  content: '';
+  position: absolute;
+  width: 6px; height: 6px;
+  background: white;
+  border-radius: 50%;
+  top: 4px; left: 4px;
+  box-shadow: 0 0 10px rgba(255, 69, 58, 0.45);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+```
+
+**Files modified**: `ui/css/components.css`
+
+#### 10.5 Accent Color Gradients
+**Purpose**: Unifies interactive buttons with ambient glow for visual hierarchy.
+
+**Watch/Save Buttons & Onboarding**:
+```css
+#watch-btn.active,
+#save-btn,
+.onboarding-btn {
+  background: linear-gradient(135deg, #FF9F0A, #F07800);
+  box-shadow: 0 0 20px rgba(255, 159, 10, 0.25);
+  color: white;
+}
+
+#chat-send-btn {
+  background: linear-gradient(135deg, #FF9F0A, #F07800);
+  box-shadow: 0 0 10px rgba(255, 159, 10, 0.15);
+}
+```
+
+**Focus/Interaction States**:
+```css
+#chat-input:focus {
+  box-shadow: 0 0 0 2px rgba(255, 159, 10, 0.08);
+}
+```
+
+**Files modified**: `ui/css/components.css`
+
+#### 10.6 Offline Channel Styling
+**Purpose**: Visual distinction between live and offline channels in sidebar.
+
+**Offline Channel Avatar**:
+```css
+.channel-item .avatar {
+  filter: grayscale(0.55) opacity(0.7);
+}
+
+.channel-item.live .avatar {
+  filter: none; /* Live channels: full saturation */
+}
+```
+
+**Live Accent Bar**:
+```css
+.channel-item.live .accent-bar {
+  background: var(--live-green);
+  opacity: 0.5;
+}
+```
+
+**Files modified**: `ui/css/components.css`
+
+#### 10.7 Context Menu Separators
+**Purpose**: Visual clarity in grouped menu items.
+
+**CSS**:
+```css
+.ctx-separator {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 4px 8px;
+}
+```
+
+**HTML** (`ui/index.html`):
+- Added `<div class="ctx-separator"></div>` after watch-related group
+- Added `<div class="ctx-separator"></div>` after browser group
+
+**Files modified**: `ui/css/components.css`, `ui/index.html`
+
+#### 10.8 Keyboard Focus Ring
+**Purpose**: Accessibility and visual feedback for keyboard navigation.
+
+```css
+.stream-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+```
+
+**Files modified**: `ui/css/components.css`
+
+#### 10.9 Chat Message Refinements
+**Purpose**: Improved readability and visual spacing in chat.
+
+```css
+.chat-msg {
+  padding: 3px 6px; /* Was 2px 5px */
+  margin-bottom: 1px;
+  line-height: var(--leading-normal);
+}
+```
+
+**Files modified**: `ui/css/components.css`
+
+#### 10.10 Staggered Entrance Animation
+**Purpose**: Visual polish when grid populates. Draws attention to new streams.
+
+**Animation Definition**:
+```css
+@keyframes card-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+```
+
+**Stream Card Stagger** (30ms intervals, 8 cards):
+```css
+.stream-card.card-enter {
+  animation: card-enter 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.stream-card.card-enter:nth-child(1) { animation-delay: 0ms; }
+.stream-card.card-enter:nth-child(2) { animation-delay: 30ms; }
+.stream-card.card-enter:nth-child(3) { animation-delay: 60ms; }
+/* ... through :nth-child(8) { animation-delay: 210ms; } */
+```
+
+**Browse Category/Stream Cards**: Same stagger pattern applied.
+
+**JavaScript Support** (`ui/js/render.js`):
+```javascript
+function createStreamCard(s) {
+  const card = document.createElement('div');
+  card.className = 'stream-card card-enter'; // Include animation class
+  card.addEventListener('animationend', function() {
+    card.classList.remove('card-enter'); // Clean up after animation
+  }, { once: true });
+  // ... rest of card creation
+}
+```
+
+**Browse Card Support** (`ui/js/callbacks.js`):
+- Added same pattern to browse category card creation (~line 748)
+- Added same pattern to browse stream card creation (~line 798)
+
+**Files modified**: `ui/css/components.css`, `ui/js/render.js`, `ui/js/callbacks.js`
+
+#### 10.11 Browse Grid Spacing
+**Purpose**: Improved breathing room in grid layouts.
+
+```css
+.browse-grid {
+  gap: 14px; /* Was 10px */
+}
+
+#multistream-grid {
+  gap: 4px; /* Was 2px */
+}
+```
+
+**Files modified**: `ui/css/views.css`
+
+#### 10.12 Multistream Overlay Readability
+**Purpose**: Ensure text over light video backgrounds remains legible.
+
+```css
+.ms-overlay {
+  backdrop-filter: blur(2px); /* Subtle blur for text contrast */
+}
+```
+
+**Files modified**: `ui/css/views.css`
+
+### Implementation Approach
+
+**Phase 1: Foundation** — Updated tokens for consistent cascade
+**Phase 2: Layout** — Applied frosted glass to major sections
+**Phase 3: Components** — Enhanced cards, buttons, and badges
+**Phase 4: Animation** — Added staggered entrance and motion
+**Phase 5: JavaScript** — Synchronized CSS variables for dynamic effects
+**Phase 6: Polish** — Spacing, shadows, focus states
+
+### Testing & Verification
+
+✅ All 462 unit tests pass
+✅ No console errors in preview
+✅ All CSS variables properly configured
+✅ JavaScript synchronization verified
+✅ Backward compatible (no breaking changes)
+✅ Works across all views: grid, browse, multistream, channel profile
+
+### Potential Future Enhancements
+
+- [ ] Skeleton card entrance animation (fade-in shimmer)
+- [ ] Context menu slide-in animation with delay
+- [ ] Channel profile modal transition (scale + fade)
+- [ ] Settings modal backdrop animation
+- [ ] Toast notification slide-up animation
+- [ ] Drag-to-reorder visual feedback (ghost element)
+- [ ] Search result highlight animation
+- [ ] Chat notification pop-in effect
+
+### Files Summary
+
+| File | Changes | Lines |
+|------|---------|-------|
+| `ui/css/tokens.css` | Added tracking/leading tokens | +9 |
+| `ui/css/layout.css` | Toolbar glassmorphism | +2 |
+| `ui/css/player.css` | Player bar glass + dynamic sliders | +20 |
+| `ui/css/components.css` | 40+ component enhancements | +180 |
+| `ui/css/views.css` | Browse/multistream spacing | +4 |
+| `ui/js/player.js` | CSS variable sync for sliders | +6 |
+| `ui/js/render.js` | Card-enter animation class | +3 |
+| `ui/js/callbacks.js` | Browse card animation support | +4 |
+| `ui/index.html` | Context menu separators | +2 |
+| **TOTAL** | | **~230 lines** |
+
+---
+

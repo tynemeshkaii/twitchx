@@ -84,8 +84,8 @@ class NativePlayerController:
             for bv in cocoa.BrowserView.instances.values():
                 ns_window = bv.window
                 break
-        except Exception:
-            pass
+        except (ImportError, AttributeError) as exc:
+            logger.debug("Could not access pywebview cocoa backend: %s", exc)
 
         if ns_window is None:
             raise RuntimeError("Cannot access NSWindow from pywebview")

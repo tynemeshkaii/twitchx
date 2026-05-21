@@ -7,23 +7,25 @@
   --accent-muted: rgba(255, 159, 10, 0.25);
   --accent-text:  #FF9F0A;
 
-  /* ── Warm obsidian depth system ──────────────────────── */
-  --bg-base:      #0A0A0C;
-  --bg-surface:   #131315;
-  --bg-elevated:  #1D1D20;
-  --bg-overlay:   #26262A;
-  --bg-border:    #222225;
+  /* ── Depth system (macOS dark mode aligned) ──────────── */
+  --bg-base:      #141416;
+  --bg-surface:   #1C1C1E;
+  --bg-elevated:  #252528;
+  --bg-overlay:   #2E2E32;
+  --bg-border:    #2C2C2E;
 
   /* ── Apple-style label hierarchy ─────────────────────── */
   --text-primary:   #F2F2F7;
-  --text-secondary: #8E8E93;
-  --text-muted:     #6E6E73;
+  --text-secondary: #AEAEB2;
+  --text-muted:     #8E8E93;
+  --text-muted-elevated: #99999F;
 
   /* ── Semantic status ────────────────────────────────── */
   --live-green:  #30D158;
   --live-red:    #FF453A;
   --warn-yellow: #FF9F0A;
   --error-red:   #FF453A;
+  --error-red-bright: #FF6961;
 
   /* ── Radii ──────────────────────────────────────────── */
   --radius-sm: 6px;
@@ -43,22 +45,33 @@
   --space-32: 32px;
 
   /* ── Typography scale ───────────────────────────────── */
-  --font-xs:   10px;
+  --font-xs:   11px;
   --font-sm:   11px;
   --font-md:   13px;
   --font-base: 14px;
   --font-lg:   16px;
   --font-xl:   20px;
 
+  /* ── Tracking (letter-spacing) ──────────────────────── */
+  --tracking-tight:  -0.02em;
+  --tracking-snug:   -0.01em;
+  --tracking-normal:  0;
+  --tracking-wide:    0.04em;
+
+  /* ── Leading (line-height) ──────────────────────────── */
+  --leading-tight: 1.2;
+  --leading-normal: 1.4;
+  --leading-relaxed: 1.6;
+
   /* ── Border tokens ──────────────────────────────────── */
-  --border-subtle:  rgba(255, 255, 255, 0.06);
-  --border-default: rgba(255, 255, 255, 0.10);
-  --border-strong:  rgba(255, 255, 255, 0.15);
+  --border-subtle:  rgba(255, 255, 255, 0.08);
+  --border-default: rgba(255, 255, 255, 0.13);
+  --border-strong:  rgba(255, 255, 255, 0.22);
 
   /* ── Shadow tokens ──────────────────────────────────── */
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 12px 40px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 24px 80px rgba(0, 0, 0, 0.8);
+  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.22);
+  --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.48), 0 2px 8px rgba(0, 0, 0, 0.22);
+  --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.65);
 
   /* ── Z-index scale ──────────────────────────────────── */
   --z-base:     1;
@@ -66,6 +79,7 @@
   --z-sticky:   200;
   --z-overlay:  500;
   --z-modal:    1000;
+  --z-toast:    2000;
   --z-tooltip:  9999;
 
   /* ── Animation tokens ───────────────────────────────── */
@@ -76,4 +90,37 @@
   --ease-default:    ease;
   --ease-spring:     cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-view:       cubic-bezier(0.25, 0.1, 0.25, 1);
+
+  /* ── Micro-interaction tokens ───────────────────────── */
+  --scale-press:      0.96;
+  --highlight-press:  rgba(255, 255, 255, 0.08);
+
+  /* ── Toast notification tokens ──────────────────────── */
+  --toast-duration: 4s;
+  --toast-bg-success: rgba(48, 209, 88, 0.14);
+  --toast-bg-error:   rgba(255, 69, 58, 0.14);
+  --toast-bg-info:    rgba(255, 255, 255, 0.07);
+  --toast-bg-warn:    rgba(255, 159, 10, 0.14);
+  --toast-border-success: rgba(48, 209, 88, 0.35);
+  --toast-border-error:   rgba(255, 69, 58, 0.35);
+  --toast-border-info:    rgba(255, 255, 255, 0.12);
+  --toast-border-warn:    rgba(255, 159, 10, 0.35);
+  --toast-text-success: var(--live-green);
+  --toast-text-error:   var(--error-red);
+  --toast-text-info:    var(--text-secondary);
+  --toast-text-warn:    var(--warn-yellow);
+
+  /* ── Icon sizing tokens ────────────────────────────── */
+  --icon-sm: 16px;
+  --icon-md: 20px;
+
+  /* ── Platform brand colors ─────────────────────────── */
+  --platform-twitch:  #9146FF;
+  --platform-kick:    #53FC18;
+  --platform-kick-text: #0A0A0C;
+  --platform-youtube: #FF0000;
+
+  /* ── Scroll shadow tokens ───────────────────────────── */
+  --scroll-shadow-size:  16px;
+  --scroll-shadow-color: rgba(0, 0, 0, 0.45);
 }

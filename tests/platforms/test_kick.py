@@ -399,8 +399,8 @@ def test_get_auth_url_uses_effective_client_id(temp_config_dir):
 
 def test_kick_login_works_without_config_credentials(temp_config_dir):
     """KickClient auth flow does not crash when config client_id/secret are empty."""
-    from core.platforms.kick import KickClient
     import core.credentials as creds
+    from core.platforms.kick import KickClient
     client = KickClient()
     cid, csec = client._effective_creds()
     assert cid == creds.KICK_CLIENT_ID

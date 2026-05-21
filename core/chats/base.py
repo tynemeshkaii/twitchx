@@ -82,6 +82,7 @@ class BaseChatClient(ChatClient):
             except StopReconnect:
                 break
             except Exception as e:
+                logger.warning("Chat reconnect error (attempt %d): %s", attempt + 1, e)
                 if not self._running:
                     break
                 attempt += 1

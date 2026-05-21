@@ -62,9 +62,10 @@ def resolve_hls_url(
     else:
         return None, "No platform client provided and channel is not a direct URL"
 
-    hls_url, err = _run_streamlink(resolved_sl, stream_url, quality, extra_args)
-
-    if not hls_url and quality != "best":
-        hls_url, err = _run_streamlink(resolved_sl, stream_url, "best", extra_args)
+    # Pass both the requested quality and "best" as a fallback in one call.
+    # streamlink picks the first available quality from the comma-separated list,
+    # which avoids a second subprocess call (and up to 15 extra seconds of wait).
+    quality_arg = f"{quality},best" if quality != "best" else "best"
+    hls_url, err = _run_streamlink(resolved_sl, stream_url, quality_arg, extra_args)
 
     return hls_url, err

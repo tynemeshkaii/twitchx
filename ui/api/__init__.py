@@ -251,6 +251,9 @@ class TwitchXApi:
     def stop_player(self) -> None:
         self._streams.stop_player()
 
+    def notify_player_hidden(self) -> None:
+        self._streams.notify_player_hidden()
+
     def add_multi_slot(
         self, slot_idx: int, channel: str, platform: str, quality: str
     ) -> None:

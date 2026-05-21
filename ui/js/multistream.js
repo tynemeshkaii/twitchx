@@ -11,12 +11,10 @@ function openMultistreamView() {
   document.getElementById('toolbar').classList.add('hidden');
   document.getElementById('stream-grid').classList.add('hidden');
   var mv = document.getElementById('multistream-view');
-  mv.classList.remove('hidden');
   mv.style.opacity = '0';
+  mv.classList.remove('hidden');
   requestAnimationFrame(function() {
-    requestAnimationFrame(function() {
-      mv.style.opacity = '';
-    });
+    mv.style.opacity = '';
   });
   TwitchX.startMultiHealthMonitor();
 }
@@ -39,12 +37,10 @@ function closeMultistreamView() {
   document.getElementById('ms-chat-panel').classList.add('hidden');
   document.getElementById('toolbar').classList.remove('hidden');
   var grid = document.getElementById('stream-grid');
-  grid.classList.remove('hidden');
   grid.style.opacity = '0';
+  grid.classList.remove('hidden');
   requestAnimationFrame(function() {
-    requestAnimationFrame(function() {
-      grid.style.opacity = '';
-    });
+    grid.style.opacity = '';
   });
   document.getElementById('ms-chat-messages').replaceChildren();
   const btn = document.getElementById('ms-sidebar-btn');
@@ -91,7 +87,9 @@ function _clearMultiSlot(idx) {
     const pipBtn = slotEl.querySelector('.ms-pip-btn');
     _bindSlotPiPEvents(fresh, pipBtn);
   }
-  slotEl.querySelector('.ms-slot-active').classList.add('hidden');
+  const activeEl = slotEl.querySelector('.ms-slot-active');
+  activeEl.classList.add('hidden');
+  activeEl.style.display = '';
   slotEl.querySelector('.ms-slot-empty').classList.remove('hidden');
   slotEl.querySelector('.ms-add-form').classList.add('hidden');
   slotEl.classList.remove('audio-focus', 'chat-focus');
@@ -109,6 +107,7 @@ function addMultiSlot(idx, channel, platform) {
   slotEl.querySelector('.ms-add-form').classList.add('hidden');
   const active = slotEl.querySelector('.ms-slot-active');
   active.classList.remove('hidden');
+  active.style.display = 'block';
   active.querySelector('.ms-loading').classList.remove('hidden');
   active.querySelector('.ms-error-msg').classList.add('hidden');
   const msVideo = active.querySelector('.ms-video');
@@ -218,7 +217,7 @@ function _createMultiSlot(idx) {
   const addBtn = document.createElement('button');
   addBtn.className = 'ms-add-btn';
   addBtn.dataset.slot = idx;
-  addBtn.textContent = '+';
+  addBtn.innerHTML = TwitchX.renderIcon('plus', 14);
   const span = document.createElement('span');
   span.textContent = 'Add Stream';
   addBtn.appendChild(span);
@@ -321,28 +320,28 @@ function _createMultiSlot(idx) {
   audioBtn.dataset.slot = idx;
   audioBtn.title = 'Focus audio';
   audioBtn.setAttribute('aria-label', 'Focus audio');
-  audioBtn.textContent = '\uD83D\uDD0A';
+  audioBtn.innerHTML = TwitchX.renderIcon('volume', 14);
   controls.appendChild(audioBtn);
   const chatBtn = document.createElement('button');
   chatBtn.className = 'ms-chat-sw-btn';
   chatBtn.dataset.slot = idx;
   chatBtn.title = 'Switch chat';
   chatBtn.setAttribute('aria-label', 'Switch chat');
-  chatBtn.textContent = '\uD83D\uDCAC';
+  chatBtn.innerHTML = TwitchX.renderIcon('chat', 14);
   controls.appendChild(chatBtn);
   const fsBtn = document.createElement('button');
   fsBtn.className = 'ms-fullscreen-btn';
   fsBtn.dataset.slot = idx;
   fsBtn.title = 'Fullscreen (double-click)';
   fsBtn.setAttribute('aria-label', 'Fullscreen');
-  fsBtn.textContent = '\u26F6';
+  fsBtn.innerHTML = TwitchX.renderIcon('fullscreen', 14);
   controls.appendChild(fsBtn);
   const pipBtn = document.createElement('button');
   pipBtn.className = 'ms-pip-btn';
   pipBtn.dataset.slot = idx;
   pipBtn.title = 'Picture-in-Picture';
   pipBtn.setAttribute('aria-label', 'Picture in Picture');
-  pipBtn.textContent = '\u29C9';
+  pipBtn.innerHTML = TwitchX.renderIcon('pip', 14);
   controls.appendChild(pipBtn);
   _bindSlotPiPEvents(video, pipBtn);
   const removeBtn = document.createElement('button');
@@ -350,7 +349,7 @@ function _createMultiSlot(idx) {
   removeBtn.dataset.slot = idx;
   removeBtn.title = 'Remove';
   removeBtn.setAttribute('aria-label', 'Remove');
-  removeBtn.innerHTML = '&times;';
+  removeBtn.innerHTML = TwitchX.renderIcon('close', 14);
   controls.appendChild(removeBtn);
   overlay.appendChild(controls);
   active.appendChild(overlay);
@@ -426,35 +425,29 @@ function _reloadMultiSlot(idx, reason) {
   if (!video || !video.src) return;
 
   // Do not destroy the DOM element while in PiP or fullscreen — that kills the session
-  if (TwitchX.isVideoPiP && TwitchX.isVideoPiP(video)) {
-    console.log('[VideoHealth] multistream slot', idx, reason, 'soft reset (PiP) at', new Date().toISOString());
+  function _softResetSlot(label) {
+    console.log('[VideoHealth] multistream slot', idx, reason, 'soft reset (' + label + ') at', new Date().toISOString());
     const oldSrc = video.src;
     const wasMuted = video.muted;
     video.pause();
     video.removeAttribute('src');
-    video.src = '';
     video.load();
     video.src = oldSrc;
     video.muted = wasMuted;
-    video.play().catch(function() {});
+    video.play().catch(function(e) {
+      console.warn('[Multistream] slot', idx, 'soft reset play() rejected:', e && e.message || e);
+    });
     delete slotEl.dataset._lastTime;
     delete slotEl.dataset._frozenCount;
+  }
+
+  if (TwitchX.isVideoPiP && TwitchX.isVideoPiP(video)) {
+    _softResetSlot('PiP');
     return;
   }
 
   if (video.webkitPresentationMode === 'fullscreen') {
-    console.log('[VideoHealth] multistream slot', idx, reason, 'soft reset (fullscreen) at', new Date().toISOString());
-    const oldSrc = video.src;
-    const wasMuted = video.muted;
-    video.pause();
-    video.removeAttribute('src');
-    video.src = '';
-    video.load();
-    video.src = oldSrc;
-    video.muted = wasMuted;
-    video.play().catch(function() {});
-    delete slotEl.dataset._lastTime;
-    delete slotEl.dataset._frozenCount;
+    _softResetSlot('fullscreen');
     return;
   }
 
@@ -481,7 +474,9 @@ function _reloadMultiSlot(idx, reason) {
   _bindSlotPiPEvents(fresh, pipBtn);
 
   fresh.src = oldSrc;
-  fresh.play().catch(function() {});
+  fresh.play().catch(function(e) {
+    console.warn('[Multistream] slot', idx, 'reload play() rejected:', e && e.message || e);
+  });
 
   delete slotEl.dataset._lastTime;
   delete slotEl.dataset._frozenCount;

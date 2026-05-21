@@ -38,8 +38,8 @@
 
 .browse-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 14px;
 }
 .browse-streams-grid {
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -95,7 +95,9 @@
 
 #channel-actions {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   flex-shrink: 0;
 }
@@ -137,24 +139,24 @@
   flex: 1;
 }
 #ms-sidebar-btn, #ms-toggle-chat-btn, #ms-close-btn {
-  padding: 4px 10px;
+  width: 28px; height: 28px; padding: 0;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(255,255,255,0.1);
+  border: none;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 12px;
   font-family: inherit;
   cursor: pointer;
-  transition: color var(--duration-fast), border-color var(--duration-fast), background var(--duration-fast);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
 }
 #ms-sidebar-btn:hover, #ms-toggle-chat-btn:hover, #ms-close-btn:hover {
   color: var(--text-primary);
-  border-color: rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.08);
 }
 #ms-sidebar-btn.active {
-  background: rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.10);
   color: var(--text-primary);
-  border-color: rgba(255,255,255,0.18);
 }
 #ms-sidebar-backdrop {
   display: none;
@@ -181,9 +183,9 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   grid-template-rows: 1fr 1fr;
-  gap: 2px;
+  gap: 4px;
   flex: 1;
-  background: #111;
+  background: var(--bg-base);
 }
 
 .ms-slot { position: relative; overflow: hidden; background: var(--bg-elevated); }

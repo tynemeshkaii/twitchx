@@ -51,7 +51,7 @@ function renderGrid() {
   if (TwitchX.state.favorites.length === 0 && !anyLoggedIn) {
     grid.classList.add('hidden');
     empty.classList.add('visible');
-    empty.querySelector('.empty-icon').textContent = '\u26A1';
+    empty.querySelector('.empty-icon').innerHTML = TwitchX.renderIcon('lightning', 36);
     empty.querySelector('.empty-title').textContent = 'Welcome to TwitchX';
     var sub = empty.querySelector('.empty-subtitle');
     while (sub.firstChild) sub.removeChild(sub.firstChild);
@@ -90,7 +90,7 @@ function renderGrid() {
   if (TwitchX.state.favorites.length === 0) {
     grid.classList.add('hidden');
     empty.classList.add('visible');
-    empty.querySelector('.empty-icon').textContent = '\uD83D\uDCFA';
+    empty.querySelector('.empty-icon').innerHTML = TwitchX.renderIcon('tv', 36);
     empty.querySelector('.empty-title').textContent = 'No favorites yet';
     empty.querySelector('.empty-subtitle').textContent = 'Add channels using the search bar in the sidebar';
     return;
@@ -99,7 +99,7 @@ function renderGrid() {
   if (streams.length === 0 && TwitchX.state.favorites.length > 0) {
     grid.classList.add('hidden');
     empty.classList.add('visible');
-    empty.querySelector('.empty-icon').textContent = '\uD83D\uDE34';
+    empty.querySelector('.empty-icon').innerHTML = TwitchX.renderIcon('sleeping', 36);
     empty.querySelector('.empty-title').textContent = 'All quiet right now';
     empty.querySelector('.empty-subtitle').textContent = 'None of your favorites are live';
     return;
@@ -126,9 +126,9 @@ function renderGrid() {
       card.querySelector('.viewers').textContent = TwitchX.formatViewers(s.viewers) + ' viewers';
       const trend = card.querySelector('.trend');
       if (s.viewer_trend === 'up') {
-        trend.textContent = '\u25B2'; trend.className = 'trend up';
+        trend.innerHTML = TwitchX.renderIcon('trend-up', 14); trend.className = 'trend up';
       } else if (s.viewer_trend === 'down') {
-        trend.textContent = '\u25BC'; trend.className = 'trend down';
+        trend.innerHTML = TwitchX.renderIcon('trend-down', 14); trend.className = 'trend down';
       } else {
         trend.textContent = ''; trend.className = 'trend';
       }
@@ -163,10 +163,11 @@ function renderGrid() {
 
 function createStreamCard(s) {
   const card = document.createElement('div');
-  card.className = 'stream-card' + (TwitchX.state.selectedChannel === s.login ? ' selected' : '');
+  card.className = 'stream-card card-enter' + (TwitchX.state.selectedChannel === s.login ? ' selected' : '');
   card.dataset.login = s.login;
   card.dataset.started = s.started_at;
   card.dataset.platform = s.platform || 'twitch';
+  card.addEventListener('animationend', function() { card.classList.remove('card-enter'); }, { once: true });
   if (TwitchX.state.gridMode === 'list') card.classList.add('list-mode');
 
   // Thumb area
@@ -195,7 +196,7 @@ function createStreamCard(s) {
 
   const watchBadge = document.createElement('span');
   watchBadge.className = 'watching-badge' + (TwitchX.state.watchingChannel === s.login ? ' visible' : '');
-  watchBadge.textContent = '\u25B6 WATCHING';
+  watchBadge.innerHTML = TwitchX.renderIcon('play', 10) + ' WATCHING';
   thumb.appendChild(watchBadge);
 
   const uptime = document.createElement('span');
@@ -206,7 +207,7 @@ function createStreamCard(s) {
   if (TwitchX.isPinned(s.platform || 'twitch', s.login)) {
     var pinBadge = document.createElement('span');
     pinBadge.className = 'pin-badge';
-    pinBadge.textContent = '\uD83D\uDCCC';
+    pinBadge.innerHTML = TwitchX.renderIcon('pin', 12);
     pinBadge.title = 'Pinned';
     thumb.appendChild(pinBadge);
   }
@@ -227,7 +228,7 @@ function createStreamCard(s) {
 
   const trend = document.createElement('span');
   trend.className = 'trend' + (s.viewer_trend === 'up' ? ' up' : s.viewer_trend === 'down' ? ' down' : '');
-  trend.textContent = s.viewer_trend === 'up' ? '\u25B2' : s.viewer_trend === 'down' ? '\u25BC' : '';
+  trend.innerHTML = s.viewer_trend === 'up' ? TwitchX.renderIcon('trend-up', 14) : s.viewer_trend === 'down' ? TwitchX.renderIcon('trend-down', 14) : '';
   meta.appendChild(trend);
   info.appendChild(meta);
 

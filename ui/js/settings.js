@@ -147,6 +147,63 @@ function loadWatchStatistics() {
     console.warn('Failed to load watch statistics:', e);
     document.getElementById('stats-loading').textContent = 'Failed to load statistics';
   }
+  // Show compact toggle
+  var toggleBtn = document.getElementById('stats-compact-toggle');
+  if (toggleBtn) toggleBtn.style.display = 'inline-flex';
+  // Restore compact state
+  var compact = localStorage.getItem('twitchx.stats.compact') === '1';
+  _applyStatsCompact(compact);
+}
+
+function _toggleStatsCompact() {
+  var compact = localStorage.getItem('twitchx.stats.compact') !== '1';
+  localStorage.setItem('twitchx.stats.compact', compact ? '1' : '0');
+  _applyStatsCompact(compact);
+}
+
+function _applyStatsCompact(compact) {
+  var grids = document.querySelectorAll('.stats-grid');
+  var cards = document.querySelectorAll('.stat-card');
+  var toggleBtn = document.getElementById('stats-compact-toggle');
+  grids.forEach(function(g) { g.classList.toggle('compact', compact); });
+  cards.forEach(function(c) { c.classList.toggle('compact', compact); });
+  if (toggleBtn) toggleBtn.textContent = compact ? 'Normal' : 'Compact';
+}
+
+function _readAllFormValues() {
+  var activeSwatch = document.querySelector('.accent-swatch.active');
+  return {
+    client_id: document.getElementById('s-client-id').value.trim(),
+    client_secret: document.getElementById('s-client-secret').value.trim(),
+    streamlink_path: document.getElementById('s-streamlink').value.trim(),
+    iina_path: document.getElementById('s-iina').value.trim(),
+    mpv_path: document.getElementById('s-mpv').value.trim(),
+    external_player: document.getElementById('s-external-player').value,
+    refresh_interval: document.getElementById('s-interval').value,
+    kick_client_id: document.getElementById('s-kick-client-id').value.trim(),
+    kick_client_secret: document.getElementById('s-kick-client-secret').value.trim(),
+    youtube_api_key: document.getElementById('yt-api-key').value.trim(),
+    youtube_client_id: document.getElementById('yt-client-id').value.trim(),
+    youtube_client_secret: document.getElementById('yt-client-secret').value.trim(),
+    recording_path: document.getElementById('s-recording-path').value.trim(),
+    low_latency_mode: document.getElementById('s-low-latency').checked,
+    pip_enabled: document.getElementById('s-pip-enabled').checked,
+    accent_color: activeSwatch ? activeSwatch.dataset.color : '#FF9F0A',
+    keyboard_shortcuts: JSON.stringify(TwitchX.state.shortcuts || {}),
+  };
+}
+
+function _isSettingsDirty() {
+  if (!TwitchX._settingsSnapshot) return false;
+  var current = JSON.stringify(_readAllFormValues());
+  return current !== TwitchX._settingsSnapshot;
+}
+
+function _setFeedback(msg, type) {
+  var fb = document.getElementById('settings-feedback');
+  if (!fb) return;
+  fb.textContent = msg;
+  fb.className = type || '';
 }
 
 function openSettings() {
@@ -234,9 +291,9 @@ function openSettings() {
   document.getElementById('settings-panel-general').classList.add('active');
   document.getElementById('stats-loading').classList.remove('hidden');
   document.getElementById('stats-content').classList.add('hidden');
-  document.getElementById('settings-feedback').textContent = '';
+  _setFeedback('');
   document.getElementById('settings-overlay').classList.add('visible');
-  document.getElementById('settings-overlay').style.opacity = '';
+  TwitchX._settingsSnapshot = JSON.stringify(_readAllFormValues());
 }
 
 function openSettingsToTab(tab) {
@@ -253,7 +310,11 @@ function openSettingsToTab(tab) {
 }
 
 function closeSettings() {
+  if (_isSettingsDirty()) {
+    if (!window.confirm('You have unsaved changes. Discard them?')) return;
+  }
   document.getElementById('settings-overlay').classList.remove('visible');
+  TwitchX._settingsSnapshot = null;
 }
 
 function toggleSecret() {
@@ -265,14 +326,11 @@ function testConnection() {
   const cid = document.getElementById('s-client-id').value.trim();
   const cs = document.getElementById('s-client-secret').value.trim();
   if (!cid || !cs) {
-    const fb = document.getElementById('settings-feedback');
-    fb.textContent = 'Client ID and Secret are required';
-    fb.style.color = 'var(--error-red)';
+    _setFeedback('Client ID and Secret are required', 'error');
     return;
   }
   document.getElementById('test-btn').disabled = true;
-  document.getElementById('settings-feedback').textContent = 'Testing...';
-  document.getElementById('settings-feedback').style.color = 'var(--text-muted)';
+  _setFeedback('Testing...');
   TwitchX.api.test_connection(cid, cs);
 }
 
@@ -303,6 +361,13 @@ function saveSettings() {
   const pipBtn = document.getElementById('pip-player-btn');
   if (pipBtn) pipBtn.classList.toggle('hidden', !pipEnabled);
   if (TwitchX.api) TwitchX.api.save_settings(JSON.stringify(data));
+  TwitchX._settingsSnapshot = JSON.stringify(_readAllFormValues());
+  var fb = document.getElementById('settings-feedback');
+  if (fb) {
+    fb.innerHTML = TwitchX.renderIcon('check', 14) + ' Settings saved';
+    fb.className = 'success';
+  }
+  setTimeout(function() { if (fb && fb.className === 'success') _setFeedback(''); }, 3000);
 }
 
 TwitchX.ACCENT_PALETTE = ACCENT_PALETTE;
@@ -315,3 +380,4 @@ TwitchX.testConnection = testConnection;
 TwitchX.saveSettings = saveSettings;
 TwitchX.loadWatchStatistics = loadWatchStatistics;
 TwitchX.renderWatchStats = renderWatchStats;
+TwitchX._toggleStatsCompact = _toggleStatsCompact;

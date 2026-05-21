@@ -13,6 +13,18 @@ function formatKeyName(key) {
   return key;
 }
 
+function formatKeyDisplay(key) {
+  if (key === ' ')          return 'Space';
+  if (key === 'ArrowUp')    return TwitchX.renderIcon('arrow-up', 14);
+  if (key === 'ArrowDown')  return TwitchX.renderIcon('arrow-down', 14);
+  if (key === 'ArrowLeft')  return TwitchX.renderIcon('arrow-left', 14);
+  if (key === 'ArrowRight') return TwitchX.renderIcon('arrow-right', 14);
+  if (key === 'Enter')      return TwitchX.renderIcon('enter', 14);
+  if (key === 'Backspace')  return TwitchX.renderIcon('backspace', 14);
+  if (key === 'Tab')        return TwitchX.renderIcon('tab', 14);
+  return key;
+}
+
 function startRebind(action) {
   TwitchX._rebindAction = action;
   renderHotkeysSettings();
@@ -38,6 +50,7 @@ function renderHotkeysSettings() {
     keyTd.style.cssText = 'padding:7px 0;text-align:right;';
 
     const kbd = document.createElement('kbd');
+    kbd.className = isCapturing ? 'hotkey-capturing' : 'hotkey-idle';
     kbd.style.cssText = [
       'display:inline-block',
       'padding:2px 8px',
@@ -46,11 +59,8 @@ function renderHotkeysSettings() {
       'font-family:inherit',
       'cursor:pointer',
       'transition:all 0.1s',
-      isCapturing
-        ? 'background:var(--accent);color:#000;border:1px solid var(--accent);'
-        : 'background:var(--bg-elevated);color:var(--text-primary);border:1px solid rgba(255,255,255,0.15);',
     ].join(';');
-    kbd.textContent = isCapturing ? 'Press key\u2026' : formatKeyName(key);
+    kbd.innerHTML = isCapturing ? 'Press key\u2026' : '<span class="hotkey-icon">' + formatKeyDisplay(key) + '</span>';
     kbd.title = isCapturing ? 'Press Esc to cancel' : 'Click to rebind';
     kbd.addEventListener('click', function() { startRebind(action); });
 
@@ -88,11 +98,11 @@ function handleKeydown(e) {
       TwitchX.browseGoBack(); return;
     }
     if (TwitchX.multiState.open) { TwitchX.closeMultistreamView(); return; }
-    if (!document.getElementById('context-menu').classList.contains('hidden')) {
-      document.getElementById('context-menu').classList.add('hidden'); return;
+    if (document.getElementById('context-menu').classList.contains('menu-visible')) {
+      TwitchX.closeContextMenu(); return;
     }
-    if (!document.getElementById('search-dropdown').classList.contains('hidden')) {
-      document.getElementById('search-dropdown').classList.add('hidden'); return;
+    if (document.getElementById('search-dropdown').classList.contains('visible')) {
+      document.getElementById('search-dropdown').classList.remove('visible'); return;
     }
     TwitchX.state.selectedChannel = null;
     document.querySelectorAll('.stream-card').forEach(function(c) { c.classList.remove('selected'); });

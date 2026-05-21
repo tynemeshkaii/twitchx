@@ -236,13 +236,14 @@ def test_get_auth_url_uses_effective_client_id(temp_config_dir):
 
 import pytest
 
+
 @pytest.mark.asyncio
 async def test_exchange_code_sends_code_verifier_not_secret(temp_config_dir):
     """exchange_code() must send code_verifier, not client_secret."""
+    from unittest.mock import MagicMock
+
     from core.platforms.twitch import TwitchClient
     from core.storage import update_config
-    from unittest.mock import MagicMock, AsyncMock
-    import json
 
     def _set_verifier(cfg):
         cfg["platforms"]["twitch"]["pkce_verifier"] = "test_verifier_abc123xyz456def789"

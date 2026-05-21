@@ -39,6 +39,24 @@
   display: flex; flex-direction: column; gap: 8px;
 }
 
+.section-body {
+  position: relative;
+}
+.section-body::before {
+  content: '';
+  position: sticky;
+  top: 0;
+  display: block;
+  height: 0;
+  pointer-events: none;
+  z-index: var(--z-sticky);
+  transition: height var(--duration-fast) ease;
+  background: linear-gradient(to bottom, var(--scroll-shadow-color), transparent);
+}
+.section-body.scrolled::before {
+  height: var(--scroll-shadow-size);
+}
+
 /* ── Search area ────────────────────────────────────────── */
 #search-area {
   padding: 6px 10px; border-top: 1px solid var(--bg-border);
@@ -50,7 +68,10 @@
 #content { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-base); }
 
 #toolbar {
-  height: 38px; background: var(--bg-surface);
+  height: 44px;
+  background: rgba(28, 28, 30, 0.82);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
   border-bottom: 1px solid var(--bg-border);
   display: flex; align-items: center; padding: 0 var(--space-12); gap: var(--space-8);
   flex-shrink: 0;

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 import webbrowser
 
@@ -13,6 +14,8 @@ from core.platforms.youtube import YOUTUBE_API_URL
 from core.storage import update_config
 
 from ._base import BaseApiComponent
+
+logger = logging.getLogger(__name__)
 
 
 class AuthComponent(BaseApiComponent):
@@ -81,6 +84,7 @@ class AuthComponent(BaseApiComponent):
                 self._api._data.refresh()
                 self._api._favorites.import_follows(silent=True)
             except Exception as e:
+                logger.warning("Twitch login failed: %s", e)
                 msg = str(e)[:80] if str(e) else "Login failed"
                 safe_msg = json.dumps(msg)
                 self._eval_js(f"window.onLoginError({safe_msg})")
@@ -175,6 +179,7 @@ class AuthComponent(BaseApiComponent):
                 self._eval_js(f"window.onKickLoginComplete({result})")
                 self._api._data.refresh()
             except Exception as e:
+                logger.warning("Kick login failed: %s", e)
                 msg = str(e)[:80] if str(e) else "Kick login failed"
                 safe_msg = json.dumps(msg)
                 self._eval_js(f"window.onKickLoginError({safe_msg})")
@@ -268,6 +273,7 @@ class AuthComponent(BaseApiComponent):
                 self._api._data.refresh()
                 self._api._favorites.youtube_import_follows(silent=True)
             except Exception as e:
+                logger.warning("YouTube login failed: %s", e)
                 msg = str(e)[:80] if str(e) else "YouTube login failed"
                 safe_msg = json.dumps(msg)
                 self._eval_js(f"window.onYouTubeLoginError({safe_msg})")
@@ -318,6 +324,7 @@ class AuthComponent(BaseApiComponent):
                     {"success": False, "message": "No internet connection"}
                 )
             except Exception as exc:
+                logger.warning("Twitch connection test failed: %s", exc)
                 msg = str(exc)[:60]
                 result = json.dumps({"success": False, "message": msg})
             self._eval_js(f"window.onTestResult({result})")
@@ -350,6 +357,7 @@ class AuthComponent(BaseApiComponent):
                     {"success": False, "message": "No internet connection"}
                 )
             except Exception as exc:
+                logger.warning("Kick connection test failed: %s", exc)
                 msg = str(exc)[:60]
                 result = json.dumps({"success": False, "message": msg})
             self._eval_js(f"window.onKickTestResult({result})")
@@ -395,6 +403,7 @@ class AuthComponent(BaseApiComponent):
                     {"success": False, "message": "No internet connection"}
                 )
             except Exception as exc:
+                logger.warning("YouTube connection test failed: %s", exc)
                 msg = str(exc)[:60]
                 result = json.dumps({"success": False, "message": msg})
             self._eval_js(f"window.onYouTubeTestResult({result})")

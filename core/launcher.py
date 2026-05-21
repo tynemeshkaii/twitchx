@@ -78,7 +78,7 @@ def launch_stream(
             stderr=subprocess.DEVNULL,
         )
         return LaunchResult(success=True, message=f"Launched {channel} ({quality})")
-    except Exception as e:
+    except OSError as e:
         return LaunchResult(success=False, message=f"Failed to launch IINA: {e}")
 
 
@@ -111,5 +111,5 @@ def launch_stream_mpv(
             stderr=subprocess.DEVNULL,
         )
         return LaunchResult(success=True, message=f"Launched {channel} in mpv ({quality})")
-    except Exception as e:
+    except OSError as e:
         return LaunchResult(success=False, message=f"Failed to launch mpv: {e}")

@@ -337,7 +337,8 @@ class TwitchChatClient(BaseChatClient):
                 )
             else:
                 await self._ws.send(f"PRIVMSG #{self._channel} :{text}")
-        except Exception:
+        except (websockets.exceptions.WebSocketException, OSError, RuntimeError) as exc:
+            logger.warning("Twitch chat send failed: %s", exc)
             return ChatSendResult(
                 ok=False,
                 platform="twitch",

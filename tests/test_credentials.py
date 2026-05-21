@@ -1,19 +1,17 @@
-import json
 from pathlib import Path
 
-import pytest
+import core.credentials as creds
 from core.credentials import (
-    TWITCH_CLIENT_ID,
-    TWITCH_CLIENT_SECRET,
     KICK_CLIENT_ID,
     KICK_CLIENT_SECRET,
+    TWITCH_CLIENT_ID,
+    TWITCH_CLIENT_SECRET,
+    YOUTUBE_API_KEY,
     YOUTUBE_CLIENT_ID,
     YOUTUBE_CLIENT_SECRET,
-    YOUTUBE_API_KEY,
 )
-import core.credentials as creds
-from core.platforms.twitch import TwitchClient
 from core.platforms.kick import KickClient
+from core.platforms.twitch import TwitchClient
 from core.platforms.youtube import YouTubeClient
 
 

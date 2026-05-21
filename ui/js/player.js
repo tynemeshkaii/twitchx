@@ -37,6 +37,12 @@ function _bindPiPEvents(video) {
   video.addEventListener('webkitpresentationmodechanged', function() {
     const btn = document.getElementById('pip-player-btn');
     if (btn) btn.classList.toggle('active', video.webkitPresentationMode === 'picture-in-picture');
+    // WebKit native fullscreen auto-hide (event does NOT bubble to document)
+    if (video.webkitPresentationMode === 'fullscreen') {
+      if (!TwitchX._fsAutoHideActive) _startFullscreenAutoHide();
+    } else if (!isVideoFullscreen(video) && !isVideoPiP(video)) {
+      _stopFullscreenAutoHide();
+    }
   });
 }
 
@@ -47,6 +53,8 @@ function showPlayerView() {
   document.getElementById('stream-grid').classList.add('hidden');
   document.getElementById('empty-state').classList.add('hidden');
   TwitchX.viewFadeIn(document.getElementById('player-view'), 'active');
+  var pLoader = document.getElementById('player-loader');
+  if (pLoader) pLoader.classList.remove('hidden');
 
   TwitchX.state.watchingChannel = TwitchX.state.selectedChannel;
   document.getElementById('watch-btn').classList.add('active');
@@ -75,7 +83,16 @@ function showPlayerView() {
   updateChatInput();
 
   const video = getPlayerVideo();
-  if (video && !video._pipEventsBound) _bindPiPEvents(video);
+  if (video) {
+    if (!video._pipEventsBound) _bindPiPEvents(video);
+    var hideLoader = function() {
+      var pl = document.getElementById('player-loader');
+      if (pl) pl.classList.add('hidden');
+    };
+    video.addEventListener('playing', hideLoader, { once: true });
+    video.addEventListener('error', hideLoader, { once: true });
+    setTimeout(hideLoader, 15000);
+  }
 
   var recordBtn = document.getElementById('record-btn');
   if (recordBtn) recordBtn.classList.remove('hidden');
@@ -90,6 +107,7 @@ function showPlayerView() {
 
   if (TwitchX.state.streamType === 'vod') {
     TwitchX.startVodTimeDisplay();
+    TwitchX.startVodSeekBar();
   } else {
     TwitchX.startVideoHealthMonitor();
     TwitchX.startFpsMonitor();
@@ -97,10 +115,21 @@ function showPlayerView() {
     TwitchX.startProactiveReset();
   }
 
+  TwitchX.syncVolumeSlider(getPlayerVideo());
   TwitchX.renderSidebar();
 }
 
 function hidePlayerView() {
+  if (!document.getElementById('player-view').classList.contains('active')) return;
+
+  // When hidePlayerView is called directly from JS (Escape key, opening multistream),
+  // Python state is not cleared automatically. Notify Python to clear _watching_channel
+  // and end the watch session. Guard against re-entry from onPlayerStop (which already
+  // cleared state before calling us).
+  if (!TwitchX._hidePlayerFromPython && TwitchX.api) {
+    TwitchX.api.notify_player_hidden();
+  }
+
   TwitchX.stopVideoHealthMonitor();
   TwitchX.stopFpsMonitor();
   TwitchX.stopFrozenMonitor();
@@ -108,6 +137,8 @@ function hidePlayerView() {
   TwitchX.stopVodTimeDisplay();
   TwitchX.hideStatsOverlay();
   TwitchX.thirdPartyEmotes = {};
+  var pLoader = document.getElementById('player-loader');
+  if (pLoader) pLoader.classList.add('hidden');
 
   if (TwitchX._recordingActive && TwitchX.api) TwitchX.api.stop_recording();
   TwitchX._recordingActive = false;
@@ -119,27 +150,7 @@ function hidePlayerView() {
   if (statsBtn) statsBtn.classList.add('hidden');
 
   // Cancel any pending gentle reset to prevent orphaned shadow videos
-  if (TwitchX._gentleResetInProgress) {
-    if (TwitchX._gentleResetTimer) {
-      clearTimeout(TwitchX._gentleResetTimer);
-      TwitchX._gentleResetTimer = null;
-    }
-    if (TwitchX._gentleResetNewVideo) {
-      if (TwitchX._gentleResetDoSwap) {
-        TwitchX._gentleResetNewVideo.removeEventListener('playing', TwitchX._gentleResetDoSwap);
-        TwitchX._gentleResetNewVideo.removeEventListener('loadeddata', TwitchX._gentleResetDoSwap);
-      }
-      if (TwitchX._gentleResetNewVideo.parentNode) {
-        TwitchX._gentleResetNewVideo.pause();
-        TwitchX._gentleResetNewVideo.removeAttribute('src');
-        TwitchX._gentleResetNewVideo.load();
-        TwitchX._gentleResetNewVideo.remove();
-      }
-    }
-    TwitchX._gentleResetInProgress = false;
-    TwitchX._gentleResetNewVideo = null;
-    TwitchX._gentleResetDoSwap = null;
-  }
+  cancelGentleReset();
 
   const video = getPlayerVideo();
   if (video) {
@@ -180,13 +191,12 @@ function hidePlayerView() {
   document.getElementById('player-view').style.opacity = '';
   document.getElementById('toolbar').classList.remove('hidden');
   var grid = document.getElementById('stream-grid');
-  grid.classList.remove('hidden');
   grid.style.opacity = '0';
+  grid.classList.remove('hidden');
   requestAnimationFrame(function() {
-    requestAnimationFrame(function() {
-      grid.style.opacity = '';
-    });
+    grid.style.opacity = '';
   });
+  document.getElementById('empty-state').classList.remove('hidden');
 
   TwitchX.state.watchingChannel = null;
   TwitchX.state.playerPlatform = null;
@@ -199,6 +209,7 @@ function hidePlayerView() {
   document.getElementById('live-dot').classList.remove('visible');
   document.getElementById('toggle-chat-btn').classList.remove('hidden');
   TwitchX.setStatus('', 'info');
+  TwitchX.syncVolumeSlider(null);
   TwitchX.renderGrid();
   TwitchX.renderSidebar();
 }
@@ -214,12 +225,29 @@ function getActiveVideo() {
   return null;
 }
 
+function syncVolumeSlider(video) {
+  const slider = document.getElementById('volume-slider');
+  const muteBtn = document.getElementById('mute-btn');
+  const volGroup = document.getElementById('volume-group');
+  if (!slider || !volGroup) return;
+  if (video) {
+    volGroup.classList.remove('hidden');
+    var pct = Math.round(video.muted ? 0 : video.volume * 100);
+    slider.value = pct;
+    slider.style.setProperty('--volume-pct', pct + '%');
+    if (muteBtn) muteBtn.classList.toggle('muted', video.muted);
+  } else {
+    volGroup.classList.add('hidden');
+  }
+}
+
 function adjustVolume(delta) {
   const video = getActiveVideo();
   if (!video) return;
   video.muted = false;
   video.volume = Math.max(0, Math.min(1, video.volume + delta));
   TwitchX.setStatus('Volume: ' + Math.round(video.volume * 100) + '%', 'info');
+  syncVolumeSlider(video);
 }
 
 function toggleMute() {
@@ -227,6 +255,24 @@ function toggleMute() {
   if (!video) return;
   video.muted = !video.muted;
   TwitchX.setStatus(video.muted ? 'Muted' : 'Unmuted', 'info');
+  syncVolumeSlider(video);
+}
+
+function _handleVolumeSliderInput() {
+  const slider = document.getElementById('volume-slider');
+  const video = getActiveVideo();
+  if (!slider || !video) return;
+  var pct = parseInt(slider.value, 10) / 100;
+  video.muted = false;
+  video.volume = pct;
+  slider.style.setProperty('--volume-pct', Math.round(pct * 100) + '%');
+  TwitchX.setStatus('Volume: ' + Math.round(pct * 100) + '%', 'info');
+  var muteBtn = document.getElementById('mute-btn');
+  if (muteBtn) muteBtn.classList.remove('muted');
+}
+
+function _handleMuteBtnClick() {
+  toggleMute();
 }
 
 function cycleStream(dir) {
@@ -338,6 +384,7 @@ function updateChatInput() {
 
 function startVideoHealthMonitor() {
   stopVideoHealthMonitor();
+  TwitchX._droppedFramesBaseline = 0;
   TwitchX._healthMonitorTimer = setInterval(checkVideoHealth, 60000);
 }
 
@@ -352,23 +399,54 @@ function checkVideoHealth() {
   const video = getPlayerVideo();
   if (!video || video.paused || !video.src) return;
 
-  // Seek to live edge if we're lagging behind (>120s back-buffer drift)
+  // Detect decoder pipeline degradation via dropped frames.
+  // rAF-based FPS monitor misses this because VideoToolbox runs on a separate thread.
+  if (typeof video.getVideoPlaybackQuality === 'function') {
+    const q = video.getVideoPlaybackQuality();
+    const total = q.totalVideoFrames;
+    const dropped = q.droppedVideoFrames - (TwitchX._droppedFramesBaseline || 0);
+    if (total > 300 && dropped / total > 0.05) {
+      TwitchX._droppedFramesBaseline = q.droppedVideoFrames;
+      gentleResetVideo('dropped-frames');
+      TwitchX.setStatus('Auto-recovered playback smoothness', 'info');
+      return;
+    }
+  }
+
+  // Seek to live edge if we're lagging behind (>30s drift).
+  // Tight threshold keeps SourceBuffer small: the player doesn't need to manage
+  // both old and new segments simultaneously when drift is large.
   if (video.seekable && video.seekable.length > 0) {
     const liveEdge = video.seekable.end(video.seekable.length - 1);
     const drift = liveEdge - video.currentTime;
-    if (drift > 120) {
+    if (drift > 30) {
       video.currentTime = liveEdge - 2;
       TwitchX.setStatus('Caught up to live edge', 'info');
       return;
     }
   }
 
-  // If buffered end is far ahead, do a gentle reset to clear accumulated buffers
+  // If buffered end is far ahead, do a gentle reset to clear accumulated buffers.
+  // 60s is intentionally conservative — live HLS needs at most 15-30s ahead;
+  // beyond that the SourceBuffer grows unboundedly and causes decode latency.
   if (video.buffered && video.buffered.length > 0) {
     const bufferedEnd = video.buffered.end(video.buffered.length - 1);
     const bufferedDrift = bufferedEnd - video.currentTime;
-    if (bufferedDrift > 180) {
+    if (bufferedDrift > 60) {
       gentleResetVideo('buffer-overflow');
+      TwitchX.setStatus('Stream buffer cleared for smooth playback', 'info');
+      return;
+    }
+  }
+
+  // Check total buffered range span (includes segments behind currentTime).
+  // Old played-back segments stay in SourceBuffer and consume memory.
+  // If total buffered span > 120s, reset to evict them.
+  if (video.buffered && video.buffered.length > 0) {
+    const totalStart = video.buffered.start(0);
+    const totalEnd = video.buffered.end(video.buffered.length - 1);
+    if (totalEnd - totalStart > 120) {
+      gentleResetVideo('buffer-total-overflow');
       TwitchX.setStatus('Stream buffer cleared for smooth playback', 'info');
       return;
     }
@@ -427,18 +505,45 @@ function softResetVideo(reason) {
   const savedVolume = video.volume;
   video.pause();
   video.removeAttribute('src');
-  video.src = '';
   video.load();
   video.src = savedSrc;
   video.muted = savedMuted;
   video.volume = savedVolume;
-  video.play().catch(function() {});
+  video.play().catch(function(e) {
+    console.warn('[Player] softReset play() rejected:', e && e.message || e);
+  });
   setTimeout(function() {
     TwitchX._softResetInProgress = false;
   }, 100);
 }
 
 /* ── Gentle Video Reset (crossfade swap) ────────────────── */
+
+function cancelGentleReset() {
+  if (!TwitchX._gentleResetInProgress) return;
+  if (TwitchX._gentleResetTimer) {
+    clearTimeout(TwitchX._gentleResetTimer);
+    TwitchX._gentleResetTimer = null;
+  }
+  if (TwitchX._gentleResetNewVideo) {
+    if (TwitchX._gentleResetDoSwap) {
+      TwitchX._gentleResetNewVideo.removeEventListener('playing', TwitchX._gentleResetDoSwap);
+      TwitchX._gentleResetNewVideo.removeEventListener('loadeddata', TwitchX._gentleResetDoSwap);
+    }
+    if (TwitchX._gentleResetNewVideo.parentNode) {
+      TwitchX._gentleResetNewVideo.pause();
+      TwitchX._gentleResetNewVideo.removeAttribute('src');
+      TwitchX._gentleResetNewVideo.load();
+      TwitchX._gentleResetNewVideo.remove();
+    }
+    TwitchX._gentleResetNewVideo = null;
+  }
+  TwitchX._gentleResetDoSwap = null;
+  TwitchX._gentleResetInProgress = false;
+  // Restore _playerVideo to the original element (now in DOM again without the shadow)
+  const orig = document.getElementById('stream-video');
+  if (orig) TwitchX._playerVideo = orig;
+}
 
 function gentleResetVideo(reason) {
   const oldVideo = getPlayerVideo();
@@ -456,24 +561,7 @@ function gentleResetVideo(reason) {
 
   // Cancel any previous pending gentle reset to avoid orphaned shadow videos
   if (TwitchX._gentleResetInProgress) {
-    if (TwitchX._gentleResetTimer) {
-      clearTimeout(TwitchX._gentleResetTimer);
-      TwitchX._gentleResetTimer = null;
-    }
-    if (TwitchX._gentleResetNewVideo) {
-      if (TwitchX._gentleResetDoSwap) {
-        TwitchX._gentleResetNewVideo.removeEventListener('playing', TwitchX._gentleResetDoSwap);
-        TwitchX._gentleResetNewVideo.removeEventListener('loadeddata', TwitchX._gentleResetDoSwap);
-      }
-      if (TwitchX._gentleResetNewVideo.parentNode) {
-        TwitchX._gentleResetNewVideo.pause();
-        TwitchX._gentleResetNewVideo.removeAttribute('src');
-        TwitchX._gentleResetNewVideo.load();
-        TwitchX._gentleResetNewVideo.remove();
-      }
-      TwitchX._gentleResetNewVideo = null;
-    }
-    TwitchX._gentleResetDoSwap = null;
+    cancelGentleReset();
   }
 
   // Prevent re-entrant calls from using the old element
@@ -499,7 +587,9 @@ function gentleResetVideo(reason) {
   newVideo.volume = savedVolume;
 
   container.insertBefore(newVideo, oldVideo);
-  newVideo.play().catch(function() {});
+  newVideo.play().catch(function(e) {
+    console.warn('[Player] gentleReset new video play() rejected:', e && e.message || e);
+  });
 
   let swapped = false;
 
@@ -547,18 +637,44 @@ function gentleResetVideo(reason) {
   }, 2500);
 }
 
-/* ── Proactive Reset (30 min) ───────────────────────────── */
+/* ── Proactive Reset (15 min) ───────────────────────────── */
+// Only resets if there are actual signs of memory/decode degradation.
+// Unconditional resets interrupt playback (re-buffering) for users on slow connections.
+
+function _hasPlaybackDegradation(video) {
+  if (!video || !video.src || video.paused) return false;
+
+  // Growing buffer ahead of playback head (>45s) indicates SourceBuffer accumulation
+  if (video.buffered && video.buffered.length > 0) {
+    const ahead = video.buffered.end(video.buffered.length - 1) - video.currentTime;
+    if (ahead > 45) return true;
+  }
+
+  // Total buffered span > 90s means old segments are piling up
+  if (video.buffered && video.buffered.length > 0) {
+    const span = video.buffered.end(video.buffered.length - 1) - video.buffered.start(0);
+    if (span > 90) return true;
+  }
+
+  // Meaningful dropped-frame rate (>3%) signals decode pipeline pressure
+  if (typeof video.getVideoPlaybackQuality === 'function') {
+    const q = video.getVideoPlaybackQuality();
+    if (q.totalVideoFrames > 600 && q.droppedVideoFrames / q.totalVideoFrames > 0.03) return true;
+  }
+
+  return false;
+}
 
 function startProactiveReset() {
   stopProactiveReset();
   function tick() {
     const video = getPlayerVideo();
-    if (video && !video.paused && video.src) {
+    if (_hasPlaybackDegradation(video)) {
       gentleResetVideo('proactive');
     }
-    TwitchX._proactiveTimer = setTimeout(tick, 30 * 60 * 1000);
+    TwitchX._proactiveTimer = setTimeout(tick, 15 * 60 * 1000);
   }
-  TwitchX._proactiveTimer = setTimeout(tick, 30 * 60 * 1000);
+  TwitchX._proactiveTimer = setTimeout(tick, 15 * 60 * 1000);
 }
 
 function stopProactiveReset() {
@@ -572,29 +688,43 @@ function stopProactiveReset() {
 
 function startFpsMonitor() {
   stopFpsMonitor();
-  TwitchX._fpsBadFrameCount = 0;
   TwitchX._fpsLastTimestamp = 0;
   TwitchX._fpsRafId = 0;
   TwitchX._fpsConsecutiveBad = 0;
+  TwitchX._fpsLastResetTime = 0;
 
   function tick(timestamp) {
     if (!TwitchX._fpsRafId) return;
+
+    // Skip when tab/window is hidden — rAF is throttled by the OS and the delta
+    // has no relation to video decode health. Reset baseline to avoid false triggers
+    // on the first frame after the window becomes visible again.
     if (document.hidden) {
-      TwitchX._fpsLastTimestamp = timestamp;
+      TwitchX._fpsLastTimestamp = 0;
+      TwitchX._fpsConsecutiveBad = 0;
       TwitchX._fpsRafId = requestAnimationFrame(tick);
       return;
     }
+
     const video = getPlayerVideo();
     if (!video || video.paused || video.readyState < 2) {
-      TwitchX._fpsLastTimestamp = timestamp;
+      TwitchX._fpsLastTimestamp = 0;
+      TwitchX._fpsConsecutiveBad = 0;
       TwitchX._fpsRafId = requestAnimationFrame(tick);
       return;
     }
+
     if (TwitchX._fpsLastTimestamp) {
       const delta = timestamp - TwitchX._fpsLastTimestamp;
-      if (delta > 66) { // < 15 FPS
+      // Use a conservative 200ms threshold (< 5 fps) to distinguish genuine UI
+      // pipeline stalls from normal macOS power-saving rAF throttling (~10–30 fps).
+      if (delta > 200) {
         TwitchX._fpsConsecutiveBad += 1;
-        if (TwitchX._fpsConsecutiveBad >= 300) { // ~5s sustained
+        // Require 15 consecutive bad frames (~3s at 5fps) and rate-limit resets
+        // to once per 60s so we don't loop on a genuinely slow machine.
+        const now = Date.now();
+        if (TwitchX._fpsConsecutiveBad >= 15 && (now - TwitchX._fpsLastResetTime) > 60000) {
+          TwitchX._fpsLastResetTime = now;
           gentleResetVideo('fps-drop');
           TwitchX.setStatus('Auto-recovered playback smoothness', 'info');
           TwitchX._fpsConsecutiveBad = 0;
@@ -615,8 +745,8 @@ function stopFpsMonitor() {
     TwitchX._fpsRafId = 0;
   }
   TwitchX._fpsLastTimestamp = 0;
-  TwitchX._fpsBadFrameCount = 0;
   TwitchX._fpsConsecutiveBad = 0;
+  TwitchX._fpsLastResetTime = 0;
 }
 
 TwitchX.showPlayerView = showPlayerView;
@@ -635,6 +765,7 @@ TwitchX.checkVideoHealth = checkVideoHealth;
 TwitchX.startFrozenMonitor = startFrozenMonitor;
 TwitchX.stopFrozenMonitor = stopFrozenMonitor;
 TwitchX.checkFrozenVideo = checkFrozenVideo;
+TwitchX.cancelGentleReset = cancelGentleReset;
 TwitchX.gentleResetVideo = gentleResetVideo;
 TwitchX.startFpsMonitor = startFpsMonitor;
 TwitchX.stopFpsMonitor = stopFpsMonitor;
@@ -664,11 +795,11 @@ function updateRecordButton() {
   var dot = document.getElementById('record-dot');
   if (!btn) return;
   if (TwitchX._recordingActive) {
-    btn.textContent = '\u25a0 Stop REC';
+    btn.innerHTML = TwitchX.renderIcon('stop', 12) + ' Stop REC';
     btn.style.color = '#e53935';
     if (dot) dot.classList.remove('hidden');
   } else {
-    btn.textContent = '\u25cf REC';
+    btn.innerHTML = TwitchX.renderIcon('record', 12) + ' REC';
     btn.style.color = '';
     if (dot) dot.classList.add('hidden');
   }
@@ -725,6 +856,9 @@ function updateStatsOverlay() {
   if (el('so-buffer'))  el('so-buffer').textContent  = buffer;
   if (el('so-dropped')) el('so-dropped').textContent = dropped;
   if (el('so-resolution')) el('so-resolution').textContent = resolution;
+
+  // Update buffer visualization bar
+  _updateBufferBar(video);
 
   TwitchX._statsRafId = requestAnimationFrame(function() {
     setTimeout(updateStatsOverlay, 500);
@@ -810,5 +944,176 @@ function stopVodTimeDisplay() {
   if (el) { el.classList.add('hidden'); el.textContent = ''; }
 }
 
+/* ── Buffer Visualization Bar ─────────────────────────── */
+
+function _updateBufferBar(video) {
+  var loaded = document.getElementById('buffer-loaded');
+  var pos = document.getElementById('buffer-position');
+  if (!loaded) return;
+  if (!video || !video.src) { loaded.style.width = '0%'; if (pos) pos.style.display = 'none'; return; }
+  var w = 0;
+  if (video.buffered && video.buffered.length > 0) {
+    var dur = video.duration;
+    if (isFinite(dur) && dur > 0) {
+      w = (video.buffered.end(video.buffered.length - 1) / dur) * 100;
+      if (pos) {
+        var pct = (video.currentTime / dur) * 100;
+        pos.style.display = 'block';
+        pos.style.left = Math.min(pct, 100) + '%';
+      }
+    }
+  }
+  loaded.style.width = Math.min(w, 100) + '%';
+}
+
+/* ── VOD Seek Bar ─────────────────────────────────────── */
+
+function startVodSeekBar() {
+  stopVodSeekBar();
+  var container = document.getElementById('seek-bar-container');
+  if (container) container.classList.remove('hidden');
+  var seek = document.getElementById('seek-bar');
+  if (!seek) return;
+  TwitchX._seekBarTimer = setInterval(function() {
+    var video = getPlayerVideo();
+    if (!video || !video.src) return;
+    var dur = video.duration;
+    if (isFinite(dur) && dur > 0) {
+      seek.max = 1000;
+      var val = Math.round((video.currentTime / dur) * 1000);
+      seek.value = val;
+      seek.style.setProperty('--seek-pct', (val / 10) + '%');
+    }
+  }, 250);
+}
+
+function stopVodSeekBar() {
+  if (TwitchX._seekBarTimer) { clearInterval(TwitchX._seekBarTimer); TwitchX._seekBarTimer = null; }
+  var container = document.getElementById('seek-bar-container');
+  if (container) container.classList.add('hidden');
+}
+
+function _handleSeekBarInput() {
+  var seek = document.getElementById('seek-bar');
+  var tooltip = document.getElementById('seek-tooltip');
+  if (!seek) return;
+  seek.style.setProperty('--seek-pct', (parseInt(seek.value, 10) / 10) + '%');
+  if (tooltip) {
+    var frac = parseInt(seek.value, 10) / 1000;
+    var video = getPlayerVideo();
+    var dur = video && video.duration;
+    if (isFinite(dur) && dur > 0) {
+      tooltip.textContent = formatVideoTime(frac * dur);
+      tooltip.classList.remove('hidden');
+      var rect = seek.getBoundingClientRect();
+      var pct = frac * rect.width;
+      tooltip.style.left = Math.min(Math.max(pct - 20, 0), rect.width - 40) + 'px';
+    }
+  }
+}
+
+function _handleSeekBarChange() {
+  var seek = document.getElementById('seek-bar');
+  var tooltip = document.getElementById('seek-tooltip');
+  var video = getPlayerVideo();
+  if (tooltip) tooltip.classList.add('hidden');
+  if (!seek || !video) return;
+  var frac = parseInt(seek.value, 10) / 1000;
+  var dur = video.duration;
+  if (isFinite(dur) && dur > 0) {
+    video.currentTime = frac * dur;
+  }
+}
+
+function _handleSeekBarLeave() {
+  var tooltip = document.getElementById('seek-tooltip');
+  if (tooltip) tooltip.classList.add('hidden');
+}
+
+/* ── Fullscreen auto-hide controls ────────────────────── */
+
+function _startFullscreenAutoHide() {
+  _stopFullscreenAutoHide();
+  TwitchX._fsHideTimer = null;
+  TwitchX._fsAutoHideActive = true;
+
+  function _resetControlsTimer() {
+    _showControls();
+    if (TwitchX._fsHideTimer) clearTimeout(TwitchX._fsHideTimer);
+    TwitchX._fsHideTimer = setTimeout(_hideControls, 3000);
+  }
+
+  function _showControls() {
+    var bar = document.getElementById('player-bar');
+    var header = document.getElementById('player-header');
+    if (bar) bar.classList.remove('fs-hidden');
+    if (header) header.classList.remove('fs-hidden');
+  }
+
+  function _hideControls() {
+    if (!TwitchX._fsAutoHideActive) return;
+    var video = getPlayerVideo();
+    if (!video || !isVideoFullscreen(video)) return;
+    var bar = document.getElementById('player-bar');
+    var header = document.getElementById('player-header');
+    if (bar) bar.classList.add('fs-hidden');
+    if (header) header.classList.add('fs-hidden');
+  }
+
+  var content = document.getElementById('player-content');
+  if (content) {
+    content.addEventListener('mousemove', _resetControlsTimer);
+    content.addEventListener('mouseenter', _resetControlsTimer);
+  }
+
+  TwitchX._fsResetControlsTimer = _resetControlsTimer;
+  TwitchX._fsShowControls = _showControls;
+  TwitchX._fsHideControls = _hideControls;
+  TwitchX._fsMouseTarget = content;
+}
+
+function _stopFullscreenAutoHide() {
+  TwitchX._fsAutoHideActive = false;
+  if (TwitchX._fsHideTimer) { clearTimeout(TwitchX._fsHideTimer); TwitchX._fsHideTimer = null; }
+  var content = TwitchX._fsMouseTarget;
+  if (content) {
+    content.removeEventListener('mousemove', TwitchX._fsResetControlsTimer);
+    content.removeEventListener('mouseenter', TwitchX._fsResetControlsTimer);
+  }
+  TwitchX._fsMouseTarget = null;
+  _showControls();
+  function _showControls() {
+    var bar = document.getElementById('player-bar');
+    var header = document.getElementById('player-header');
+    if (bar) bar.classList.remove('fs-hidden');
+    if (header) header.classList.remove('fs-hidden');
+  }
+}
+
+/* ── Fullscreen change listener ───────────────────────── */
+
+function _watchFullscreenChanges() {
+  var handler = function() {
+    var video = getPlayerVideo();
+    if (video && isVideoFullscreen(video)) {
+      _startFullscreenAutoHide();
+    } else {
+      _stopFullscreenAutoHide();
+    }
+  };
+  document.addEventListener('fullscreenchange', handler);
+  document.addEventListener('webkitfullscreenchange', handler);
+  document.addEventListener('webkitpresentationmodechanged', handler);
+}
+
 TwitchX.startVodTimeDisplay = startVodTimeDisplay;
 TwitchX.stopVodTimeDisplay  = stopVodTimeDisplay;
+TwitchX.startVodSeekBar = startVodSeekBar;
+TwitchX.stopVodSeekBar = stopVodSeekBar;
+TwitchX.syncVolumeSlider = syncVolumeSlider;
+TwitchX._handleVolumeSliderInput = _handleVolumeSliderInput;
+TwitchX._handleMuteBtnClick = _handleMuteBtnClick;
+TwitchX._handleSeekBarInput = _handleSeekBarInput;
+TwitchX._handleSeekBarChange = _handleSeekBarChange;
+TwitchX._handleSeekBarLeave = _handleSeekBarLeave;
+TwitchX._watchFullscreenChanges = _watchFullscreenChanges;

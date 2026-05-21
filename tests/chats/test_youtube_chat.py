@@ -300,6 +300,7 @@ class TestYouTubeChatClientSend:
         assert result.ok is False
         assert result.platform == "youtube"
         assert result.channel_id == "test_channel"
+        assert result.error is not None
         assert "read-only" in result.error or "YouTube" in result.error
 
 

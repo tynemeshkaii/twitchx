@@ -36,10 +36,10 @@ class TestSetChatSettings:
                 resp.status_code = 200
                 resp.raise_for_status = MagicMock()
                 resp.json = MagicMock(return_value=patch_response)
-                fake_patch.last_url = url
-                fake_patch.last_headers = headers
-                fake_patch.last_params = params
-                fake_patch.last_body = json
+                fake_patch.last_url = url  # type: ignore[attr-defined]
+                fake_patch.last_headers = headers  # type: ignore[attr-defined]
+                fake_patch.last_params = params  # type: ignore[attr-defined]
+                fake_patch.last_body = json  # type: ignore[attr-defined]
                 return resp
 
             mock_client = MagicMock()
@@ -154,12 +154,12 @@ class TestSetChatSettings:
             )
             mock_client = client._get_client()
             patch_fn = mock_client.patch
-            assert patch_fn.last_url == "https://api.twitch.tv/helix/chat/settings"
-            assert patch_fn.last_params == {
+            assert patch_fn.last_url == "https://api.twitch.tv/helix/chat/settings"  # type: ignore[attr-defined]
+            assert patch_fn.last_params == {  # type: ignore[attr-defined]
                 "broadcaster_id": "111",
                 "moderator_id": "222",
             }
-            body = patch_fn.last_body
+            body = patch_fn.last_body  # type: ignore[attr-defined]
             assert body["slow_mode"] is True
             assert body["slow_mode_wait_time"] == 10
             assert body["emote_mode"] is True
@@ -197,7 +197,7 @@ class TestSetChatSettings:
             )
             mock_client = client._get_client()
             patch_fn = mock_client.patch
-            body = patch_fn.last_body
+            body = patch_fn.last_body  # type: ignore[attr-defined]
             assert "slow_mode" not in body
             assert "slow_mode_wait_time" not in body
             assert "subscriber_mode" not in body
@@ -238,7 +238,7 @@ class TestSetChatSettings:
             )
             mock_client = client._get_client()
             patch_fn = mock_client.patch
-            headers = patch_fn.last_headers
+            headers = patch_fn.last_headers  # type: ignore[attr-defined]
             assert headers["Authorization"] == "Bearer test-token"
             assert headers["Client-Id"] == "test-client-id"
             assert headers["Content-Type"] == "application/json"
