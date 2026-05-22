@@ -119,6 +119,7 @@ TwitchX._bindSidebarEvents = function() {
     var sidebar = document.getElementById('sidebar');
     var collapsed = sidebar.classList.toggle('collapsed-sidebar');
     localStorage.setItem('twitchx.sidebar.collapsed', collapsed ? '1' : '0');
+    TwitchX.renderSidebar();
   });
 
   // Platform tab switching

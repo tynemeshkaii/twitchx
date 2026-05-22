@@ -470,7 +470,120 @@ function updateSidebarItem(item, login, streamMap) {
   }
 }
 
+function createRailAvatar(login, isLive, streamMap) {
+  var item = document.createElement('div');
+  var isWatching = !!(TwitchX.state.watchingChannel &&
+    TwitchX.state.watchingChannel.toLowerCase() === login.toLowerCase());
+  item.className = 'rail-avatar' +
+    (isLive ? ' live' : ' offline') +
+    (isWatching ? ' watching' : '');
+  item.dataset.login = login;
+  item.tabIndex = 0;
+  item.setAttribute('role', 'button');
+  item.setAttribute(
+    'aria-label',
+    isLive
+      ? login + ', live'
+      : login + ', offline'
+  );
+
+  var img = document.createElement('img');
+  img.className = 'rail-av-img';
+  img.alt = '';
+  if (TwitchX.state.avatars[login]) {
+    img.src = TwitchX.state.avatars[login];
+  }
+  item.appendChild(img);
+
+  if (isLive) {
+    var ring = document.createElement('div');
+    ring.className = 'rail-av-ring';
+    item.appendChild(ring);
+
+    var dot = document.createElement('div');
+    dot.className = 'rail-av-dot';
+    item.appendChild(dot);
+  }
+
+  _setupSidebarTooltip(item, login, streamMap);
+
+  item.addEventListener('click', function() { TwitchX.selectChannel(login); });
+  item.addEventListener('dblclick', function() { TwitchX.selectChannel(login); TwitchX.doWatch(); });
+  item.addEventListener('contextmenu', function(e) { TwitchX.showSidebarContextMenu(e, login); });
+  item.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      TwitchX.selectChannel(login);
+    }
+  });
+
+  return item;
+}
+
+function renderRail(groups) {
+  var list = document.getElementById('channel-list');
+  var liveLogins = groups.online;
+  var offlineLogins = groups.offline;
+
+  // In-place update if membership unchanged
+  var existingLive = Array.from(list.querySelectorAll('.rail-avatar.live'))
+    .map(function(el) { return el.dataset.login; });
+  var existingOffline = Array.from(list.querySelectorAll('.rail-avatar.offline'))
+    .map(function(el) { return el.dataset.login; });
+
+  var liveChanged = existingLive.length !== liveLogins.length ||
+    liveLogins.some(function(l, i) { return existingLive[i] !== l; });
+  var offlineChanged = existingOffline.length !== offlineLogins.length ||
+    offlineLogins.some(function(l, i) { return existingOffline[i] !== l; });
+
+  if (!liveChanged && !offlineChanged) {
+    list.querySelectorAll('.rail-avatar').forEach(function(el) {
+      var login = el.dataset.login;
+
+      // Sync avatar image
+      var img = el.querySelector('.rail-av-img');
+      var newSrc = TwitchX.state.avatars[login] || '';
+      if (img && newSrc && img.src !== newSrc) {
+        img.src = newSrc;
+      }
+
+      // Sync selected state
+      var isSelected = TwitchX.state.selectedChannel === login;
+      el.classList.toggle('selected', isSelected);
+
+      // Sync watching state
+      var isWatching = !!(TwitchX.state.watchingChannel &&
+        TwitchX.state.watchingChannel.toLowerCase() === login.toLowerCase());
+      el.classList.toggle('watching', isWatching);
+    });
+    return;
+  }
+
+  // Full rebuild
+  while (list.firstChild) list.removeChild(list.firstChild);
+
+  liveLogins.forEach(function(login) {
+    list.appendChild(createRailAvatar(login, true, groups.streamMap));
+  });
+
+  if (liveLogins.length > 0 && offlineLogins.length > 0) {
+    var divider = document.createElement('div');
+    divider.className = 'rail-divider';
+    list.appendChild(divider);
+  }
+
+  offlineLogins.forEach(function(login) {
+    list.appendChild(createRailAvatar(login, false, groups.streamMap));
+  });
+}
+
 function renderSidebar() {
+  var _sidebar = document.getElementById('sidebar');
+  if (_sidebar && _sidebar.classList.contains('collapsed-sidebar')) {
+    renderRail(getSidebarGroups());
+    return;
+  }
+
   const list = document.getElementById('channel-list');
   const groups = getSidebarGroups();
   const selectedExpanded = expandSidebarSectionForLogin(TwitchX.state.selectedChannel);
@@ -715,6 +828,8 @@ TwitchX.getSidebarSectionMeta = getSidebarSectionMeta;
 TwitchX.createSidebarItem = createSidebarItem;
 TwitchX.createSidebarSection = createSidebarSection;
 TwitchX.updateSidebarItem = updateSidebarItem;
+TwitchX.createRailAvatar = createRailAvatar;
+TwitchX.renderRail = renderRail;
 TwitchX.renderSidebar = renderSidebar;
 TwitchX.updateSidebarScrollShadow = updateSidebarScrollShadow;
 TwitchX.initSidebarScrollShadow = initSidebarScrollShadow;

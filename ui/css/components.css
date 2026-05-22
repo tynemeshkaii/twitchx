@@ -98,7 +98,7 @@
 }
 
 /* ── Sidebar collapsed mode (icons-only) ───────────────── */
-#sidebar.collapsed-sidebar { width: 56px; transition: width var(--duration-normal) var(--ease-default); }
+#sidebar.collapsed-sidebar { width: 52px; transition: width var(--duration-normal) var(--ease-default); }
 #sidebar.collapsed-sidebar #profile-area { display: none; }
 #sidebar.collapsed-sidebar #kick-profile-area { display: none; }
 #sidebar.collapsed-sidebar #platform-tabs { display: none; }
@@ -115,6 +115,74 @@
 }
 #sidebar.collapsed-sidebar .sidebar-collapse-btn svg {
   transform: rotate(180deg);
+}
+#sidebar.collapsed-sidebar #channel-list {
+  padding: 4px 0 8px;
+  align-items: center;
+  gap: 5px;
+  overflow-y: auto;
+}
+
+/* ── Icon rail — avatar items ───────────────────────────── */
+.rail-avatar {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  cursor: pointer;
+  border-radius: 50%;
+}
+.rail-avatar:focus-visible {
+  box-shadow: 0 0 0 2px rgba(255, 159, 10, 0.6);
+}
+.rail-avatar.offline {
+  filter: grayscale(0.7) opacity(0.5);
+}
+.rail-av-img {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--bg-elevated);
+  display: block;
+}
+.rail-av-ring {
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 2px solid var(--live-green);
+  pointer-events: none;
+}
+.rail-av-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--live-green);
+  border: 2px solid var(--bg-surface);
+  pointer-events: none;
+}
+
+/* ── Icon rail — selection / watching state ─────────────── */
+.rail-avatar.selected {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.rail-avatar.watching {
+  box-shadow: 0 0 0 2px rgba(255, 159, 10, 0.45);
+}
+.rail-avatar.selected.watching {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* ── Icon rail — section divider ────────────────────────── */
+.rail-divider {
+  width: 24px;
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 2px 0;
+  flex-shrink: 0;
 }
 
 /* ── Sidebar tooltip ──────────────────────────────────── */
