@@ -67,3 +67,24 @@ def test_load_config_invalid_int_string_falls_back_to_default(
     temp_config_dir.write_text(json.dumps(cfg))
     config = load_config()
     assert config["settings"]["refresh_interval"] == DEFAULT_SETTINGS["refresh_interval"]
+
+
+def test_save_config_logs_error_on_permission_denied(
+    temp_config_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    original_open = open
+
+    def failing_open(path, mode="r", **kw):  # type: ignore[override]
+        if "w" in str(mode):
+            raise PermissionError("read-only filesystem")
+        return original_open(path, mode, **kw)
+
+    monkeypatch.setattr("builtins.open", failing_open)
+    with caplog.at_level(logging.ERROR, logger="core.storage"):
+        save_config(DEFAULT_CONFIG)  # must not raise
+    assert any(
+        "Cannot save" in r.message or "Permission" in r.message or "permission" in r.message
+        for r in caplog.records
+    )

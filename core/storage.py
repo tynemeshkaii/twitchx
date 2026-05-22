@@ -377,11 +377,15 @@ def load_config() -> dict[str, Any]:
 
 
 def save_config(config: dict[str, Any]) -> None:
+    logger.debug("Saving config to %s", CONFIG_FILE)
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     tmp = CONFIG_FILE.with_suffix(".tmp")
-    with open(tmp, "w") as f:
-        json.dump(config, f, indent=2)
-    os.replace(tmp, CONFIG_FILE)
+    try:
+        with open(tmp, "w") as f:
+            json.dump(config, f, indent=2)
+        os.replace(tmp, CONFIG_FILE)
+    except PermissionError as exc:
+        logger.error("Cannot save config — permission denied: %s", exc)
 
 
 _config_lock = threading.Lock()
