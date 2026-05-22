@@ -59,6 +59,9 @@ def _configure_crash_logging() -> None:
     def _excepthook(
         exc_type: type, exc_value: BaseException, exc_tb: object
     ) -> None:
+        if issubclass(exc_type, (KeyboardInterrupt, SystemExit)):
+            sys.__excepthook__(exc_type, exc_value, exc_tb)
+            return
         from datetime import datetime
 
         header = f"CRASH {datetime.now().isoformat(timespec='seconds')} (main thread)"
