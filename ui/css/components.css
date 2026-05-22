@@ -120,6 +120,7 @@
   padding: 4px 0 8px;
   align-items: center;
   gap: 5px;
+  overflow-y: auto;
 }
 
 /* ── Icon rail — avatar items ───────────────────────────── */
@@ -162,6 +163,17 @@
   background: var(--live-green);
   border: 2px solid var(--bg-surface);
   pointer-events: none;
+}
+
+/* ── Icon rail — selection / watching state ─────────────── */
+.rail-avatar.selected {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.rail-avatar.watching {
+  box-shadow: 0 0 0 2px rgba(255, 159, 10, 0.45);
+}
+.rail-avatar.selected.watching {
+  box-shadow: 0 0 0 2px var(--accent);
 }
 
 /* ── Icon rail — section divider ────────────────────────── */

@@ -472,7 +472,11 @@ function updateSidebarItem(item, login, streamMap) {
 
 function createRailAvatar(login, isLive, streamMap) {
   var item = document.createElement('div');
-  item.className = 'rail-avatar' + (isLive ? ' live' : ' offline');
+  var isWatching = !!(TwitchX.state.watchingChannel &&
+    TwitchX.state.watchingChannel.toLowerCase() === login.toLowerCase());
+  item.className = 'rail-avatar' +
+    (isLive ? ' live' : ' offline') +
+    (isWatching ? ' watching' : '');
   item.dataset.login = login;
   item.tabIndex = 0;
   item.setAttribute('role', 'button');
