@@ -36,7 +36,7 @@ def test_add_first_channel_populates_favorites(
 ) -> None:
     """Adding the very first channel persists correctly."""
     api = TwitchXApi()
-    monkeypatch.setattr(api, "refresh", lambda: None)
+    monkeypatch.setattr(api._data, "refresh", lambda: None)
 
     api.add_channel("xqc", platform="twitch")
 
@@ -50,7 +50,7 @@ def test_add_first_channel_then_second_keeps_both(
     temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     api = TwitchXApi()
-    monkeypatch.setattr(api, "refresh", lambda: None)
+    monkeypatch.setattr(api._data, "refresh", lambda: None)
 
     api.add_channel("xqc", platform="twitch")
     api.add_channel("shroud", platform="twitch")
