@@ -535,11 +535,22 @@ function renderRail(groups) {
   if (!liveChanged && !offlineChanged) {
     list.querySelectorAll('.rail-avatar').forEach(function(el) {
       var login = el.dataset.login;
+
+      // Sync avatar image
       var img = el.querySelector('.rail-av-img');
       var newSrc = TwitchX.state.avatars[login] || '';
       if (img && newSrc && img.src !== newSrc) {
         img.src = newSrc;
       }
+
+      // Sync selected state
+      var isSelected = TwitchX.state.selectedChannel === login;
+      el.classList.toggle('selected', isSelected);
+
+      // Sync watching state
+      var isWatching = !!(TwitchX.state.watchingChannel &&
+        TwitchX.state.watchingChannel.toLowerCase() === login.toLowerCase());
+      el.classList.toggle('watching', isWatching);
     });
     return;
   }
