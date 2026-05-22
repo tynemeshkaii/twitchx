@@ -130,7 +130,6 @@
   flex-shrink: 0;
   cursor: pointer;
   border-radius: 50%;
-  outline: none;
 }
 .rail-avatar:focus-visible {
   box-shadow: 0 0 0 2px rgba(255, 159, 10, 0.6);
@@ -150,7 +149,7 @@
   position: absolute;
   inset: -2px;
   border-radius: 50%;
-  border: 2px solid #30d158;
+  border: 2px solid var(--live-green);
   pointer-events: none;
 }
 .rail-av-dot {
@@ -160,7 +159,7 @@
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #30d158;
+  background: var(--live-green);
   border: 2px solid var(--bg-surface);
   pointer-events: none;
 }
@@ -169,7 +168,7 @@
 .rail-divider {
   width: 24px;
   height: 1px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--border-subtle);
   margin: 2px 0;
   flex-shrink: 0;
 }
