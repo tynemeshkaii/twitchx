@@ -294,6 +294,14 @@ function openSettings() {
   _setFeedback('');
   document.getElementById('settings-overlay').classList.add('visible');
   TwitchX._settingsSnapshot = JSON.stringify(_readAllFormValues());
+  var versionEl = document.getElementById('settings-version-footer');
+  if (versionEl && TwitchX.api) {
+    try {
+      versionEl.textContent = 'v' + TwitchX.api.get_version();
+    } catch (e) {
+      versionEl.textContent = '';
+    }
+  }
 }
 
 function openSettingsToTab(tab) {

@@ -4,8 +4,10 @@ import asyncio
 import json
 import logging
 import threading
+import tomllib as _tomllib
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path as _Path
 from typing import Any
 
 import httpx
@@ -37,6 +39,17 @@ from .images import ImagesComponent
 from .streams import StreamsComponent
 
 logger = logging.getLogger(__name__)
+
+
+def _read_project_version() -> str:
+    toml_path = _Path(__file__).parent.parent.parent / "pyproject.toml"
+    try:
+        with open(toml_path, "rb") as f:
+            data = _tomllib.load(f)
+        return data["project"]["version"]
+    except Exception:
+        return "0.0.0"
+
 
 _ACCENT_PALETTE = {
     "#FF9F0A",
@@ -134,6 +147,11 @@ class TwitchXApi:
         self._streams = StreamsComponent(self)
         self._chat = ChatComponent(self)
         self._images = ImagesComponent(self)
+
+    # ─── App metadata ───
+
+    def get_version(self) -> str:
+        return _read_project_version()
 
     # ─── Backward-compatible method delegation (accessed by tests) ───
 
