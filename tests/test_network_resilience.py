@@ -97,9 +97,13 @@ class TestNetworkResilience:
             )
 
         assert call_count == 2, f"Expected 2 _ensure_token calls, got {call_count}"
-        assert any(
-            "onStreamsUpdate" in call for call in js_calls
-        ), f"Expected onStreamsUpdate in JS calls but got: {js_calls}"
+        streams_update_calls = [c for c in js_calls if "onStreamsUpdate" in c]
+        assert len(streams_update_calls) >= 2, (
+            f"Expected onStreamsUpdate emitted at least twice (once per attempt), got {len(streams_update_calls)}: {streams_update_calls}"
+        )
+        assert "streamer1" in streams_update_calls[-1], (
+            "Last onStreamsUpdate should contain real stream data from the successful retry"
+        )
 
     def test_all_retries_exhausted_emits_error_status(
         self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
