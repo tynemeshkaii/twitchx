@@ -155,6 +155,24 @@ def _deep_merge(defaults: dict[str, Any], override: dict[str, Any]) -> dict[str,
     return result
 
 
+_INT_SETTINGS: frozenset[str] = frozenset(
+    {"refresh_interval", "youtube_refresh_interval", "player_height", "chat_width"}
+)
+
+
+def _coerce_settings(settings: dict[str, Any]) -> dict[str, Any]:
+    """Cast known numeric settings to int; fall back to DEFAULT_SETTINGS on bad values."""
+    result = dict(settings)
+    for key in _INT_SETTINGS:
+        val = result.get(key)
+        if isinstance(val, str):
+            try:
+                result[key] = int(val)
+            except ValueError:
+                result[key] = DEFAULT_SETTINGS.get(key, 0)
+    return result
+
+
 def _is_v1_config(stored: dict[str, Any]) -> bool:
     """Check if config is v1 format (flat keys at root, no 'platforms' key)."""
     return "platforms" not in stored and (
@@ -352,6 +370,7 @@ def load_config() -> dict[str, Any]:
 
     favorites_changed = _migrate_favorites_v2(stored)
     merged = _deep_merge(DEFAULT_CONFIG, stored)
+    merged["settings"] = _coerce_settings(merged["settings"])
     if favorites_changed:
         save_config(merged)
     return merged
