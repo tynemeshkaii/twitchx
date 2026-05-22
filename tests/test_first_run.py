@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 
-import core.storage as storage
-from core.storage import DEFAULT_CONFIG, get_favorite_logins, get_favorites, load_config
+from core.storage import get_favorite_logins, get_favorites, load_config
 from ui.api import TwitchXApi
 
 

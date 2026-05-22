@@ -8,7 +8,8 @@ import pytest
 
 import core.storage as storage
 from core.chats.kick_chat import KickChatClient
-from core.chats.youtube_chat import YouTubeChatClient, _DEDUP_MAX as _YT_DEDUP_MAX
+from core.chats.youtube_chat import _DEDUP_MAX as _YT_DEDUP_MAX
+from core.chats.youtube_chat import YouTubeChatClient
 from core.storage import save_avatar
 from ui.api import TwitchXApi
 
