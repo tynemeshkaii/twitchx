@@ -342,6 +342,7 @@ def load_config() -> dict[str, Any]:
             stored = json.load(f)
     except json.JSONDecodeError:
         logger.warning("Corrupt config at %s — resetting to defaults", CONFIG_FILE)
+        save_config(DEFAULT_CONFIG)
         return _deep_merge(DEFAULT_CONFIG, {})
 
     # Auto-migrate v1 → v2

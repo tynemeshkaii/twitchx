@@ -19,7 +19,18 @@ def test_load_config_malformed_json_falls_back_to_defaults(
     assert config["favorites"] == []
 
 
-def test_load_config_empty_file_falls_back_to_defaults(
+def test_load_config_corrupt_json_overwrites_file_with_defaults(
+    temp_config_dir: Path,
+) -> None:
+    temp_config_dir.write_text("{bad}")
+    load_config()
+    # The corrupt file should now be valid JSON containing the defaults
+    restored = json.loads(temp_config_dir.read_text())
+    assert restored["settings"]["quality"] == "best"
+    assert restored["favorites"] == []
+
+
+def test_load_config_empty_file_raises_json_decode_falls_back_to_defaults(
     temp_config_dir: Path,
 ) -> None:
     temp_config_dir.write_text("")
