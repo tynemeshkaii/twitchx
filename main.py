@@ -44,7 +44,7 @@ def _configure_crash_logging() -> None:
         exc_value: BaseException | None,
         exc_tb: object,
     ) -> None:
-        log_dir = _storage.CONFIG_DIR / "twitchx"
+        log_dir = _storage.CONFIG_DIR
         crash_log = log_dir / "crash.log"
         log_dir.mkdir(parents=True, exist_ok=True)
         lines = ["=" * 60 + "\n", header + "\n"]

@@ -13,7 +13,7 @@ def test_excepthook_writes_crash_log(temp_config_dir: Path, monkeypatch) -> None
     importlib.reload(_main)
 
     _main._configure_crash_logging()
-    crash_log = temp_config_dir.parent / "twitchx" / "crash.log"
+    crash_log = temp_config_dir.parent / "crash.log"
 
     try:
         raise RuntimeError("test crash")
@@ -35,7 +35,7 @@ def test_thread_excepthook_writes_crash_log(temp_config_dir: Path) -> None:
     importlib.reload(_main)
 
     _main._configure_crash_logging()
-    crash_log = temp_config_dir.parent / "twitchx" / "crash.log"
+    crash_log = temp_config_dir.parent / "crash.log"
 
     try:
         raise ValueError("thread crash")
