@@ -57,6 +57,7 @@ function showPlayerView() {
   if (pLoader) pLoader.classList.remove('hidden');
 
   TwitchX.state.watchingChannel = TwitchX.state.selectedChannel;
+  TwitchX.state.watchingChannelKey = TwitchX.state.selectedChannelKey;
   document.getElementById('watch-btn').classList.add('active');
   document.getElementById('stop-player-btn').classList.remove('hidden');
   document.getElementById('live-dot').classList.add('visible');
@@ -180,7 +181,6 @@ function hidePlayerView() {
     video.pause();
     video.removeAttribute('src');
     video.load();
-    video.style.display = '';
 
     // Phase 6: guaranteed cleanup — destroy the MediaPlayer
     video.remove();
@@ -217,6 +217,7 @@ function hidePlayerView() {
   document.getElementById('empty-state').classList.remove('hidden');
 
   TwitchX.state.watchingChannel = null;
+  TwitchX.state.watchingChannelKey = null;
   TwitchX.state.playerPlatform = null;
   TwitchX.state.playerHasChat = true;
   TwitchX.chatPlatform = null;
@@ -296,13 +297,15 @@ function _handleMuteBtnClick() {
 function cycleStream(dir) {
   const streams = TwitchX.getFilteredSortedStreams();
   if (streams.length === 0) return;
-  let idx = streams.findIndex(function(s) { return s.login === TwitchX.state.selectedChannel; });
+  let idx = streams.findIndex(function(s) {
+    return TwitchX.channelKey(s.login, s.platform || 'twitch') === TwitchX.state.selectedChannelKey;
+  });
   if (idx === -1) {
     idx = dir > 0 ? 0 : streams.length - 1;
   } else {
     idx = (idx + dir + streams.length) % streams.length;
   }
-  TwitchX.selectChannel(streams[idx].login);
+  TwitchX.selectChannel(streams[idx].login, streams[idx].platform || 'twitch');
 }
 
 function togglePiP(video) {
@@ -819,11 +822,11 @@ function updateRecordButton() {
   var dot = document.getElementById('record-dot');
   if (!btn) return;
   if (TwitchX._recordingActive) {
-    btn.innerHTML = TwitchX.renderIcon('stop', 12) + ' Stop REC';
+    TwitchX.setIconText(btn, 'stop', 12, 'Stop REC');
     btn.style.color = '#e53935';
     if (dot) dot.classList.remove('hidden');
   } else {
-    btn.innerHTML = TwitchX.renderIcon('record', 12) + ' REC';
+    TwitchX.setIconText(btn, 'record', 12, 'REC');
     btn.style.color = '';
     if (dot) dot.classList.add('hidden');
   }
@@ -974,7 +977,11 @@ function _updateBufferBar(video) {
   var loaded = document.getElementById('buffer-loaded');
   var pos = document.getElementById('buffer-position');
   if (!loaded) return;
-  if (!video || !video.src) { loaded.style.width = '0%'; if (pos) pos.style.display = 'none'; return; }
+  if (!video || !video.src) {
+    loaded.style.width = '0%';
+    if (pos) pos.classList.add('hidden');
+    return;
+  }
   var w = 0;
   if (video.buffered && video.buffered.length > 0) {
     var dur = video.duration;
@@ -982,7 +989,7 @@ function _updateBufferBar(video) {
       w = (video.buffered.end(video.buffered.length - 1) / dur) * 100;
       if (pos) {
         var pct = (video.currentTime / dur) * 100;
-        pos.style.display = 'block';
+        pos.classList.remove('hidden');
         pos.style.left = Math.min(pct, 100) + '%';
       }
     }

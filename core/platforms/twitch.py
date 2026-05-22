@@ -109,11 +109,12 @@ class TwitchClient(BasePlatformClient):
     async def exchange_code(self, code: str) -> dict[str, Any]:
         self._reload_config()
         tc = self._platform_config()
-        cid, _ = self._effective_creds()
+        cid, csec = self._effective_creds()
         resp = await self._get_client().post(
             TWITCH_AUTH_URL,
             data={
                 "client_id": cid,
+                "client_secret": csec,
                 "code": code,
                 "code_verifier": tc.get("pkce_verifier", ""),
                 "grant_type": "authorization_code",

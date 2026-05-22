@@ -18,28 +18,36 @@ class ImagesComponent(BaseApiComponent):
     """Avatar and thumbnail fetching."""
 
     def get_avatar(self, login: str, platform: str = "twitch") -> None:
-        login_lower = login.lower()
-        dedup_key = f"{platform}:{login_lower}"
+        login_key = login if platform == "youtube" else login.lower()
+        dedup_key = f"{platform}:{login_key}"
         if dedup_key in self._api._fetching_avatars:
             return
         self._api._fetching_avatars.add(dedup_key)
 
         def do_fetch() -> None:
             try:
-                cached_bytes = get_cached_avatar(login_lower, platform)
+                cached_bytes = get_cached_avatar(login_key, platform)
                 if cached_bytes:
                     try:
                         b64 = base64.b64encode(cached_bytes).decode()
                         data_url = f"data:image/png;base64,{b64}"
-                        result = json.dumps({"login": login_lower, "data": data_url})
+                        result = json.dumps(
+                            {
+                                "login": login_key,
+                                "platform": platform,
+                                "data": data_url,
+                            }
+                        )
                         self._eval_js(f"window.onAvatar({result})")
                         return
                     except Exception as exc:
                         logger.debug(
-                            "Cached avatar decode failed for %s: %s", login_lower, exc
+                            "Cached avatar decode failed for %s: %s", login_key, exc
                         )
 
-                url = self._api._user_avatars.get(login_lower, "")
+                url = self._api._user_avatars.get(login_key, "") or self._api._user_avatars.get(
+                    login.lower(), ""
+                )
                 if not url:
                     return
 
@@ -53,13 +61,13 @@ class ImagesComponent(BaseApiComponent):
                 resized_bytes = buf.getvalue()
                 b64 = base64.b64encode(resized_bytes).decode()
                 data_url = f"data:image/png;base64,{b64}"
-                result = json.dumps({"login": login_lower, "data": data_url})
-                self._eval_js(f"window.onAvatar({result})")
-                save_avatar(login_lower, resized_bytes, platform)
-            except Exception as e:
-                logger.warning(
-                    "get_avatar failed for %s/%s: %s", platform, login_lower, e
+                result = json.dumps(
+                    {"login": login_key, "platform": platform, "data": data_url}
                 )
+                self._eval_js(f"window.onAvatar({result})")
+                save_avatar(login_key, resized_bytes, platform)
+            except Exception as e:
+                logger.warning("get_avatar failed for %s/%s: %s", platform, login_key, e)
             finally:
                 self._api._fetching_avatars.discard(dedup_key)
 

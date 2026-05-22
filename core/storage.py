@@ -155,6 +155,29 @@ def _deep_merge(defaults: dict[str, Any], override: dict[str, Any]) -> dict[str,
     return result
 
 
+def _coerce_settings_types(config: dict[str, Any]) -> bool:
+    """Coerce simple persisted setting types back to their default shapes."""
+    settings = config.get("settings")
+    if not isinstance(settings, dict):
+        config["settings"] = {**DEFAULT_SETTINGS}
+        return True
+
+    changed = False
+    for key, default in DEFAULT_SETTINGS.items():
+        if key not in settings:
+            continue
+        value = settings[key]
+        if isinstance(default, int) and not isinstance(default, bool):
+            if isinstance(value, int) and not isinstance(value, bool):
+                continue
+            try:
+                settings[key] = int(value)
+            except (TypeError, ValueError):
+                settings[key] = default
+            changed = True
+    return changed
+
+
 def _is_v1_config(stored: dict[str, Any]) -> bool:
     """Check if config is v1 format (flat keys at root, no 'platforms' key)."""
     return "platforms" not in stored and (
@@ -338,8 +361,13 @@ def load_config() -> dict[str, Any]:
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         save_config(DEFAULT_CONFIG)
         return _deep_merge(DEFAULT_CONFIG, {})
-    with open(CONFIG_FILE) as f:
-        stored = json.load(f)
+    try:
+        with open(CONFIG_FILE) as f:
+            stored = json.load(f)
+    except json.JSONDecodeError as exc:
+        logger.warning("Corrupt config file %s, restoring defaults: %s", CONFIG_FILE, exc)
+        save_config(DEFAULT_CONFIG)
+        return _deep_merge(DEFAULT_CONFIG, {})
 
     # Auto-migrate v1 → v2
     if _is_v1_config(stored):
@@ -349,8 +377,9 @@ def load_config() -> dict[str, Any]:
 
     favorites_changed = _migrate_favorites_v2(stored)
     merged = _deep_merge(DEFAULT_CONFIG, stored)
-    if favorites_changed:
-        logger.debug("Favorites migrated, saving config")
+    settings_changed = _coerce_settings_types(merged)
+    if favorites_changed or settings_changed:
+        logger.debug("Config normalized, saving config")
         save_config(merged)
     return merged
 
@@ -359,9 +388,12 @@ def save_config(config: dict[str, Any]) -> None:
     logger.debug("Saving config to %s", CONFIG_FILE)
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     tmp = CONFIG_FILE.with_suffix(".tmp")
-    with open(tmp, "w") as f:
-        json.dump(config, f, indent=2)
-    os.replace(tmp, CONFIG_FILE)
+    try:
+        with open(tmp, "w") as f:
+            json.dump(config, f, indent=2)
+        os.replace(tmp, CONFIG_FILE)
+    except OSError as exc:
+        logger.error("Cannot save config to %s: %s", CONFIG_FILE, exc)
 
 
 _config_lock = threading.Lock()

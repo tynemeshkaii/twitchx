@@ -251,11 +251,17 @@ class TwitchXApi:
     def watch(self, channel: str, quality: str) -> None:
         self._streams.watch(channel, quality)
 
+    def watch_platform(self, channel: str, platform: str, quality: str) -> None:
+        self._streams.watch_platform(channel, platform, quality)
+
     def watch_direct(self, channel: str, platform: str, quality: str) -> None:
         self._streams.watch_direct(channel, platform, quality)
 
     def watch_external(self, channel: str, quality: str) -> None:
         self._streams.watch_external(channel, quality)
+
+    def watch_external_platform(self, channel: str, platform: str, quality: str) -> None:
+        self._streams.watch_external_platform(channel, platform, quality)
 
     def watch_media(
         self,

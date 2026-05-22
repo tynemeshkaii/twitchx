@@ -15,13 +15,13 @@ function formatKeyName(key) {
 
 function formatKeyDisplay(key) {
   if (key === ' ')          return 'Space';
-  if (key === 'ArrowUp')    return TwitchX.renderIcon('arrow-up', 14);
-  if (key === 'ArrowDown')  return TwitchX.renderIcon('arrow-down', 14);
-  if (key === 'ArrowLeft')  return TwitchX.renderIcon('arrow-left', 14);
-  if (key === 'ArrowRight') return TwitchX.renderIcon('arrow-right', 14);
-  if (key === 'Enter')      return TwitchX.renderIcon('enter', 14);
-  if (key === 'Backspace')  return TwitchX.renderIcon('backspace', 14);
-  if (key === 'Tab')        return TwitchX.renderIcon('tab', 14);
+  if (key === 'ArrowUp')    return '\u2191';
+  if (key === 'ArrowDown')  return '\u2193';
+  if (key === 'ArrowLeft')  return '\u2190';
+  if (key === 'ArrowRight') return '\u2192';
+  if (key === 'Enter')      return '\u21B5';
+  if (key === 'Backspace')  return '\u232B';
+  if (key === 'Tab')        return '\u21E5';
   return key;
 }
 
@@ -60,9 +60,25 @@ function renderHotkeysSettings() {
       'cursor:pointer',
       'transition:all 0.1s',
     ].join(';');
-    kbd.innerHTML = isCapturing ? 'Press key\u2026' : '<span class="hotkey-icon">' + formatKeyDisplay(key) + '</span>';
+    kbd.replaceChildren();
+    if (isCapturing) {
+      kbd.textContent = 'Press key\u2026';
+    } else {
+      var keyEl = document.createElement('span');
+      keyEl.className = 'hotkey-icon';
+      keyEl.textContent = formatKeyDisplay(key);
+      kbd.appendChild(keyEl);
+    }
     kbd.title = isCapturing ? 'Press Esc to cancel' : 'Click to rebind';
+    kbd.tabIndex = 0;
+    kbd.setAttribute('role', 'button');
+    kbd.setAttribute('aria-label', 'Rebind ' + TwitchX.SHORTCUT_LABELS[action]);
     kbd.addEventListener('click', function() { startRebind(action); });
+    kbd.addEventListener('keydown', function(e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();
+      startRebind(action);
+    });
 
     keyTd.appendChild(kbd);
     tr.appendChild(labelTd);
@@ -81,8 +97,12 @@ function handleKeydown(e) {
 
   if (e.key === 'Tab') {
     var overlay = document.getElementById('settings-overlay');
-    if (overlay && overlay.classList.contains('visible')) {
-      var focusable = overlay.querySelectorAll(
+    var paletteOverlay = document.getElementById('palette-overlay');
+    var trapRoot = null;
+    if (overlay && overlay.classList.contains('visible')) trapRoot = overlay;
+    else if (paletteOverlay && !paletteOverlay.classList.contains('hidden')) trapRoot = paletteOverlay;
+    if (trapRoot) {
+      var focusable = trapRoot.querySelectorAll(
         'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
       );
       if (focusable.length === 0) return;
@@ -103,6 +123,9 @@ function handleKeydown(e) {
   }
 
   if (e.key === 'Escape') {
+    if (document.getElementById('context-menu').classList.contains('menu-visible')) {
+      TwitchX.closeContextMenu(); return;
+    }
     if (!document.getElementById('palette-overlay').classList.contains('hidden')) {
       if (TwitchX.closePalette) TwitchX.closePalette();
       return;
@@ -121,13 +144,12 @@ function handleKeydown(e) {
       TwitchX.browseGoBack(); return;
     }
     if (TwitchX.multiState.open) { TwitchX.closeMultistreamView(); return; }
-    if (document.getElementById('context-menu').classList.contains('menu-visible')) {
-      TwitchX.closeContextMenu(); return;
-    }
     if (document.getElementById('search-dropdown').classList.contains('visible')) {
       document.getElementById('search-dropdown').classList.remove('visible'); return;
     }
     TwitchX.state.selectedChannel = null;
+    TwitchX.state.selectedChannelKey = null;
+    TwitchX.state.selectedPlatform = null;
     document.querySelectorAll('.stream-card').forEach(function(c) { c.classList.remove('selected'); });
     document.querySelectorAll('.channel-item').forEach(function(c) { c.classList.remove('selected'); });
     document.getElementById('watch-btn').classList.remove('active');

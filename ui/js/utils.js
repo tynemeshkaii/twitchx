@@ -68,6 +68,41 @@ function buildChannelMediaMeta(item, tab) {
   return parts.join(' \u2022 ');
 }
 
+function makeIcon(name, size) {
+  const icon = document.createElement('span');
+  icon.className = 'icon';
+  icon.innerHTML = TwitchX.renderIcon(name, size || 14);
+  return icon;
+}
+
+function setIconText(el, iconName, size, text) {
+  if (!el) return;
+  el.replaceChildren(makeIcon(iconName, size), document.createTextNode(' ' + (text || '')));
+}
+
+function setIconOnly(el, iconName, size) {
+  if (!el) return;
+  el.replaceChildren(makeIcon(iconName, size));
+}
+
+function setActiveTab(buttons, activeBtn) {
+  buttons.forEach(function(btn) {
+    var active = btn === activeBtn;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-selected', String(active));
+    btn.tabIndex = active ? 0 : -1;
+  });
+}
+
+function focusAdjacentTab(buttons, currentBtn, direction) {
+  if (!buttons.length) return;
+  var idx = buttons.indexOf(currentBtn);
+  if (idx < 0) idx = 0;
+  var next = buttons[(idx + direction + buttons.length) % buttons.length];
+  next.focus();
+  next.click();
+}
+
 TwitchX.truncate = truncate;
 TwitchX.formatViewers = formatViewers;
 TwitchX.formatUptime = formatUptime;
@@ -75,6 +110,11 @@ TwitchX.setStatus = setStatus;
 TwitchX.formatMediaDate = formatMediaDate;
 TwitchX.formatDuration = formatDuration;
 TwitchX.buildChannelMediaMeta = buildChannelMediaMeta;
+TwitchX.makeIcon = makeIcon;
+TwitchX.setIconText = setIconText;
+TwitchX.setIconOnly = setIconOnly;
+TwitchX.setActiveTab = setActiveTab;
+TwitchX.focusAdjacentTab = focusAdjacentTab;
 
 function viewFadeIn(el, showClass) {
   el.style.opacity = '0';

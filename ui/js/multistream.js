@@ -89,7 +89,6 @@ function _clearMultiSlot(idx) {
   }
   const activeEl = slotEl.querySelector('.ms-slot-active');
   activeEl.classList.add('hidden');
-  activeEl.style.display = '';
   slotEl.querySelector('.ms-slot-empty').classList.remove('hidden');
   slotEl.querySelector('.ms-add-form').classList.add('hidden');
   slotEl.classList.remove('audio-focus', 'chat-focus');
@@ -107,7 +106,6 @@ function addMultiSlot(idx, channel, platform) {
   slotEl.querySelector('.ms-add-form').classList.add('hidden');
   const active = slotEl.querySelector('.ms-slot-active');
   active.classList.remove('hidden');
-  active.style.display = 'block';
   active.querySelector('.ms-loading').classList.remove('hidden');
   active.querySelector('.ms-error-msg').classList.add('hidden');
   const msVideo = active.querySelector('.ms-video');
@@ -210,6 +208,7 @@ function _createMultiSlot(idx) {
   const slot = document.createElement('div');
   slot.className = 'ms-slot';
   slot.setAttribute('data-slot-idx', idx);
+  slot.setAttribute('aria-label', 'Multi-stream slot ' + (idx + 1));
   slot.tabIndex = -1;
 
   const empty = document.createElement('div');
@@ -217,7 +216,7 @@ function _createMultiSlot(idx) {
   const addBtn = document.createElement('button');
   addBtn.className = 'ms-add-btn';
   addBtn.dataset.slot = idx;
-  addBtn.innerHTML = TwitchX.renderIcon('plus', 14);
+  TwitchX.setIconOnly(addBtn, 'plus', 14);
   const span = document.createElement('span');
   span.textContent = 'Add Stream';
   addBtn.appendChild(span);
@@ -256,9 +255,11 @@ function _createMultiSlot(idx) {
   input.placeholder = 'channel name';
   input.maxLength = 100;
   input.autocomplete = 'off';
+  input.setAttribute('aria-label', 'Channel name for slot ' + (idx + 1));
   form.appendChild(input);
   const select = document.createElement('select');
   select.className = 'ms-add-platform';
+  select.setAttribute('aria-label', 'Platform for slot ' + (idx + 1));
   const optTwitch = document.createElement('option');
   optTwitch.value = 'twitch';
   optTwitch.textContent = 'Twitch';
@@ -320,28 +321,28 @@ function _createMultiSlot(idx) {
   audioBtn.dataset.slot = idx;
   audioBtn.title = 'Focus audio';
   audioBtn.setAttribute('aria-label', 'Focus audio');
-  audioBtn.innerHTML = TwitchX.renderIcon('volume', 14);
+  TwitchX.setIconOnly(audioBtn, 'volume', 14);
   controls.appendChild(audioBtn);
   const chatBtn = document.createElement('button');
   chatBtn.className = 'ms-chat-sw-btn';
   chatBtn.dataset.slot = idx;
   chatBtn.title = 'Switch chat';
   chatBtn.setAttribute('aria-label', 'Switch chat');
-  chatBtn.innerHTML = TwitchX.renderIcon('chat', 14);
+  TwitchX.setIconOnly(chatBtn, 'chat', 14);
   controls.appendChild(chatBtn);
   const fsBtn = document.createElement('button');
   fsBtn.className = 'ms-fullscreen-btn';
   fsBtn.dataset.slot = idx;
   fsBtn.title = 'Fullscreen (double-click)';
   fsBtn.setAttribute('aria-label', 'Fullscreen');
-  fsBtn.innerHTML = TwitchX.renderIcon('fullscreen', 14);
+  TwitchX.setIconOnly(fsBtn, 'fullscreen', 14);
   controls.appendChild(fsBtn);
   const pipBtn = document.createElement('button');
   pipBtn.className = 'ms-pip-btn';
   pipBtn.dataset.slot = idx;
   pipBtn.title = 'Picture-in-Picture';
   pipBtn.setAttribute('aria-label', 'Picture in Picture');
-  pipBtn.innerHTML = TwitchX.renderIcon('pip', 14);
+  TwitchX.setIconOnly(pipBtn, 'pip', 14);
   controls.appendChild(pipBtn);
   _bindSlotPiPEvents(video, pipBtn);
   const removeBtn = document.createElement('button');
@@ -349,7 +350,7 @@ function _createMultiSlot(idx) {
   removeBtn.dataset.slot = idx;
   removeBtn.title = 'Remove';
   removeBtn.setAttribute('aria-label', 'Remove');
-  removeBtn.innerHTML = TwitchX.renderIcon('close', 14);
+  TwitchX.setIconOnly(removeBtn, 'close', 14);
   controls.appendChild(removeBtn);
   overlay.appendChild(controls);
   active.appendChild(overlay);

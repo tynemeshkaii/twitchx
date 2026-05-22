@@ -112,7 +112,7 @@ function renderChatEmotes(parent, text, emotes) {
     img.src = emote.url;
     img.alt = emote.code;
     img.title = emote.code;
-    img.onerror = function() { this.style.display = 'none'; };
+    img.onerror = function() { this.classList.add('hidden'); };
     parent.appendChild(img);
     lastIdx = emote.end + 1;
   }
@@ -202,6 +202,8 @@ function toggleChatFilterPanel() {
   if (!panel) return;
   var opening = panel.classList.contains('hidden');
   panel.classList.toggle('hidden', !opening);
+  var btn = document.getElementById('chat-filter-btn');
+  if (btn) btn.setAttribute('aria-expanded', String(opening));
   if (opening) loadChatFiltersFromConfig();
 }
 
@@ -253,7 +255,7 @@ function exportChatLog(format) {
   var a = document.createElement('a');
   a.href = url;
   a.download = filename;
-  a.style.display = 'none';
+  a.classList.add('hidden');
   document.body.appendChild(a);
   a.click();
   setTimeout(function() {
@@ -295,7 +297,7 @@ function renderEmotePicker(filter) {
     img.src = emotes[code];
     img.alt = code;
     img.title = code;
-    img.onerror = function() { this.style.display = 'none'; };
+    img.onerror = function() { this.classList.add('hidden'); };
     img.addEventListener('click', function() {
       var input = document.getElementById('chat-input');
       if (input) {
@@ -321,6 +323,8 @@ function openEmotePicker() {
   TwitchX._cachedPickerEmotes = null;
   var picker = document.getElementById('emote-picker');
   if (picker) picker.classList.remove('hidden');
+  var btn = document.getElementById('emote-picker-btn');
+  if (btn) btn.setAttribute('aria-expanded', 'true');
   var searchEl = document.getElementById('emote-search');
   if (searchEl) { searchEl.value = ''; searchEl.focus(); }
   renderEmotePicker('');
@@ -330,6 +334,8 @@ function closeEmotePicker() {
   TwitchX._emotePickerOpen = false;
   var picker = document.getElementById('emote-picker');
   if (picker) picker.classList.add('hidden');
+  var btn = document.getElementById('emote-picker-btn');
+  if (btn) btn.setAttribute('aria-expanded', 'false');
 }
 
 function toggleEmotePicker() {
@@ -367,6 +373,8 @@ function toggleChatUserList() {
   if (!panel) return;
   var open = !panel.classList.contains('hidden');
   panel.classList.toggle('hidden', open);
+  var btn = document.getElementById('chat-userlist-btn');
+  if (btn) btn.setAttribute('aria-expanded', String(!open));
   if (!open) renderChatUserList('');
 }
 

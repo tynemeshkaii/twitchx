@@ -5,8 +5,28 @@ function closeContextMenu() {
   const menu = document.getElementById('context-menu');
   if (menu) menu.classList.remove('menu-visible');
   TwitchX.ctxChannel = null;
+  TwitchX.ctxChannelKey = null;
   if (TwitchX.deactivateFocusTrap) TwitchX.deactivateFocusTrap();
+  if (TwitchX._contextReturnFocus && TwitchX._contextReturnFocus.focus) {
+    TwitchX._contextReturnFocus.focus();
+  }
+  TwitchX._contextReturnFocus = null;
   if (TwitchX.focusReturn && TwitchX.focusReturn.restore) TwitchX.focusReturn.restore();
+}
+
+function _visibleMenuItems(menu) {
+  return Array.from(menu.querySelectorAll('[role="menuitem"]')).filter(function(item) {
+    return !item.classList.contains('hidden');
+  });
+}
+
+function _focusMenuItem(menu, idx) {
+  const items = _visibleMenuItems(menu);
+  if (items.length === 0) return;
+  var next = ((idx % items.length) + items.length) % items.length;
+  items.forEach(function(item) { item.tabIndex = -1; });
+  items[next].tabIndex = 0;
+  items[next].focus();
 }
 
 function _positionContextMenu(e) {
@@ -25,8 +45,10 @@ function _positionContextMenu(e) {
   menu.style.top = top + 'px';
 }
 
-function _showMenu(e, login) {
+function _showMenu(e, login, platform) {
   TwitchX.ctxChannel = login;
+  TwitchX.ctxChannelKey = TwitchX.channelKey(login, platform || TwitchX.getChannelPlatform(login));
+  TwitchX._contextReturnFocus = document.activeElement;
   const menu = document.getElementById('context-menu');
   menu.classList.remove('menu-visible');
   menu.style.left = '0';
@@ -36,16 +58,19 @@ function _showMenu(e, login) {
   _positionContextMenu(e);
   requestAnimationFrame(function() {
     menu.classList.add('menu-visible');
+    _focusMenuItem(menu, 0);
   });
 }
 
-function showContextMenu(e, login) {
+function showContextMenu(e, login, platform) {
   e.preventDefault();
-  _showMenu(e, login);
+  const ctxPlatform = platform || TwitchX.getChannelPlatform(login);
+  const ctxKey = TwitchX.channelKey(login, ctxPlatform);
+  _showMenu(e, login, ctxPlatform);
   const menu = document.getElementById('context-menu');
   const favItem = menu.querySelector('[data-action="favorite"]');
   const removeItem = menu.querySelector('[data-action="remove"]');
-  if (TwitchX.state.favorites.indexOf(login) !== -1) {
+  if (TwitchX.state.favoritesMeta[ctxKey]) {
     favItem.classList.add('hidden');
     removeItem.classList.remove('hidden');
   } else {
@@ -55,55 +80,39 @@ function showContextMenu(e, login) {
   const msItem = menu.querySelector('[data-action="multistream"]');
   if (msItem) {
     const allFull = TwitchX.multiState.slots.every(function(s) { return s !== null; });
-    const ctxStream = TwitchX.state.streams.find(function(s) { return s.login === login; });
-    const isYT = (ctxStream && ctxStream.platform === 'youtube') ||
-      (TwitchX.state.favoritesMeta['youtube:' + login] !== undefined);
+    const ctxStream = TwitchX.findStreamByKey(ctxKey);
+    const isYT = ctxPlatform === 'youtube' || (ctxStream && ctxStream.platform === 'youtube');
     msItem.classList.toggle('hidden', allFull || isYT);
   }
   var pinItem = menu.querySelector('[data-action="pin"]');
   if (pinItem) {
-    var ctxPlatForPin = (function() {
-      var s = TwitchX.state.streams.find(function(s) { return s.login === login; });
-      if (s && s.platform) return s.platform;
-      var plats = ['twitch', 'kick', 'youtube'];
-      for (var pi = 0; pi < plats.length; pi++) {
-        if (TwitchX.state.favoritesMeta[plats[pi] + ':' + login]) return plats[pi];
-      }
-      return 'twitch';
-    })();
+    var ctxPlatForPin = ctxPlatform;
     var alreadyPinned = TwitchX.isPinned(ctxPlatForPin, login);
-    pinItem.innerHTML = TwitchX.renderIcon('pin', 14) + ' ' + (alreadyPinned ? 'Unpin' : 'Pin to top');
+    TwitchX.setIconText(pinItem, 'pin', 14, alreadyPinned ? 'Unpin' : 'Pin to top');
     pinItem.dataset.pinPlatform = ctxPlatForPin;
   }
 }
 
-function showSidebarContextMenu(e, login) {
+function showSidebarContextMenu(e, login, platform) {
   e.preventDefault();
-  _showMenu(e, login);
+  const ctxPlatform = platform || TwitchX.getChannelPlatform(login);
+  const ctxKey = TwitchX.channelKey(login, ctxPlatform);
+  _showMenu(e, login, ctxPlatform);
   const menu = document.getElementById('context-menu');
   menu.querySelector('[data-action="favorite"]').classList.add('hidden');
   menu.querySelector('[data-action="remove"]').classList.remove('hidden');
   const msItem = menu.querySelector('[data-action="multistream"]');
   if (msItem) {
     const allFull = TwitchX.multiState.slots.every(function(s) { return s !== null; });
-    const ctxStream = TwitchX.state.streams.find(function(s) { return s.login === login; });
-    const isYT = (ctxStream && ctxStream.platform === 'youtube') ||
-      (TwitchX.state.favoritesMeta['youtube:' + login] !== undefined);
+    const ctxStream = TwitchX.findStreamByKey(ctxKey);
+    const isYT = ctxPlatform === 'youtube' || (ctxStream && ctxStream.platform === 'youtube');
     msItem.classList.toggle('hidden', allFull || isYT);
   }
   var pinItem = menu.querySelector('[data-action="pin"]');
   if (pinItem) {
-    var ctxPlatForPin = (function() {
-      var s = TwitchX.state.streams.find(function(s) { return s.login === login; });
-      if (s && s.platform) return s.platform;
-      var plats = ['twitch', 'kick', 'youtube'];
-      for (var pi = 0; pi < plats.length; pi++) {
-        if (TwitchX.state.favoritesMeta[plats[pi] + ':' + login]) return plats[pi];
-      }
-      return 'twitch';
-    })();
+    var ctxPlatForPin = ctxPlatform;
     var alreadyPinned = TwitchX.isPinned(ctxPlatForPin, login);
-    pinItem.innerHTML = TwitchX.renderIcon('pin', 14) + ' ' + (alreadyPinned ? 'Unpin' : 'Pin to top');
+    TwitchX.setIconText(pinItem, 'pin', 14, alreadyPinned ? 'Unpin' : 'Pin to top');
     pinItem.dataset.pinPlatform = ctxPlatForPin;
   }
 }
@@ -111,3 +120,5 @@ function showSidebarContextMenu(e, login) {
 TwitchX.showContextMenu = showContextMenu;
 TwitchX.showSidebarContextMenu = showSidebarContextMenu;
 TwitchX.closeContextMenu = closeContextMenu;
+TwitchX.focusContextMenuItem = _focusMenuItem;
+TwitchX.getVisibleContextMenuItems = _visibleMenuItems;

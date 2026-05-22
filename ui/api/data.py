@@ -118,17 +118,15 @@ class DataComponent(BaseApiComponent):
         twitch_favorites = get_favorite_logins(self._config, "twitch")
         kick_favorites = get_favorite_logins(self._config, "kick")
         youtube_favorites = get_favorite_logins(self._config, "youtube")
-        twitch_conf = get_platform_config(self._config, "twitch")
 
         all_favorites = twitch_favorites + kick_favorites + youtube_favorites
 
         if not all_favorites:
+            tw_cid, tw_csec = self._twitch._effective_creds()
+            kc_cid, kc_csec = self._kick._effective_creds()
             has_creds = bool(
-                (twitch_conf.get("client_id") and twitch_conf.get("client_secret"))
-                or (
-                    get_platform_config(self._config, "kick").get("client_id")
-                    and get_platform_config(self._config, "kick").get("client_secret")
-                )
+                (tw_cid and tw_csec)
+                or (kc_cid and kc_csec)
                 or get_platform_config(self._config, "youtube").get("api_key")
             )
             data = json.dumps(
@@ -144,9 +142,8 @@ class DataComponent(BaseApiComponent):
             self._eval_js(f"window.onStreamsUpdate({data})")
             return
 
-        twitch_has_creds = bool(
-            twitch_conf.get("client_id") and twitch_conf.get("client_secret")
-        )
+        t_cid, t_csec = self._twitch._effective_creds()
+        twitch_has_creds = bool(t_cid and t_csec)
 
         if not twitch_has_creds and not kick_favorites and not youtube_favorites:
             data = json.dumps(
@@ -271,12 +268,8 @@ class DataComponent(BaseApiComponent):
         youtube_favorites = youtube_favorites or []
 
         async def _do_twitch() -> tuple[list[dict], list[dict]]:
-            twitch_conf = get_platform_config(self._config, "twitch")
-            if not (
-                twitch_favorites
-                and twitch_conf.get("client_id")
-                and twitch_conf.get("client_secret")
-            ):
+            cid, csec = self._twitch._effective_creds()
+            if not (twitch_favorites and cid and csec):
                 return [], []
             await self._twitch._ensure_token()
             streams, users = await asyncio.gather(
@@ -517,7 +510,11 @@ class DataComponent(BaseApiComponent):
         return str(login) if stream.get("platform") == "youtube" else str(login).lower()
 
     @classmethod
-    def _stream_matches_channel(cls, stream: dict[str, Any], channel: str) -> bool:
+    def _stream_matches_channel(
+        cls, stream: dict[str, Any], channel: str, platform: str | None = None
+    ) -> bool:
+        if platform and cls._stream_platform(stream) != platform:
+            return False
         login = cls._stream_login(stream)
         if stream.get("platform") == "youtube":
             return login == channel
@@ -527,9 +524,11 @@ class DataComponent(BaseApiComponent):
     def _stream_platform(stream: dict[str, Any] | None) -> str:
         return str((stream or {}).get("platform", "twitch"))
 
-    def _find_live_stream(self, channel: str) -> dict[str, Any] | None:
+    def _find_live_stream(
+        self, channel: str, platform: str | None = None
+    ) -> dict[str, Any] | None:
         for stream in self._live_streams:
-            if self._stream_matches_channel(stream, channel):
+            if self._stream_matches_channel(stream, channel, platform):
                 return stream
         return None
 

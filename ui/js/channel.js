@@ -1,21 +1,25 @@
 window.TwitchX = window.TwitchX || {};
 const TwitchX = window.TwitchX;
 
-function selectChannel(login) {
+function selectChannel(login, platform) {
+  const resolvedPlatform = platform || TwitchX.getChannelPlatform(login);
+  const key = TwitchX.channelKey(login, resolvedPlatform);
   TwitchX.state.selectedChannel = login;
-  if (TwitchX.expandSidebarSectionForLogin(login)) {
+  TwitchX.state.selectedPlatform = resolvedPlatform;
+  TwitchX.state.selectedChannelKey = key;
+  if (TwitchX.expandSidebarSectionForLogin(login, key)) {
     TwitchX.renderSidebar();
   }
   document.querySelectorAll('.stream-card').forEach(function(c) {
-    c.classList.toggle('selected', c.dataset.login === login);
+    c.classList.toggle('selected', c.dataset.key === key);
   });
   document.querySelectorAll('.channel-item').forEach(function(c) {
-    const isSelected = c.dataset.login === login;
+    const isSelected = c.dataset.key === key;
     c.classList.toggle('selected', isSelected);
     c.setAttribute('aria-pressed', String(isSelected));
   });
   document.getElementById('watch-btn').classList.add('active');
-  TwitchX.setStatus('Selected: ' + login, 'info');
+  TwitchX.setStatus('Selected: ' + login + ' on ' + TwitchX.platformLabel(resolvedPlatform), 'info');
 }
 
 function addChannel() {
@@ -23,18 +27,20 @@ function addChannel() {
   const val = input.value.trim();
   if (val && TwitchX.api) {
     const platform = TwitchX.state.activePlatformFilter;
-    const lower = val.toLowerCase();
+    const inputLower = val.toLowerCase();
     let choice = null;
     if (platform === 'all') {
-      if (lower.indexOf('youtube.com/') !== -1 || lower.charAt(0) === '@') {
+      if (inputLower.indexOf('youtube.com/') !== -1 || val.charAt(0) === '@') {
         choice = { login: val, platform: 'youtube' };
-      } else if (lower.indexOf('kick.com/') !== -1) {
+      } else if (inputLower.indexOf('kick.com/') !== -1) {
         choice = { login: val, platform: 'kick' };
-      } else if (lower.indexOf('twitch.tv/') !== -1) {
+      } else if (inputLower.indexOf('twitch.tv/') !== -1) {
         choice = { login: val, platform: 'twitch' };
       } else {
         const matches = TwitchX.state.searchResults.filter(function(result) {
-          return result.login === lower || (result.display_name || '').toLowerCase() === lower;
+          if (result.login === val) return true;
+          if (result.platform !== 'youtube' && result.login.toLowerCase() === inputLower) return true;
+          return (result.display_name || '').toLowerCase() === inputLower;
         });
         if (matches.length === 1) {
           choice = matches[0];
@@ -60,14 +66,21 @@ function addChannelDirect(login, platform, displayName) {
 function doWatch() {
   if (!TwitchX.state.selectedChannel || !TwitchX.api) return;
   if (
-    TwitchX.state.watchingChannel &&
-    TwitchX.state.watchingChannel.toLowerCase() === TwitchX.state.selectedChannel.toLowerCase()
+    TwitchX.state.watchingChannelKey &&
+    TwitchX.state.watchingChannelKey === TwitchX.state.selectedChannelKey
   ) {
     TwitchX.setStatus('Already watching ' + TwitchX.state.selectedChannel, 'info');
     return;
   }
   const quality = document.getElementById('quality-select').value;
-  TwitchX.api.watch(TwitchX.state.selectedChannel, quality);
+  const platform = TwitchX.state.selectedPlatform || TwitchX.getChannelPlatform(TwitchX.state.selectedChannel, TwitchX.state.selectedChannelKey);
+  if (TwitchX.api.watch_platform) {
+    TwitchX.api.watch_platform(TwitchX.state.selectedChannel, platform, quality);
+  } else if (platform === 'twitch') {
+    TwitchX.api.watch(TwitchX.state.selectedChannel, quality);
+  } else {
+    TwitchX.api.watch_direct(TwitchX.state.selectedChannel, platform, quality);
+  }
 }
 
 function resetChannelMediaPanels() {
@@ -130,7 +143,7 @@ function createChannelMediaCard(item, tab) {
   thumb.className = 'channel-media-thumb';
   thumb.alt = '';
   if (item.thumbnail_url) thumb.src = item.thumbnail_url;
-  thumb.onerror = function() { thumbWrap.style.display = 'none'; };
+  thumb.onerror = function() { thumbWrap.classList.add('hidden'); };
   thumbWrap.appendChild(thumb);
 
   const body = document.createElement('div');
@@ -237,7 +250,10 @@ function showChannelView(login, platform, source) {
   document.getElementById('channel-follow-btn').classList.remove('following');
   document.getElementById('channel-live-empty').classList.add('hidden');
   document.querySelectorAll('.channel-tab').forEach(function(t) {
-    t.classList.toggle('active', t.dataset.tab === 'live');
+    var active = t.dataset.tab === 'live';
+    t.classList.toggle('active', active);
+    t.setAttribute('aria-selected', String(active));
+    t.tabIndex = active ? 0 : -1;
   });
   document.querySelectorAll('.channel-tab-panel').forEach(function(p) {
     p.classList.toggle('hidden', p.id !== 'channel-tab-live');
@@ -265,9 +281,7 @@ function hideChannelView() {
 
 function switchChannelTab(btn, tab) {
   TwitchX.state.channelTabs.active = tab;
-  document.querySelectorAll('.channel-tab').forEach(function(t) {
-    t.classList.toggle('active', t === btn);
-  });
+  TwitchX.setActiveTab(Array.from(document.querySelectorAll('.channel-tab')), btn);
   document.querySelectorAll('.channel-tab-panel').forEach(function(p) {
     p.classList.toggle('hidden', p.id !== 'channel-tab-' + tab);
   });

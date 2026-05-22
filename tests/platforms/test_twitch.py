@@ -238,8 +238,8 @@ def test_get_auth_url_uses_effective_client_id(temp_config_dir):
 
 
 @pytest.mark.asyncio
-async def test_exchange_code_sends_code_verifier_not_secret(temp_config_dir):
-    """exchange_code() must send code_verifier, not client_secret."""
+async def test_exchange_code_sends_code_verifier_and_secret(temp_config_dir):
+    """exchange_code() must send code_verifier and client_secret (confidential client)."""
     from unittest.mock import MagicMock
 
     from core.platforms.twitch import TwitchClient
@@ -274,8 +274,9 @@ async def test_exchange_code_sends_code_verifier_not_secret(temp_config_dir):
     await client.exchange_code("auth_code_xyz")
 
     assert captured.get("code_verifier") == "test_verifier_abc123xyz456def789"
-    assert "client_secret" not in captured
     assert captured.get("code") == "auth_code_xyz"
+    # Confidential clients (those with a client_secret) must send it even with PKCE.
+    assert "client_secret" in captured
 
 
 class TestChannelMedia:

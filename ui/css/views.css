@@ -139,7 +139,7 @@
   flex: 1;
 }
 #ms-sidebar-btn, #ms-toggle-chat-btn, #ms-close-btn {
-  width: 28px; height: 28px; padding: 0;
+  width: 32px; height: 32px; padding: 0;
   border-radius: var(--radius-sm);
   border: none;
   background: transparent;
@@ -197,7 +197,7 @@
   height: 100%;
 }
 
-.ms-slot-active { display: none; position: relative; height: 100%; }
+.ms-slot-active { display: block; position: relative; height: 100%; }
 .ms-video { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 .ms-loading {

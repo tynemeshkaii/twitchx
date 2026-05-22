@@ -25,8 +25,8 @@
           <div class="platform-user-details">
             <div id="user-display-name" class="platform-user-name"></div>
             <div class="platform-user-actions">
-              <a id="logout-link">Logout</a>
-              <a id="import-link">Import follows</a>
+              <a id="logout-link" role="button" tabindex="0">Logout</a>
+              <a id="import-link" role="button" tabindex="0">Import follows</a>
             </div>
           </div>
         </div>
@@ -37,17 +37,17 @@
           <div class="platform-user-details">
             <div id="kick-user-name" class="platform-user-name"></div>
             <div class="platform-user-actions">
-              <a id="kick-logout-link">Logout</a>
+              <a id="kick-logout-link" role="button" tabindex="0">Logout</a>
             </div>
           </div>
         </div>
       </div>
 
-      <div id="platform-tabs">
-        <button class="platform-tab active" data-platform="all">All</button>
-        <button class="platform-tab" data-platform="twitch">Twitch</button>
-        <button class="platform-tab" data-platform="kick">Kick</button>
-        <button class="platform-tab" data-platform="youtube">YouTube</button>
+      <div id="platform-tabs" role="tablist" aria-label="Platform filter">
+        <button class="platform-tab active" data-platform="all" role="tab" aria-selected="true">All</button>
+        <button class="platform-tab" data-platform="twitch" role="tab" aria-selected="false" tabindex="-1">Twitch</button>
+        <button class="platform-tab" data-platform="kick" role="tab" aria-selected="false" tabindex="-1">Kick</button>
+        <button class="platform-tab" data-platform="youtube" role="tab" aria-selected="false" tabindex="-1">YouTube</button>
       </div>
 
       <div id="sidebar-stale-banner" class="sidebar-stale-banner hidden">
@@ -64,10 +64,10 @@
       <div id="channel-list"></div>
 
       <div id="search-area">
-        <div id="search-dropdown"></div>
+        <div id="search-dropdown" role="listbox" aria-label="Search results"></div>
         <div id="search-row">
-          <input id="search-input" placeholder="Search or add channel..." autocomplete="off">
-          <button id="add-btn"><span data-icon="plus" data-size="16"></span></button>
+          <input id="search-input" placeholder="Search or add channel..." autocomplete="off" aria-label="Search or add channel" aria-controls="search-dropdown" aria-expanded="false">
+          <button id="add-btn" title="Add channel" aria-label="Add channel"><span data-icon="plus" data-size="16"></span></button>
         </div>
       </div>
       <div id="browse-nav-wrapper">
@@ -78,12 +78,12 @@
     <!-- Content -->
     <div id="content">
       <div id="toolbar">
-        <select id="sort-select">
+        <select id="sort-select" aria-label="Sort streams">
           <option value="viewers">Most Viewers</option>
           <option value="recent">Recently Started</option>
           <option value="alpha">Alphabetical</option>
         </select>
-        <input id="filter-input" placeholder="Filter by game...">
+        <input id="filter-input" placeholder="Filter by game..." aria-label="Filter streams by game">
         <button id="grid-toggle-btn" class="bar-btn" title="Switch to list view" aria-label="Toggle grid/list view"><span data-icon="grid-toggle" data-size="16"></span></button>
       </div>
       <div id="stream-grid"></div>
@@ -96,11 +96,11 @@
         <div id="browse-header">
           <button id="browse-back-btn" class="browse-back-btn hidden"><span data-icon="arrow-left" data-size="16"></span> Back</button>
           <nav id="browse-breadcrumbs" aria-label="Browse breadcrumbs"></nav>
-          <div id="browse-platform-tabs">
-            <button class="browse-platform-tab active" data-platform="all">All</button>
-            <button class="browse-platform-tab" data-platform="twitch">Twitch</button>
-            <button class="browse-platform-tab" data-platform="kick">Kick</button>
-            <button class="browse-platform-tab" data-platform="youtube">YouTube</button>
+          <div id="browse-platform-tabs" role="tablist" aria-label="Browse platform filter">
+            <button class="browse-platform-tab active" data-platform="all" role="tab" aria-selected="true">All</button>
+            <button class="browse-platform-tab" data-platform="twitch" role="tab" aria-selected="false" tabindex="-1">Twitch</button>
+            <button class="browse-platform-tab" data-platform="kick" role="tab" aria-selected="false" tabindex="-1">Kick</button>
+            <button class="browse-platform-tab" data-platform="youtube" role="tab" aria-selected="false" tabindex="-1">YouTube</button>
           </div>
         </div>
         <div id="browse-body">
@@ -133,20 +133,20 @@
             </div>
           </div>
           <div id="channel-bio"></div>
-          <div id="channel-tabs">
-            <button class="channel-tab active" data-tab="live">Live Now</button>
-            <button class="channel-tab" data-tab="vods">VODs</button>
-            <button class="channel-tab" data-tab="clips">Clips</button>
+          <div id="channel-tabs" role="tablist" aria-label="Channel media">
+            <button class="channel-tab active" data-tab="live" role="tab" aria-selected="true" aria-controls="channel-tab-live">Live Now</button>
+            <button class="channel-tab" data-tab="vods" role="tab" aria-selected="false" aria-controls="channel-tab-vods" tabindex="-1">VODs</button>
+            <button class="channel-tab" data-tab="clips" role="tab" aria-selected="false" aria-controls="channel-tab-clips" tabindex="-1">Clips</button>
           </div>
-          <div id="channel-tab-live" class="channel-tab-panel">
+          <div id="channel-tab-live" class="channel-tab-panel" role="tabpanel">
             <div id="channel-live-empty" class="channel-empty hidden">Channel is not live right now.</div>
           </div>
-          <div id="channel-tab-vods" class="channel-tab-panel hidden">
+          <div id="channel-tab-vods" class="channel-tab-panel hidden" role="tabpanel">
             <div id="channel-vods-loading" class="browse-loading hidden">Loading VODs...</div>
             <div id="channel-vods-empty" class="channel-empty hidden"></div>
             <div id="channel-vods-list" class="channel-media-list"></div>
           </div>
-          <div id="channel-tab-clips" class="channel-tab-panel hidden">
+          <div id="channel-tab-clips" class="channel-tab-panel hidden" role="tabpanel">
             <div id="channel-clips-loading" class="browse-loading hidden">Loading Clips...</div>
             <div id="channel-clips-empty" class="channel-empty hidden"></div>
             <div id="channel-clips-grid" class="channel-media-grid"></div>
@@ -173,7 +173,7 @@
             <div id="ms-chat-messages"></div>
             <div id="ms-chat-new-messages"><span data-icon="arrow-down" data-size="16"></span> New messages</div>
             <div id="ms-chat-input-area">
-              <input id="ms-chat-input" type="text" placeholder="Send a message..." maxlength="500" disabled />
+              <input id="ms-chat-input" type="text" placeholder="Send a message..." maxlength="500" disabled aria-label="Multi-stream chat message" />
               <button id="ms-chat-send-btn" disabled>Send</button>
             </div>
           </div>
@@ -213,10 +213,10 @@
               <span id="chat-status-dot"></span>
               <span id="chat-status-text"></span>
               <button id="chat-timestamp-btn" class="chat-header-btn" title="Toggle timestamps" aria-label="Toggle timestamps"><span data-icon="clock" data-size="14"></span></button>
-              <button id="chat-filter-btn" class="chat-header-btn" title="Chat Filters"><span data-icon="filter" data-size="14"></span></button>
-              <button id="chat-export-btn" class="chat-header-btn" title="Export Chat Log"><span data-icon="download" data-size="14"></span></button>
-              <button id="chat-userlist-btn" class="chat-header-btn" title="Chat Users"><span data-icon="users" data-size="14"></span> <span id="chat-userlist-count">0</span></button>
-              <button id="chat-mod-btn" class="chat-header-btn hidden" title="Chat Controls"><span data-icon="shield" data-size="14"></span> Mod</button>
+              <button id="chat-filter-btn" class="chat-header-btn" title="Chat Filters" aria-label="Chat filters" aria-expanded="false" aria-controls="chat-filter-panel"><span data-icon="filter" data-size="14"></span></button>
+              <button id="chat-export-btn" class="chat-header-btn" title="Export Chat Log" aria-label="Export chat log" aria-expanded="false" aria-controls="chat-export-menu"><span data-icon="download" data-size="14"></span></button>
+              <button id="chat-userlist-btn" class="chat-header-btn" title="Chat Users" aria-label="Chat users" aria-expanded="false" aria-controls="chat-userlist-panel"><span data-icon="users" data-size="14"></span> <span id="chat-userlist-count">0</span></button>
+              <button id="chat-mod-btn" class="chat-header-btn hidden" title="Chat Controls" aria-label="Chat moderation controls" aria-expanded="false" aria-controls="chat-mod-panel"><span data-icon="shield" data-size="14"></span> Mod</button>
             </div>
             <div id="chat-filter-panel" class="hidden chat-filter-panel">
               <label class="filter-row">
@@ -229,11 +229,11 @@
                 <input type="checkbox" id="chat-filter-spam" checked> Hide spam/caps
               </label>
               <div class="mt-1">
-                <input id="chat-blocklist-input" type="text" placeholder="Add blocked word…" class="chat-filter-input">
+                <input id="chat-blocklist-input" type="text" placeholder="Add blocked word…" class="chat-filter-input" aria-label="Add blocked word">
               </div>
             </div>
             <div id="chat-userlist-panel" class="hidden chat-userlist-panel">
-              <input id="chat-userlist-search" type="text" placeholder="Search users…" class="userlist-search">
+              <input id="chat-userlist-search" type="text" placeholder="Search users…" class="userlist-search" aria-label="Search chat users">
               <div id="chat-userlist-items" class="userlist-items"></div>
             </div>
             <div id="chat-mod-panel" class="hidden chat-mod-panel">
@@ -252,8 +252,8 @@
               </label>
             </div>
             <div id="chat-export-menu" class="hidden chat-export-menu">
-              <div class="ctx-item" id="chat-export-json">Export as JSON</div>
-              <div class="ctx-item" id="chat-export-txt">Export as TXT</div>
+              <div class="ctx-item" id="chat-export-json" role="menuitem" tabindex="-1">Export as JSON</div>
+              <div class="ctx-item" id="chat-export-txt" role="menuitem" tabindex="-1">Export as TXT</div>
             </div>
             <div id="chat-messages">
               <div id="chat-shadow-top"></div>
@@ -263,15 +263,15 @@
               <span>Replying to</span>
               <span class="reply-nick" id="chat-reply-nick"></span>
               <span class="reply-body" id="chat-reply-body"></span>
-              <button class="reply-close" id="chat-reply-close"><span data-icon="close" data-size="14"></span></button>
+              <button class="reply-close" id="chat-reply-close" aria-label="Cancel reply"><span data-icon="close" data-size="14"></span></button>
             </div>
             <div id="emote-picker" class="hidden emote-picker">
-              <input id="emote-search" type="text" placeholder="Search emotes…" class="emote-search">
+              <input id="emote-search" type="text" placeholder="Search emotes…" class="emote-search" aria-label="Search emotes">
               <div id="emote-grid" class="emote-grid"></div>
             </div>
             <div id="chat-input-area">
-              <button id="emote-picker-btn" class="emote-picker-btn" title="Emotes"><span data-icon="smile" data-size="16"></span></button>
-              <input id="chat-input" type="text" placeholder="Send a message..." maxlength="500" disabled />
+              <button id="emote-picker-btn" class="emote-picker-btn" title="Emotes" aria-label="Open emote picker" aria-expanded="false" aria-controls="emote-picker"><span data-icon="smile" data-size="16"></span></button>
+              <input id="chat-input" type="text" placeholder="Send a message..." maxlength="500" disabled aria-label="Chat message" />
               <button id="chat-send-btn" disabled>Send</button>
             </div>
           </div>
@@ -288,7 +288,7 @@
       <span id="seek-tooltip" class="hidden"></span>
     </div>
     <div class="bar-group bar-group--playback">
-      <select id="quality-select">
+      <select id="quality-select" aria-label="Stream quality">
         <option value="best">Best</option>
         <option value="1080p60">1080p60</option>
         <option value="720p60">720p60</option>
@@ -321,24 +321,24 @@
 </div>
 
 <!-- Context menu -->
-<div id="context-menu">
-  <div class="ctx-item" data-action="watch"><span data-icon="play" data-size="14"></span> Watch in App</div>
-  <div class="ctx-item" data-action="multistream"><span data-icon="grid-layout" data-size="14"></span> Add to Multi-stream</div>
-  <div class="ctx-item" data-action="watch-external"><span data-icon="external-link" data-size="14"></span> Open in External Player</div>
+<div id="context-menu" role="menu" tabindex="-1" aria-label="Channel actions">
+  <div class="ctx-item" data-action="watch" role="menuitem" tabindex="-1"><span data-icon="play" data-size="14"></span> Watch in App</div>
+  <div class="ctx-item" data-action="multistream" role="menuitem" tabindex="-1"><span data-icon="grid-layout" data-size="14"></span> Add to Multi-stream</div>
+  <div class="ctx-item" data-action="watch-external" role="menuitem" tabindex="-1"><span data-icon="external-link" data-size="14"></span> Open in External Player</div>
   <div class="ctx-separator"></div>
-  <div class="ctx-item" data-action="browser"><span data-icon="browser" data-size="14"></span> Open in Browser</div>
-  <div class="ctx-item" data-action="profile"><span data-icon="user" data-size="14"></span> View Channel</div>
-  <div class="ctx-item" data-action="copy"><span data-icon="copy" data-size="14"></span> Copy URL</div>
+  <div class="ctx-item" data-action="browser" role="menuitem" tabindex="-1"><span data-icon="browser" data-size="14"></span> Open in Browser</div>
+  <div class="ctx-item" data-action="profile" role="menuitem" tabindex="-1"><span data-icon="user" data-size="14"></span> View Channel</div>
+  <div class="ctx-item" data-action="copy" role="menuitem" tabindex="-1"><span data-icon="copy" data-size="14"></span> Copy URL</div>
   <div class="ctx-separator"></div>
-  <div class="ctx-item" data-action="favorite"><span data-icon="star" data-size="14"></span> Add to Favorites</div>
-  <div class="ctx-item" data-action="pin"><span data-icon="pin" data-size="14"></span> Pin to top</div>
-  <div class="ctx-item" data-action="remove"><span data-icon="close" data-size="14"></span> Remove</div>
+  <div class="ctx-item" data-action="favorite" role="menuitem" tabindex="-1"><span data-icon="star" data-size="14"></span> Add to Favorites</div>
+  <div class="ctx-item" data-action="pin" role="menuitem" tabindex="-1"><span data-icon="pin" data-size="14"></span> Pin to top</div>
+  <div class="ctx-item" data-action="remove" role="menuitem" tabindex="-1"><span data-icon="close" data-size="14"></span> Remove</div>
 </div>
 
 <!-- Command Palette -->
 <div id="palette-overlay" class="hidden" role="dialog" aria-label="Command palette" aria-modal="true">
   <div id="palette-modal">
-    <input id="palette-input" type="text" placeholder="Search channels and commands..." autocomplete="off" spellcheck="false">
+    <input id="palette-input" type="text" placeholder="Search channels and commands..." autocomplete="off" spellcheck="false" aria-label="Search channels and commands" aria-controls="palette-results" aria-activedescendant="">
     <div id="palette-results" role="listbox"></div>
   </div>
 </div>
@@ -359,38 +359,38 @@
     <button id="close-settings" aria-label="Close settings"><span data-icon="close" data-size="12"></span></button>
     <h2 id="settings-title"><span data-icon="settings" data-size="16" style="vertical-align:-2px;margin-right:6px;"></span>TwitchX Settings</h2>
 
-    <div class="settings-tabs">
-      <button class="settings-tab active" data-tab="general">General</button>
-      <button class="settings-tab" data-tab="twitch">Twitch</button>
-      <button class="settings-tab" data-tab="kick">Kick</button>
-      <button class="settings-tab" data-tab="youtube">YouTube</button>
-      <button class="settings-tab" data-tab="hotkeys">Hotkeys</button>
-      <button class="settings-tab" data-tab="statistics">Statistics</button>
+    <div class="settings-tabs" role="tablist" aria-label="Settings sections">
+      <button class="settings-tab active" data-tab="general" role="tab" aria-selected="true" aria-controls="settings-panel-general">General</button>
+      <button class="settings-tab" data-tab="twitch" role="tab" aria-selected="false" aria-controls="settings-panel-twitch" tabindex="-1">Twitch</button>
+      <button class="settings-tab" data-tab="kick" role="tab" aria-selected="false" aria-controls="settings-panel-kick" tabindex="-1">Kick</button>
+      <button class="settings-tab" data-tab="youtube" role="tab" aria-selected="false" aria-controls="settings-panel-youtube" tabindex="-1">YouTube</button>
+      <button class="settings-tab" data-tab="hotkeys" role="tab" aria-selected="false" aria-controls="settings-panel-hotkeys" tabindex="-1">Hotkeys</button>
+      <button class="settings-tab" data-tab="statistics" role="tab" aria-selected="false" aria-controls="settings-panel-statistics" tabindex="-1">Statistics</button>
     </div>
 
     <!-- General panel -->
-    <div class="settings-panel active" id="settings-panel-general">
+    <div class="settings-panel active" id="settings-panel-general" role="tabpanel">
       <div class="setting-group">
-        <label>Streamlink Path</label>
+        <label for="s-streamlink">Streamlink Path</label>
         <input id="s-streamlink" type="text" autocomplete="off">
       </div>
       <div class="setting-group">
-        <label>IINA Path</label>
+        <label for="s-iina">IINA Path</label>
         <input id="s-iina" type="text" autocomplete="off">
       </div>
       <div class="setting-group">
-        <label>External Player</label>
+        <label for="s-external-player">External Player</label>
         <select id="s-external-player">
           <option value="iina">IINA</option>
           <option value="mpv">mpv</option>
         </select>
       </div>
       <div class="setting-group hidden" id="s-mpv-group">
-        <label>mpv Path</label>
+        <label for="s-mpv">mpv Path</label>
         <input id="s-mpv" type="text" autocomplete="off">
       </div>
       <div class="setting-group">
-        <label>Refresh Interval</label>
+        <label for="s-interval">Refresh Interval</label>
         <select id="s-interval">
           <option value="30">30 seconds</option>
           <option value="60">60 seconds</option>
@@ -398,24 +398,24 @@
         </select>
       </div>
       <div class="setting-group">
-        <label>Twitch Low-Latency Mode</label>
+        <div class="setting-label">Twitch Low-Latency Mode</div>
         <label class="checkbox-row">
           <input type="checkbox" id="s-low-latency"> Enable low-latency HLS (Twitch only)
         </label>
         <p class="setting-hint">Reduces stream delay. Requires streamlink &ge;6.x and Twitch support.</p>
       </div>
       <div class="setting-group">
-        <label>Recording Directory</label>
+        <label for="s-recording-path">Recording Directory</label>
         <input id="s-recording-path" type="text" autocomplete="off">
       </div>
       <div class="setting-group">
-        <label>Accent Color</label>
+        <div class="setting-label" id="accent-color-label">Accent Color</div>
         <div id="accent-swatches" class="accent-swatches"></div>
       </div>
     </div>
 
     <!-- Twitch panel -->
-    <div class="settings-panel" id="settings-panel-twitch">
+    <div class="settings-panel" id="settings-panel-twitch" role="tabpanel">
       <div id="twitch-bundled-status" class="setting-group">
         <div class="bundled-app-badge">
           <span data-icon="check" data-size="14"></span>
@@ -425,11 +425,11 @@
       </div>
       <div id="twitch-advanced-section" class="hidden">
         <div class="setting-group">
-          <label>Client ID</label>
+          <label for="s-client-id">Client ID</label>
           <input id="s-client-id" type="text" autocomplete="off" placeholder="Leave blank to use built-in">
         </div>
         <div class="setting-group">
-          <label>Client Secret</label>
+          <label for="s-client-secret">Client Secret</label>
           <div class="secret-row">
             <input id="s-client-secret" type="password" autocomplete="off" placeholder="Leave blank to use built-in">
             <button class="eye-btn" id="eye-toggle-btn" aria-label="Toggle visibility"><span data-icon="eye" data-size="14"></span></button>
@@ -446,7 +446,7 @@
     </div>
 
     <!-- Kick panel -->
-    <div class="settings-panel" id="settings-panel-kick">
+    <div class="settings-panel" id="settings-panel-kick" role="tabpanel">
       <div id="kick-bundled-status" class="setting-group">
         <div class="bundled-app-badge">
           <span data-icon="check" data-size="14"></span>
@@ -456,11 +456,11 @@
       </div>
       <div id="kick-advanced-section" class="hidden">
         <div class="setting-group">
-          <label>Kick Client ID</label>
+          <label for="s-kick-client-id">Kick Client ID</label>
           <input id="s-kick-client-id" type="text" autocomplete="off" placeholder="Leave blank to use built-in">
         </div>
         <div class="setting-group">
-          <label>Kick Client Secret</label>
+          <label for="s-kick-client-secret">Kick Client Secret</label>
           <div class="secret-row">
             <input id="s-kick-client-secret" type="password" autocomplete="off" placeholder="Leave blank to use built-in">
             <button class="eye-btn" id="kick-eye-toggle-btn" aria-label="Toggle visibility"><span data-icon="eye" data-size="14"></span></button>
@@ -477,7 +477,7 @@
       </div>
       <div id="kick-user-area" class="setting-group hidden">
         <div id="kick-user-display" class="setting-user-display"></div>
-        <a id="kick-logout-settings-link" class="logout-link">Logout from Kick</a>
+        <a id="kick-logout-settings-link" class="logout-link" role="button" tabindex="0">Logout from Kick</a>
       </div>
       <div class="settings-btns">
         <button id="kick-test-btn">Test Kick Connection</button>
@@ -485,7 +485,7 @@
     </div>
 
     <!-- YouTube panel -->
-    <div class="settings-panel" id="settings-panel-youtube">
+    <div class="settings-panel" id="settings-panel-youtube" role="tabpanel">
       <div id="yt-bundled-status" class="setting-group">
         <div class="bundled-app-badge">
           <span data-icon="check" data-size="14"></span>
@@ -495,18 +495,18 @@
       </div>
       <div id="yt-advanced-section" class="hidden">
         <div class="setting-group">
-          <label>YouTube API Key</label>
+          <label for="yt-api-key">YouTube API Key</label>
           <div class="secret-row">
             <input id="yt-api-key" type="password" autocomplete="off" placeholder="Leave blank to use built-in">
             <button class="eye-btn" id="yt-api-key-eye-btn" aria-label="Toggle visibility"><span data-icon="eye" data-size="14"></span></button>
           </div>
         </div>
         <div class="setting-group">
-          <label>OAuth Client ID</label>
+          <label for="yt-client-id">OAuth Client ID</label>
           <input id="yt-client-id" type="text" autocomplete="off" placeholder="Leave blank to use built-in">
         </div>
         <div class="setting-group">
-          <label>OAuth Client Secret</label>
+          <label for="yt-client-secret">OAuth Client Secret</label>
           <div class="secret-row">
             <input id="yt-client-secret" type="password" autocomplete="off" placeholder="Leave blank to use built-in">
             <button class="eye-btn" id="yt-client-secret-eye-btn" aria-label="Toggle visibility"><span data-icon="eye" data-size="14"></span></button>
@@ -523,7 +523,7 @@
         <div id="yt-display-name" class="setting-user-display mb-1"></div>
         <div id="yt-quota-display" class="setting-quota-display"></div>
         <button id="yt-import-btn" class="import-btn">Import Subscriptions</button>
-        <a id="yt-logout-btn" class="logout-link">Logout from YouTube</a>
+        <a id="yt-logout-btn" class="logout-link" role="button" tabindex="0">Logout from YouTube</a>
       </div>
       <div class="settings-btns">
         <button id="yt-test-btn">Test YouTube Connection</button>
@@ -532,15 +532,15 @@
     </div>
 
     <!-- Hotkeys panel -->
-    <div class="settings-panel" id="settings-panel-hotkeys">
+    <div class="settings-panel" id="settings-panel-hotkeys" role="tabpanel">
       <div class="setting-group">
-        <label>Keyboard Shortcuts</label>
+        <div class="setting-label">Keyboard Shortcuts</div>
         <p class="setting-hint setting-hint-spaced">Click a key badge to rebind it. Press Esc to cancel.</p>
         <table id="hotkeys-table" class="hotkeys-table"></table>
         <button id="reset-shortcuts-btn" class="reset-btn">Reset to Defaults</button>
       </div>
       <div class="setting-group mt-1">
-        <label>Picture-in-Picture</label>
+        <div class="setting-label">Picture-in-Picture</div>
         <label class="checkbox-row">
           <input type="checkbox" id="s-pip-enabled"> Show PiP button in player header
         </label>
@@ -548,14 +548,14 @@
     </div>
 
     <!-- Statistics panel -->
-    <div class="settings-panel" id="settings-panel-statistics">
+    <div class="settings-panel" id="settings-panel-statistics" role="tabpanel">
       <div class="stats-controls">
         <div id="stats-loading" class="stats-loading stats-loading--header">Loading statistics...</div>
         <button id="stats-compact-toggle" title="Toggle compact view">Compact</button>
       </div>
       <div id="stats-content" class="hidden">
         <div class="setting-group">
-          <label>Today</label>
+          <div class="setting-label">Today</div>
           <div id="stats-today" class="stats-grid">
             <div class="stat-card">
               <span class="stat-value" id="stat-today-time">--</span>
@@ -572,11 +572,11 @@
           </div>
         </div>
         <div class="setting-group">
-          <label>This Week</label>
+          <div class="setting-label">This Week</div>
           <div id="stats-weekly"></div>
         </div>
         <div class="setting-group">
-          <label>All Time</label>
+          <div class="setting-label">All Time</div>
           <div class="stats-grid stats-grid-cols-2">
             <div class="stat-card">
               <span class="stat-value" id="stat-total-time">--</span>
@@ -589,7 +589,7 @@
           </div>
         </div>
         <div class="setting-group">
-          <label>Top Channels</label>
+          <div class="setting-label">Top Channels</div>
           <div id="stats-top-channels" class="stats-list"></div>
         </div>
       </div>

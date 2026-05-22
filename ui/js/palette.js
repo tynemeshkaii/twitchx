@@ -15,6 +15,7 @@ var PALETTE_COMMANDS = [
 
 TwitchX._paletteActiveIdx = -1;
 TwitchX._paletteItems = [];
+TwitchX._paletteItemCounter = 0;
 
 function openPalette() {
   document.getElementById('palette-overlay').classList.remove('hidden');
@@ -28,18 +29,43 @@ function openPalette() {
 
 function closePalette() {
   document.getElementById('palette-overlay').classList.add('hidden');
+  var input = document.getElementById('palette-input');
+  if (input) input.setAttribute('aria-activedescendant', '');
   TwitchX._paletteActiveIdx = -1;
   TwitchX._paletteItems = [];
+}
+
+function _setPaletteActive(idx) {
+  var items = TwitchX._paletteItems || [];
+  if (items.length === 0) {
+    TwitchX._paletteActiveIdx = -1;
+    var input = document.getElementById('palette-input');
+    if (input) input.setAttribute('aria-activedescendant', '');
+    return;
+  }
+  TwitchX._paletteActiveIdx = (idx + items.length) % items.length;
+  items.forEach(function(item, itemIdx) {
+    var active = itemIdx === TwitchX._paletteActiveIdx;
+    item.classList.toggle('palette-active', active);
+    item.setAttribute('aria-selected', String(active));
+  });
+  var activeItem = items[TwitchX._paletteActiveIdx];
+  var paletteInput = document.getElementById('palette-input');
+  if (paletteInput && activeItem) {
+    paletteInput.setAttribute('aria-activedescendant', activeItem.id || '');
+  }
 }
 
 function _buildPaletteItem(icon, label, hint, action) {
   var item = document.createElement('div');
   item.className = 'palette-item';
   item.setAttribute('role', 'option');
+  TwitchX._paletteItemCounter += 1;
+  item.id = 'palette-item-' + TwitchX._paletteItemCounter;
 
   var iconEl = document.createElement('span');
   iconEl.className = 'palette-item-icon';
-  iconEl.innerHTML = TwitchX.renderIcon(icon, 16);
+  TwitchX.setIconOnly(iconEl, icon, 16);
 
   var labelEl = document.createElement('span');
   labelEl.className = 'palette-item-label';
@@ -58,9 +84,7 @@ function _buildPaletteItem(icon, label, hint, action) {
     action();
   });
   item.addEventListener('mouseenter', function() {
-    TwitchX._paletteItems.forEach(function(i) { i.classList.remove('palette-active'); });
-    item.classList.add('palette-active');
-    TwitchX._paletteActiveIdx = TwitchX._paletteItems.indexOf(item);
+    _setPaletteActive(TwitchX._paletteItems.indexOf(item));
   });
   return item;
 }
@@ -87,8 +111,8 @@ function renderPaletteResults(query) {
       var item = _buildPaletteItem(
         'live-dot',
         s.display_name,
-        TwitchX.formatViewers(s.viewers) + ' viewers',
-        function() { TwitchX.selectChannel(s.login); TwitchX.doWatch(); }
+        TwitchX.platformLabel(s.platform || 'twitch') + ' • ' + TwitchX.formatViewers(s.viewers) + ' viewers',
+        function() { TwitchX.selectChannel(s.login, s.platform || 'twitch'); TwitchX.doWatch(); }
       );
       container.appendChild(item);
       allItems.push(item);
@@ -96,13 +120,14 @@ function renderPaletteResults(query) {
   }
 
   // Offline favorites
-  var liveLogins = new Set(TwitchX.state.streams.map(function(s) { return s.login; }));
-  var favMatches = TwitchX.state.favorites.filter(function(login) {
-    if (liveLogins.has(login)) return false;
+  var liveLogins = new Set(TwitchX.state.streams.map(function(s) {
+    return TwitchX.channelKey(s.login, s.platform || 'twitch');
+  }));
+  var favMatches = TwitchX.getFavoriteEntries().filter(function(entry) {
+    if (liveLogins.has(entry.key)) return false;
     if (!q) return true;
-    var meta = TwitchX.state.favoritesMeta[login] || {};
-    var name = meta.display_name || login;
-    return login.toLowerCase().indexOf(q) !== -1 || name.toLowerCase().indexOf(q) !== -1;
+    var name = entry.display_name || entry.login;
+    return entry.login.toLowerCase().indexOf(q) !== -1 || name.toLowerCase().indexOf(q) !== -1;
   }).slice(0, 3);
 
   if (favMatches.length > 0) {
@@ -110,11 +135,10 @@ function renderPaletteResults(query) {
     favHeader.className = 'palette-section-header';
     favHeader.textContent = 'Favorites';
     container.appendChild(favHeader);
-    favMatches.forEach(function(login) {
-      var meta = TwitchX.state.favoritesMeta[login] || {};
-      var displayName = meta.display_name || login;
-      var item = _buildPaletteItem('star', displayName, 'Offline', function() {
-        TwitchX.selectChannel(login);
+    favMatches.forEach(function(entry) {
+      var displayName = entry.display_name || entry.login;
+      var item = _buildPaletteItem('star', displayName, TwitchX.platformLabel(entry.platform) + ' • Offline', function() {
+        TwitchX.selectChannel(entry.login, entry.platform);
       });
       container.appendChild(item);
       allItems.push(item);
@@ -140,8 +164,9 @@ function renderPaletteResults(query) {
 
   TwitchX._paletteItems = allItems;
   if (allItems.length > 0) {
-    TwitchX._paletteActiveIdx = 0;
-    allItems[0].classList.add('palette-active');
+    _setPaletteActive(0);
+  } else {
+    _setPaletteActive(-1);
   }
 }
 
@@ -156,18 +181,14 @@ function handlePaletteKeydown(e) {
   if (e.key === 'ArrowDown') {
     e.preventDefault();
     if (items.length === 0) return;
-    if (items[TwitchX._paletteActiveIdx]) items[TwitchX._paletteActiveIdx].classList.remove('palette-active');
-    TwitchX._paletteActiveIdx = (TwitchX._paletteActiveIdx + 1) % items.length;
-    items[TwitchX._paletteActiveIdx].classList.add('palette-active');
+    _setPaletteActive(TwitchX._paletteActiveIdx + 1);
     items[TwitchX._paletteActiveIdx].scrollIntoView({ block: 'nearest' });
     return;
   }
   if (e.key === 'ArrowUp') {
     e.preventDefault();
     if (items.length === 0) return;
-    if (items[TwitchX._paletteActiveIdx]) items[TwitchX._paletteActiveIdx].classList.remove('palette-active');
-    TwitchX._paletteActiveIdx = (TwitchX._paletteActiveIdx - 1 + items.length) % items.length;
-    items[TwitchX._paletteActiveIdx].classList.add('palette-active');
+    _setPaletteActive(TwitchX._paletteActiveIdx - 1);
     items[TwitchX._paletteActiveIdx].scrollIntoView({ block: 'nearest' });
     return;
   }

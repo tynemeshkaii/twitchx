@@ -21,9 +21,10 @@ function showUserProfile(user) {
   info.classList.remove('hidden');
   document.getElementById('user-display-name').textContent = user.display_name;
   const avatar = document.getElementById('user-avatar');
-  avatar.dataset.login = (user.login || '').toLowerCase();
-  if (TwitchX.state.avatars[(user.login || '').toLowerCase()]) {
-    avatar.src = TwitchX.state.avatars[(user.login || '').toLowerCase()];
+  avatar.dataset.login = user.login || '';
+  avatar.dataset.key = TwitchX.channelKey(avatar.dataset.login, 'twitch');
+  if (TwitchX.state.avatars[avatar.dataset.key]) {
+    avatar.src = TwitchX.state.avatars[avatar.dataset.key];
   }
 }
 
@@ -53,9 +54,8 @@ function doLogout() {
 
 function doBrowser() {
   if (!TwitchX.state.selectedChannel || !TwitchX.api) return;
-  const selectedStream = TwitchX.state.streams.find(function(s) { return s.login === TwitchX.state.selectedChannel; });
-  const platform = (selectedStream && selectedStream.platform) || 'twitch';
-  const meta = TwitchX.getFavoriteMeta(TwitchX.state.selectedChannel, platform);
+  const selectedStream = TwitchX.findStreamByKey(TwitchX.state.selectedChannelKey);
+  const platform = (selectedStream && selectedStream.platform) || TwitchX.state.selectedPlatform || 'twitch';
   TwitchX.api.open_browser(TwitchX.state.selectedChannel, platform);
 }
 

@@ -51,7 +51,7 @@ function renderGrid() {
   if (TwitchX.state.favorites.length === 0 && !anyLoggedIn) {
     grid.classList.add('hidden');
     empty.classList.add('visible');
-    empty.querySelector('.empty-icon').innerHTML = TwitchX.renderIcon('lightning', 36);
+    TwitchX.setIconOnly(empty.querySelector('.empty-icon'), 'lightning', 36);
     empty.querySelector('.empty-title').textContent = 'Welcome to TwitchX';
     var sub = empty.querySelector('.empty-subtitle');
     while (sub.firstChild) sub.removeChild(sub.firstChild);
@@ -90,7 +90,7 @@ function renderGrid() {
   if (TwitchX.state.favorites.length === 0) {
     grid.classList.add('hidden');
     empty.classList.add('visible');
-    empty.querySelector('.empty-icon').innerHTML = TwitchX.renderIcon('tv', 36);
+    TwitchX.setIconOnly(empty.querySelector('.empty-icon'), 'tv', 36);
     empty.querySelector('.empty-title').textContent = 'No favorites yet';
     empty.querySelector('.empty-subtitle').textContent = 'Add channels using the search bar in the sidebar';
     return;
@@ -99,7 +99,7 @@ function renderGrid() {
   if (streams.length === 0 && TwitchX.state.favorites.length > 0) {
     grid.classList.add('hidden');
     empty.classList.add('visible');
-    empty.querySelector('.empty-icon').innerHTML = TwitchX.renderIcon('sleeping', 36);
+    TwitchX.setIconOnly(empty.querySelector('.empty-icon'), 'sleeping', 36);
     empty.querySelector('.empty-title').textContent = 'All quiet right now';
     empty.querySelector('.empty-subtitle').textContent = 'None of your favorites are live';
     return;
@@ -110,8 +110,8 @@ function renderGrid() {
 
   // Diff-based update
   const existingLogins = new Set();
-  grid.querySelectorAll('.stream-card').forEach(function(c) { existingLogins.add(c.dataset.login); });
-  const newLogins = new Set(streams.map(function(s) { return s.login; }));
+  grid.querySelectorAll('.stream-card').forEach(function(c) { existingLogins.add(c.dataset.key); });
+  const newLogins = new Set(streams.map(function(s) { return TwitchX.channelKey(s.login, s.platform || 'twitch'); }));
 
   let setsEqual = existingLogins.size === newLogins.size;
   if (setsEqual) {
@@ -121,14 +121,15 @@ function renderGrid() {
   if (setsEqual && existingLogins.size > 0) {
     // In-place update
     streams.forEach(function(s) {
-      const card = grid.querySelector('.stream-card[data-login="' + s.login + '"]');
+      const streamKey = TwitchX.channelKey(s.login, s.platform || 'twitch');
+      const card = grid.querySelector('.stream-card[data-key="' + streamKey + '"]');
       if (!card) return;
       card.querySelector('.viewers').textContent = TwitchX.formatViewers(s.viewers) + ' viewers';
       const trend = card.querySelector('.trend');
       if (s.viewer_trend === 'up') {
-        trend.innerHTML = TwitchX.renderIcon('trend-up', 14); trend.className = 'trend up';
+        TwitchX.setIconOnly(trend, 'trend-up', 14); trend.className = 'trend up';
       } else if (s.viewer_trend === 'down') {
-        trend.innerHTML = TwitchX.renderIcon('trend-down', 14); trend.className = 'trend down';
+        TwitchX.setIconOnly(trend, 'trend-down', 14); trend.className = 'trend down';
       } else {
         trend.textContent = ''; trend.className = 'trend';
       }
@@ -137,12 +138,12 @@ function renderGrid() {
       card.querySelector('.card-game').textContent = TwitchX.truncate(s.game, 28);
       card.querySelector('.uptime-badge').textContent = TwitchX.formatUptime(s.started_at);
       const wb = card.querySelector('.watching-badge');
-      wb.classList.toggle('visible', TwitchX.state.watchingChannel === s.login);
-      card.classList.toggle('selected', TwitchX.state.selectedChannel === s.login);
+      wb.classList.toggle('visible', TwitchX.state.watchingChannelKey === streamKey);
+      card.classList.toggle('selected', TwitchX.state.selectedChannelKey === streamKey);
     });
     // Reorder cards to match sort
     streams.forEach(function(s) {
-      const card = grid.querySelector('.stream-card[data-login="' + s.login + '"]');
+      const card = grid.querySelector('.stream-card[data-key="' + TwitchX.channelKey(s.login, s.platform || 'twitch') + '"]');
       if (card) grid.appendChild(card);
     });
   } else {
@@ -154,17 +155,20 @@ function renderGrid() {
     });
     // Request missing thumbnails
     streams.forEach(function(s) {
-      if (!TwitchX.state.thumbnails[s.login] && s.thumbnail_url) {
-        TwitchX.api.get_thumbnail(s.login, s.thumbnail_url);
+      const streamKey = TwitchX.channelKey(s.login, s.platform || 'twitch');
+      if (!TwitchX.state.thumbnails[streamKey] && s.thumbnail_url) {
+        TwitchX.api.get_thumbnail(streamKey, s.thumbnail_url);
       }
     });
   }
 }
 
 function createStreamCard(s) {
+  const streamKey = TwitchX.channelKey(s.login, s.platform || 'twitch');
   const card = document.createElement('div');
-  card.className = 'stream-card card-enter' + (TwitchX.state.selectedChannel === s.login ? ' selected' : '');
+  card.className = 'stream-card card-enter' + (TwitchX.state.selectedChannelKey === streamKey ? ' selected' : '');
   card.dataset.login = s.login;
+  card.dataset.key = streamKey;
   card.dataset.started = s.started_at;
   card.dataset.platform = s.platform || 'twitch';
   card.addEventListener('animationend', function() { card.classList.remove('card-enter'); }, { once: true });
@@ -175,8 +179,8 @@ function createStreamCard(s) {
   thumb.className = 'card-thumb';
 
   const img = document.createElement('img');
-  img.className = 'thumb-img' + (TwitchX.state.thumbnails[s.login] ? ' loaded' : '');
-  img.src = TwitchX.state.thumbnails[s.login] || '';
+  img.className = 'thumb-img' + (TwitchX.state.thumbnails[streamKey] ? ' loaded' : '');
+  img.src = TwitchX.state.thumbnails[streamKey] || '';
   img.alt = '';
   thumb.appendChild(img);
 
@@ -195,8 +199,8 @@ function createStreamCard(s) {
   thumb.appendChild(platformBadge);
 
   const watchBadge = document.createElement('span');
-  watchBadge.className = 'watching-badge' + (TwitchX.state.watchingChannel === s.login ? ' visible' : '');
-  watchBadge.innerHTML = TwitchX.renderIcon('play', 10) + ' WATCHING';
+  watchBadge.className = 'watching-badge' + (TwitchX.state.watchingChannelKey === streamKey ? ' visible' : '');
+  TwitchX.setIconText(watchBadge, 'play', 10, 'WATCHING');
   thumb.appendChild(watchBadge);
 
   const uptime = document.createElement('span');
@@ -207,7 +211,7 @@ function createStreamCard(s) {
   if (TwitchX.isPinned(s.platform || 'twitch', s.login)) {
     var pinBadge = document.createElement('span');
     pinBadge.className = 'pin-badge';
-    pinBadge.innerHTML = TwitchX.renderIcon('pin', 12);
+    TwitchX.setIconOnly(pinBadge, 'pin', 12);
     pinBadge.title = 'Pinned';
     thumb.appendChild(pinBadge);
   }
@@ -228,7 +232,11 @@ function createStreamCard(s) {
 
   const trend = document.createElement('span');
   trend.className = 'trend' + (s.viewer_trend === 'up' ? ' up' : s.viewer_trend === 'down' ? ' down' : '');
-  trend.innerHTML = s.viewer_trend === 'up' ? TwitchX.renderIcon('trend-up', 14) : s.viewer_trend === 'down' ? TwitchX.renderIcon('trend-down', 14) : '';
+  if (s.viewer_trend === 'up') {
+    TwitchX.setIconOnly(trend, 'trend-up', 14);
+  } else if (s.viewer_trend === 'down') {
+    TwitchX.setIconOnly(trend, 'trend-down', 14);
+  }
   meta.appendChild(trend);
   info.appendChild(meta);
 
@@ -251,9 +259,9 @@ function createStreamCard(s) {
   card.appendChild(info);
 
   // Events
-  card.addEventListener('click', function() { TwitchX.selectChannel(s.login); });
-  card.addEventListener('dblclick', function() { TwitchX.selectChannel(s.login); TwitchX.doWatch(); });
-  card.addEventListener('contextmenu', function(e) { TwitchX.showContextMenu(e, s.login); });
+  card.addEventListener('click', function() { TwitchX.selectChannel(s.login, s.platform || 'twitch'); });
+  card.addEventListener('dblclick', function() { TwitchX.selectChannel(s.login, s.platform || 'twitch'); TwitchX.doWatch(); });
+  card.addEventListener('contextmenu', function(e) { TwitchX.showContextMenu(e, s.login, s.platform || 'twitch'); });
 
   return card;
 }

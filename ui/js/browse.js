@@ -14,7 +14,10 @@ function showBrowseView() {
   TwitchX.state.browseCategory = null;
   TwitchX.state.browsePlatformFilter = 'all';
   document.querySelectorAll('.browse-platform-tab').forEach(function(t) {
-    t.classList.toggle('active', t.dataset.platform === 'all');
+    var active = t.dataset.platform === 'all';
+    t.classList.toggle('active', active);
+    t.setAttribute('aria-selected', String(active));
+    t.tabIndex = active ? 0 : -1;
   });
   document.getElementById('browse-back-btn').classList.add('hidden');
   document.getElementById('browse-categories-grid').classList.remove('hidden');
@@ -53,10 +56,7 @@ function browseGoBack() {
 }
 
 function setBrowsePlatform(btn, platform) {
-  document.querySelectorAll('.browse-platform-tab').forEach(function(t) {
-    t.classList.remove('active');
-  });
-  btn.classList.add('active');
+  TwitchX.setActiveTab(Array.from(document.querySelectorAll('.browse-platform-tab')), btn);
   TwitchX.state.browsePlatformFilter = platform;
   if (TwitchX.state.browseMode === 'categories') {
     loadBrowseCategories();

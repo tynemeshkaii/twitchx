@@ -149,7 +149,7 @@ function loadWatchStatistics() {
   }
   // Show compact toggle
   var toggleBtn = document.getElementById('stats-compact-toggle');
-  if (toggleBtn) toggleBtn.style.display = 'inline-flex';
+  if (toggleBtn) toggleBtn.classList.remove('hidden');
   // Restore compact state
   var compact = localStorage.getItem('twitchx.stats.compact') === '1';
   _applyStatsCompact(compact);
@@ -257,9 +257,15 @@ function openSettings() {
       btn.style.background = p.value;
       btn.title = p.label;
       btn.dataset.color = p.value;
+      btn.setAttribute('aria-label', 'Use ' + p.label + ' accent color');
+      btn.setAttribute('aria-pressed', String(p.value === currentAccent));
       btn.addEventListener('click', function() {
-        document.querySelectorAll('.accent-swatch').forEach(function(s) { s.classList.remove('active'); });
+        document.querySelectorAll('.accent-swatch').forEach(function(s) {
+          s.classList.remove('active');
+          s.setAttribute('aria-pressed', 'false');
+        });
         btn.classList.add('active');
+        btn.setAttribute('aria-pressed', 'true');
         applyAccentColor(p.value);
       });
       swatchContainer.appendChild(btn);
@@ -286,9 +292,14 @@ function openSettings() {
   }
 
   TwitchX.renderHotkeysSettings();
-  document.querySelectorAll('.settings-tab').forEach(function(b) { b.classList.remove('active'); });
+  var generalTab = document.querySelector('.settings-tab[data-tab="general"]');
+  document.querySelectorAll('.settings-tab').forEach(function(b) {
+    var isGeneral = b === generalTab;
+    b.classList.toggle('active', isGeneral);
+    b.setAttribute('aria-selected', String(isGeneral));
+    b.tabIndex = isGeneral ? 0 : -1;
+  });
   document.querySelectorAll('.settings-panel').forEach(function(p) { p.classList.remove('active'); });
-  document.querySelector('.settings-tab[data-tab="general"]').classList.add('active');
   document.getElementById('settings-panel-general').classList.add('active');
   document.getElementById('stats-loading').classList.remove('hidden');
   document.getElementById('stats-content').classList.add('hidden');
@@ -309,11 +320,15 @@ function openSettings() {
 
 function openSettingsToTab(tab) {
   openSettings();
-  document.querySelectorAll('.settings-tab').forEach(function(b) { b.classList.remove('active'); });
-  document.querySelectorAll('.settings-panel').forEach(function(p) { p.classList.remove('active'); });
   const tabBtn = document.querySelector('.settings-tab[data-tab="' + tab + '"]');
+  document.querySelectorAll('.settings-tab').forEach(function(b) {
+    var active = b === tabBtn;
+    b.classList.toggle('active', active);
+    b.setAttribute('aria-selected', String(active));
+    b.tabIndex = active ? 0 : -1;
+  });
+  document.querySelectorAll('.settings-panel').forEach(function(p) { p.classList.remove('active'); });
   const panel = document.getElementById('settings-panel-' + tab);
-  if (tabBtn) tabBtn.classList.add('active');
   if (panel) panel.classList.add('active');
   if (tab === 'statistics') {
     loadWatchStatistics();
@@ -379,7 +394,7 @@ function saveSettings() {
   TwitchX._settingsSnapshot = JSON.stringify(_readAllFormValues());
   var fb = document.getElementById('settings-feedback');
   if (fb) {
-    fb.innerHTML = TwitchX.renderIcon('check', 14) + ' Settings saved';
+    TwitchX.setIconText(fb, 'check', 14, 'Settings saved');
     fb.className = 'success';
   }
   setTimeout(function() { if (fb && fb.className === 'success') _setFeedback(''); }, 3000);
