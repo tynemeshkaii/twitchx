@@ -11,8 +11,6 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 from core.constants import (
     AVATAR_CACHE_TTL_SECONDS,
     BROWSE_CACHE_TTL_SECONDS,
@@ -23,6 +21,8 @@ from core.constants import (
     DEFAULT_RECORDING_DIR,
 )
 from core.utils import sanitize_kick_slug, sanitize_twitch_login, sanitize_youtube_login
+
+logger = logging.getLogger(__name__)
 
 CONFIG_DIR = Path.home() / ".config" / CONFIG_DIR_NAME
 CONFIG_FILE = CONFIG_DIR / CONFIG_FILE_NAME
@@ -152,24 +152,6 @@ def _deep_merge(defaults: dict[str, Any], override: dict[str, Any]) -> dict[str,
             result[key] = _deep_merge(result[key], val)
         else:
             result[key] = val
-    return result
-
-
-_INT_SETTINGS: frozenset[str] = frozenset(
-    {"refresh_interval", "youtube_refresh_interval", "player_height", "chat_width"}
-)
-
-
-def _coerce_settings(settings: dict[str, Any]) -> dict[str, Any]:
-    """Cast known numeric settings to int; fall back to DEFAULT_SETTINGS on bad values."""
-    result = dict(settings)
-    for key in _INT_SETTINGS:
-        val = result.get(key)
-        if isinstance(val, str):
-            try:
-                result[key] = int(val)
-            except ValueError:
-                result[key] = DEFAULT_SETTINGS.get(key, 0)
     return result
 
 
@@ -352,26 +334,23 @@ def _migrate_favorites_v2(cfg: dict[str, Any]) -> bool:
 def load_config() -> dict[str, Any]:
     _migrate_old_config()
     if not CONFIG_FILE.exists():
+        logger.debug("Config file not found, creating default")
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         save_config(DEFAULT_CONFIG)
         return _deep_merge(DEFAULT_CONFIG, {})
-    try:
-        with open(CONFIG_FILE) as f:
-            stored = json.load(f)
-    except json.JSONDecodeError:
-        logger.warning("Corrupt config at %s — resetting to defaults", CONFIG_FILE)
-        save_config(DEFAULT_CONFIG)
-        return _deep_merge(DEFAULT_CONFIG, {})
+    with open(CONFIG_FILE) as f:
+        stored = json.load(f)
 
     # Auto-migrate v1 → v2
     if _is_v1_config(stored):
+        logger.info("Migrating v1 config to v2")
         stored = _migrate_v1_to_v2(stored)
         save_config(stored)
 
     favorites_changed = _migrate_favorites_v2(stored)
     merged = _deep_merge(DEFAULT_CONFIG, stored)
-    merged["settings"] = _coerce_settings(merged["settings"])
     if favorites_changed:
+        logger.debug("Favorites migrated, saving config")
         save_config(merged)
     return merged
 
@@ -380,12 +359,9 @@ def save_config(config: dict[str, Any]) -> None:
     logger.debug("Saving config to %s", CONFIG_FILE)
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     tmp = CONFIG_FILE.with_suffix(".tmp")
-    try:
-        with open(tmp, "w") as f:
-            json.dump(config, f, indent=2)
-        os.replace(tmp, CONFIG_FILE)
-    except PermissionError as exc:
-        logger.error("Cannot save config — permission denied: %s", exc)
+    with open(tmp, "w") as f:
+        json.dump(config, f, indent=2)
+    os.replace(tmp, CONFIG_FILE)
 
 
 _config_lock = threading.Lock()

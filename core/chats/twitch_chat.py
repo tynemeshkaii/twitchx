@@ -249,7 +249,9 @@ class TwitchChatClient(BaseChatClient):
                     self._ws = ws
                     await ws.send(f"PASS {password}")
                     await ws.send(f"NICK {nick}")
-                    await ws.send("CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership")
+                    await ws.send(
+                        "CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership"
+                    )
                     await ws.send(f"JOIN #{channel_id}")
 
                     self._emit_status(connected=True)

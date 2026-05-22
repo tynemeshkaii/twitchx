@@ -224,6 +224,27 @@
   animation: spin 0.8s linear infinite;
 }
 
+/* -- Buffering overlay (mid-playback) -- */
+.player-buffering {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-sticky);
+  transition: opacity var(--duration-fast) ease;
+  pointer-events: none;
+}
+.player-buffering.buffering-hide {
+  opacity: 0;
+  pointer-events: none;
+}
+.player-buffering .player-spinner {
+  width: 28px;
+  height: 28px;
+}
+
 /* -- Stats overlay -- */
 #stats-overlay {
   position: absolute;

@@ -105,7 +105,9 @@ class TwitchXApi:
         self._send_pool = ThreadPoolExecutor(
             max_workers=2, thread_name_prefix="twitchx-send"
         )
-        self._chat_client: TwitchChatClient | KickChatClient | YouTubeChatClient | None = None
+        self._chat_client: (
+            TwitchChatClient | KickChatClient | YouTubeChatClient | None
+        ) = None
         self._chat_thread: threading.Thread | None = None
         self._watch_stats = WatchStatsDB(str(CONFIG_DIR / WATCH_STATS_DB_NAME))
         self._recorder = Recorder()
@@ -430,7 +432,10 @@ class TwitchXApi:
                 st["streamlink_path"] = parsed["streamlink_path"].strip()
             if "iina_path" in parsed:
                 st["iina_path"] = parsed["iina_path"].strip()
-            if "external_player" in parsed and parsed["external_player"] in ("iina", "mpv"):
+            if "external_player" in parsed and parsed["external_player"] in (
+                "iina",
+                "mpv",
+            ):
                 st["external_player"] = parsed["external_player"]
             if "mpv_path" in parsed:
                 st["mpv_path"] = parsed["mpv_path"].strip()
@@ -456,8 +461,12 @@ class TwitchXApi:
                 st["chat_filter_sub_only"] = bool(parsed["chat_filter_sub_only"])
             if "chat_filter_mod_only" in parsed:
                 st["chat_filter_mod_only"] = bool(parsed["chat_filter_mod_only"])
-            if "chat_block_list" in parsed and isinstance(parsed["chat_block_list"], list):
-                st["chat_block_list"] = [str(w)[:50] for w in parsed["chat_block_list"][:100]]
+            if "chat_block_list" in parsed and isinstance(
+                parsed["chat_block_list"], list
+            ):
+                st["chat_block_list"] = [
+                    str(w)[:50] for w in parsed["chat_block_list"][:100]
+                ]
             if "chat_anti_spam" in parsed:
                 st["chat_anti_spam"] = bool(parsed["chat_anti_spam"])
             if "keyboard_shortcuts" in parsed and isinstance(
@@ -519,7 +528,9 @@ class TwitchXApi:
     def _get_youtube_config(self) -> dict[str, Any]:
         return get_platform_config(self._config, "youtube")
 
-    def _close_thread_loop(self, loop: asyncio.AbstractEventLoop) -> None:
+    def _close_thread_loop(self, loop: asyncio.AbstractEventLoop | None) -> None:
+        if loop is None:
+            return
         try:
             asyncio.set_event_loop(loop)
             for client in self._platforms.values():

@@ -138,7 +138,9 @@ class TestExtraArgs:
         )
         client = _mock_platform("https://twitch.tv/xqc")
         resolve_hls_url(
-            "xqc", "best", platform_client=client,
+            "xqc",
+            "best",
+            platform_client=client,
             extra_args=["--twitch-low-latency"],
         )
         call_args = mock_run.call_args[0][0]
@@ -152,7 +154,8 @@ class TestExtraArgs:
         self, mock_run: MagicMock, _mock_which: MagicMock
     ) -> None:
         mock_run.return_value = MagicMock(
-            returncode=0, stdout=b"https://example.com/stream.m3u8\n",
+            returncode=0,
+            stdout=b"https://example.com/stream.m3u8\n",
         )
         client = _mock_platform("https://twitch.tv/xqc")
         resolve_hls_url("xqc", "best", platform_client=client)

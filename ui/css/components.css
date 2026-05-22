@@ -49,6 +49,25 @@
   color: var(--text-primary); font-weight: 600; border-bottom-color: var(--accent);
 }
 
+/* ── Sidebar stale data banner ───────────────────────── */
+.sidebar-stale-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  margin: var(--space-1) var(--space-2);
+  background: rgba(255, 159, 10, 0.1);
+  border: 1px solid rgba(255, 159, 10, 0.25);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-xs);
+  color: var(--warn-yellow);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sidebar-stale-banner.hidden { display: none; }
+.sidebar-stale-icon { flex-shrink: 0; }
+
 .favorites-label {
   font-size: var(--font-sm); font-weight: 600; letter-spacing: 0;
   color: var(--text-secondary); text-transform: none;

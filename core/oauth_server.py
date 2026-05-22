@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from core.constants import OAUTH_PORT, OAUTH_TIMEOUT_SECONDS
+
+logger = logging.getLogger(__name__)
 
 _RESPONSE_HTML = """\
 <!DOCTYPE html>
@@ -52,6 +55,7 @@ def wait_for_oauth_code(
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
             parsed = urlparse(self.path)
+            logger.debug("OAuth callback received: %s", parsed.path)
             if parsed.path != "/callback":
                 self.send_response(404)
                 self.end_headers()
@@ -61,12 +65,14 @@ def wait_for_oauth_code(
             code = params.get("code", [None])[0]
 
             if code:
+                logger.info("OAuth authorization code received")
                 result[0] = code
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.end_headers()
                 self.wfile.write(_RESPONSE_HTML.encode())
             else:
+                logger.warning("OAuth callback received without authorization code")
                 self.send_response(400)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.end_headers()
@@ -80,8 +86,7 @@ def wait_for_oauth_code(
 
     server = HTTPServer(("127.0.0.1", port), Handler)
     server.timeout = timeout
-    # HTTPServer.__init__ calls bind() + listen(), so the socket is ready to
-    # accept connections before serve_forever() is invoked.
+    logger.info("OAuth server listening on port %d (timeout=%ds)", port, timeout)
     server_ready.set()
 
     def serve() -> None:
@@ -89,12 +94,14 @@ def wait_for_oauth_code(
 
     thread = threading.Thread(target=serve, daemon=True)
     thread.start()
-    server_ready.wait()  # returns immediately; kept for clarity
+    server_ready.wait()
 
-    # Wait for either the callback or timeout
     thread.join(timeout=timeout)
     if thread.is_alive():
+        logger.warning("OAuth server timed out after %ds", timeout)
         server.shutdown()
         thread.join(timeout=5)
+    else:
+        logger.debug("OAuth server shut down")
 
     return result[0]

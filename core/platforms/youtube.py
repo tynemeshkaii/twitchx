@@ -9,7 +9,8 @@ import re
 import threading
 import time
 import xml.etree.ElementTree as ET
-from datetime import date
+import zoneinfo
+from datetime import datetime
 from typing import Any
 from urllib.parse import urlencode
 
@@ -39,7 +40,16 @@ def _generate_code_challenge(verifier: str) -> str:
     digest = hashlib.sha256(verifier.encode("ascii")).digest()
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
+
 DAILY_QUOTA_LIMIT = 10_000
+
+
+_PACIFIC_TZ = zoneinfo.ZoneInfo("America/Los_Angeles")
+
+
+def _pacific_today() -> str:
+    """Return today's date in Pacific Time (YouTube's reset timezone)."""
+    return datetime.now(_PACIFIC_TZ).date().isoformat()
 
 
 class QuotaTracker:
@@ -59,7 +69,7 @@ class QuotaTracker:
         self._lock = threading.Lock()
         # Seed in-memory state from persisted config once at construction.
         yc = get_yt_config()
-        today = date.today().isoformat()
+        today = _pacific_today()
         if yc.get("quota_reset_date") == today:
             self._used: int = yc.get("daily_quota_used", 0)
         else:
@@ -77,7 +87,7 @@ class QuotaTracker:
 
     def _maybe_reset(self) -> None:
         """Reset counter if the calendar day has changed. Must be called under lock."""
-        today = date.today().isoformat()
+        today = _pacific_today()
         if self._date != today:
             self._used = 0
             self._date = today
@@ -168,6 +178,7 @@ class YouTubeClient(BasePlatformClient):
     def _effective_api_key(self) -> str:
         """Return api_key from config, or bundled default."""
         from core import credentials as _creds
+
         return self._platform_config().get("api_key", "") or _creds.YOUTUBE_API_KEY
 
     # ── Token management ─────────────────────────────────────
@@ -179,8 +190,7 @@ class YouTubeClient(BasePlatformClient):
             yc = self._platform_config()
             if (
                 yc.get("access_token")
-                and yc.get("token_expires_at", 0)
-                > time.time() + 60
+                and yc.get("token_expires_at", 0) > time.time() + 60
             ):
                 return yc["access_token"]
             if yc.get("refresh_token"):

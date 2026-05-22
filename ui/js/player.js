@@ -94,6 +94,24 @@ function showPlayerView() {
     setTimeout(hideLoader, 15000);
   }
 
+  // Mid-playback buffering indicator via event delegation
+  var pContent = document.getElementById('player-content');
+  if (pContent && !pContent._bufferingBound) {
+    pContent._bufferingBound = true;
+    pContent.addEventListener('waiting', function(e) {
+      if (e.target.tagName === 'VIDEO') {
+        var buf = document.getElementById('player-buffering');
+        if (buf) buf.classList.remove('buffering-hide');
+      }
+    });
+    pContent.addEventListener('playing', function(e) {
+      if (e.target.tagName === 'VIDEO') {
+        var buf = document.getElementById('player-buffering');
+        if (buf) buf.classList.add('buffering-hide');
+      }
+    });
+  }
+
   var recordBtn = document.getElementById('record-btn');
   if (recordBtn) recordBtn.classList.remove('hidden');
   var statsBtn = document.getElementById('stats-overlay-btn');
@@ -495,6 +513,8 @@ function checkFrozenVideo() {
 
 function softResetVideo(reason) {
   if (TwitchX._softResetInProgress) return;
+  // Clear any recovery status set by gentleResetVideo before it fell through to us
+  setStatus('', 'info');
   const video = getPlayerVideo();
   if (!video || !video.src) return;
   TwitchX._softResetInProgress = true;
@@ -559,6 +579,9 @@ function gentleResetVideo(reason) {
     return;
   }
 
+  // Show recovery status — only after guards, so early-return paths don't leave it stale
+  setStatus('Recovering playback...', 'warn');
+
   // Cancel any previous pending gentle reset to avoid orphaned shadow videos
   if (TwitchX._gentleResetInProgress) {
     cancelGentleReset();
@@ -621,6 +644,7 @@ function gentleResetVideo(reason) {
 
       TwitchX._playerVideo = newVideo;
       _bindPiPEvents(newVideo);
+      setStatus('', 'info');
       console.log('[VideoHealth]', reason, 'reset completed');
     }, 160);
   }
@@ -1081,13 +1105,7 @@ function _stopFullscreenAutoHide() {
     content.removeEventListener('mouseenter', TwitchX._fsResetControlsTimer);
   }
   TwitchX._fsMouseTarget = null;
-  _showControls();
-  function _showControls() {
-    var bar = document.getElementById('player-bar');
-    var header = document.getElementById('player-header');
-    if (bar) bar.classList.remove('fs-hidden');
-    if (header) header.classList.remove('fs-hidden');
-  }
+  if (TwitchX._fsShowControls) TwitchX._fsShowControls();
 }
 
 /* ── Fullscreen change listener ───────────────────────── */

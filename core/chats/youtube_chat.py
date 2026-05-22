@@ -156,7 +156,9 @@ class YouTubeChatClient(BaseChatClient):
             except StopReconnect:
                 break
             except Exception as e:
-                logger.warning("YouTube chat poll error (attempt %d): %s", attempt + 1, e)
+                logger.warning(
+                    "YouTube chat poll error (attempt %d): %s", attempt + 1, e
+                )
                 if not self._running:
                     break
                 attempt += 1
@@ -223,9 +225,7 @@ class YouTubeChatClient(BaseChatClient):
             for err in error.get("errors", []):
                 reason = err.get("reason", "")
                 if reason == "liveChatEnded":
-                    self._emit_status(
-                        connected=False, error="Live stream has ended."
-                    )
+                    self._emit_status(connected=False, error="Live stream has ended.")
                     raise StopReconnect()
                 if reason == "quotaExceeded":
                     self._emit_status(

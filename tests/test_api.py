@@ -1133,7 +1133,10 @@ class TestAddMultiSlot:
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
         monkeypatch.setattr(
             "ui.api.streams.resolve_hls_url",
-            lambda ch, q, sl, platform_client=None, extra_args=None: ("https://hls.example.com/s.m3u8", ""),
+            lambda ch, q, sl, platform_client=None, extra_args=None: (
+                "https://hls.example.com/s.m3u8",
+                "",
+            ),
         )
 
         api.add_multi_slot(0, "xqc", "twitch", "best")
@@ -1156,7 +1159,10 @@ class TestAddMultiSlot:
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
         monkeypatch.setattr(
             "ui.api.streams.resolve_hls_url",
-            lambda ch, q, sl, platform_client=None, extra_args=None: (None, "streamlink not found"),
+            lambda ch, q, sl, platform_client=None, extra_args=None: (
+                None,
+                "streamlink not found",
+            ),
         )
 
         api.add_multi_slot(2, "ninja", "twitch", "720p")
@@ -1203,7 +1209,10 @@ class TestAddMultiSlot:
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
         monkeypatch.setattr(
             "ui.api.streams.resolve_hls_url",
-            lambda ch, q, sl, platform_client=None, extra_args=None: ("https://hls.example.com/s.m3u8", ""),
+            lambda ch, q, sl, platform_client=None, extra_args=None: (
+                "https://hls.example.com/s.m3u8",
+                "",
+            ),
         )
 
         api.add_multi_slot(0, "xqc", "twitch", "best")
@@ -1424,7 +1433,9 @@ class TestWatchMediaStreamType:
             mock_resolve.return_value = ("https://example.com/live.m3u8", "")
             api = TwitchXApi()
             api._eval_js = capture_eval_js
-            api._live_streams = [{"login": "xqc", "platform": "twitch", "user_login": "xqc"}]
+            api._live_streams = [
+                {"login": "xqc", "platform": "twitch", "user_login": "xqc"}
+            ]
             api.watch("xqc", "best")
         capture_eval_js.assert_any('"stream_type": "live"')
 
@@ -1434,6 +1445,7 @@ def test_start_watch_session_is_atomic_under_lock(
 ) -> None:
     """Concurrent _start_watch_session must not create orphaned DB sessions."""
     import threading
+
     api = TwitchXApi()
     monkeypatch.setattr(api, "_eval_js", lambda code: None)
 
@@ -1505,7 +1517,9 @@ def test_async_run_closes_thread_loop(
     monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
 
     close_calls: list[object] = []
-    monkeypatch.setattr(api, "_close_thread_loop", lambda loop: close_calls.append(loop))
+    monkeypatch.setattr(
+        api, "_close_thread_loop", lambda loop: close_calls.append(loop)
+    )
 
     async def dummy() -> None:
         pass
@@ -1540,6 +1554,7 @@ def test_get_config_has_credentials_not_dependent_on_custom_fields(
         cfg["platforms"]["youtube"]["client_secret"] = ""
 
     from core.storage import update_config
+
     update_config(_clear)
     api = TwitchXApi()
     assert api.get_config()["has_credentials"] is True
@@ -1617,9 +1632,7 @@ class TestLoginWithoutCustomCredentials:
 
         api.login()
 
-        credential_error_calls = [
-            c for c in emitted if "Set API credentials" in c
-        ]
+        credential_error_calls = [c for c in emitted if "Set API credentials" in c]
         assert credential_error_calls == [], (
             f"login() emitted credential-missing error: {credential_error_calls}"
         )
@@ -1679,7 +1692,7 @@ def test_quota_warn_toast_fires_at_80_percent(temp_config_dir):
     emitted = []
     api._eval_js = lambda code: emitted.append(code)
 
-    with patch.object(api._youtube, 'quota_remaining', return_value=1500):
+    with patch.object(api._youtube, "quota_remaining", return_value=1500):
         api._check_youtube_quota_warning()
 
     assert any("onYouTubeQuotaWarning" in s for s in emitted)
@@ -1695,7 +1708,7 @@ def test_quota_warn_not_fired_when_plenty_remaining(temp_config_dir):
     emitted = []
     api._eval_js = lambda code: emitted.append(code)
 
-    with patch.object(api._youtube, 'quota_remaining', return_value=8000):
+    with patch.object(api._youtube, "quota_remaining", return_value=8000):
         api._check_youtube_quota_warning()
 
     assert not any("onYouTubeQuotaWarning" in s for s in emitted)
@@ -1712,7 +1725,7 @@ def test_quota_critical_fires_at_95_percent(temp_config_dir):
     emitted = []
     api._eval_js = lambda code: emitted.append(code)
 
-    with patch.object(api._youtube, 'quota_remaining', return_value=400):
+    with patch.object(api._youtube, "quota_remaining", return_value=400):
         api._check_youtube_quota_warning()
 
     assert any("onYouTubeQuotaWarning" in s for s in emitted)
@@ -1726,3 +1739,42 @@ def test_quota_critical_fires_at_95_percent(temp_config_dir):
     data = json.loads(call[start:end])
     assert data["level"] == "critical"
     assert data["remaining"] == 400
+
+
+def test_close_thread_loop_with_none(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """_close_thread_loop(None) must return without error."""
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "_eval_js", lambda code: None)
+    # Should not raise
+    api._close_thread_loop(None)
+
+
+def test_on_data_fetched_skips_normalize_when_loop_is_none(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """_on_data_fetched with loop=None must not call normalize_stream_item."""
+    from unittest.mock import MagicMock
+
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "_eval_js", lambda code: None)
+    monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+
+    # Spy on normalize_stream_item
+    api._kick.normalize_stream_item = MagicMock()
+    api._youtube.normalize_stream_item = MagicMock()
+
+    api._data._on_data_fetched(
+        twitch_favorites=[],
+        kick_favorites=[],
+        youtube_favorites=[],
+        twitch_streams=[],
+        twitch_users=[],
+        kick_streams=[{"slug": "test"}],
+        youtube_streams=[{"login": "UCtest"}],
+        loop=None,
+    )
+
+    api._kick.normalize_stream_item.assert_not_called()
+    api._youtube.normalize_stream_item.assert_not_called()

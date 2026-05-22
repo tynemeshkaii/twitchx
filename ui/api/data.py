@@ -468,9 +468,7 @@ class DataComponent(BaseApiComponent):
 
             for s in youtube_streams:
                 stream_items.append(
-                    loop.run_until_complete(
-                        self._youtube.normalize_stream_item(s)
-                    )
+                    loop.run_until_complete(self._youtube.normalize_stream_item(s))
                 )
 
         self._live_streams = stream_items

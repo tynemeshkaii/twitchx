@@ -94,7 +94,7 @@ class BaseApiComponent:
 
         self._run_in_thread(_runner)
 
-    def _close_thread_loop(self, loop: asyncio.AbstractEventLoop) -> None:
+    def _close_thread_loop(self, loop: asyncio.AbstractEventLoop | None) -> None:
         self._api._close_thread_loop(loop)
 
     def _handle_async_error(self, error: Exception) -> None:

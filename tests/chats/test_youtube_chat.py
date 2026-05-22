@@ -320,9 +320,7 @@ class TestYouTubeChatClientConnect:
             patch("core.chats.youtube_chat.asyncio.sleep", new_callable=AsyncMock),
             contextlib.suppress(StopReconnect),
         ):
-            await client.connect(
-                "UCtest123", token="fake", live_chat_id="abc123"
-            )
+            await client.connect("UCtest123", token="fake", live_chat_id="abc123")
 
         # Should have emitted connected=True at least once
         connected_statuses = [s for s in statuses if s.connected]
@@ -333,9 +331,7 @@ class TestYouTubeChatClientConnect:
         yt._live_video_ids = {"UCtest123": "vid_abc"}
         yt._quota = MagicMock()
         yt._quota.check_and_use.return_value = True
-        yt._yt_get = AsyncMock(
-            side_effect=StopReconnect
-        )
+        yt._yt_get = AsyncMock(side_effect=StopReconnect)
 
         client = YouTubeChatClient(yt)
         statuses: list[Any] = []
@@ -435,7 +431,11 @@ class TestYoutubeChatDedup:
             if call_count >= 1:
                 client._running = False
 
-        with patch("core.chats.youtube_chat.asyncio.sleep", new_callable=AsyncMock, side_effect=fake_sleep):
+        with patch(
+            "core.chats.youtube_chat.asyncio.sleep",
+            new_callable=AsyncMock,
+            side_effect=fake_sleep,
+        ):
             await client._poll_messages()
             assert len(received) == 1
 
@@ -457,7 +457,11 @@ class TestYoutubeChatDedup:
             if call_count2 >= 1:
                 client._running = False
 
-        with patch("core.chats.youtube_chat.asyncio.sleep", new_callable=AsyncMock, side_effect=fake_sleep2):
+        with patch(
+            "core.chats.youtube_chat.asyncio.sleep",
+            new_callable=AsyncMock,
+            side_effect=fake_sleep2,
+        ):
             await client._poll_messages()
             assert len(received) == 1  # Duplicate was skipped
 

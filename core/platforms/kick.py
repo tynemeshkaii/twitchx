@@ -305,8 +305,8 @@ class KickClient(BasePlatformClient):
     @staticmethod
     def _merge_channel_payloads(
         public_channel: dict[str, Any],
-        legacy_channel: dict[str, Any],
-        legacy_chatroom: dict[str, Any],
+        legacy_channel: dict[str, Any] | None,
+        legacy_chatroom: dict[str, Any] | None,
     ) -> dict[str, Any]:
         merged = dict(public_channel)
 

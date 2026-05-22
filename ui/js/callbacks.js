@@ -208,7 +208,7 @@ window.onLaunchResult = function(data) {
     document.getElementById('live-dot').classList.add('visible');
     TwitchX.renderGrid();
   } else {
-    TwitchX.setStatus(data.message, 'error');
+    TwitchX.showToast(data.message, 'error');
   }
 };
 
@@ -535,13 +535,26 @@ window.onChatStatus = function(status) {
       TwitchX.loadChatFiltersFromConfig();
       const newBtn = document.getElementById('chat-new-messages');
       if (newBtn) newBtn.classList.remove('visible');
+      // Dismiss disconnect toast on reconnect
+      if (TwitchX._chatDisconnectToast) {
+        TwitchX.dismissToast(TwitchX._chatDisconnectToast);
+        TwitchX._chatDisconnectToast = null;
+      }
     } else {
       dot.classList.remove('connected');
-      dot.classList.remove('connecting');
       dot.title = status.error || 'Disconnected';
       if (statusText) statusText.textContent = status.error ? status.error : 'Disconnected';
       TwitchX.chatSelfLogin = '';
       TwitchX.clearChatReply();
+      // Show yellow pulsing dot during reconnect backoff
+      if (status.error && status.error.indexOf('Reconnect') !== -1) {
+        dot.classList.add('connecting');
+      } else {
+        dot.classList.remove('connecting');
+      }
+      if (status.error) {
+        TwitchX._chatDisconnectToast = TwitchX.showToast(status.error, 'error');
+      }
     }
   }
   TwitchX.updateChatInput();
@@ -586,6 +599,7 @@ window.onTestResult = function(data) {
   } else {
     fb.innerHTML = TwitchX.renderIcon('cross', 14) + ' ' + data.message;
     fb.style.color = 'var(--error-red)';
+    TwitchX.showToast(data.message, 'error');
   }
   document.getElementById('test-btn').disabled = false;
 };
@@ -642,6 +656,7 @@ window.onKickTestResult = function(data) {
   } else {
     fb.innerHTML = TwitchX.renderIcon('cross', 14) + ' ' + data.message;
     fb.style.color = 'var(--error-red)';
+    TwitchX.showToast(data.message, 'error');
   }
   document.getElementById('kick-test-btn').disabled = false;
 };
@@ -678,30 +693,40 @@ window.onYouTubeLogout = function() {
 
 window.onYouTubeTestResult = function(result) {
   const tr = document.getElementById('yt-test-result');
-  tr.classList.remove('hidden');
-  if (result.success) {
-    tr.innerHTML = TwitchX.renderIcon('check', 14) + ' ' + result.message;
-    tr.style.color = 'var(--live-green)';
-  } else {
-    tr.innerHTML = TwitchX.renderIcon('cross', 14) + ' ' + result.message;
-    tr.style.color = 'var(--error-red)';
+  if (tr) {
+    tr.classList.remove('hidden');
+    if (result.success) {
+      tr.innerHTML = TwitchX.renderIcon('check', 14) + ' ' + result.message;
+      tr.style.color = 'var(--live-green)';
+    } else {
+      tr.innerHTML = TwitchX.renderIcon('cross', 14) + ' ' + result.message;
+      tr.style.color = 'var(--error-red)';
+      TwitchX.showToast(result.message, 'error');
+    }
   }
-  document.getElementById('yt-test-btn').disabled = false;
+  const btn = document.getElementById('yt-test-btn');
+  if (btn) btn.disabled = false;
 };
 
 window.onYouTubeImportComplete = function(data) {
   const count = data && typeof data === 'object' ? data.added : data;
   const tr = document.getElementById('yt-test-result');
-  tr.classList.remove('hidden');
-  tr.innerHTML = TwitchX.renderIcon('check', 14) + ' Imported ' + count + ' subscriptions';
-  tr.style.color = 'var(--live-green)';
+  if (tr) {
+    tr.classList.remove('hidden');
+    tr.innerHTML = TwitchX.renderIcon('check', 14) + ' Imported ' + count + ' subscriptions';
+    tr.style.color = 'var(--live-green)';
+  }
+  TwitchX.showToast('Imported ' + count + ' channel(s)', 'success');
 };
 
 window.onYouTubeImportError = function(msg) {
   const tr = document.getElementById('yt-test-result');
-  tr.classList.remove('hidden');
-  tr.innerHTML = TwitchX.renderIcon('cross', 14) + ' Import failed: ' + msg;
-  tr.style.color = 'var(--error-red)';
+  if (tr) {
+    tr.classList.remove('hidden');
+    tr.innerHTML = TwitchX.renderIcon('cross', 14) + ' Import failed: ' + msg;
+    tr.style.color = 'var(--error-red)';
+  }
+  TwitchX.showToast('Import error: ' + msg, 'error');
 };
 
 window.onAvatar = function(data) {
@@ -730,6 +755,13 @@ window.onStatusUpdate = function(data) {
   TwitchX.setStatus(data.text, data.type || 'info');
   if (data.stale) {
     document.getElementById('updated-time').classList.add('stale');
+    document.getElementById('sidebar-stale-banner').classList.remove('hidden');
+  } else {
+    document.getElementById('updated-time').classList.remove('stale');
+    document.getElementById('sidebar-stale-banner').classList.add('hidden');
+  }
+  if (data.type === 'error' && data.toast !== false) {
+    TwitchX.showToast(data.text, 'error');
   }
 };
 

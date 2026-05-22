@@ -331,7 +331,9 @@ class AuthComponent(BaseApiComponent):
 
         self._run_in_thread(do_test)
 
-    def kick_test_connection(self, client_id: str = "", client_secret: str = "") -> None:
+    def kick_test_connection(
+        self, client_id: str = "", client_secret: str = ""
+    ) -> None:
         cid = client_id.strip() or self._kick._effective_creds()[0]
         csec = client_secret.strip() or self._kick._effective_creds()[1]
 

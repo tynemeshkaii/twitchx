@@ -6,9 +6,12 @@ can share the same resolver.
 
 from __future__ import annotations
 
+import logging
 import shutil
 import subprocess
 from typing import TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from core.platform import PlatformClient
@@ -50,6 +53,7 @@ def resolve_hls_url(
     """
     resolved_sl = shutil.which(streamlink_path)
     if resolved_sl is None:
+        logger.warning("streamlink not found at %s", streamlink_path)
         return (
             None,
             "streamlink not found.\n\nInstall it with:\n  brew install streamlink",
@@ -57,15 +61,25 @@ def resolve_hls_url(
 
     if channel.startswith("http://") or channel.startswith("https://"):
         stream_url = channel
+        logger.debug("Resolving HLS from direct URL: %s", channel[:80])
     elif platform_client is not None:
         stream_url = platform_client.build_stream_url(channel)
+        logger.debug(
+            "Resolving HLS for %s via %s", channel, platform_client.PLATFORM_ID
+        )
     else:
+        logger.error("No platform client and channel is not a URL: %s", channel)
         return None, "No platform client provided and channel is not a direct URL"
 
     # Pass both the requested quality and "best" as a fallback in one call.
     # streamlink picks the first available quality from the comma-separated list,
     # which avoids a second subprocess call (and up to 15 extra seconds of wait).
     quality_arg = f"{quality},best" if quality != "best" else "best"
+    logger.debug("Running streamlink with quality=%s", quality_arg)
     hls_url, err = _run_streamlink(resolved_sl, stream_url, quality_arg, extra_args)
 
+    if hls_url:
+        logger.info("HLS URL resolved successfully (length=%d)", len(hls_url))
+    else:
+        logger.warning("HLS resolution failed: %s", err)
     return hls_url, err

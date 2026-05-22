@@ -32,7 +32,7 @@ make check   # lint + test (перед коммитом)
 
 | Path | Что находится | Зачем агенту знать |
 |------|---------------|-------------------|
-| `main.py` | Точка входа | Запускает `TwitchXApp` |
+| `main.py` | Точка входа | Запускает `TwitchXApp`. Логирование всегда включено (WARNING, DEBUG при `TWITCHX_DEBUG=1`), пишет в `~/.config/twitchx/twitchx.log` через `RotatingFileHandler` (5MB × 2) + stderr |
 | `app.py` | `TwitchXApp` | Создаёт `TwitchXApi` + окно pywebview |
 | `core/platforms/` | TwitchClient, KickClient, YouTubeClient | Наследуют `BasePlatformClient` → `PlatformClient` |
 | `core/chats/` | TwitchChatClient, KickChatClient, YouTubeChatClient | Наследуют `BaseChatClient` → `ChatClient` |
@@ -143,7 +143,7 @@ state → utils → icons → api-bridge → render → sidebar → player → m
 | `api-bridge.js` | `pywebviewready`, `TwitchX.api`, profile helpers |
 | `render.js` | `renderGrid`, `createStreamCard`, `createOnboardingCard`. Grid/list-mode toggle via `list-mode` CSS class. Pinned-first sort in `getFilteredSortedStreams`. Pin badge rendering in `createStreamCard`. `showSkeletonGrid`/`hideSkeletonGrid` — 8 skeleton карточек при первой загрузке. |
 | `sidebar.js` | `renderSidebar`, diff-based updates, layout logic, `getChannelPlatform` helper, drag-to-multistream (`draggable=true`, `dragstart`/`dragend` events). **Phase 6:** `.watching` class при `watchingChannel`, `_setupSidebarTooltip()` c 400ms debounce + thumbnail preview, `_updateNotifBadges()` для offline→online переходов |
-| `player.js` | Video lifecycle, health monitors, fullscreen, gentle reset, recording toggle, stats overlay, VOD time display. **Phase 6:** `syncVolumeSlider()`/`_handleVolumeSliderInput()`/`_handleMuteBtnClick()` — volume slider + mute toggle, `_updateBufferBar()` — buffer visualization в stats overlay rAF-цикле, `startVodSeekBar()`/`stopVodSeekBar()`/`_handleSeekBar*()` — VOD seek bar с time tooltip, `_startFullscreenAutoHide()`/`_stopFullscreenAutoHide()`/`_watchFullscreenChanges()` — auto-hide controls в fullscreen через `webkitpresentationmodechanged` |
+| `player.js` | Video lifecycle, health monitors, fullscreen, gentle reset, recording toggle, stats overlay, VOD time display. **Phase 6:** `syncVolumeSlider()`/`_handleVolumeSliderInput()`/`_handleMuteBtnClick()` — volume slider + mute toggle, `_updateBufferBar()` — buffer visualization в stats overlay rAF-цикле, `startVodSeekBar()`/`stopVodSeekBar()`/`_handleSeekBar*()` — VOD seek bar с time tooltip, `_startFullscreenAutoHide()`/`_stopFullscreenAutoHide()`/`_watchFullscreenChanges()` — auto-hide controls в fullscreen через `webkitpresentationmodechanged`. **Session 2026-05-21:** buffering overlay (`#player-buffering`) через event delegation на `#player-content` (`waiting`/`playing`), recovery status при gentle reset (`setStatus('Recovering playback...')`), `softResetVideo` очищает статус при PiP/fullscreen early return, `_stopFullscreenAutoHide` использует `TwitchX._fsShowControls` |
 | `multistream.js` | Slot management, audio/chat focus, health monitor, `dragover`/`dragleave`/`drop` handlers на `.ms-slot-empty` для drag-to-multistream |
 | `browse.js` | `showBrowseView`, breadcrumb nav (`Following > Browse > Category`), category/top-stream loading |
 | `channel.js` | `showChannelView`, tabs, media cards, follow/watch actions |
@@ -152,8 +152,8 @@ state → utils → icons → api-bridge → render → sidebar → player → m
 | `context-menu.js` | `showContextMenu`, `showSidebarContextMenu`, pin item show/hide and label update |
 | `keyboard.js` | `handleKeydown`, shortcut rebinding, hotkeys (player + multistream scopes), duplicate-key confirm-swap, Cmd+K → palette, Escape priority for palette |
 | `palette.js` | Command Palette module: `openPalette`, `closePalette`, `renderPaletteResults`, `handlePaletteKeydown` |
-| `toast.js` | Toast notification system: `showToast`, `dismissToast`, `clearToasts` — slide-in уведомления с авто-dismiss, стопка до 5, клик-to-dismiss, 4 типа (success/error/info/warn) |
-| `callbacks.js` | Все `window.on*` — thin proxies к `TwitchX.*`, chat batching (`flushChatBatch`), `_shouldFilter`, `_hasBadge`, `onThirdPartyEmotes`, `onChatUserList`, `onChatModeChanged`. Transient-сообщения (логин, импорт, ошибки, credentials) используют `showToast()` вместо `setStatus()` |
+| `toast.js` | Toast notification system: `showToast`, `dismissToast`, `clearToasts` — slide-in уведомления с авто-dismiss, стопка до 5, клик-to-dismiss, 4 типа (success/error/info/warn). `showToast()` возвращает DOM-элемент для внешнего dismiss. `dismissToast` имеет `if (!el) return` guard |
+| `callbacks.js` | Все `window.on*` — thin proxies к `TwitchX.*`, chat batching (`flushChatBatch`), `_shouldFilter`, `_hasBadge`, `onThirdPartyEmotes`, `onChatUserList`, `onChatModeChanged`. Transient-сообщения (логин, импорт, ошибки, credentials) используют `showToast()` вместо `setStatus()`. **Session 2026-05-21:** toast на `onLaunchResult` failure, `onChatStatus` disconnect auto-dismiss, `onStatusUpdate` error с opt-out через `data.toast !== false` |
 | `init.js` | `DOMContentLoaded`, `_bind*()` wiring, uptime interval. `toggleMiniMode`/`applyMiniMode`, `_bindPaletteEvents`, grid toggle binding, mini btn binding, accent/ mini/grid/pinned restore на старте, skeleton init при наличии favorites. **Phase 6:** bindings для volume slider (`#mute-btn`, `#volume-slider`), VOD seek bar (`#seek-bar`), chat timestamp toggle (`#chat-timestamp-btn`), sidebar collapse (`#sidebar-collapse-btn`), stats compact toggle (`#stats-compact-toggle`). `_watchFullscreenChanges()` для fullscreen auto-hide. Восстановление `collapsed-sidebar` и `chat_timestamps` из localStorage.
 
 **pywebview 6.x Constraint:** модули не загружаются через отдельные `<script src="...">`. `app.py._inline_resources()` мержит все JS в **один** inline `<script>` блок и CSS в inline `<style>`. Только `state.js` содержит `window.TwitchX = window.TwitchX || {};`, остальные используют `const TwitchX = window.TwitchX;`.
@@ -183,6 +183,8 @@ state → utils → icons → api-bridge → render → sidebar → player → m
 - Если `isVideoPiP(oldVideo)` → вызывает `softResetVideo(reason)` и возвращает (PiP аналогично привязан к DOM-ноду).
 - `_gentleResetInProgress` + `_gentleResetTimer` — отменяет предыдущий pending reset при повторном вызове.
 - `_playerVideo = null` выставляется **сразу** в начале, предотвращая re-entrancy.
+- `setStatus('Recovering playback...')` выставляется **после** PiP/fullscreen guards, чтобы при early return не оставить stale статус.
+- `softResetVideo` безусловно очищает статус (`setStatus('', 'info')`) для защиты от callers без собственного setStatus.
 
 #### Soft Reset (Same-DOM)
 `softResetVideo(reason)` — для случаев, когда нельзя уничтожать DOM-нод (fullscreen):
@@ -240,6 +242,7 @@ state → utils → icons → api-bridge → render → sidebar → player → m
 #### Race Safety
 - `hidePlayerView()` при active gentle reset: отменяет таймер, удаляет shadow video, чистит `_gentleReset*` flags.
 - Event delegation для dblclick на `#player-content` вместо прямого `video.addEventListener` — переживает recreation.
+- Buffering overlay (`#player-buffering`) использует event delegation (`waiting`/`playing` на `#player-content`) с классом `.buffering-hide` (не `.hidden`, чтобы не конфликтовать с `display: none !important` из reset.css).
 
 #### VOD Mode
 Когда стрим запущен через `watch_media()` (VOD, clips), плеер входит в VOD mode:
@@ -308,6 +311,7 @@ state → utils → icons → api-bridge → render → sidebar → player → m
 - **Hover tooltip:** `_setupSidebarTooltip(item, login, streamMap)` — 400ms debounce, показ `#sidebar-tooltip` с thumbnail (`tooltip-thumb`), названием (`tooltip-title`), игрой (`tooltip-game`), зрителями (`tooltip-viewers`). Clamping to viewport. Скрывается при `mouseleave`.
 - **Notification badge:** `TwitchX._notifBadgeLogins` — список новых online каналов. `_updateNotifBadges()` показывает `.notif-dot` на элементах + `.notif-badge` счётчик в `#favorites-header`. Сбрасывается при клике/ререндере.
 - **Collapsible mode (icons-only):** `#sidebar.collapsed-sidebar` — `width: 56px`, скрывает profile, tabs, text, search, browse. Только avatar + live-dot. Кнопка `#sidebar-collapse-btn` в `#favorites-header`. Состояние в `localStorage('twitchx.sidebar.collapsed')`.
+- **Stale data banner:** `#sidebar-stale-banner` показывается когда `onStatusUpdate(stale=true)` — предупреждает пользователя, что данные могут быть устаревшими. Скрывается при `stale=false`.
 
 ### 3.5 Chat Lifecycle (Chat.js + Callbacks)
 
@@ -682,6 +686,11 @@ state → utils → icons → api-bridge → render → sidebar → player → m
 - OAuth server в `core/oauth_server.py` — 120 с timeout, авто-остановка после callback.
 - `reset_client()` — no-op (каждый loop получает свой `httpx.AsyncClient`).
 
+**YouTube QuotaTracker (`core/platforms/youtube.py`):**
+- `QuotaTracker` — in-memory счетчик с персистентностью в config (ключи `daily_quota_used` / `quota_reset_date`).
+- **Timezone:** использует `America/Los_Angeles` (Pacific Time) вместо `date.today()` — YouTube Data API reset происходит в полночь PT.
+- `check_and_use(units)` — атомарная проверка + расход, предпочтительнее отдельного `can_use()` + `use()` (TOCTOU race).
+
 ---
 
 ## 5. API Bridge (ui/api/)
@@ -706,7 +715,7 @@ state → utils → icons → api-bridge → render → sidebar → player → m
 - Все public методы `TwitchXApi` делегируют sub-component (например, `self.login()` → `self._auth.login()`).
 - `_eval_js(code)` — suppress errors при закрытии окна (`_shutdown` guard).
 - `_run_in_thread(fn)` — `threading.Thread(daemon=True)` для всего async I/O.
-- `_async_run(coro)` — создаёт `asyncio.new_event_loop()`, запускает корутину, в `finally` вызывает `_close_thread_loop(loop)` (а не `loop.close()` напрямую), что гарантирует очистку `httpx.AsyncClient` из `BasePlatformClient._loop_clients`.
+- `_async_run(coro)` — создаёт `asyncio.new_event_loop()`, запускает корутину, в `finally` вызывает `_close_thread_loop(loop)` (а не `loop.close()` напрямую), что гарантирует очистку `httpx.AsyncClient` из `BasePlatformClient._loop_clients`. `_close_thread_loop` принимает `AbstractEventLoop | None` (с `if loop is None: return` guard) — защита от случайного вызова с None.
 - Thread pools: `_image_pool` (max 8) для аватарок, `_send_pool` (max 2) для отправки чата.
 - `_active_watch_session` защищён `_active_watch_lock` (`threading.Lock`) от race между background resolve-тредом и main-thread `stop_player`. `_start_watch_session()` всегда завершает предыдущую active session под этим lock перед записью нового `session_id`.
 - `_launch_id` — generation guard для запуска стрима. Все `watch*` пути должны брать id через `_begin_launch()` и проверять `_is_launch_current()` перед `onStreamReady`/`onLaunchResult(success)`, чтобы late `streamlink` result после timeout не стартовал плеер. `_finish_launch()` также инкрементирует `_launch_id`, чтобы concurrent `tick()` launch-таймера не мог перезапустить себя (streams.py:70).
@@ -857,6 +866,7 @@ state → utils → icons → api-bridge → render → sidebar → player → m
 | 2026-05-18 | Health Monitor Optimization | FPS drops при длительном просмотре (>20 мин) из-за накопления SourceBuffer в WKWebView | **Buffer management:** forward threshold 180s→60s (live HLS нужно максимум 30s буфера), добавлен total span check (>120s → reset). **Live edge drift:** 120s→30s (меньше дрейф = меньше SourceBuffer). **Proactive reset:** 30min→15min (упреждение деградации). **Decoder monitoring:** добавлен dropped frames check (`video.getVideoPlaybackQuality()` > 5% drop rate), детектирует VideoToolbox-деградацию которую rAF miss'ит. Инициализация `_droppedFramesBaseline` в `startVideoHealthMonitor()`. | ✅ Active |
 | 2026-05-21 | P0 — Blockers | Credentials in git, weak .gitignore, 12 pyright errors, low test coverage (auth.py 8%, images.py 17%), broad exception handlers, no final verification | **Task 1 — Credentials security:** Removed OAuth tokens from git history. Created `core/credentials.py.template` with setup instructions. Updated `.gitignore` with comprehensive Python/macOS patterns, project-specific rules (`core/credentials.py`, `.superpowers/`). **Task 2 — Pyright fixes (12 errors):** Fixed parameter naming (`s` → `code`), None-safety guards (`if loop is not None:`), combined elif conditions (SIM102), added `type: ignore[attr-defined]` for MagicMock, added None-checks before operators. **Task 3 — Auth tests:** Created `tests/test_auth.py` with 28 tests (98% coverage on `ui/api/auth.py`). Covers Twitch/Kick/YouTube login/logout/test_connection flows. **Task 4 — Images tests:** Created `tests/test_images.py` with 19 tests (100% coverage on `ui/api/images.py`). Covers avatar cache hit/miss, network fetch, resize, dedup, corrupt cache fallthrough, thumbnails. **Task 5 — Exception audit:** Reviewed 42 broad exception handlers across 15 files. Narrowed specific cases to exact exception types (OSError, ValueError, etc.). Preserved legitimate broad catches in error boundaries + background threads with logging. **Task 6 — Verification:** Pyright 0 errors, Ruff 2 pre-existing E402s (not from changes), 89 new tests passing (436 total), 98-100% coverage on modified modules. | ✅ Complete |
 | 2026-05-20..21 | Feature: Bundled Credentials + PKCE | Users must set up OAuth apps in developer portals for Twitch/Kick/YouTube before first login; high friction for new users; no PKCE for security (RFC 7636) | **Task 1:** Created `core/credentials.py` with 7 bundled app credential placeholders (Twitch/Kick/YouTube). **Task 2:** Added `_effective_creds(platform)` + `_effective_api_key()` in `BasePlatformClient` — config values override bundled fallback. **Task 3–5:** Integrated PKCE (code verifier + S256 challenge) in all platforms (`_generate_code_verifier()` / `_generate_code_challenge()`), store/clear verifier in config per-platform. **Task 6:** Removed credential guards from `ui/api/auth.py` — bundled creds always available. **Task 7:** `has_credentials: True` hardcoded in `get_config()` since bundled always fallback. **Task 8:** Settings UI — bundled-app badge (✓ icon) + collapsible "Use custom credentials" for advanced OAuth. **Task 9:** Onboarding card shows 3 login buttons (Twitch/Kick/YouTube) instead of "Open Settings". **Task 10:** Removed dead `onKickNeedsCredentials` / `onYouTubeNeedsCredentials` callbacks. **Task 11:** YouTube quota warning at ≤2000 remaining (warn) / ≤500 (critical) via `onYouTubeQuotaWarning`. **Merge:** Fast-forward merge `feature/bundled-credentials-pkce` → `main`, resolved stash pop conflicts in 3 files. **Verification:** 462 tests passing, all 11 tasks complete, worktree removed. | ✅ Complete |
+| 2026-05-21 | P1 — Production hardening | 6 P1-пунктов из BETA_PLAN.md: null event loop guard, structured logging, error UX toasts, connection indicators, YouTube quota timezone, platform test coverage | **Item 9:** `if loop is None: return` в `_close_thread_loop` + `AbstractEventLoop \| None` тип. **Item 7:** Always-on logging (RotatingFileHandler 5MB×2 + stderr), DEBUG при `TWITCHX_DEBUG=1`. **Item 8:** Toasts на `onLaunchResult` fail, `onChatStatus` disconnect, `onStatusUpdate(error)`. `showToast()` возвращает элемент. **Item 10:** Buffering overlay (`.buffering-hide`), stale sidebar banner, recovery status при gentle reset. **Item 11:** `QuotaTracker` → `America/Los_Angeles` timezone. **Item 12:** +41 тест, twitch.py 56%→79%, kick.py 64%→75%. Итого 552 теста, 75% total. | ✅ Complete |
 
 ## 8. Testing Guide
 
@@ -902,13 +912,15 @@ def test_my_feature(temp_config_dir, run_sync, capture_eval_js):
     capture_eval_js.assert_any("onSomething")
 ```
 
-### 8.5 Test Coverage Baselines (P0 Blockers)
+### 8.5 Test Coverage Baselines (P1 Hardening)
 
 | Module | Before | After | Tests | Status |
 |--------|--------|-------|-------|--------|
 | `ui/api/auth.py` | 8% | 98% | 28 tests | ✅ Complete |
 | `ui/api/images.py` | 17% | 100% | 19 tests | ✅ Complete |
-| **Overall** | ~40% | 436 tests pass | 89 new tests added | ✅ Verified |
+| `core/platforms/twitch.py` | 56% | 79% | +18 tests | ✅ Complete |
+| `core/platforms/kick.py` | 64% | 75% | +16 tests | ✅ Complete |
+| **Overall** | ~40% | 552 tests pass | 180+ new tests added | ✅ Verified |
 
 **Coverage methodology:** Pyright 0 errors, Ruff 2 pre-existing E402s (not from changes), all exception handlers audited (15 files, 42 instances), credentials removed from git history, `.gitignore` hardened.
 
@@ -1004,6 +1016,11 @@ def test_my_feature(temp_config_dir, run_sync, capture_eval_js):
 | «Settings не предупреждает о несохранённых» | §6.4, settings.js | `_settingsSnapshot` устанавливается в `openSettings()`. `_isSettingsDirty()` сравнивает `JSON.stringify(_readAllFormValues())`. Accent и shortcuts отслеживаются. |
 | «SVG иконки не отображаются / невидимы» | §7.1, icons.js | Проверить что `fill="currentColor"` или `fill` явно указан для элементов внутри SVG (родитель имеет `fill="none"`). `record`, `live-dot`, `info`, `warn` требуют `fill="currentColor" stroke="none"` на кругах. |
 | «Grid-toggle иконка не меняется при клике» | §3.6, init.js | `gridToggleBtn.innerHTML` устанавливается в `_bindToolbarEvents()`. Проверить что `TwitchX.renderIcon()` возвращает корректный SVG для `grid-toggle`/`list-toggle`.
+| «Buffering overlay не появляется» | §3.3, player.js | Проверить event delegation на `#player-content` — `waiting`/`playing` события. Убедиться что класс `.buffering-hide` используется, не `.hidden`. |
+| «Stale data banner не скрывается» | §3.4, callbacks.js | `onStatusUpdate({stale: false})` снимает `.scrolled` с `#updated-time` и добавляет `.hidden` на `#sidebar-stale-banner`. |
+| «Recovery status не очищается» | §3.3, player.js | `softResetVideo()` теперь вызывает `setStatus('', 'info')`. Проверить что `gentleResetVideo` ставит статус после PiP/fullscreen guards. |
+| «YouTube квота не сбрасывается в полночь» | §4.5, core/platforms/youtube.py | `QuotaTracker` использует `America/Los_Angeles` (не `date.today()`). Проверить `_pacific_today()`. |
+| «Буферизация не анимируется (мгновенное появление/исчезание)» | §3.3, player.css | `.player-buffering` использует `.buffering-hide` вместо глобального `.hidden` (который имеет `display: none !important`). |
 
 ---
 

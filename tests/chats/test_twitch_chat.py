@@ -281,7 +281,9 @@ class TestTwitchChatClientConnect:
         calls = [c.args[0] for c in mock_ws.send.call_args_list]
         assert "PASS SCHMOOPIIE" in calls
         assert "NICK justinfan12345" in calls
-        assert "CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership" in calls
+        assert (
+            "CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership" in calls
+        )
         assert "JOIN #testchannel" in calls
 
     async def test_authenticated_connect(self) -> None:

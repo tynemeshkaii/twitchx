@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import shutil
 import subprocess
 import threading
 import time
 from datetime import datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 class Recorder:
@@ -43,10 +46,12 @@ class Recorder:
         """Start recording. Returns an error string on failure, None on success."""
         resolved_sl = shutil.which(streamlink_path)
         if resolved_sl is None:
+            logger.warning("streamlink not found for recording")
             return "streamlink not found. Install with: brew install streamlink"
 
         with self._lock:
             if self._process is not None and self._process.poll() is None:
+                logger.debug("Terminating previous recording before starting new one")
                 self._process.terminate()
                 self._process = None
                 self.current_file = None
@@ -64,12 +69,14 @@ class Recorder:
                 stderr=subprocess.DEVNULL,
             )
         except OSError as e:
+            logger.error("Failed to start recording for %s: %s", channel, e)
             return f"Failed to start recording: {e}"
 
         with self._lock:
             self._process = proc
             self.current_file = filepath
             self._start_time = time.time()
+        logger.info("Recording started for %s → %s", channel, filepath)
         return None
 
     def stop(self) -> None:
@@ -80,6 +87,7 @@ class Recorder:
             self.current_file = None
             self._start_time = 0.0
         if proc is not None and proc.poll() is None:
+            logger.info("Stopping recording")
             proc.terminate()
 
     def state_dict(self) -> dict:

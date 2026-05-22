@@ -76,9 +76,10 @@ class TestGetAvatar:
         api._http = MagicMock()
         api._http.get.return_value = mock_resp
 
-        with patch("ui.api.images.get_cached_avatar", return_value=None), patch(
-            "ui.api.images.save_avatar"
-        ) as mock_save:
+        with (
+            patch("ui.api.images.get_cached_avatar", return_value=None),
+            patch("ui.api.images.save_avatar") as mock_save,
+        ):
             api._images.get_avatar("NetUser")
 
         capture_eval_js.assert_any("onAvatar")
@@ -102,9 +103,10 @@ class TestGetAvatar:
         api._http = MagicMock()
         api._http.get.return_value = mock_resp
 
-        with patch("ui.api.images.get_cached_avatar", return_value=None), patch(
-            "ui.api.images.save_avatar"
-        ) as mock_save:
+        with (
+            patch("ui.api.images.get_cached_avatar", return_value=None),
+            patch("ui.api.images.save_avatar") as mock_save,
+        ):
             api._images.get_avatar("SaveUser", platform="kick")
 
         mock_save.assert_called_once()
@@ -149,9 +151,10 @@ class TestGetAvatar:
 
         api._eval_js = eval_js_fail_first
 
-        with patch(
-            "ui.api.images.get_cached_avatar", return_value=_make_png()
-        ), patch("ui.api.images.save_avatar"):
+        with (
+            patch("ui.api.images.get_cached_avatar", return_value=_make_png()),
+            patch("ui.api.images.save_avatar"),
+        ):
             api._images.get_avatar("CorruptUser")
 
         # The cache path raised on _eval_js, so it fell through to network fetch
@@ -269,9 +272,7 @@ class TestGetThumbnail:
         assert "thumbuser" in capture_eval_js.calls[0]
         assert "data:image/jpeg;base64," in capture_eval_js.calls[0]
 
-    def test_resizes_to_jpeg(
-        self, temp_config_dir: Path, capture_eval_js: Any
-    ) -> None:
+    def test_resizes_to_jpeg(self, temp_config_dir: Path, capture_eval_js: Any) -> None:
         api = _create_api()
         api._eval_js = capture_eval_js
         api._image_pool.submit = lambda fn: fn()

@@ -50,6 +50,11 @@
         <button class="platform-tab" data-platform="youtube">YouTube</button>
       </div>
 
+      <div id="sidebar-stale-banner" class="sidebar-stale-banner hidden">
+        <span class="sidebar-stale-icon">&#x26A0;</span>
+        <span class="sidebar-stale-text">Data may be stale</span>
+      </div>
+
       <div id="favorites-header">
         <span class="favorites-label">Favorites</span>
         <span id="favorites-count-badge">0</span>
@@ -193,6 +198,7 @@
         <div id="player-content">
           <video id="stream-video" autoplay controls playsinline></video>
           <div id="player-loader" class="hidden"><div class="player-spinner"></div></div>
+          <div id="player-buffering" class="player-buffering buffering-hide"><div class="player-spinner"></div></div>
           <div id="buffer-bar"><div id="buffer-loaded"></div><div id="buffer-position"></div></div>
           <div id="stats-overlay" class="hidden">
             <div class="stats-row"><span class="stats-key">Latency</span><span class="stats-val" id="so-latency">--</span></div>

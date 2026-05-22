@@ -50,9 +50,12 @@ function showToast(message, type) {
   el._toastTimer = setTimeout(function() {
     dismissToast(el);
   }, TOAST_DURATION);
+
+  return el;
 }
 
 function dismissToast(el) {
+  if (!el) return;
   if (el._dismissing) return;
   el._dismissing = true;
   if (el._toastTimer) {

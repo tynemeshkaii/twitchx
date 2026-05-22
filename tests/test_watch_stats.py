@@ -21,7 +21,11 @@ class TestWatchStatsDB:
         return sid
 
     def test_start_session_returns_id(self, stats_db: WatchStatsDB) -> None:
-        sid = self._sid(stats_db.start_session("xqc", "twitch", display_name="xQc", title="Stream Title"))
+        sid = self._sid(
+            stats_db.start_session(
+                "xqc", "twitch", display_name="xQc", title="Stream Title"
+            )
+        )
         assert isinstance(sid, int)
         assert sid > 0
 
@@ -56,8 +60,12 @@ class TestWatchStatsDB:
 
     def test_get_today_stats_multi_channel(self, stats_db: WatchStatsDB) -> None:
         s1 = self._sid(stats_db.start_session("xqc", "twitch", display_name="xQc"))
-        s2 = self._sid(stats_db.start_session("forsen", "twitch", display_name="Forsen"))
-        s3 = self._sid(stats_db.start_session("summit1g", "twitch", display_name="Summit"))
+        s2 = self._sid(
+            stats_db.start_session("forsen", "twitch", display_name="Forsen")
+        )
+        s3 = self._sid(
+            stats_db.start_session("summit1g", "twitch", display_name="Summit")
+        )
         stats_db.end_session(s1)
         stats_db.end_session(s2)
         stats_db.end_session(s3)
@@ -90,7 +98,9 @@ class TestWatchStatsDB:
 
     def test_total_stats(self, stats_db: WatchStatsDB) -> None:
         s1 = self._sid(stats_db.start_session("xqc", "twitch", display_name="xQc"))
-        s2 = self._sid(stats_db.start_session("forsen", "twitch", display_name="Forsen"))
+        s2 = self._sid(
+            stats_db.start_session("forsen", "twitch", display_name="Forsen")
+        )
         stats_db.end_session(s1)
         stats_db.end_session(s2)
         total = stats_db.get_total_stats()
@@ -101,7 +111,9 @@ class TestWatchStatsDB:
     def test_top_channels(self, stats_db: WatchStatsDB) -> None:
         s1 = self._sid(stats_db.start_session("xqc", "twitch", display_name="xQc"))
         s2 = self._sid(stats_db.start_session("xqc", "twitch", display_name="xQc"))
-        s3 = self._sid(stats_db.start_session("forsen", "twitch", display_name="Forsen"))
+        s3 = self._sid(
+            stats_db.start_session("forsen", "twitch", display_name="Forsen")
+        )
         stats_db.end_session(s1)
         stats_db.end_session(s2)
         stats_db.end_session(s3)
@@ -176,7 +188,9 @@ class TestWatchStatsDB:
         recent = stats_db.get_recent_sessions(10)
         assert len(recent) == 1
 
-    def test_cleanup_preserves_recent_daily_summary(self, stats_db: WatchStatsDB) -> None:
+    def test_cleanup_preserves_recent_daily_summary(
+        self, stats_db: WatchStatsDB
+    ) -> None:
         with sqlite3.connect(stats_db._db_path) as conn:
             conn.execute(
                 """INSERT INTO daily_summary

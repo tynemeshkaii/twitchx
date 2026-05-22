@@ -45,9 +45,11 @@ def test_effective_creds_returns_bundled_when_config_empty(temp_config_dir: Path
 def test_effective_creds_returns_config_when_set(temp_config_dir: Path):
     """Non-empty config credentials take priority over bundled."""
     from core.storage import update_config
+
     def _set(cfg):
         cfg["platforms"]["twitch"]["client_id"] = "custom_id"
         cfg["platforms"]["twitch"]["client_secret"] = "custom_secret"
+
     update_config(_set)
     client = TwitchClient()
     cid, csec = client._effective_creds()

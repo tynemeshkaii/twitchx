@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import threading
 from typing import Any
 
@@ -10,6 +11,8 @@ from core.storage import get_settings, load_config, update_config
 from core.stream_resolver import resolve_hls_url
 
 from ._base import BaseApiComponent
+
+logger = logging.getLogger(__name__)
 
 _MAX_LAUNCH_SECONDS = 35
 
@@ -87,12 +90,10 @@ class StreamsComponent(BaseApiComponent):
 
         safe_ch = json.dumps(channel)
         _watching = self._api._watching_channel
-        _already = (
-            _watching is not None and (
-                _watching == channel  # exact-case for YouTube UC IDs
-                if platform == "youtube"
-                else _watching.lower() == channel.lower()
-            )
+        _already = _watching is not None and (
+            _watching == channel  # exact-case for YouTube UC IDs
+            if platform == "youtube"
+            else _watching.lower() == channel.lower()
         )
         if _already:
             self._eval_js(
@@ -135,6 +136,9 @@ class StreamsComponent(BaseApiComponent):
             launch_id = self._begin_launch(channel)
 
             def do_resolve_yt() -> None:
+                logger.info(
+                    "Resolving YouTube stream for %s (quality=%s)", channel, quality
+                )
                 settings = get_settings(self._config)
                 hls_url, err = resolve_hls_url(
                     video_id,
@@ -144,9 +148,14 @@ class StreamsComponent(BaseApiComponent):
                     extra_args=self._low_latency_args(platform, settings),
                 )
                 if not self._finish_launch(launch_id):
+                    logger.debug("Launch aborted for %s (launch_id mismatch)", channel)
                     return
 
                 if not hls_url:
+                    msg = err or "Could not resolve YouTube stream URL"
+                    logger.warning(
+                        "Failed to resolve YouTube stream for %s: %s", channel, msg
+                    )
                     r = json.dumps(
                         {
                             "success": False,
@@ -159,6 +168,7 @@ class StreamsComponent(BaseApiComponent):
                     self._eval_js(f"window.onLaunchResult({r})")
                     return
 
+                logger.info("YouTube stream resolved for %s", channel)
                 self._api._chat.stop_chat()
                 self._api._watching_channel = channel
                 self._start_watch_session(
@@ -175,7 +185,9 @@ class StreamsComponent(BaseApiComponent):
                     }
                 )
                 self._eval_js(f"window.onStreamReady({stream_data})")
-                self._api._chat.start_chat(channel, "youtube", live_chat_id=live_chat_id)
+                self._api._chat.start_chat(
+                    channel, "youtube", live_chat_id=live_chat_id
+                )
                 r = json.dumps(
                     {
                         "success": True,
@@ -191,6 +203,9 @@ class StreamsComponent(BaseApiComponent):
         launch_id = self._begin_launch(channel)
 
         def do_resolve() -> None:
+            logger.info(
+                "Resolving stream for %s on %s (quality=%s)", channel, platform, quality
+            )
             settings = get_settings(self._config)
             platform_client = self._get_platform(platform)
             hls_url, err = resolve_hls_url(
@@ -201,9 +216,12 @@ class StreamsComponent(BaseApiComponent):
                 extra_args=self._low_latency_args(platform, settings),
             )
             if not self._finish_launch(launch_id):
+                logger.debug("Launch aborted for %s (launch_id mismatch)", channel)
                 return
 
             if not hls_url:
+                msg = err or "Could not resolve stream URL"
+                logger.warning("Failed to resolve stream for %s: %s", channel, msg)
                 r = json.dumps(
                     {
                         "success": False,
@@ -216,6 +234,7 @@ class StreamsComponent(BaseApiComponent):
                 self._eval_js(f"window.onLaunchResult({r})")
                 return
 
+            logger.info("Stream resolved for %s on %s", channel, platform)
             self._api._chat.stop_chat()
             self._api._watching_channel = channel
             self._start_watch_session(
@@ -280,12 +299,10 @@ class StreamsComponent(BaseApiComponent):
         self._config = update_config(_save_quality)
         safe_ch = json.dumps(channel)
         _watching = self._api._watching_channel
-        _already = (
-            _watching is not None and (
-                _watching == channel
-                if platform == "youtube"
-                else _watching.lower() == channel.lower()
-            )
+        _already = _watching is not None and (
+            _watching == channel
+            if platform == "youtube"
+            else _watching.lower() == channel.lower()
         )
         if _already:
             self._eval_js(
@@ -323,7 +340,13 @@ class StreamsComponent(BaseApiComponent):
             self._api._watching_channel = channel
             self._start_watch_session(channel, platform, display_name=channel)
             stream_data = json.dumps(
-                {"url": hls_url, "channel": channel, "title": "", "platform": platform, "stream_type": "live"}
+                {
+                    "url": hls_url,
+                    "channel": channel,
+                    "title": "",
+                    "platform": platform,
+                    "stream_type": "live",
+                }
             )
             self._eval_js(f"window.onStreamReady({stream_data})")
             self._api._chat.start_chat(channel, platform)
@@ -358,11 +381,13 @@ class StreamsComponent(BaseApiComponent):
             video_id = stream.get("video_id", "") if stream else ""
             if not video_id:
                 safe_ch = json.dumps(channel)
-                r = json.dumps({
-                    "success": False,
-                    "message": "No live video found for this YouTube channel",
-                    "channel": channel,
-                })
+                r = json.dumps(
+                    {
+                        "success": False,
+                        "message": "No live video found for this YouTube channel",
+                        "channel": channel,
+                    }
+                )
                 self._eval_js(f"window.onLaunchResult({r})")
                 return
 
@@ -497,10 +522,9 @@ class StreamsComponent(BaseApiComponent):
         title = ""
         youtube_video_id: str | None = None
         for s in self._live_streams:
-            if (
-                self._api._data._stream_platform(s) == platform
-                and self._api._data._stream_matches_channel(s, channel)
-            ):
+            if self._api._data._stream_platform(
+                s
+            ) == platform and self._api._data._stream_matches_channel(s, channel):
                 title = s.get("title", "")
                 if platform == "youtube":
                     youtube_video_id = s.get("video_id") or None
@@ -574,7 +598,9 @@ class StreamsComponent(BaseApiComponent):
         stream = self._api._data._find_live_stream(channel)
         platform = self._api._data._stream_platform(stream) if stream else "twitch"
         platform_client = self._get_platform(platform)
-        stream_url = platform_client.build_stream_url(channel) if platform_client else channel
+        stream_url = (
+            platform_client.build_stream_url(channel) if platform_client else channel
+        )
 
         err = self._api._recorder.start(
             stream_url, channel, output_dir, streamlink_path

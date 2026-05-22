@@ -15,6 +15,7 @@ from ui.api import TwitchXApi
 
 # ── Helpers ────────────────────────────────────────────────────────
 
+
 def _make_api(
     capture_eval_js: Any,
     mock_twitch: MagicMock | None = None,
@@ -49,6 +50,7 @@ def _make_api(
 
     # Re-create auth component so it picks up the new platform clients
     from ui.api.auth import AuthComponent
+
     api._auth = AuthComponent(api)
 
     return api
@@ -87,8 +89,10 @@ class TestTwitchLogin:
 
         api = _make_api(capture_eval_js, mock_twitch=mock_twitch_client)
 
-        with patch("ui.api.auth.webbrowser.open"), \
-             patch("ui.api.auth.wait_for_oauth_code", return_value="auth-code-123"):
+        with (
+            patch("ui.api.auth.webbrowser.open"),
+            patch("ui.api.auth.wait_for_oauth_code", return_value="auth-code-123"),
+        ):
             api.login()
 
         capture_eval_js.assert_any("onLoginComplete")
@@ -115,8 +119,10 @@ class TestTwitchLogin:
     ) -> None:
         api = _make_api(capture_eval_js, mock_twitch=mock_twitch_client)
 
-        with patch("ui.api.auth.webbrowser.open"), \
-             patch("ui.api.auth.wait_for_oauth_code", return_value=None):
+        with (
+            patch("ui.api.auth.webbrowser.open"),
+            patch("ui.api.auth.wait_for_oauth_code", return_value=None),
+        ):
             api.login()
 
         capture_eval_js.assert_any("onLoginError")
@@ -133,13 +139,18 @@ class TestTwitchLogin:
         api = _make_api(capture_eval_js, mock_twitch=mock_twitch_client)
         api._shutdown.set()
 
-        with patch("ui.api.auth.webbrowser.open"), \
-             patch("ui.api.auth.wait_for_oauth_code", return_value=None):
+        with (
+            patch("ui.api.auth.webbrowser.open"),
+            patch("ui.api.auth.wait_for_oauth_code", return_value=None),
+        ):
             api.login()
 
         # No callbacks should fire after shutdown
-        assert not any("onLoginError" in c for c in capture_eval_js.calls
-                       if "onStatusUpdate" not in c)
+        assert not any(
+            "onLoginError" in c
+            for c in capture_eval_js.calls
+            if "onStatusUpdate" not in c
+        )
 
     def test_login_exchange_exception(
         self,
@@ -155,8 +166,10 @@ class TestTwitchLogin:
 
         api = _make_api(capture_eval_js, mock_twitch=mock_twitch_client)
 
-        with patch("ui.api.auth.webbrowser.open"), \
-             patch("ui.api.auth.wait_for_oauth_code", return_value="code"):
+        with (
+            patch("ui.api.auth.webbrowser.open"),
+            patch("ui.api.auth.wait_for_oauth_code", return_value="code"),
+        ):
             api.login()
 
         capture_eval_js.assert_any("onLoginError")
@@ -219,8 +232,10 @@ class TestKickLogin:
 
         api = _make_api(capture_eval_js, mock_kick=mock_kick_client)
 
-        with patch("ui.api.auth.webbrowser.open"), \
-             patch("ui.api.auth.wait_for_oauth_code", return_value="kick-code"):
+        with (
+            patch("ui.api.auth.webbrowser.open"),
+            patch("ui.api.auth.wait_for_oauth_code", return_value="kick-code"),
+        ):
             api.kick_login(client_id="  my-cid  ", client_secret="  my-csec  ")
 
         capture_eval_js.assert_any("onKickLoginComplete")
@@ -242,8 +257,10 @@ class TestKickLogin:
     ) -> None:
         api = _make_api(capture_eval_js, mock_kick=mock_kick_client)
 
-        with patch("ui.api.auth.webbrowser.open"), \
-             patch("ui.api.auth.wait_for_oauth_code", return_value=None):
+        with (
+            patch("ui.api.auth.webbrowser.open"),
+            patch("ui.api.auth.wait_for_oauth_code", return_value=None),
+        ):
             api.kick_login()
 
         capture_eval_js.assert_any("onKickLoginError")
@@ -264,8 +281,10 @@ class TestKickLogin:
 
         api = _make_api(capture_eval_js, mock_kick=mock_kick_client)
 
-        with patch("ui.api.auth.webbrowser.open"), \
-             patch("ui.api.auth.wait_for_oauth_code", return_value="code"):
+        with (
+            patch("ui.api.auth.webbrowser.open"),
+            patch("ui.api.auth.wait_for_oauth_code", return_value="code"),
+        ):
             api.kick_login()
 
         capture_eval_js.assert_any("onKickLoginError")
@@ -282,8 +301,10 @@ class TestKickLogin:
         api = _make_api(capture_eval_js, mock_kick=mock_kick_client)
         api._shutdown.set()
 
-        with patch("ui.api.auth.webbrowser.open"), \
-             patch("ui.api.auth.wait_for_oauth_code", return_value=None):
+        with (
+            patch("ui.api.auth.webbrowser.open"),
+            patch("ui.api.auth.wait_for_oauth_code", return_value=None),
+        ):
             api.kick_login()
 
         assert not any("onKickLoginError" in c for c in capture_eval_js.calls)
@@ -345,8 +366,10 @@ class TestYouTubeLogin:
 
         api = _make_api(capture_eval_js, mock_youtube=mock_youtube_client)
 
-        with patch("ui.api.auth.webbrowser.open"), \
-             patch("ui.api.auth.wait_for_oauth_code", return_value="yt-code"):
+        with (
+            patch("ui.api.auth.webbrowser.open"),
+            patch("ui.api.auth.wait_for_oauth_code", return_value="yt-code"),
+        ):
             api.youtube_login(client_id="yt-cid", client_secret="yt-csec")
 
         capture_eval_js.assert_any("onYouTubeLoginComplete")
@@ -373,8 +396,10 @@ class TestYouTubeLogin:
         )
         api = _make_api(capture_eval_js, mock_youtube=mock_youtube_client)
 
-        with patch("ui.api.auth.webbrowser.open"), \
-             patch("ui.api.auth.wait_for_oauth_code", return_value=None):
+        with (
+            patch("ui.api.auth.webbrowser.open"),
+            patch("ui.api.auth.wait_for_oauth_code", return_value=None),
+        ):
             api.youtube_login()
 
         capture_eval_js.assert_any("onYouTubeLoginError")
@@ -398,8 +423,10 @@ class TestYouTubeLogin:
 
         api = _make_api(capture_eval_js, mock_youtube=mock_youtube_client)
 
-        with patch("ui.api.auth.webbrowser.open"), \
-             patch("ui.api.auth.wait_for_oauth_code", return_value="code"):
+        with (
+            patch("ui.api.auth.webbrowser.open"),
+            patch("ui.api.auth.wait_for_oauth_code", return_value="code"),
+        ):
             api.youtube_login()
 
         capture_eval_js.assert_any("onYouTubeLoginError")
@@ -658,7 +685,9 @@ class TestYouTubeTestConnection:
         call = [c for c in capture_eval_js.calls if "onYouTubeTestResult" in c][0]
         data = json.loads(call.split("onYouTubeTestResult(")[1].rstrip(")"))
         assert data["success"] is False
-        assert "quota" in data["message"].lower() or "invalid" in data["message"].lower()
+        assert (
+            "quota" in data["message"].lower() or "invalid" in data["message"].lower()
+        )
 
     def test_other_http_error(
         self,

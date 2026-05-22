@@ -59,7 +59,9 @@ def launch_stream(
         return LaunchResult(success=False, message=iina_err)
 
     # Resolve the direct HLS URL via stream_resolver (shared with native player)
-    hls_url, err = resolve_hls_url(channel, quality, streamlink_path, platform_client, extra_args)
+    hls_url, err = resolve_hls_url(
+        channel, quality, streamlink_path, platform_client, extra_args
+    )
 
     if not hls_url:
         return LaunchResult(
@@ -97,11 +99,15 @@ def launch_stream_mpv(
     if mpv_err:
         return LaunchResult(success=False, message=mpv_err)
 
-    hls_url, err = resolve_hls_url(channel, quality, streamlink_path, platform_client, extra_args)
+    hls_url, err = resolve_hls_url(
+        channel, quality, streamlink_path, platform_client, extra_args
+    )
     if not hls_url:
         return LaunchResult(
             success=False,
-            message=f"streamlink error: {err}" if err else "Could not resolve stream URL",
+            message=f"streamlink error: {err}"
+            if err
+            else "Could not resolve stream URL",
         )
 
     try:
@@ -110,6 +116,8 @@ def launch_stream_mpv(
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        return LaunchResult(success=True, message=f"Launched {channel} in mpv ({quality})")
+        return LaunchResult(
+            success=True, message=f"Launched {channel} in mpv ({quality})"
+        )
     except OSError as e:
         return LaunchResult(success=False, message=f"Failed to launch mpv: {e}")

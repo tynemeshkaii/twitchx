@@ -26,7 +26,9 @@ class ChatComponent(BaseApiComponent):
 
     # ── Start / Stop ────────────────────────────────────────────
 
-    def start_chat(self, channel: str, platform: str = "twitch", live_chat_id: str | None = None) -> None:
+    def start_chat(
+        self, channel: str, platform: str = "twitch", live_chat_id: str | None = None
+    ) -> None:
         self.stop_chat()
 
         if platform == "twitch":
@@ -82,11 +84,15 @@ class ChatComponent(BaseApiComponent):
                         emote_loop = asyncio.new_event_loop()
                         try:
                             asyncio.set_event_loop(emote_loop)
-                            users = emote_loop.run_until_complete(twitch_client_ref.get_users([channel]))
+                            users = emote_loop.run_until_complete(
+                                twitch_client_ref.get_users([channel])
+                            )
                             if users:
                                 twitch_user_id = str(users[0].get("id", ""))
                         except (httpx.HTTPError, OSError, ValueError) as exc:
-                            logger.debug("Failed to resolve Twitch user ID for emotes: %s", exc)
+                            logger.debug(
+                                "Failed to resolve Twitch user ID for emotes: %s", exc
+                            )
                         finally:
                             emote_loop.close()
                     cache_dir = str(CONFIG_DIR / "emotes")
@@ -95,7 +101,9 @@ class ChatComponent(BaseApiComponent):
                         payload = json.dumps({"channel": channel, "emotes": emote_map})
                         self._eval_js(f"window.onThirdPartyEmotes({payload})")
                 except Exception as exc:
-                    logger.debug("Third-party emote fetch failed for %s: %s", channel, exc)
+                    logger.debug(
+                        "Third-party emote fetch failed for %s: %s", channel, exc
+                    )
 
             threading.Thread(target=_fetch_emotes, daemon=True).start()
 
@@ -225,7 +233,9 @@ class ChatComponent(BaseApiComponent):
                     yt_chat_client._loop = None
                     loop.close()
 
-            self._api._chat_thread = threading.Thread(target=run_youtube_chat, daemon=True)
+            self._api._chat_thread = threading.Thread(
+                target=run_youtube_chat, daemon=True
+            )
             self._api._chat_thread.start()
 
         else:
@@ -339,12 +349,16 @@ class ChatComponent(BaseApiComponent):
         twitch_conf = get_platform_config(self._config, "twitch")
         user_id = twitch_conf.get("user_id", "")
         if not user_id:
-            self._eval_js("window.onChatModeChanged({ok: false, error: 'Not logged in to Twitch'})")
+            self._eval_js(
+                "window.onChatModeChanged({ok: false, error: 'Not logged in to Twitch'})"
+            )
             return
 
         channel = self._api._watching_channel
         if not channel:
-            self._eval_js("window.onChatModeChanged({ok: false, error: 'Not watching any channel'})")
+            self._eval_js(
+                "window.onChatModeChanged({ok: false, error: 'Not watching any channel'})"
+            )
             return
 
         def _do() -> None:

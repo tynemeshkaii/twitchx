@@ -35,7 +35,9 @@ class ImagesComponent(BaseApiComponent):
                         self._eval_js(f"window.onAvatar({result})")
                         return
                     except Exception as exc:
-                        logger.debug("Cached avatar decode failed for %s: %s", login_lower, exc)
+                        logger.debug(
+                            "Cached avatar decode failed for %s: %s", login_lower, exc
+                        )
 
                 url = self._api._user_avatars.get(login_lower, "")
                 if not url:

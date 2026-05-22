@@ -158,7 +158,12 @@ class WatchStatsDB:
                 return result
         except sqlite3.Error as e:
             logger.error("get_today_stats failed: %s", e)
-            return {"total_sec": 0, "streams_count": 0, "unique_channels": 0, "per_platform": []}
+            return {
+                "total_sec": 0,
+                "streams_count": 0,
+                "unique_channels": 0,
+                "per_platform": [],
+            }
 
     def get_weekly_stats(self) -> list[dict[str, Any]]:
         today = datetime.now(UTC).strftime("%Y-%m-%d")
@@ -207,8 +212,12 @@ class WatchStatsDB:
         except sqlite3.Error as e:
             logger.error("get_total_stats failed: %s", e)
             return {
-                "total_sec": 0, "total_sessions": 0, "unique_channels": 0,
-                "total_hours": 0, "total_minutes": 0, "per_platform": [],
+                "total_sec": 0,
+                "total_sessions": 0,
+                "unique_channels": 0,
+                "total_hours": 0,
+                "total_minutes": 0,
+                "per_platform": [],
             }
 
     def get_top_channels(self, limit: int = 10) -> list[dict[str, Any]]:

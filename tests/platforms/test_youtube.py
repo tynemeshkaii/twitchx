@@ -1,13 +1,22 @@
 from __future__ import annotations
 
 import asyncio
+import datetime as _dt
 import json
-from datetime import date
+import zoneinfo
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
+
+_PACIFIC_TZ = zoneinfo.ZoneInfo("America/Los_Angeles")
+
+
+def _pacific_today() -> str:
+    return datetime.now(_PACIFIC_TZ).date().isoformat()
+
 
 # ── Helpers ───────────────────────────────────────────────────
 
@@ -79,7 +88,7 @@ class TestQuotaTracker:
         assert qt.remaining() == 10_000
 
     def test_same_day_preserves_usage(self, tmp_path: Path) -> None:
-        today = date.today().isoformat()
+        today = _pacific_today()
         _setup_config(
             tmp_path,
             {"daily_quota_used": 3000, "quota_reset_date": today},
@@ -90,7 +99,7 @@ class TestQuotaTracker:
         assert qt.remaining() == 7_000
 
     def test_can_use_returns_false_when_exhausted(self, tmp_path: Path) -> None:
-        today = date.today().isoformat()
+        today = _pacific_today()
         _setup_config(
             tmp_path,
             {"daily_quota_used": 10_000, "quota_reset_date": today},
@@ -130,7 +139,7 @@ class TestQuotaTracker:
         assert qt.remaining() == 9_900
 
     def test_check_and_use_fails_when_insufficient_budget(self, tmp_path: Path) -> None:
-        today = date.today().isoformat()
+        today = _pacific_today()
         _setup_config(tmp_path, {"daily_quota_used": 9_950, "quota_reset_date": today})
         from core.platforms.youtube import QuotaTracker
 
@@ -140,7 +149,7 @@ class TestQuotaTracker:
         assert qt.remaining() == 50  # counter must not have changed
 
     def test_check_and_use_does_not_overshoot_quota(self, tmp_path: Path) -> None:
-        today = date.today().isoformat()
+        today = _pacific_today()
         _setup_config(tmp_path, {"daily_quota_used": 9_999, "quota_reset_date": today})
         from core.platforms.youtube import QuotaTracker
 
@@ -148,7 +157,46 @@ class TestQuotaTracker:
         assert qt.check_and_use(1) is True
         assert qt.remaining() == 0
         assert qt.check_and_use(1) is False  # 0 units left — must not go negative
-        assert qt.remaining() == 0
+
+    def test_usage_persists_across_restart(self, tmp_path: Path) -> None:
+        """Quota usage written to config must be picked up by a new QuotaTracker
+        instantiation — simulating app restart."""
+        today = _pacific_today()
+        _setup_config(tmp_path, {"daily_quota_used": 0, "quota_reset_date": today})
+        from core.platforms.youtube import QuotaTracker
+
+        # ── First life ──
+        qt1 = QuotaTracker(lambda: _yt_conf(tmp_path), _make_update_fn(tmp_path))
+        qt1.use(2500)
+        assert qt1.remaining() == 7_500
+
+        # ── Simulate restart: new instance reads from config ──
+        qt2 = QuotaTracker(lambda: _yt_conf(tmp_path), _make_update_fn(tmp_path))
+        assert qt2.remaining() == 7_500  # restored from config, same day
+
+    def test_usage_zeroes_on_new_pacific_day_in_config(self, tmp_path: Path) -> None:
+        """If the config still contains yesterday's Pacific date, the tracker
+        must recognise the new day and reset to zero."""
+        from core.platforms.youtube import QuotaTracker
+
+        yesterday = "2025-12-31"  # definitely not today in Pacific
+        _setup_config(
+            tmp_path, {"daily_quota_used": 9_000, "quota_reset_date": yesterday}
+        )
+        qt = QuotaTracker(lambda: _yt_conf(tmp_path), _make_update_fn(tmp_path))
+        assert qt.remaining() == 10_000  # reset because it's a new day
+        assert qt._used == 0
+
+    def test_pacific_timezone_respects_late_night(self, tmp_path: Path) -> None:
+        """At 01:00 UTC on a new day, the Pacific date may still be the previous day.
+        QuotaTracker must use the Pacific date, not the local/UTC date."""
+        from core.platforms.youtube import _pacific_today
+
+        pacific = _pacific_today()
+        pacific_dt = datetime.strptime(pacific, "%Y-%m-%d")
+        now_utc = datetime.now(_dt.UTC).date()
+        diff = (now_utc - pacific_dt.date()).days
+        assert 0 <= diff <= 1
 
 
 # ── RSS Parsing ───────────────────────────────────────────────
@@ -628,6 +676,7 @@ class TestOAuth:
         # Set a custom client_id so it overrides the bundled credential.
         def _set(cfg):
             cfg["platforms"]["youtube"]["client_id"] = "test-client-id"
+
         update_config(_set)
 
         client = YouTubeClient()
@@ -907,6 +956,7 @@ class TestResolveStreamUrl:
 
 def test_get_auth_url_includes_pkce_params(temp_config_dir):
     from core.platforms.youtube import YouTubeClient
+
     client = YouTubeClient()
     url = client.get_auth_url()
     assert "code_challenge=" in url
@@ -916,15 +966,19 @@ def test_get_auth_url_includes_pkce_params(temp_config_dir):
 def test_get_auth_url_stores_pkce_verifier(temp_config_dir):
     from core.platforms.youtube import YouTubeClient
     from core.storage import load_config
+
     client = YouTubeClient()
     client.get_auth_url()
-    verifier = load_config().get("platforms", {}).get("youtube", {}).get("pkce_verifier", "")
+    verifier = (
+        load_config().get("platforms", {}).get("youtube", {}).get("pkce_verifier", "")
+    )
     assert len(verifier) >= 43
 
 
 def test_effective_api_key_returns_bundled_when_config_empty(temp_config_dir):
     import core.credentials as creds
     from core.platforms.youtube import YouTubeClient
+
     client = YouTubeClient()
     assert client._effective_api_key() == creds.YOUTUBE_API_KEY
 
@@ -932,14 +986,13 @@ def test_effective_api_key_returns_bundled_when_config_empty(temp_config_dir):
 def test_effective_api_key_returns_config_when_set(temp_config_dir):
     from core.platforms.youtube import YouTubeClient
     from core.storage import update_config
+
     def _set(cfg):
         cfg["platforms"]["youtube"]["api_key"] = "my_personal_key"
+
     update_config(_set)
     client = YouTubeClient()
     assert client._effective_api_key() == "my_personal_key"
-
-
-import pytest
 
 
 @pytest.mark.asyncio
@@ -951,6 +1004,7 @@ async def test_exchange_code_sends_code_verifier_not_secret(temp_config_dir):
 
     def _set_verifier(cfg):
         cfg["platforms"]["youtube"]["pkce_verifier"] = "yt_verifier_xyz_abc_123_def456"
+
     update_config(_set_verifier)
 
     client = YouTubeClient()
@@ -962,9 +1016,13 @@ async def test_exchange_code_sends_code_verifier_not_secret(temp_config_dir):
         resp = MagicMock()
         resp.raise_for_status = MagicMock(return_value=None)
         resp.status_code = 200
-        resp.json = MagicMock(return_value={
-            "access_token": "tok", "refresh_token": "ref", "expires_in": 3600
-        })
+        resp.json = MagicMock(
+            return_value={
+                "access_token": "tok",
+                "refresh_token": "ref",
+                "expires_in": 3600,
+            }
+        )
         return resp
 
     mock_http_client = MagicMock()

@@ -207,6 +207,7 @@ class TestGetChannelInfo:
 def test_get_auth_url_includes_pkce_params(temp_config_dir):
     """get_auth_url() must include code_challenge and code_challenge_method."""
     from core.platforms.twitch import TwitchClient
+
     client = TwitchClient()
     url = client.get_auth_url()
     assert "code_challenge=" in url
@@ -218,6 +219,7 @@ def test_get_auth_url_stores_pkce_verifier(temp_config_dir):
     """get_auth_url() must persist pkce_verifier to config."""
     from core.platforms.twitch import TwitchClient
     from core.storage import load_config
+
     client = TwitchClient()
     client.get_auth_url()
     cfg = load_config()
@@ -229,12 +231,10 @@ def test_get_auth_url_uses_effective_client_id(temp_config_dir):
     """get_auth_url() uses bundled client_id when config is empty."""
     import core.credentials as creds
     from core.platforms.twitch import TwitchClient
+
     client = TwitchClient()
     url = client.get_auth_url()
     assert creds.TWITCH_CLIENT_ID in url
-
-
-import pytest
 
 
 @pytest.mark.asyncio
@@ -247,6 +247,7 @@ async def test_exchange_code_sends_code_verifier_not_secret(temp_config_dir):
 
     def _set_verifier(cfg):
         cfg["platforms"]["twitch"]["pkce_verifier"] = "test_verifier_abc123xyz456def789"
+
     update_config(_set_verifier)
 
     client = TwitchClient()
@@ -258,9 +259,13 @@ async def test_exchange_code_sends_code_verifier_not_secret(temp_config_dir):
         resp = MagicMock()
         resp.raise_for_status = MagicMock(return_value=None)
         resp.status_code = 200
-        resp.json = MagicMock(return_value={
-            "access_token": "tok", "refresh_token": "ref", "expires_in": 3600
-        })
+        resp.json = MagicMock(
+            return_value={
+                "access_token": "tok",
+                "refresh_token": "ref",
+                "expires_in": 3600,
+            }
+        )
         return resp
 
     mock_http_client = MagicMock()
@@ -371,3 +376,253 @@ class TestChannelMedia:
                 "views": 9876,
             }
         ]
+
+
+# ── Coverage: OAuth, HTTP layer, utility methods ──────────────
+
+
+class TestSanitizeIdentifier:
+    @pytest.mark.parametrize(
+        "raw,expected",
+        [
+            ("xqc", "xqc"),
+            ("https://twitch.tv/xqc", "xqc"),
+            ("twitch.tv/foo_bar", "foo_bar"),
+            ("@xqc", "xqc"),
+            ("XQC", "xqc"),
+            ("", ""),
+        ],
+    )
+    def test_sanitize_identifier(self, raw: str, expected: str) -> None:
+        assert TwitchClient.sanitize_identifier(raw) == expected
+
+
+class TestBuildStreamUrl:
+    def test_build_stream_url(self) -> None:
+        url = TwitchClient.build_stream_url("xqc")
+        assert url == "https://twitch.tv/xqc"
+
+
+class TestSearchChannels:
+    @pytest.mark.asyncio
+    async def test_empty_query_returns_empty(self, temp_config_dir) -> None:
+        client = TwitchClient()
+        result = await client.search_channels("")
+        await client.close()
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_non_empty_query_calls_search(self, temp_config_dir) -> None:
+        client = TwitchClient()
+
+        async def fake_get(endpoint: str, params: object = None) -> Any:
+            assert endpoint == "/search/channels"
+            assert isinstance(params, list)
+            assert ("query", "xqc") in params
+            return {
+                "data": [{"id": "1", "display_name": "xQc", "broadcaster_login": "xqc"}]
+            }
+
+        client._get = fake_get  # type: ignore[method-assign]
+        result = await client.search_channels("xqc")
+        await client.close()
+        assert len(result) == 1
+        assert result[0]["broadcaster_login"] == "xqc"
+
+
+class TestGetGames:
+    @pytest.mark.asyncio
+    async def test_empty_returns_empty_dict(self, temp_config_dir) -> None:
+        client = TwitchClient()
+        result = await client.get_games([])
+        await client.close()
+        assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_deduplicates_and_returns_name_map(self, temp_config_dir) -> None:
+        client = TwitchClient()
+
+        async def fake_get(endpoint: str, params: object = None) -> Any:
+            assert endpoint == "/games"
+            assert isinstance(params, list)
+            param_ids = [p[1] for p in params if isinstance(p, tuple) and p[0] == "id"]
+            return {
+                "data": [
+                    {"id": gid, "name": f"Game{gid}"}
+                    for gid in param_ids
+                    if gid in ("123", "456", "789")
+                ]
+            }
+
+        client._get = fake_get  # type: ignore[method-assign]
+        result = await client.get_games(["123", "456", "123", "789", "456"])
+        await client.close()
+        assert result == {"123": "Game123", "456": "Game456", "789": "Game789"}
+
+
+class TestGetCurrentUser:
+    @pytest.mark.asyncio
+    async def test_returns_current_user(self, temp_config_dir) -> None:
+        client = TwitchClient()
+
+        async def fake_get(endpoint: str, params: Any = None) -> Any:
+            return {
+                "data": [{"id": "123", "login": "testuser", "display_name": "TestUser"}]
+            }
+
+        client._get = fake_get  # type: ignore[method-assign]
+        result = await client.get_current_user()
+        await client.close()
+        assert result == {"id": "123", "login": "testuser", "display_name": "TestUser"}
+
+    @pytest.mark.asyncio
+    async def test_empty_data_raises_value_error(self, temp_config_dir) -> None:
+        client = TwitchClient()
+
+        async def fake_get(endpoint: str, params: Any = None) -> Any:
+            return {"data": []}
+
+        client._get = fake_get  # type: ignore[method-assign]
+        with pytest.raises(ValueError, match="Could not fetch"):
+            await client.get_current_user()
+        await client.close()
+
+
+class TestRefreshUserToken:
+    @pytest.mark.asyncio
+    async def test_success_refreshes_token(self, temp_config_dir) -> None:
+        from unittest.mock import MagicMock
+
+        from core.storage import load_config, update_config
+
+        def _set_refresh(cfg):
+            cfg["platforms"]["twitch"]["refresh_token"] = "old_refresh"
+
+        update_config(_set_refresh)
+
+        client = TwitchClient()
+
+        async def mock_post(url, data=None, **kwargs):
+            resp = MagicMock()
+            resp.raise_for_status = MagicMock(return_value=None)
+            resp.status_code = 200
+            resp.json = MagicMock(
+                return_value={
+                    "access_token": "new_token",
+                    "refresh_token": "new_refresh",
+                    "expires_in": 3600,
+                }
+            )
+            return resp
+
+        mock_http_client = MagicMock()
+        mock_http_client.post = mock_post
+        client._get_client = lambda: mock_http_client
+
+        result = await client.refresh_user_token()
+        await client.close()
+
+        assert result == "new_token"
+        cfg = load_config()
+        yt = cfg["platforms"]["twitch"]
+        assert yt["access_token"] == "new_token"
+        assert yt["refresh_token"] == "new_refresh"
+
+    @pytest.mark.asyncio
+    async def test_400_clears_auth_and_raises_value_error(
+        self, temp_config_dir
+    ) -> None:
+        from unittest.mock import MagicMock
+
+        from core.storage import load_config, update_config
+
+        def _set_refresh(cfg):
+            cfg["platforms"]["twitch"]["refresh_token"] = "bad_refresh"
+
+        update_config(_set_refresh)
+
+        client = TwitchClient()
+
+        async def mock_post(url, data=None, **kwargs):
+            resp = MagicMock()
+            resp.status_code = 400
+            return resp
+
+        mock_http_client = MagicMock()
+        mock_http_client.post = mock_post
+        client._get_client = lambda: mock_http_client
+
+        with pytest.raises(ValueError, match="User token expired"):
+            await client.refresh_user_token()
+        await client.close()
+
+        cfg = load_config()
+        tw = cfg["platforms"]["twitch"]
+        assert tw.get("access_token") is None or tw.get("access_token") == ""
+        assert tw.get("refresh_token") is None or tw.get("refresh_token") == ""
+
+
+class TestEnsureToken:
+    @pytest.mark.asyncio
+    async def test_returns_valid_token(self, temp_config_dir) -> None:
+        from core.storage import update_config
+
+        def _set_token(cfg):
+            cfg["platforms"]["twitch"]["access_token"] = "good_token"
+            cfg["platforms"]["twitch"]["refresh_token"] = "good_refresh"
+            cfg["platforms"]["twitch"]["token_expires_at"] = 9999999999  # far future
+
+        update_config(_set_token)
+
+        client = TwitchClient()
+        token = await client._ensure_token()
+        await client.close()
+        assert token == "good_token"
+
+    @pytest.mark.asyncio
+    async def test_expired_refreshes_token(self, temp_config_dir) -> None:
+        from unittest.mock import AsyncMock
+
+        from core.storage import update_config
+
+        def _set_token(cfg):
+            cfg["platforms"]["twitch"]["access_token"] = "expired_token"
+            cfg["platforms"]["twitch"]["refresh_token"] = "refresh_me"
+            cfg["platforms"]["twitch"]["token_type"] = "user"
+            cfg["platforms"]["twitch"]["token_expires_at"] = 1
+
+        update_config(_set_token)
+
+        client = TwitchClient()
+        client.refresh_user_token = AsyncMock(return_value="new_token")  # type: ignore[method-assign]
+        token = await client._ensure_token()
+        await client.close()
+        assert token == "new_token"
+
+
+class TestGetUsers:
+    @pytest.mark.asyncio
+    async def test_batch_loop_with_valid_logins(self, temp_config_dir) -> None:
+        client = TwitchClient()
+
+        async def fake_get(endpoint: str, params: Any = None) -> Any:
+            return {"data": [{"id": "1", "login": "user1"}]}
+
+        client._get = fake_get  # type: ignore[method-assign]
+        result = await client.get_users(["user1"])
+        await client.close()
+        assert result == [{"id": "1", "login": "user1"}]
+
+
+class TestGetLiveStreams:
+    @pytest.mark.asyncio
+    async def test_empty_filtered_list_returns_empty(self, temp_config_dir) -> None:
+        client = TwitchClient()
+
+        async def fake_get(endpoint: str, params: Any = None) -> Any:
+            return {"data": []}
+
+        client._get = fake_get  # type: ignore[method-assign]
+        result = await client.get_live_streams(["nobody_live"])
+        await client.close()
+        assert result == []

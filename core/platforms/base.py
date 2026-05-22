@@ -61,7 +61,9 @@ class BasePlatformClient(PlatformClient):
         """Return (client_id, client_secret): config override or bundled fallback."""
         cfg = self._platform_config()
         cid = cfg.get("client_id", "") or _BUNDLED_CLIENT_IDS.get(self.PLATFORM_ID, "")
-        csec = cfg.get("client_secret", "") or _BUNDLED_CLIENT_SECRETS.get(self.PLATFORM_ID, "")
+        csec = cfg.get("client_secret", "") or _BUNDLED_CLIENT_SECRETS.get(
+            self.PLATFORM_ID, ""
+        )
         return cid, csec
 
     # --- Per-loop httpx client ---
@@ -129,8 +131,7 @@ class BasePlatformClient(PlatformClient):
             platform_cfg = self._platform_config()
             if (
                 platform_cfg.get("access_token")
-                and platform_cfg.get("token_expires_at", 0)
-                > time.time() + 60
+                and platform_cfg.get("token_expires_at", 0) > time.time() + 60
             ):
                 return platform_cfg["access_token"]
             if platform_cfg.get("refresh_token"):

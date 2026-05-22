@@ -69,7 +69,9 @@ class FavoritesComponent(BaseApiComponent):
                 self._api._data.refresh()
             except Exception as e:
                 msg = str(e)[:80] if str(e) else "Import failed"
-                logger.warning("Twitch import %s: %s", "silent" if silent else "failed", e)
+                logger.warning(
+                    "Twitch import %s: %s", "silent" if silent else "failed", e
+                )
                 if not silent:
                     safe_msg = json.dumps(msg)
                     self._eval_js(f"window.onImportError({safe_msg})")
@@ -125,7 +127,9 @@ class FavoritesComponent(BaseApiComponent):
                 self._api._data.refresh()
             except Exception as e:
                 msg = str(e)[:80] if str(e) else "YouTube import failed"
-                logger.warning("YouTube import %s: %s", "silent" if silent else "failed", e)
+                logger.warning(
+                    "YouTube import %s: %s", "silent" if silent else "failed", e
+                )
                 if not silent:
                     safe_msg = json.dumps(msg)
                     self._eval_js(f"window.onYouTubeImportError({safe_msg})")
