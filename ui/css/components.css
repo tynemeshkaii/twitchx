@@ -98,7 +98,7 @@
 }
 
 /* ── Sidebar collapsed mode (icons-only) ───────────────── */
-#sidebar.collapsed-sidebar { width: 56px; transition: width var(--duration-normal) var(--ease-default); }
+#sidebar.collapsed-sidebar { width: 52px; transition: width var(--duration-normal) var(--ease-default); }
 #sidebar.collapsed-sidebar #profile-area { display: none; }
 #sidebar.collapsed-sidebar #kick-profile-area { display: none; }
 #sidebar.collapsed-sidebar #platform-tabs { display: none; }
@@ -115,6 +115,63 @@
 }
 #sidebar.collapsed-sidebar .sidebar-collapse-btn svg {
   transform: rotate(180deg);
+}
+#sidebar.collapsed-sidebar #channel-list {
+  padding: 4px 0 8px;
+  align-items: center;
+  gap: 5px;
+}
+
+/* ── Icon rail — avatar items ───────────────────────────── */
+.rail-avatar {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  cursor: pointer;
+  border-radius: 50%;
+  outline: none;
+}
+.rail-avatar:focus-visible {
+  box-shadow: 0 0 0 2px rgba(255, 159, 10, 0.6);
+}
+.rail-avatar.offline {
+  filter: grayscale(0.7) opacity(0.5);
+}
+.rail-av-img {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--bg-elevated);
+  display: block;
+}
+.rail-av-ring {
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 2px solid #30d158;
+  pointer-events: none;
+}
+.rail-av-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #30d158;
+  border: 2px solid var(--bg-surface);
+  pointer-events: none;
+}
+
+/* ── Icon rail — section divider ────────────────────────── */
+.rail-divider {
+  width: 24px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 2px 0;
+  flex-shrink: 0;
 }
 
 /* ── Sidebar tooltip ──────────────────────────────────── */
