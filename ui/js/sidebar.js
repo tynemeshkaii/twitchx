@@ -574,6 +574,12 @@ function renderRail(groups) {
 }
 
 function renderSidebar() {
+  var _sidebar = document.getElementById('sidebar');
+  if (_sidebar && _sidebar.classList.contains('collapsed-sidebar')) {
+    renderRail(getSidebarGroups());
+    return;
+  }
+
   const list = document.getElementById('channel-list');
   const groups = getSidebarGroups();
   const selectedExpanded = expandSidebarSectionForLogin(TwitchX.state.selectedChannel);
