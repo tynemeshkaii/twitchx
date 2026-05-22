@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import shutil
@@ -9,6 +10,8 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from core.constants import (
     AVATAR_CACHE_TTL_SECONDS,
@@ -334,8 +337,12 @@ def load_config() -> dict[str, Any]:
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         save_config(DEFAULT_CONFIG)
         return _deep_merge(DEFAULT_CONFIG, {})
-    with open(CONFIG_FILE) as f:
-        stored = json.load(f)
+    try:
+        with open(CONFIG_FILE) as f:
+            stored = json.load(f)
+    except json.JSONDecodeError:
+        logger.warning("Corrupt config at %s — resetting to defaults", CONFIG_FILE)
+        return _deep_merge(DEFAULT_CONFIG, {})
 
     # Auto-migrate v1 → v2
     if _is_v1_config(stored):
