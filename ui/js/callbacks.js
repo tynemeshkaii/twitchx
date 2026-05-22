@@ -731,8 +731,12 @@ window.onYouTubeImportError = function(msg) {
 
 window.onAvatar = function(data) {
   TwitchX.state.avatars[data.login] = data.data;
-  // Update sidebar avatars
+  // Update expanded sidebar avatars
   document.querySelectorAll('.channel-item[data-login="' + data.login + '"] .avatar').forEach(function(img) {
+    img.src = data.data;
+  });
+  // Update collapsed rail avatars
+  document.querySelectorAll('.rail-avatar[data-login="' + data.login + '"] .rail-av-img').forEach(function(img) {
     img.src = data.data;
   });
   // Update user profile avatar

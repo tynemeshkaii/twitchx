@@ -122,6 +122,10 @@
   gap: 5px;
   overflow-y: auto;
 }
+/* Defense in depth: hide any non-rail content if JS rebuild hasn't run yet */
+#sidebar.collapsed-sidebar #channel-list > :not(.rail-avatar):not(.rail-divider) {
+  display: none;
+}
 
 /* ── Icon rail — avatar items ───────────────────────────── */
 .rail-avatar {

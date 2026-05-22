@@ -120,6 +120,9 @@ TwitchX._bindSidebarEvents = function() {
     var sidebar = document.getElementById('sidebar');
     var collapsed = sidebar.classList.toggle('collapsed-sidebar');
     localStorage.setItem('twitchx.sidebar.collapsed', collapsed ? '1' : '0');
+    // Explicitly clear channel-list so renderSidebar always starts from clean DOM
+    var list = document.getElementById('channel-list');
+    while (list.firstChild) list.removeChild(list.firstChild);
     TwitchX.renderSidebar();
   });
 
