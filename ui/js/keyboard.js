@@ -79,6 +79,29 @@ function handleKeydown(e) {
   const inInput = tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA';
   const sc = TwitchX.state.shortcuts;
 
+  if (e.key === 'Tab') {
+    var overlay = document.getElementById('settings-overlay');
+    if (overlay && overlay.classList.contains('visible')) {
+      var focusable = overlay.querySelectorAll(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      var first = focusable[0];
+      var last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+  }
+
   if (e.key === 'Escape') {
     if (!document.getElementById('palette-overlay').classList.contains('hidden')) {
       if (TwitchX.closePalette) TwitchX.closePalette();

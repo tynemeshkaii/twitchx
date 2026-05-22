@@ -208,6 +208,7 @@ function _setFeedback(msg, type) {
 
 function openSettings() {
   if (!TwitchX.api) return;
+  TwitchX._settingsReturnFocus = document.activeElement;
   const config = TwitchX.api.get_full_config_for_settings();
   document.getElementById('s-client-id').value = config.client_id || '';
   document.getElementById('s-client-secret').value = config.client_secret || '';
@@ -302,6 +303,8 @@ function openSettings() {
       versionEl.textContent = '';
     }
   }
+  var closeBtn = document.getElementById('close-settings');
+  if (closeBtn) closeBtn.focus();
 }
 
 function openSettingsToTab(tab) {
@@ -323,6 +326,10 @@ function closeSettings() {
   }
   document.getElementById('settings-overlay').classList.remove('visible');
   TwitchX._settingsSnapshot = null;
+  if (TwitchX._settingsReturnFocus && TwitchX._settingsReturnFocus.focus) {
+    TwitchX._settingsReturnFocus.focus();
+    TwitchX._settingsReturnFocus = null;
+  }
 }
 
 function toggleSecret() {
