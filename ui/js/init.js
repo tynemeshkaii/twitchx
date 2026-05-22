@@ -78,6 +78,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var saved = localStorage.getItem('twitchx.sidebar.collapsed');
     if (saved === '1') {
       document.getElementById('sidebar').classList.add('collapsed-sidebar');
+      TwitchX.renderSidebar();
     }
   })();
 

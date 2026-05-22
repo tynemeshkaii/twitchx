@@ -525,7 +525,10 @@ function renderRail(groups) {
   var liveLogins = groups.online;
   var offlineLogins = groups.offline;
 
-  // In-place update if membership unchanged
+  // If #channel-list still has expanded-sidebar DOM, skip diff and force full rebuild
+  var hasStaleDom = !!list.querySelector('.sidebar-section');
+
+  // In-place update if membership unchanged (and no stale section DOM to clear)
   var existingLive = Array.from(list.querySelectorAll('.rail-avatar.live'))
     .map(function(el) { return el.dataset.login; });
   var existingOffline = Array.from(list.querySelectorAll('.rail-avatar.offline'))
@@ -536,7 +539,7 @@ function renderRail(groups) {
   var offlineChanged = existingOffline.length !== offlineLogins.length ||
     offlineLogins.some(function(l, i) { return existingOffline[i] !== l; });
 
-  if (!liveChanged && !offlineChanged) {
+  if (!hasStaleDom && !liveChanged && !offlineChanged) {
     list.querySelectorAll('.rail-avatar').forEach(function(el) {
       var login = el.dataset.login;
 
