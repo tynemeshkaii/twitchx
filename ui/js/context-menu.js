@@ -62,6 +62,19 @@ function _showMenu(e, login, platform) {
   });
 }
 
+function _setMenuDisabled(item, disabled, reason) {
+  if (!item) return;
+  item.classList.toggle('disabled', !!disabled);
+  item.setAttribute('aria-disabled', String(!!disabled));
+  if (disabled && reason) {
+    item.title = reason;
+    item.dataset.disabledReason = reason;
+  } else {
+    item.title = '';
+    delete item.dataset.disabledReason;
+  }
+}
+
 function showContextMenu(e, login, platform) {
   e.preventDefault();
   const ctxPlatform = platform || TwitchX.getChannelPlatform(login);
@@ -78,11 +91,29 @@ function showContextMenu(e, login, platform) {
     removeItem.classList.add('hidden');
   }
   const msItem = menu.querySelector('[data-action="multistream"]');
+  const watchItem = menu.querySelector('[data-action="watch"]');
+  const externalItem = menu.querySelector('[data-action="watch-external"]');
+  const ctxStream = TwitchX.findStreamByKey(ctxKey);
+  const isYTContext = ctxPlatform === 'youtube' || (ctxStream && ctxStream.platform === 'youtube');
+  _setMenuDisabled(
+    watchItem,
+    isYTContext,
+    'YouTube items from Browse cannot be watched directly here. View the channel or open it in the browser.'
+  );
+  _setMenuDisabled(
+    externalItem,
+    isYTContext,
+    'External player launch needs a directly resolvable stream URL; YouTube Browse results are channel-based.'
+  );
   if (msItem) {
     const allFull = TwitchX.multiState.slots.every(function(s) { return s !== null; });
-    const ctxStream = TwitchX.findStreamByKey(ctxKey);
-    const isYT = ctxPlatform === 'youtube' || (ctxStream && ctxStream.platform === 'youtube');
-    msItem.classList.toggle('hidden', allFull || isYT);
+    _setMenuDisabled(
+      msItem,
+      allFull || isYTContext,
+      allFull
+        ? 'All multistream slots are full.'
+        : 'YouTube Browse results cannot be added to multistream directly.'
+    );
   }
   var pinItem = menu.querySelector('[data-action="pin"]');
   if (pinItem) {
@@ -102,11 +133,29 @@ function showSidebarContextMenu(e, login, platform) {
   menu.querySelector('[data-action="favorite"]').classList.add('hidden');
   menu.querySelector('[data-action="remove"]').classList.remove('hidden');
   const msItem = menu.querySelector('[data-action="multistream"]');
+  const watchItem = menu.querySelector('[data-action="watch"]');
+  const externalItem = menu.querySelector('[data-action="watch-external"]');
+  const ctxStream = TwitchX.findStreamByKey(ctxKey);
+  const isYTContext = ctxPlatform === 'youtube' || (ctxStream && ctxStream.platform === 'youtube');
+  _setMenuDisabled(
+    watchItem,
+    false,
+    ''
+  );
+  _setMenuDisabled(
+    externalItem,
+    false,
+    ''
+  );
   if (msItem) {
     const allFull = TwitchX.multiState.slots.every(function(s) { return s !== null; });
-    const ctxStream = TwitchX.findStreamByKey(ctxKey);
-    const isYT = ctxPlatform === 'youtube' || (ctxStream && ctxStream.platform === 'youtube');
-    msItem.classList.toggle('hidden', allFull || isYT);
+    _setMenuDisabled(
+      msItem,
+      allFull || isYTContext,
+      allFull
+        ? 'All multistream slots are full.'
+        : 'YouTube channels cannot be added to multistream directly from the sidebar.'
+    );
   }
   var pinItem = menu.querySelector('[data-action="pin"]');
   if (pinItem) {

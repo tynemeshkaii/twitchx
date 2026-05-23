@@ -386,7 +386,9 @@ function updateChatInput() {
   const canSend = !!chatUser && TwitchX.chatAuthenticated;
   input.disabled = !canSend;
   btn.disabled = !canSend;
-  if (!chatUser) {
+  if (!TwitchX.state.playerHasChat) {
+    input.placeholder = 'Chat is not available for this media';
+  } else if (!chatUser) {
     input.placeholder = platform === 'kick' ? 'Log in to Kick to chat' : 'Log in to chat';
   } else if (!TwitchX.chatAuthenticated) {
     if (platform === 'kick' && !kickHasChatWrite) {

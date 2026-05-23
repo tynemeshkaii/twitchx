@@ -30,6 +30,18 @@ class ChatComponent(BaseApiComponent):
         self, channel: str, platform: str = "twitch", live_chat_id: str | None = None
     ) -> None:
         self.stop_chat()
+        connecting = json.dumps(
+            {
+                "connected": False,
+                "connecting": True,
+                "platform": platform,
+                "channel_id": channel,
+                "error": None,
+                "authenticated": False,
+                "self_login": "",
+            }
+        )
+        self._eval_js(f"window.onChatStatus({connecting})")
 
         if platform == "twitch":
             twitch_conf = get_platform_config(self._config, "twitch")
@@ -271,11 +283,32 @@ class ChatComponent(BaseApiComponent):
         reply_body: str | None = None,
         request_id: str | None = None,
     ) -> None:
-        if not self._api._chat_client or not text:
+        def _send_unavailable(error: str) -> None:
+            payload = json.dumps(
+                {
+                    "ok": False,
+                    "platform": "",
+                    "channel_id": "",
+                    "message_id": None,
+                    "error": error,
+                    "request_id": request_id,
+                    "text": text,
+                    "reply_to_id": reply_to,
+                    "reply_to_display": reply_display,
+                    "reply_to_body": reply_body,
+                }
+            )
+            self._eval_js(f"window.onChatSendResult({payload})")
+
+        if not text:
+            return
+        if not self._api._chat_client:
+            _send_unavailable("Chat is not connected.")
             return
         client = self._api._chat_client
         loop = client._loop
         if not loop or loop.is_closed():
+            _send_unavailable("Chat connection is not ready yet.")
             return
 
         platform = client.platform
@@ -336,8 +369,10 @@ class ChatComponent(BaseApiComponent):
             )
             self._eval_js(f"window.onChatSendResult({send_result})")
 
-        with contextlib.suppress(RuntimeError):
+        try:
             self._api._send_pool.submit(_do_send)
+        except RuntimeError:
+            _send_unavailable("Chat sender is shutting down.")
 
     # ── Persistence ──────────────────────────────────────────────
 
@@ -453,6 +488,7 @@ class ChatComponent(BaseApiComponent):
         data = json.dumps(
             {
                 "connected": status.connected,
+                "connecting": False,
                 "platform": status.platform,
                 "channel_id": status.channel_id,
                 "error": status.error,

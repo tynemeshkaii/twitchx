@@ -3,6 +3,7 @@ const TwitchX = window.TwitchX;
 
 function openMultistreamView() {
   TwitchX.multiState.open = true;
+  _updateMultiGridLayout();
   if (document.getElementById('player-view').classList.contains('active')) {
     TwitchX.hidePlayerView();
   }
@@ -17,6 +18,75 @@ function openMultistreamView() {
     mv.style.opacity = '';
   });
   TwitchX.startMultiHealthMonitor();
+}
+
+function _getMultiSlotEl(idx) {
+  return document.querySelector('.ms-slot[data-slot-idx="' + idx + '"]');
+}
+
+function _multiOccupiedCount() {
+  return TwitchX.multiState.slots.filter(function(slot) {
+    return slot !== null;
+  }).length;
+}
+
+function _updateMultiGridLayout() {
+  const grid = document.getElementById('multistream-grid');
+  if (!grid) return;
+  const count = _multiOccupiedCount();
+  const openFormCount = document.querySelectorAll('.ms-slot.ms-add-form-open').length;
+  const visualCount = Math.min(4, count + openFormCount);
+  grid.classList.remove('ms-grid-empty', 'ms-grid-count-1', 'ms-grid-count-2', 'ms-grid-count-3', 'ms-grid-count-4');
+  grid.classList.add(visualCount === 0 ? 'ms-grid-empty' : 'ms-grid-count-' + visualCount);
+
+  let nextEmptyMarked = false;
+  document.querySelectorAll('.ms-slot').forEach(function(slotEl) {
+    const idx = parseInt(slotEl.dataset.slotIdx, 10);
+    const isEmpty = TwitchX.multiState.slots[idx] === null;
+    const isNextEmpty = isEmpty && !nextEmptyMarked;
+    slotEl.classList.toggle('ms-next-empty', isNextEmpty);
+    if (isNextEmpty) nextEmptyMarked = true;
+  });
+
+  const addSlotBtn = document.getElementById('ms-add-slot-btn');
+  if (addSlotBtn) {
+    addSlotBtn.disabled = count >= 4;
+    addSlotBtn.classList.toggle('disabled', count >= 4);
+  }
+}
+
+function _setMultiSlotState(idx, state, message) {
+  const slotEl = _getMultiSlotEl(idx);
+  if (!slotEl) return;
+  slotEl.dataset.state = state;
+  slotEl.classList.remove(
+    'ms-state-empty',
+    'ms-state-loading',
+    'ms-state-playing',
+    'ms-state-error',
+    'ms-state-removing'
+  );
+  slotEl.classList.add('ms-state-' + state);
+  const status = slotEl.querySelector('.ms-slot-status');
+  if (status) {
+    status.textContent = message || state.charAt(0).toUpperCase() + state.slice(1);
+  }
+  if (TwitchX.multiState.slots[idx]) TwitchX.multiState.slots[idx].state = state;
+  _updateMultiGridLayout();
+}
+
+function openFirstEmptyMultiSlot(preferredIdx) {
+  const idx = Number.isInteger(preferredIdx) && TwitchX.multiState.slots[preferredIdx] === null
+    ? preferredIdx
+    : TwitchX.multiState.slots.indexOf(null);
+  if (idx === -1) return;
+  const slotEl = _getMultiSlotEl(idx);
+  if (!slotEl) return;
+  slotEl.classList.add('ms-add-form-open');
+  slotEl.querySelector('.ms-slot-empty').classList.add('hidden');
+  slotEl.querySelector('.ms-add-form').classList.remove('hidden');
+  _setMultiSlotState(idx, 'empty', 'Ready to add');
+  slotEl.querySelector('.ms-add-input').focus();
 }
 
 function closeMultistreamView() {
@@ -45,6 +115,7 @@ function closeMultistreamView() {
   document.getElementById('ms-chat-messages').replaceChildren();
   const btn = document.getElementById('ms-sidebar-btn');
   if (btn) btn.classList.remove('active');
+  _updateMultiGridLayout();
 }
 
 function toggleMsSidebar() {
@@ -66,7 +137,7 @@ function _bindSlotPiPEvents(video, pipBtn) {
 }
 
 function _clearMultiSlot(idx) {
-  const slotEl = document.querySelector('.ms-slot[data-slot-idx="' + idx + '"]');
+  const slotEl = _getMultiSlotEl(idx);
   if (!slotEl) return;
   const video = slotEl.querySelector('.ms-video');
   if (video) {
@@ -89,9 +160,12 @@ function _clearMultiSlot(idx) {
   }
   const activeEl = slotEl.querySelector('.ms-slot-active');
   activeEl.classList.add('hidden');
+  slotEl.classList.remove('ms-add-form-open');
   slotEl.querySelector('.ms-slot-empty').classList.remove('hidden');
   slotEl.querySelector('.ms-add-form').classList.add('hidden');
   slotEl.classList.remove('audio-focus', 'chat-focus');
+  slotEl.querySelector('.ms-error-msg').textContent = '';
+  _setMultiSlotState(idx, 'empty', 'Empty');
   delete slotEl.dataset._lastTime;
   delete slotEl.dataset._frozenCount;
 }
@@ -99,50 +173,70 @@ function _clearMultiSlot(idx) {
 function addMultiSlot(idx, channel, platform) {
   const cfg = TwitchX.api ? TwitchX.api.get_full_config_for_settings() : {};
   const quality = (cfg && cfg.quality) || 'best';
-  TwitchX.multiState.slots[idx] = { channel: channel, platform: platform, quality: quality, title: '' };
-  const slotEl = document.querySelector('.ms-slot[data-slot-idx="' + idx + '"]');
+  TwitchX.multiState.slots[idx] = { channel: channel, platform: platform, quality: quality, title: '', state: 'loading' };
+  const slotEl = _getMultiSlotEl(idx);
   if (!slotEl) return;
+  slotEl.dataset.platform = platform || 'twitch';
+  slotEl.classList.remove('ms-add-form-open');
   slotEl.querySelector('.ms-slot-empty').classList.add('hidden');
   slotEl.querySelector('.ms-add-form').classList.add('hidden');
   const active = slotEl.querySelector('.ms-slot-active');
   active.classList.remove('hidden');
   active.querySelector('.ms-loading').classList.remove('hidden');
   active.querySelector('.ms-error-msg').classList.add('hidden');
+  active.querySelector('.ms-channel-name').textContent = channel || '';
+  const badge = active.querySelector('.ms-platform-badge');
+  badge.className = 'ms-platform-badge ' + (platform || 'twitch');
+  badge.textContent = TwitchX.platformLabel(platform || 'twitch');
   const msVideo = active.querySelector('.ms-video');
   if (msVideo) msVideo.muted = true;
+  _setMultiSlotState(idx, 'loading', 'Loading');
   if (TwitchX.api) TwitchX.api.add_multi_slot(idx, channel, platform, quality);
 }
 
 function removeMultiSlot(idx) {
-  _clearMultiSlot(idx);
-  TwitchX.multiState.slots[idx] = null;
-  if (TwitchX.multiState.audioFocus === idx) {
-    TwitchX.multiState.audioFocus = -1;
-    for (let i = 0; i < 4; i++) {
-      if (TwitchX.multiState.slots[i]) { setAudioFocus(i); break; }
+  _setMultiSlotState(idx, 'removing', 'Removing');
+  setTimeout(function() {
+    _clearMultiSlot(idx);
+    TwitchX.multiState.slots[idx] = null;
+    if (TwitchX.multiState.audioFocus === idx) {
+      TwitchX.multiState.audioFocus = -1;
+      for (let i = 0; i < 4; i++) {
+        if (TwitchX.multiState.slots[i]) { setAudioFocus(i); break; }
+      }
     }
-  }
-  if (TwitchX.multiState.chatSlot === idx) {
-    TwitchX.multiState.chatSlot = -1;
-    if (TwitchX.api) TwitchX.api.stop_chat();
-    document.getElementById('ms-chat-title').textContent = 'Chat';
-    document.getElementById('ms-chat-status-dot').className = '';
-    document.getElementById('ms-chat-input').disabled = true;
-    document.getElementById('ms-chat-send-btn').disabled = true;
-  }
+    if (TwitchX.multiState.chatSlot === idx) {
+      TwitchX.multiState.chatSlot = -1;
+      if (TwitchX.api) TwitchX.api.stop_chat();
+      document.getElementById('ms-chat-title').textContent = 'Chat';
+      document.getElementById('ms-chat-status-dot').className = '';
+      document.getElementById('ms-chat-input').disabled = true;
+      document.getElementById('ms-chat-send-btn').disabled = true;
+      document.querySelectorAll('.ms-slot').forEach(function(el) {
+        el.classList.remove('chat-focus');
+      });
+    }
+    _updateMultiGridLayout();
+  }, 120);
 }
 
 function setAudioFocus(idx) {
   document.querySelectorAll('.ms-slot').forEach(function(el) {
     el.classList.remove('audio-focus');
+    el.classList.add('audio-muted');
     const v = el.querySelector('.ms-video');
     if (v) v.muted = true;
+    const label = el.querySelector('.ms-audio-state');
+    if (label) label.textContent = 'Muted';
   });
-  const focusEl = document.querySelector('.ms-slot[data-slot-idx="' + idx + '"]');
-  if (focusEl) {
+  const focusEl = _getMultiSlotEl(idx);
+  if (focusEl && TwitchX.multiState.slots[idx]) {
     focusEl.classList.add('audio-focus');
+    focusEl.classList.remove('audio-muted');
     const v = focusEl.querySelector('.ms-video');
     if (v) v.muted = false;
+    const label = focusEl.querySelector('.ms-audio-state');
+    if (label) label.textContent = 'Audio';
   }
   TwitchX.multiState.audioFocus = idx;
 }
@@ -150,15 +244,21 @@ function setAudioFocus(idx) {
 function switchMultiChat(idx) {
   const slot = TwitchX.multiState.slots[idx];
   if (!slot) return;
+  const input = document.getElementById('ms-chat-input');
+  const hadFocus = document.activeElement === input;
   document.getElementById('ms-chat-input').disabled = true;
   document.getElementById('ms-chat-send-btn').disabled = true;
   document.querySelectorAll('.ms-slot').forEach(function(el) {
     el.classList.remove('chat-focus');
   });
-  const el = document.querySelector('.ms-slot[data-slot-idx="' + idx + '"]');
+  const el = _getMultiSlotEl(idx);
   if (el) el.classList.add('chat-focus');
   TwitchX.multiState.chatSlot = idx;
-  document.getElementById('ms-chat-messages').replaceChildren();
+  if (TwitchX.setChatNotice) {
+    TwitchX.setChatNotice('Switching chat...', 'connecting', 'multi');
+  } else {
+    document.getElementById('ms-chat-messages').replaceChildren();
+  }
   if (TwitchX.clearChatBatch) TwitchX.clearChatBatch();
   document.getElementById('ms-chat-title').textContent = slot.channel;
   if (TwitchX.api) {
@@ -166,6 +266,11 @@ function switchMultiChat(idx) {
     TwitchX.api.start_chat(slot.channel, slot.platform);
   }
   if (!TwitchX.multiState.chatVisible) toggleMsChat();
+  if (hadFocus) {
+    requestAnimationFrame(function() {
+      document.getElementById('ms-chat-input').focus();
+    });
+  }
 }
 
 function toggleMsChat() {
@@ -174,7 +279,7 @@ function toggleMsChat() {
 }
 
 function toggleMsSlotFullscreen(idx) {
-  const slotEl = document.querySelector('.ms-slot[data-slot-idx="' + idx + '"]');
+  const slotEl = _getMultiSlotEl(idx);
   const video = slotEl ? slotEl.querySelector('.ms-video') : null;
 
   // Exit Safari Video Presentation Mode (WKWebView)
@@ -206,8 +311,9 @@ function toggleMsSlotFullscreen(idx) {
 
 function _createMultiSlot(idx) {
   const slot = document.createElement('div');
-  slot.className = 'ms-slot';
+  slot.className = 'ms-slot ms-state-empty audio-muted';
   slot.setAttribute('data-slot-idx', idx);
+  slot.dataset.state = 'empty';
   slot.setAttribute('aria-label', 'Multi-stream slot ' + (idx + 1));
   slot.tabIndex = -1;
 
@@ -220,7 +326,11 @@ function _createMultiSlot(idx) {
   const span = document.createElement('span');
   span.textContent = 'Add Stream';
   addBtn.appendChild(span);
+  const hint = document.createElement('p');
+  hint.className = 'ms-empty-hint';
+  hint.textContent = 'Drop a channel here or choose a platform.';
   empty.appendChild(addBtn);
+  empty.appendChild(hint);
 
   empty.addEventListener('dragover', function(e) {
     e.preventDefault();
@@ -268,7 +378,15 @@ function _createMultiSlot(idx) {
   optKick.value = 'kick';
   optKick.textContent = 'Kick';
   select.appendChild(optKick);
+  const optYoutube = document.createElement('option');
+  optYoutube.value = 'youtube';
+  optYoutube.textContent = 'YouTube live';
+  select.appendChild(optYoutube);
   form.appendChild(select);
+  const note = document.createElement('div');
+  note.className = 'ms-platform-note';
+  note.textContent = 'YouTube works when the live stream is already loaded in TwitchX.';
+  form.appendChild(note);
   const btns = document.createElement('div');
   btns.className = 'ms-form-btns';
   const confirm = document.createElement('button');
@@ -307,12 +425,20 @@ function _createMultiSlot(idx) {
   overlay.className = 'ms-overlay';
   const info = document.createElement('div');
   info.className = 'ms-slot-info';
+  const status = document.createElement('span');
+  status.className = 'ms-slot-status';
+  status.textContent = 'Empty';
+  info.appendChild(status);
   const badge = document.createElement('span');
   badge.className = 'ms-platform-badge';
   info.appendChild(badge);
   const name = document.createElement('span');
   name.className = 'ms-channel-name';
   info.appendChild(name);
+  const audioState = document.createElement('span');
+  audioState.className = 'ms-audio-state';
+  audioState.textContent = 'Muted';
+  info.appendChild(audioState);
   overlay.appendChild(info);
   const controls = document.createElement('div');
   controls.className = 'ms-slot-controls';
@@ -490,6 +616,9 @@ TwitchX.addMultiSlot = addMultiSlot;
 TwitchX.removeMultiSlot = removeMultiSlot;
 TwitchX.setAudioFocus = setAudioFocus;
 TwitchX.switchMultiChat = switchMultiChat;
+TwitchX.openFirstEmptyMultiSlot = openFirstEmptyMultiSlot;
+TwitchX._setMultiSlotState = _setMultiSlotState;
+TwitchX._updateMultiGridLayout = _updateMultiGridLayout;
 TwitchX.toggleMsChat = toggleMsChat;
 TwitchX.toggleMsSlotFullscreen = toggleMsSlotFullscreen;
 TwitchX._clearMultiSlot = _clearMultiSlot;

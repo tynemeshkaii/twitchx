@@ -127,6 +127,7 @@ function handleKeydown(e) {
       TwitchX.closeContextMenu(); return;
     }
     if (!document.getElementById('palette-overlay').classList.contains('hidden')) {
+      e.preventDefault();
       if (TwitchX.closePalette) TwitchX.closePalette();
       return;
     }
@@ -157,11 +158,6 @@ function handleKeydown(e) {
     return;
   }
 
-  if (inInput) return;
-
-  const inPlayer = document.getElementById('player-view').classList.contains('active');
-  const inMulti = TwitchX.multiState.open;
-
   // Modifier-based shortcuts (not rebindable)
   if (e.key === 'F5' || (e.metaKey && e.key === 'r')) {
     e.preventDefault(); TwitchX.doRefresh(); return;
@@ -174,6 +170,11 @@ function handleKeydown(e) {
     if (TwitchX.openPalette) TwitchX.openPalette();
     return;
   }
+
+  if (inInput) return;
+
+  const inPlayer = document.getElementById('player-view').classList.contains('active');
+  const inMulti = TwitchX.multiState.open;
 
   // Single-key shortcuts — skip if any modifier is held
   if (e.metaKey || e.ctrlKey || e.altKey) return;

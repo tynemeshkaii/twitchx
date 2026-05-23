@@ -64,3 +64,39 @@ def test_no_oauth_tokens_does_not_crash_load_config(temp_config_dir: Path) -> No
     config = load_config()
     assert config["platforms"]["twitch"]["access_token"] == ""
     assert config["platforms"]["twitch"]["token_type"] == "app"
+
+
+# ── First-run credential / onboarding state ──────────────────────────────────
+
+def test_first_run_twitch_kick_use_bundled_credentials(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """On first run, Twitch and Kick report bundled credentials (no custom creds needed)."""
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "_eval_js", lambda js: None)
+    result = api.get_full_config_for_settings()
+    assert result["twitch_using_bundled"] is True, "Twitch should use bundled on first run"
+    assert result["kick_using_bundled"] is True, "Kick should use bundled on first run"
+
+
+def test_first_run_youtube_has_no_bundled_credentials(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """On first run, YouTube signals no valid bundled credentials — user must provide their own."""
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "_eval_js", lambda js: None)
+    result = api.get_full_config_for_settings()
+    assert result["youtube_bundled_available"] is False
+    assert result["youtube_using_bundled_api_key"] is True  # no custom key set yet
+    assert result["youtube_api_key"] == ""  # field is blank on first run
+
+
+def test_first_run_no_logged_in_users(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """On first run, no platform has a logged-in user."""
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "_eval_js", lambda js: None)
+    result = api.get_full_config_for_settings()
+    assert result["kick_display_name"] == ""
+    assert result["youtube_display_name"] == ""

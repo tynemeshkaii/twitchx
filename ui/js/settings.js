@@ -91,7 +91,7 @@ function renderWatchStats(stats) {
     weeklyContainer.appendChild(table);
   } else {
     var emptyMsg = document.createElement('div');
-    emptyMsg.style.cssText = 'font-size:12px;color:var(--text-muted);padding:8px 0;';
+    emptyMsg.className = 'stats-empty-msg';
     emptyMsg.textContent = 'No data for this week yet.';
     weeklyContainer.appendChild(emptyMsg);
   }
@@ -129,7 +129,7 @@ function renderWatchStats(stats) {
     });
   } else {
     var emptyMsg = document.createElement('div');
-    emptyMsg.style.cssText = 'font-size:12px;color:var(--text-muted);padding:8px 0;';
+    emptyMsg.className = 'stats-empty-msg';
     emptyMsg.textContent = 'No watch data yet.';
     topContainer.appendChild(emptyMsg);
   }
@@ -271,36 +271,72 @@ function openSettings() {
       swatchContainer.appendChild(btn);
     });
   }
-  // Auto-expand advanced sections if user already has custom credentials set
+  // Auto-expand Twitch/Kick advanced sections when user already has custom credentials;
+  // collapse them when switching back to bundled so state is always fresh on open
+  var tAdv = document.getElementById('twitch-advanced-section');
+  var tToggle = document.getElementById('twitch-advanced-toggle');
   if (config.twitch_using_bundled === false) {
-    var tAdv = document.getElementById('twitch-advanced-section');
-    var tToggle = document.getElementById('twitch-advanced-toggle');
     if (tAdv) tAdv.classList.remove('hidden');
     if (tToggle) tToggle.textContent = 'Hide custom credentials ▴';
+  } else {
+    if (tAdv) tAdv.classList.add('hidden');
+    if (tToggle) tToggle.textContent = 'Use custom credentials ▾';
   }
+  var kAdv = document.getElementById('kick-advanced-section');
+  var kToggle = document.getElementById('kick-advanced-toggle');
   if (config.kick_using_bundled === false) {
-    var kAdv = document.getElementById('kick-advanced-section');
-    var kToggle = document.getElementById('kick-advanced-toggle');
     if (kAdv) kAdv.classList.remove('hidden');
     if (kToggle) kToggle.textContent = 'Hide custom credentials ▴';
+  } else {
+    if (kAdv) kAdv.classList.add('hidden');
+    if (kToggle) kToggle.textContent = 'Use custom credentials ▾';
   }
-  if (config.youtube_using_bundled_oauth === false || config.youtube_using_bundled_api_key === false) {
-    var yAdv = document.getElementById('yt-advanced-section');
-    var yToggle = document.getElementById('yt-advanced-toggle');
-    if (yAdv) yAdv.classList.remove('hidden');
-    if (yToggle) yToggle.textContent = 'Hide personal credentials ▴';
+
+  // Update credential status badges
+  var tBadge = document.getElementById('twitch-cred-status');
+  if (tBadge) {
+    if (config.twitch_using_bundled === false) {
+      tBadge.textContent = 'Custom credentials';
+      tBadge.className = 'cred-badge cred-custom';
+    } else {
+      tBadge.textContent = 'Built-in credentials';
+      tBadge.className = 'cred-badge cred-bundled';
+    }
+  }
+  var kBadge = document.getElementById('kick-cred-status');
+  if (kBadge) {
+    if (config.kick_using_bundled === false) {
+      kBadge.textContent = 'Custom credentials';
+      kBadge.className = 'cred-badge cred-custom';
+    } else {
+      kBadge.textContent = 'Built-in credentials';
+      kBadge.className = 'cred-badge cred-bundled';
+    }
+  }
+  var yBadge = document.getElementById('yt-cred-status');
+  if (yBadge) {
+    if (config.youtube_display_name) {
+      yBadge.textContent = 'Connected';
+      yBadge.className = 'cred-badge cred-custom';
+    } else if (config.youtube_api_key) {
+      yBadge.textContent = 'API key set';
+      yBadge.className = 'cred-badge cred-custom';
+    } else {
+      yBadge.textContent = 'API key required';
+      yBadge.className = 'cred-badge cred-missing';
+    }
   }
 
   TwitchX.renderHotkeysSettings();
-  var generalTab = document.querySelector('.settings-tab[data-tab="general"]');
+  var accountsTab = document.querySelector('.settings-tab[data-tab="accounts"]');
   document.querySelectorAll('.settings-tab').forEach(function(b) {
-    var isGeneral = b === generalTab;
-    b.classList.toggle('active', isGeneral);
-    b.setAttribute('aria-selected', String(isGeneral));
-    b.tabIndex = isGeneral ? 0 : -1;
+    var isAccounts = b === accountsTab;
+    b.classList.toggle('active', isAccounts);
+    b.setAttribute('aria-selected', String(isAccounts));
+    b.tabIndex = isAccounts ? 0 : -1;
   });
   document.querySelectorAll('.settings-panel').forEach(function(p) { p.classList.remove('active'); });
-  document.getElementById('settings-panel-general').classList.add('active');
+  document.getElementById('settings-panel-accounts').classList.add('active');
   document.getElementById('stats-loading').classList.remove('hidden');
   document.getElementById('stats-content').classList.add('hidden');
   _setFeedback('');
@@ -319,6 +355,9 @@ function openSettings() {
 }
 
 function openSettingsToTab(tab) {
+  // Map legacy tab names to new tab structure
+  var tabAliases = { general: 'player', twitch: 'accounts', kick: 'accounts', youtube: 'accounts', hotkeys: 'advanced', statistics: 'advanced' };
+  tab = tabAliases[tab] || tab;
   openSettings();
   const tabBtn = document.querySelector('.settings-tab[data-tab="' + tab + '"]');
   document.querySelectorAll('.settings-tab').forEach(function(b) {
@@ -330,7 +369,7 @@ function openSettingsToTab(tab) {
   document.querySelectorAll('.settings-panel').forEach(function(p) { p.classList.remove('active'); });
   const panel = document.getElementById('settings-panel-' + tab);
   if (panel) panel.classList.add('active');
-  if (tab === 'statistics') {
+  if (tab === 'advanced') {
     loadWatchStatistics();
   }
 }
@@ -355,12 +394,9 @@ function toggleSecret() {
 function testConnection() {
   const cid = document.getElementById('s-client-id').value.trim();
   const cs = document.getElementById('s-client-secret').value.trim();
-  if (!cid || !cs) {
-    _setFeedback('Client ID and Secret are required', 'error');
-    return;
-  }
+  // Empty fields are fine — Python falls back to bundled credentials
   document.getElementById('test-btn').disabled = true;
-  _setFeedback('Testing...');
+  _setFeedback('Testing Twitch...');
   TwitchX.api.test_connection(cid, cs);
 }
 

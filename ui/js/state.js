@@ -80,6 +80,7 @@ TwitchX.state = {
   shortcuts: Object.assign({}, TwitchX.DEFAULT_SHORTCUTS),
   pipEnabled: false,
   gridMode: 'grid',
+  streamsLoaded: false,
 };
 
 TwitchX.state.pinnedStreams = new Set();

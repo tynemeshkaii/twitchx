@@ -121,15 +121,22 @@
           <div id="channel-loading" class="browse-loading hidden">Loading...</div>
           <div id="channel-profile-card">
             <img id="channel-avatar" class="channel-avatar hidden" src="" alt="">
+            <div id="channel-avatar-fallback" class="channel-avatar-fallback hidden" aria-hidden="true"></div>
             <div id="channel-meta">
               <div id="channel-display-name"></div>
-              <div id="channel-login-text"></div>
+              <div id="channel-identity-row">
+                <span id="channel-login-text"></span>
+                <span id="channel-platform-badge" class="platform-badge hidden"></span>
+              </div>
               <div id="channel-live-badge" class="channel-live-badge hidden">LIVE</div>
               <div id="channel-followers"></div>
+              <div id="channel-platform-note" class="channel-platform-note hidden"></div>
             </div>
             <div id="channel-actions">
               <button id="channel-follow-btn" class="channel-follow-btn">Follow</button>
+              <button id="channel-open-btn" class="channel-open-btn"><span data-icon="browser" data-size="16"></span> Browser</button>
               <button id="channel-watch-btn" class="channel-watch-btn hidden"><span data-icon="play" data-size="16"></span> Watch Now</button>
+              <div id="channel-action-note" class="channel-action-note hidden"></div>
             </div>
           </div>
           <div id="channel-bio"></div>
@@ -158,6 +165,7 @@
       <div id="multistream-view" class="hidden">
         <div id="multistream-header">
           <span id="multistream-title"><span data-icon="grid-layout" data-size="16"></span> Multi-stream</span>
+          <button id="ms-add-slot-btn" title="Add stream" aria-label="Add stream"><span data-icon="plus" data-size="16"></span></button>
           <button id="ms-sidebar-btn" title="Toggle Sidebar" aria-label="Toggle Sidebar"><span data-icon="sidebar" data-size="16"></span></button>
           <button id="ms-toggle-chat-btn" title="Toggle Chat" aria-label="Toggle Multi Chat"><span data-icon="chat" data-size="16"></span></button>
           <button id="ms-close-btn" title="Close Multistream" aria-label="Close Multistream"><span data-icon="close" data-size="16"></span></button>
@@ -360,24 +368,130 @@
     <h2 id="settings-title"><span data-icon="settings" data-size="16" style="vertical-align:-2px;margin-right:6px;"></span>TwitchX Settings</h2>
 
     <div class="settings-tabs" role="tablist" aria-label="Settings sections">
-      <button class="settings-tab active" data-tab="general" role="tab" aria-selected="true" aria-controls="settings-panel-general">General</button>
-      <button class="settings-tab" data-tab="twitch" role="tab" aria-selected="false" aria-controls="settings-panel-twitch" tabindex="-1">Twitch</button>
-      <button class="settings-tab" data-tab="kick" role="tab" aria-selected="false" aria-controls="settings-panel-kick" tabindex="-1">Kick</button>
-      <button class="settings-tab" data-tab="youtube" role="tab" aria-selected="false" aria-controls="settings-panel-youtube" tabindex="-1">YouTube</button>
-      <button class="settings-tab" data-tab="hotkeys" role="tab" aria-selected="false" aria-controls="settings-panel-hotkeys" tabindex="-1">Hotkeys</button>
-      <button class="settings-tab" data-tab="statistics" role="tab" aria-selected="false" aria-controls="settings-panel-statistics" tabindex="-1">Statistics</button>
+      <button class="settings-tab active" data-tab="accounts" role="tab" aria-selected="true" aria-controls="settings-panel-accounts">Accounts</button>
+      <button class="settings-tab" data-tab="player" role="tab" aria-selected="false" aria-controls="settings-panel-player" tabindex="-1">Player</button>
+      <button class="settings-tab" data-tab="chat" role="tab" aria-selected="false" aria-controls="settings-panel-chat" tabindex="-1">Chat</button>
+      <button class="settings-tab" data-tab="appearance" role="tab" aria-selected="false" aria-controls="settings-panel-appearance" tabindex="-1">Appearance</button>
+      <button class="settings-tab" data-tab="advanced" role="tab" aria-selected="false" aria-controls="settings-panel-advanced" tabindex="-1">Advanced</button>
     </div>
 
-    <!-- General panel -->
-    <div class="settings-panel active" id="settings-panel-general" role="tabpanel">
-      <div class="setting-group">
-        <label for="s-streamlink">Streamlink Path</label>
-        <input id="s-streamlink" type="text" autocomplete="off">
+    <!-- Accounts panel: Twitch + Kick + YouTube -->
+    <div class="settings-panel active" id="settings-panel-accounts" role="tabpanel">
+
+      <!-- Twitch -->
+      <div class="platform-section">
+        <div class="platform-section-header">
+          <span class="platform-section-name">Twitch</span>
+          <span id="twitch-cred-status" class="cred-badge cred-bundled">Built-in credentials</span>
+        </div>
+        <div id="twitch-advanced-section" class="hidden">
+          <div class="setting-group">
+            <label for="s-client-id">Client ID</label>
+            <input id="s-client-id" type="text" autocomplete="off" placeholder="Leave blank to use built-in">
+          </div>
+          <div class="setting-group">
+            <label for="s-client-secret">Client Secret</label>
+            <div class="secret-row">
+              <input id="s-client-secret" type="password" autocomplete="off" placeholder="Leave blank to use built-in">
+              <button class="eye-btn" id="eye-toggle-btn" aria-label="Toggle visibility"><span data-icon="eye" data-size="14"></span></button>
+            </div>
+          </div>
+          <div class="oauth-note">OAuth Redirect URL: <code class="oauth-code">http://localhost:3457/callback</code></div>
+        </div>
+        <div class="platform-actions">
+          <a id="twitch-advanced-toggle" class="toggle-link" href="#">Use custom credentials ▾</a>
+          <button id="test-btn" class="test-conn-btn">Test connection</button>
+        </div>
       </div>
-      <div class="setting-group">
-        <label for="s-iina">IINA Path</label>
-        <input id="s-iina" type="text" autocomplete="off">
+
+      <div class="platform-divider"></div>
+
+      <!-- Kick -->
+      <div class="platform-section">
+        <div class="platform-section-header">
+          <span class="platform-section-name">Kick</span>
+          <span id="kick-cred-status" class="cred-badge cred-bundled">Built-in credentials</span>
+        </div>
+        <div id="kick-advanced-section" class="hidden">
+          <div class="setting-group">
+            <label for="s-kick-client-id">Client ID</label>
+            <input id="s-kick-client-id" type="text" autocomplete="off" placeholder="Leave blank to use built-in">
+          </div>
+          <div class="setting-group">
+            <label for="s-kick-client-secret">Client Secret</label>
+            <div class="secret-row">
+              <input id="s-kick-client-secret" type="password" autocomplete="off" placeholder="Leave blank to use built-in">
+              <button class="eye-btn" id="kick-eye-toggle-btn" aria-label="Toggle visibility"><span data-icon="eye" data-size="14"></span></button>
+            </div>
+          </div>
+          <div class="oauth-note">
+            OAuth Redirect URL: <code class="oauth-code">http://localhost:3457/callback</code><br>
+            Kick's API doesn't expose followed channels — favorites must be added manually via search.
+          </div>
+        </div>
+        <div id="kick-login-area" class="platform-auth-row">
+          <button id="kick-login-btn" class="oauth-login-btn">Login with Kick</button>
+        </div>
+        <div id="kick-user-area" class="platform-auth-row hidden">
+          <div id="kick-user-display" class="setting-user-display"></div>
+          <a id="kick-logout-settings-link" class="logout-link" role="button" tabindex="0">Logout</a>
+        </div>
+        <div class="platform-actions">
+          <a id="kick-advanced-toggle" class="toggle-link" href="#">Use custom credentials ▾</a>
+          <button id="kick-test-btn" class="test-conn-btn">Test connection</button>
+        </div>
       </div>
+
+      <div class="platform-divider"></div>
+
+      <!-- YouTube -->
+      <div class="platform-section">
+        <div class="platform-section-header">
+          <span class="platform-section-name">YouTube</span>
+          <span id="yt-cred-status" class="cred-badge cred-missing">API key required</span>
+        </div>
+        <div id="yt-advanced-section">
+          <div class="setting-group">
+            <label for="yt-api-key">API Key <span class="field-optional">(required for browsing)</span></label>
+            <div class="secret-row">
+              <input id="yt-api-key" type="password" autocomplete="off" placeholder="YouTube Data API v3 key">
+              <button class="eye-btn" id="yt-api-key-eye-btn" aria-label="Toggle visibility"><span data-icon="eye" data-size="14"></span></button>
+            </div>
+          </div>
+          <div class="setting-group">
+            <label for="yt-client-id">OAuth Client ID <span class="field-optional">(required for login)</span></label>
+            <input id="yt-client-id" type="text" autocomplete="off" placeholder="From Google Cloud Console">
+          </div>
+          <div class="setting-group">
+            <label for="yt-client-secret">OAuth Client Secret <span class="field-optional">(required for login)</span></label>
+            <div class="secret-row">
+              <input id="yt-client-secret" type="password" autocomplete="off" placeholder="From Google Cloud Console">
+              <button class="eye-btn" id="yt-client-secret-eye-btn" aria-label="Toggle visibility"><span data-icon="eye" data-size="14"></span></button>
+            </div>
+          </div>
+          <div class="oauth-note">
+            Enable YouTube Data API v3 in Google Cloud Console, create an OAuth 2.0 client, add <code class="oauth-code">http://localhost:3457/callback</code> as redirect URI.
+          </div>
+        </div>
+        <div id="yt-login-area" class="platform-auth-row">
+          <button id="yt-login-btn" class="oauth-login-btn">Connect YouTube Account</button>
+        </div>
+        <div id="yt-user-area" class="platform-auth-row hidden">
+          <div id="yt-display-name" class="setting-user-display mb-1"></div>
+          <div id="yt-quota-display" class="setting-quota-display"></div>
+          <button id="yt-import-btn" class="import-btn">Import Subscriptions</button>
+          <a id="yt-logout-btn" class="logout-link" role="button" tabindex="0">Logout</a>
+        </div>
+        <div class="platform-actions">
+          <button id="yt-test-btn" class="test-conn-btn" style="margin-left: auto;">Test connection</button>
+        </div>
+        <div id="yt-test-result" class="hidden test-result"></div>
+      </div>
+
+    </div>
+
+    <!-- Player panel -->
+    <div class="settings-panel" id="settings-panel-player" role="tabpanel">
       <div class="setting-group">
         <label for="s-external-player">External Player</label>
         <select id="s-external-player">
@@ -385,10 +499,51 @@
           <option value="mpv">mpv</option>
         </select>
       </div>
+      <div class="setting-group">
+        <label for="s-iina">IINA Path</label>
+        <input id="s-iina" type="text" autocomplete="off">
+      </div>
       <div class="setting-group hidden" id="s-mpv-group">
         <label for="s-mpv">mpv Path</label>
         <input id="s-mpv" type="text" autocomplete="off">
       </div>
+      <div class="setting-group">
+        <label for="s-streamlink">Streamlink Path</label>
+        <input id="s-streamlink" type="text" autocomplete="off">
+      </div>
+      <div class="setting-group">
+        <label for="s-recording-path">Recording Directory</label>
+        <input id="s-recording-path" type="text" autocomplete="off">
+      </div>
+      <div class="setting-group">
+        <div class="setting-label">Twitch Low-Latency Mode</div>
+        <label class="checkbox-row">
+          <input type="checkbox" id="s-low-latency"> Enable low-latency HLS (Twitch only)
+        </label>
+        <p class="setting-hint">Reduces stream delay. Requires streamlink &ge;6.x and Twitch support.</p>
+      </div>
+    </div>
+
+    <!-- Chat panel -->
+    <div class="settings-panel" id="settings-panel-chat" role="tabpanel">
+      <div class="setting-group">
+        <div class="setting-label">Picture-in-Picture</div>
+        <label class="checkbox-row">
+          <input type="checkbox" id="s-pip-enabled"> Show PiP button in player header
+        </label>
+      </div>
+    </div>
+
+    <!-- Appearance panel -->
+    <div class="settings-panel" id="settings-panel-appearance" role="tabpanel">
+      <div class="setting-group">
+        <div class="setting-label" id="accent-color-label">Accent Color</div>
+        <div id="accent-swatches" class="accent-swatches"></div>
+      </div>
+    </div>
+
+    <!-- Advanced panel: intervals + hotkeys + statistics -->
+    <div class="settings-panel" id="settings-panel-advanced" role="tabpanel">
       <div class="setting-group">
         <label for="s-interval">Refresh Interval</label>
         <select id="s-interval">
@@ -398,199 +553,56 @@
         </select>
       </div>
       <div class="setting-group">
-        <div class="setting-label">Twitch Low-Latency Mode</div>
-        <label class="checkbox-row">
-          <input type="checkbox" id="s-low-latency"> Enable low-latency HLS (Twitch only)
-        </label>
-        <p class="setting-hint">Reduces stream delay. Requires streamlink &ge;6.x and Twitch support.</p>
-      </div>
-      <div class="setting-group">
-        <label for="s-recording-path">Recording Directory</label>
-        <input id="s-recording-path" type="text" autocomplete="off">
-      </div>
-      <div class="setting-group">
-        <div class="setting-label" id="accent-color-label">Accent Color</div>
-        <div id="accent-swatches" class="accent-swatches"></div>
-      </div>
-    </div>
-
-    <!-- Twitch panel -->
-    <div class="settings-panel" id="settings-panel-twitch" role="tabpanel">
-      <div id="twitch-bundled-status" class="setting-group">
-        <div class="bundled-app-badge">
-          <span data-icon="check" data-size="14"></span>
-          Using TwitchX built-in app
-        </div>
-        <p class="setting-hint">No setup required. <a id="twitch-advanced-toggle" class="toggle-link" href="#">Use custom credentials &#9662;</a></p>
-      </div>
-      <div id="twitch-advanced-section" class="hidden">
-        <div class="setting-group">
-          <label for="s-client-id">Client ID</label>
-          <input id="s-client-id" type="text" autocomplete="off" placeholder="Leave blank to use built-in">
-        </div>
-        <div class="setting-group">
-          <label for="s-client-secret">Client Secret</label>
-          <div class="secret-row">
-            <input id="s-client-secret" type="password" autocomplete="off" placeholder="Leave blank to use built-in">
-            <button class="eye-btn" id="eye-toggle-btn" aria-label="Toggle visibility"><span data-icon="eye" data-size="14"></span></button>
-          </div>
-        </div>
-        <div class="oauth-note">
-          OAuth Redirect URL (add to dev.twitch.tv/console):<br>
-          http://localhost:3457/callback
-        </div>
-      </div>
-      <div class="settings-btns">
-        <button id="test-btn">Test Connection</button>
-      </div>
-    </div>
-
-    <!-- Kick panel -->
-    <div class="settings-panel" id="settings-panel-kick" role="tabpanel">
-      <div id="kick-bundled-status" class="setting-group">
-        <div class="bundled-app-badge">
-          <span data-icon="check" data-size="14"></span>
-          Using TwitchX built-in app
-        </div>
-        <p class="setting-hint">No setup required. <a id="kick-advanced-toggle" class="toggle-link" href="#">Use custom credentials &#9662;</a></p>
-      </div>
-      <div id="kick-advanced-section" class="hidden">
-        <div class="setting-group">
-          <label for="s-kick-client-id">Kick Client ID</label>
-          <input id="s-kick-client-id" type="text" autocomplete="off" placeholder="Leave blank to use built-in">
-        </div>
-        <div class="setting-group">
-          <label for="s-kick-client-secret">Kick Client Secret</label>
-          <div class="secret-row">
-            <input id="s-kick-client-secret" type="password" autocomplete="off" placeholder="Leave blank to use built-in">
-            <button class="eye-btn" id="kick-eye-toggle-btn" aria-label="Toggle visibility"><span data-icon="eye" data-size="14"></span></button>
-          </div>
-        </div>
-        <div class="oauth-note">
-          Kick OAuth uses the same callback URL:<br>
-          http://localhost:3457/callback<br><br>
-          Kick's API does not currently expose followed channels for import, so Kick favorites still need to be added manually via search or direct slug.
-        </div>
-      </div>
-      <div id="kick-login-area" class="setting-group">
-        <button id="kick-login-btn" class="oauth-login-btn">Login with Kick</button>
-      </div>
-      <div id="kick-user-area" class="setting-group hidden">
-        <div id="kick-user-display" class="setting-user-display"></div>
-        <a id="kick-logout-settings-link" class="logout-link" role="button" tabindex="0">Logout from Kick</a>
-      </div>
-      <div class="settings-btns">
-        <button id="kick-test-btn">Test Kick Connection</button>
-      </div>
-    </div>
-
-    <!-- YouTube panel -->
-    <div class="settings-panel" id="settings-panel-youtube" role="tabpanel">
-      <div id="yt-bundled-status" class="setting-group">
-        <div class="bundled-app-badge">
-          <span data-icon="check" data-size="14"></span>
-          Using TwitchX built-in app
-        </div>
-        <p class="setting-hint">No setup required. <a id="yt-advanced-toggle" class="toggle-link" href="#">Use personal API key / credentials &#9662;</a></p>
-      </div>
-      <div id="yt-advanced-section" class="hidden">
-        <div class="setting-group">
-          <label for="yt-api-key">YouTube API Key</label>
-          <div class="secret-row">
-            <input id="yt-api-key" type="password" autocomplete="off" placeholder="Leave blank to use built-in">
-            <button class="eye-btn" id="yt-api-key-eye-btn" aria-label="Toggle visibility"><span data-icon="eye" data-size="14"></span></button>
-          </div>
-        </div>
-        <div class="setting-group">
-          <label for="yt-client-id">OAuth Client ID</label>
-          <input id="yt-client-id" type="text" autocomplete="off" placeholder="Leave blank to use built-in">
-        </div>
-        <div class="setting-group">
-          <label for="yt-client-secret">OAuth Client Secret</label>
-          <div class="secret-row">
-            <input id="yt-client-secret" type="password" autocomplete="off" placeholder="Leave blank to use built-in">
-            <button class="eye-btn" id="yt-client-secret-eye-btn" aria-label="Toggle visibility"><span data-icon="eye" data-size="14"></span></button>
-          </div>
-        </div>
-        <div class="oauth-note">
-          Client ID + Secret required for login and subscription import
-        </div>
-      </div>
-      <div id="yt-login-area" class="setting-group">
-        <button id="yt-login-btn" class="oauth-login-btn">Connect YouTube Account</button>
-      </div>
-      <div id="yt-user-area" class="setting-group hidden">
-        <div id="yt-display-name" class="setting-user-display mb-1"></div>
-        <div id="yt-quota-display" class="setting-quota-display"></div>
-        <button id="yt-import-btn" class="import-btn">Import Subscriptions</button>
-        <a id="yt-logout-btn" class="logout-link" role="button" tabindex="0">Logout from YouTube</a>
-      </div>
-      <div class="settings-btns">
-        <button id="yt-test-btn">Test YouTube Connection</button>
-      </div>
-      <div id="yt-test-result" class="hidden test-result"></div>
-    </div>
-
-    <!-- Hotkeys panel -->
-    <div class="settings-panel" id="settings-panel-hotkeys" role="tabpanel">
-      <div class="setting-group">
         <div class="setting-label">Keyboard Shortcuts</div>
         <p class="setting-hint setting-hint-spaced">Click a key badge to rebind it. Press Esc to cancel.</p>
         <table id="hotkeys-table" class="hotkeys-table"></table>
         <button id="reset-shortcuts-btn" class="reset-btn">Reset to Defaults</button>
       </div>
-      <div class="setting-group mt-1">
-        <div class="setting-label">Picture-in-Picture</div>
-        <label class="checkbox-row">
-          <input type="checkbox" id="s-pip-enabled"> Show PiP button in player header
-        </label>
-      </div>
-    </div>
-
-    <!-- Statistics panel -->
-    <div class="settings-panel" id="settings-panel-statistics" role="tabpanel">
-      <div class="stats-controls">
-        <div id="stats-loading" class="stats-loading stats-loading--header">Loading statistics...</div>
-        <button id="stats-compact-toggle" title="Toggle compact view">Compact</button>
-      </div>
-      <div id="stats-content" class="hidden">
-        <div class="setting-group">
-          <div class="setting-label">Today</div>
-          <div id="stats-today" class="stats-grid">
-            <div class="stat-card">
-              <span class="stat-value" id="stat-today-time">--</span>
-              <span class="stat-label">Watch time</span>
-            </div>
-            <div class="stat-card">
-              <span class="stat-value" id="stat-today-streams">--</span>
-              <span class="stat-label">Streams</span>
-            </div>
-            <div class="stat-card">
-              <span class="stat-value" id="stat-today-channels">--</span>
-              <span class="stat-label">Channels</span>
+      <div class="setting-group">
+        <div class="setting-label">Watch Statistics</div>
+        <div class="stats-controls">
+          <div id="stats-loading" class="stats-loading stats-loading--header">Loading...</div>
+          <button id="stats-compact-toggle" class="hidden" title="Toggle compact view">Compact</button>
+        </div>
+        <div id="stats-content" class="hidden">
+          <div class="setting-group mt-1">
+            <div class="setting-label">Today</div>
+            <div id="stats-today" class="stats-grid">
+              <div class="stat-card">
+                <span class="stat-value" id="stat-today-time">--</span>
+                <span class="stat-label">Watch time</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-value" id="stat-today-streams">--</span>
+                <span class="stat-label">Streams</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-value" id="stat-today-channels">--</span>
+                <span class="stat-label">Channels</span>
+              </div>
             </div>
           </div>
-        </div>
-        <div class="setting-group">
-          <div class="setting-label">This Week</div>
-          <div id="stats-weekly"></div>
-        </div>
-        <div class="setting-group">
-          <div class="setting-label">All Time</div>
-          <div class="stats-grid stats-grid-cols-2">
-            <div class="stat-card">
-              <span class="stat-value" id="stat-total-time">--</span>
-              <span class="stat-label">Total watch time</span>
-            </div>
-            <div class="stat-card">
-              <span class="stat-value" id="stat-total-channels">--</span>
-              <span class="stat-label">Unique channels</span>
+          <div class="setting-group">
+            <div class="setting-label">This Week</div>
+            <div id="stats-weekly"></div>
+          </div>
+          <div class="setting-group">
+            <div class="setting-label">All Time</div>
+            <div class="stats-grid stats-grid-cols-2">
+              <div class="stat-card">
+                <span class="stat-value" id="stat-total-time">--</span>
+                <span class="stat-label">Total watch time</span>
+              </div>
+              <div class="stat-card">
+                <span class="stat-value" id="stat-total-channels">--</span>
+                <span class="stat-label">Unique channels</span>
+              </div>
             </div>
           </div>
-        </div>
-        <div class="setting-group">
-          <div class="setting-label">Top Channels</div>
-          <div id="stats-top-channels" class="stats-list"></div>
+          <div class="setting-group">
+            <div class="setting-label">Top Channels</div>
+            <div id="stats-top-channels" class="stats-list"></div>
+          </div>
         </div>
       </div>
     </div>

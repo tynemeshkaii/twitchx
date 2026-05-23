@@ -284,6 +284,8 @@ TwitchX._bindChannelEvents = function() {
   });
   const followBtn = document.getElementById('channel-follow-btn');
   if (followBtn) followBtn.addEventListener('click', TwitchX.toggleChannelFollow);
+  const openBtn = document.getElementById('channel-open-btn');
+  if (openBtn) openBtn.addEventListener('click', TwitchX.openChannelInBrowser);
   const watchBtn = document.getElementById('channel-watch-btn');
   if (watchBtn) watchBtn.addEventListener('click', TwitchX.watchChannelStream);
 };
@@ -543,7 +545,7 @@ TwitchX._bindSettingsEvents = function() {
       TwitchX.setActiveTab(Array.from(document.querySelectorAll('.settings-tab')), btn);
       document.querySelectorAll('.settings-panel').forEach(function(p) { p.classList.remove('active'); });
       document.getElementById('settings-panel-' + btn.dataset.tab).classList.add('active');
-      if (btn.dataset.tab === 'statistics') {
+      if (btn.dataset.tab === 'advanced') {
         TwitchX.loadWatchStatistics();
       }
     });
@@ -566,12 +568,7 @@ TwitchX._bindSettingsEvents = function() {
   if (kickLoginBtn) kickLoginBtn.addEventListener('click', function() {
     const cid = document.getElementById('s-kick-client-id').value.trim();
     const cs = document.getElementById('s-kick-client-secret').value.trim();
-    if (!cid || !cs) {
-      const fb = document.getElementById('settings-feedback');
-      fb.textContent = 'Kick Client ID and Secret are required';
-      fb.style.color = 'var(--error-red)';
-      return;
-    }
+    // Empty fields are fine — Python uses bundled Kick credentials
     if (TwitchX.api) TwitchX.api.kick_login(cid, cs);
   });
   const kickLogoutSettings = document.getElementById('kick-logout-settings-link');
@@ -584,15 +581,9 @@ TwitchX._bindSettingsEvents = function() {
   if (kickTestBtn) kickTestBtn.addEventListener('click', function() {
     const cid = document.getElementById('s-kick-client-id').value.trim();
     const cs = document.getElementById('s-kick-client-secret').value.trim();
-    if (!cid || !cs) {
-      const fb = document.getElementById('settings-feedback');
-      fb.textContent = 'Kick Client ID and Secret are required';
-      fb.style.color = 'var(--error-red)';
-      return;
-    }
+    // Empty fields are fine — Python falls back to bundled Kick credentials
     document.getElementById('kick-test-btn').disabled = true;
-    document.getElementById('settings-feedback').textContent = 'Testing Kick...';
-    document.getElementById('settings-feedback').style.color = 'var(--text-muted)';
+    _setFeedback('Testing Kick...');
     TwitchX.api.kick_test_connection(cid, cs);
   });
 
@@ -610,14 +601,14 @@ TwitchX._bindSettingsEvents = function() {
 
   // YouTube login/logout/import
   const ytLoginBtn = document.getElementById('yt-login-btn');
-    if (ytLoginBtn) ytLoginBtn.addEventListener('click', function() {
+  if (ytLoginBtn) ytLoginBtn.addEventListener('click', function() {
     const cid = document.getElementById('yt-client-id').value.trim();
     const cs = document.getElementById('yt-client-secret').value.trim();
     if (!cid || !cs) {
       const fb = document.getElementById('yt-test-result');
       fb.classList.remove('hidden');
       fb.style.color = 'var(--error-red)';
-      fb.textContent = 'YouTube Client ID and Secret are required';
+      fb.textContent = 'OAuth Client ID and Secret are required to log in — enter them above first.';
       return;
     }
     if (TwitchX.api) TwitchX.api.youtube_login(cid, cs);
@@ -662,8 +653,6 @@ TwitchX._bindAdvancedToggles = function() {
     'Use custom credentials ▾', 'Hide custom credentials ▴');
   _makeToggle('kick-advanced-toggle', 'kick-advanced-section',
     'Use custom credentials ▾', 'Hide custom credentials ▴');
-  _makeToggle('yt-advanced-toggle', 'yt-advanced-section',
-    'Use personal API key / credentials ▾', 'Hide personal credentials ▴');
 };
 
 TwitchX._bindContextMenuEvents = function() {
@@ -672,6 +661,13 @@ TwitchX._bindContextMenuEvents = function() {
     const target = e.target.closest('[data-action]');
     const action = target ? target.dataset.action : null;
     if (!action || !TwitchX.ctxChannel) return;
+    if (target.getAttribute('aria-disabled') === 'true') {
+      const reason = target.dataset.disabledReason || target.title || 'This action is not available for this platform.';
+      TwitchX.setStatus(reason, 'warn');
+      TwitchX.showToast(reason, 'warn');
+      e.preventDefault();
+      return;
+    }
     const ctxStream = TwitchX.findStreamByKey(TwitchX.ctxChannelKey);
     const ctxPlat = (ctxStream && ctxStream.platform) ||
       TwitchX.getChannelPlatform(TwitchX.ctxChannel, TwitchX.ctxChannelKey);
@@ -803,6 +799,8 @@ TwitchX._bindGlobalEvents = function() {
 TwitchX._bindMultistreamEvents = function() {
   const msSidebarBtn = document.getElementById('ms-sidebar-btn');
   if (msSidebarBtn) msSidebarBtn.addEventListener('click', TwitchX.toggleMsSidebar);
+  const msAddSlotBtn = document.getElementById('ms-add-slot-btn');
+  if (msAddSlotBtn) msAddSlotBtn.addEventListener('click', TwitchX.openFirstEmptyMultiSlot);
   const msToggleChatBtn = document.getElementById('ms-toggle-chat-btn');
   if (msToggleChatBtn) msToggleChatBtn.addEventListener('click', TwitchX.toggleMsChat);
   const msCloseBtn = document.getElementById('ms-close-btn');
@@ -816,10 +814,7 @@ TwitchX._bindMultistreamEvents = function() {
     const addBtn = e.target.closest('.ms-add-btn');
     if (addBtn) {
       const slot = parseInt(addBtn.dataset.slot, 10);
-      const slotEl = document.querySelector('.ms-slot[data-slot-idx="' + slot + '"]');
-      slotEl.querySelector('.ms-slot-empty').classList.add('hidden');
-      slotEl.querySelector('.ms-add-form').classList.remove('hidden');
-      slotEl.querySelector('.ms-add-input').focus();
+      TwitchX.openFirstEmptyMultiSlot(slot);
       return;
     }
     const confirmBtn = e.target.closest('.ms-confirm-btn');
@@ -831,8 +826,10 @@ TwitchX._bindMultistreamEvents = function() {
       if (channel) {
         TwitchX.addMultiSlot(slot, channel, platform);
       } else {
+        slotEl.classList.remove('ms-add-form-open');
         slotEl.querySelector('.ms-add-form').classList.add('hidden');
         slotEl.querySelector('.ms-slot-empty').classList.remove('hidden');
+        if (TwitchX._setMultiSlotState) TwitchX._setMultiSlotState(slot, 'empty', 'Empty');
       }
       return;
     }
@@ -840,8 +837,10 @@ TwitchX._bindMultistreamEvents = function() {
     if (cancelBtn) {
       const slot = parseInt(cancelBtn.dataset.slot, 10);
       const slotEl = document.querySelector('.ms-slot[data-slot-idx="' + slot + '"]');
+      slotEl.classList.remove('ms-add-form-open');
       slotEl.querySelector('.ms-add-form').classList.add('hidden');
       slotEl.querySelector('.ms-slot-empty').classList.remove('hidden');
+      if (TwitchX._setMultiSlotState) TwitchX._setMultiSlotState(slot, 'empty', 'Empty');
       return;
     }
     const audioBtn = e.target.closest('.ms-audio-btn');
@@ -876,8 +875,10 @@ TwitchX._bindMultistreamEvents = function() {
     if (e.key === 'Escape' && form) {
       e.preventDefault();
       const slotEl = form.closest('.ms-slot');
+      slotEl.classList.remove('ms-add-form-open');
       form.classList.add('hidden');
       slotEl.querySelector('.ms-slot-empty').classList.remove('hidden');
+      if (TwitchX._setMultiSlotState) TwitchX._setMultiSlotState(parseInt(slotEl.dataset.slotIdx, 10), 'empty', 'Empty');
       var addBtn = slotEl.querySelector('.ms-add-btn');
       if (addBtn) addBtn.focus();
       return;
@@ -890,29 +891,17 @@ TwitchX._bindMultistreamEvents = function() {
     if (channel) {
       TwitchX.addMultiSlot(idx, channel, platform);
     } else {
+      slotEl.classList.remove('ms-add-form-open');
       slotEl.querySelector('.ms-add-form').classList.add('hidden');
       slotEl.querySelector('.ms-slot-empty').classList.remove('hidden');
+      if (TwitchX._setMultiSlotState) TwitchX._setMultiSlotState(idx, 'empty', 'Empty');
     }
   });
 
   // ms-chat send button
   const msChatSendBtn = document.getElementById('ms-chat-send-btn');
   if (msChatSendBtn) msChatSendBtn.addEventListener('click', function() {
-    const input = document.getElementById('ms-chat-input');
-    const text = input.value.trim();
-    if (!text || !TwitchX.api) return;
-    const r = TwitchX.chatReplyTo;
-    const requestId = 'ms-send-' + Date.now();
-    TwitchX.api.send_chat(
-      text,
-      r ? r.id : null,
-      r ? r.display : null,
-      r ? r.body : null,
-      requestId
-    );
-    input.value = '';
-    if (TwitchX.clearChatReply) TwitchX.clearChatReply();
-    if (TwitchX.closeEmotePicker) TwitchX.closeEmotePicker();
+    TwitchX.submitChatMessage();
   });
   const msChatInput = document.getElementById('ms-chat-input');
   if (msChatInput) msChatInput.addEventListener('keydown', function(e) {
@@ -951,6 +940,7 @@ TwitchX._initMultistreamSlots = function() {
   for (let i = 0; i < 4; i++) {
     grid.appendChild(TwitchX._createMultiSlot(i));
   }
+  if (TwitchX._updateMultiGridLayout) TwitchX._updateMultiGridLayout();
 };
 
 /* ── Uptime counter ─────────────────────────────────────── */

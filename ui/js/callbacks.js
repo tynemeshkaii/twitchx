@@ -3,6 +3,7 @@ const TwitchX = window.TwitchX;
 
 window.onStreamsUpdate = function(data) {
   TwitchX.state.hasCredentials = data.has_credentials !== false;
+  TwitchX.state.streamsLoaded = true;
   TwitchX.state.favorites = data.favorites || [];
   TwitchX.state.favoritesMeta = data.favorites_meta || {};
   const newStreams = data.streams || [];
@@ -253,6 +254,16 @@ window.onStreamReady = function(data) {
   TwitchX.state.streamType = data.stream_type || 'live';
   document.getElementById('player-channel-name').textContent = data.channel || '';
   document.getElementById('player-stream-title').textContent = data.title || '';
+  if (TwitchX.state.playerHasChat) {
+    TwitchX.chatAuthenticated = false;
+    TwitchX.chatPlatform = TwitchX.state.playerPlatform;
+    TwitchX.setChatNotice('Connecting to chat...', 'connecting');
+    TwitchX.updateChatInput();
+  } else {
+    TwitchX.chatAuthenticated = false;
+    TwitchX.setChatNotice('Chat is not available for this media', 'unavailable');
+    TwitchX.updateChatInput();
+  }
 
   // HLS / native video path (Twitch, Kick, YouTube via streamlink)
   // Cancel any in-flight gentle reset so the new src lands on the correct element.
@@ -319,6 +330,7 @@ window.onMultiSlotReady = function(data) {
     loading.classList.add('hidden');
     errEl.textContent = data.error;
     errEl.classList.remove('hidden');
+    if (TwitchX._setMultiSlotState) TwitchX._setMultiSlotState(idx, 'error', 'Error');
     return;
   }
 
@@ -330,11 +342,12 @@ window.onMultiSlotReady = function(data) {
   });
   loading.classList.add('hidden');
   errEl.classList.add('hidden');
+  if (TwitchX._setMultiSlotState) TwitchX._setMultiSlotState(idx, 'playing', 'Playing');
 
   active.querySelector('.ms-channel-name').textContent = data.channel || '';
   var badge = active.querySelector('.ms-platform-badge');
   badge.className = 'ms-platform-badge ' + (data.platform || 'twitch');
-  badge.textContent = (data.platform || '').charAt(0).toUpperCase();
+  badge.textContent = TwitchX.platformLabel(data.platform || 'twitch');
   if (data.title) TwitchX.multiState.slots[idx].title = data.title;
 
   if (TwitchX.multiState.audioFocus === -1) TwitchX.setAudioFocus(idx);
@@ -389,13 +402,17 @@ window.onMultiSlotReady = function(data) {
     const fragment = document.createDocumentFragment();
     const isMulti = TwitchX.multiState.open;
     const maxMsgs = isMulti ? MAX_CHAT_MESSAGES : MAX_CHAT_MESSAGES;
+    let addedCount = 0;
 
     msgs.forEach(function(msg) {
       if (_shouldFilter(msg)) return;
       if (TwitchX._appendChatLog) TwitchX._appendChatLog(msg);
 
       if (msg.msg_id) {
-        const existing = container.querySelector('.chat-msg[data-msg-id="' + String(msg.msg_id).replace(/"/g, '\\"') + '"]');
+        const msgId = String(msg.msg_id);
+        const existing = Array.prototype.some.call(container.children, function(child) {
+          return child.classList && child.classList.contains('chat-msg') && child.dataset.msgId === msgId;
+        });
         if (existing) return;
       }
 
@@ -443,6 +460,18 @@ window.onMultiSlotReady = function(data) {
           img.className = 'badge';
           img.src = badge.icon_url;
           img.alt = badge.name;
+          img.title = badge.name;
+          img.width = 16;
+          img.height = 16;
+          img.decoding = 'async';
+          img.loading = 'lazy';
+          img.onerror = function() {
+            var fallback = document.createElement('span');
+            fallback.className = 'badge-fallback';
+            fallback.textContent = badge.name ? badge.name.charAt(0).toUpperCase() : '?';
+            fallback.title = badge.name || 'Badge';
+            this.replaceWith(fallback);
+          };
           el.appendChild(img);
         }
       }
@@ -475,8 +504,15 @@ window.onMultiSlotReady = function(data) {
       }
 
       fragment.appendChild(el);
+      addedCount++;
     });
 
+    if (addedCount === 0) return;
+    const wasAtBottom = (container.scrollHeight - container.scrollTop - container.clientHeight) < 60;
+    if (wasAtBottom) TwitchX._setChatAutoScroll(true);
+    container.querySelectorAll('.chat-empty-state').forEach(function(el) {
+      el.remove();
+    });
     container.appendChild(fragment);
 
     while (container.children.length > maxMsgs) {
@@ -516,7 +552,19 @@ window.onChatSendResult = function(result) {
   if (!result) return;
   const pending = result.request_id ? TwitchX.chatPendingSends[result.request_id] : null;
   if (result.request_id) delete TwitchX.chatPendingSends[result.request_id];
-  if (result.ok) return;
+  if (TwitchX.multiState.open) {
+    const msInput = document.getElementById('ms-chat-input');
+    const msBtn = document.getElementById('ms-chat-send-btn');
+    const disabled = !TwitchX.chatAuthenticated;
+    if (msInput) msInput.disabled = disabled;
+    if (msBtn) msBtn.disabled = disabled;
+  } else if (TwitchX.updateChatInput) {
+    TwitchX.updateChatInput();
+  }
+  if (result.ok) {
+    TwitchX.setStatus('Chat message sent', 'success');
+    return;
+  }
 
   TwitchX.showToast(result.error || 'Failed to send chat message', 'error');
   const input = document.getElementById(TwitchX.multiState.open ? 'ms-chat-input' : 'chat-input');
@@ -530,31 +578,52 @@ window.onChatSendResult = function(result) {
 };
 
 window.onChatStatus = function(status) {
+  var statusKey = TwitchX.channelKey(status.channel_id, status.platform || TwitchX.state.playerPlatform || 'twitch');
   if (TwitchX.multiState.open) {
-    const dot = document.getElementById('ms-chat-status-dot');
-    if (dot) {
-      dot.className = status.connected ? 'connected' : '';
-      dot.title = status.connected ? 'Connected' : (status.error || 'Disconnected');
-    }
-    const inp = document.getElementById('ms-chat-input');
-    const btn = document.getElementById('ms-chat-send-btn');
-    if (inp) inp.disabled = !(status.connected && status.authenticated);
-    if (btn) btn.disabled = !(status.connected && status.authenticated);
+    var activeSlot = TwitchX.multiState.slots[TwitchX.multiState.chatSlot];
+    var activeMsKey = activeSlot ? TwitchX.channelKey(activeSlot.channel, activeSlot.platform) : '';
+    if (statusKey && activeMsKey && statusKey !== activeMsKey) return;
+  } else if (TwitchX.state.watchingChannelKey && statusKey && statusKey !== TwitchX.state.watchingChannelKey) {
     return;
   }
   TwitchX.chatAuthenticated = !!(status.authenticated);
   TwitchX.chatPlatform = status.platform || TwitchX.state.playerPlatform || 'twitch';
   if (status.self_login) TwitchX.chatSelfLogin = status.self_login;
+  if (TwitchX.multiState.open) {
+    const dot = document.getElementById('ms-chat-status-dot');
+    const target = 'multi';
+    if (dot) {
+      dot.className = status.connected ? 'connected' : (status.connecting ? 'connecting' : (status.error ? 'error' : ''));
+      dot.title = status.connected ? 'Connected' : (status.error || (status.connecting ? 'Connecting' : 'Disconnected'));
+    }
+    const inp = document.getElementById('ms-chat-input');
+    const btn = document.getElementById('ms-chat-send-btn');
+    if (inp) inp.disabled = !(status.connected && status.authenticated);
+    if (btn) btn.disabled = !(status.connected && status.authenticated);
+    if (status.connected) {
+      TwitchX.setChatNotice('No messages yet', 'empty', target);
+      const newBtn = document.getElementById('ms-chat-new-messages');
+      if (newBtn) newBtn.classList.remove('visible');
+    } else if (status.connecting) {
+      TwitchX.setChatNotice('Connecting to chat...', 'connecting', target);
+    } else if (status.error) {
+      TwitchX.setChatNotice(status.error, 'error', target);
+    } else {
+      TwitchX.setChatNotice('Chat disconnected', 'disconnected', target);
+    }
+    return;
+  }
   const dot = document.getElementById('chat-status-dot');
   var statusText = document.getElementById('chat-status-text');
   if (dot) {
     if (status.connected) {
       dot.classList.remove('connecting');
+      dot.classList.remove('error');
       dot.classList.add('connected');
       dot.title = status.authenticated ? 'Connected' : 'Connected (read-only)';
-      if (statusText) statusText.textContent = '';
+      if (statusText) statusText.textContent = status.authenticated ? 'Connected' : 'Read-only';
       if (TwitchX.clearChatBatch) TwitchX.clearChatBatch();
-      TwitchX.clearChatMessages();
+      TwitchX.clearChatMessages('No messages yet');
       TwitchX.chatAutoScroll = true;
       TwitchX.loadChatFiltersFromConfig();
       const newBtn = document.getElementById('chat-new-messages');
@@ -564,6 +633,13 @@ window.onChatStatus = function(status) {
         TwitchX.dismissToast(TwitchX._chatDisconnectToast);
         TwitchX._chatDisconnectToast = null;
       }
+    } else if (status.connecting) {
+      dot.classList.remove('connected');
+      dot.classList.remove('error');
+      dot.classList.add('connecting');
+      dot.title = 'Connecting';
+      if (statusText) statusText.textContent = 'Connecting...';
+      TwitchX.setChatNotice('Connecting to chat...', 'connecting');
     } else {
       dot.classList.remove('connected');
       dot.title = status.error || 'Disconnected';
@@ -573,8 +649,12 @@ window.onChatStatus = function(status) {
       // Show yellow pulsing dot during reconnect backoff
       if (status.error && status.error.indexOf('Reconnect') !== -1) {
         dot.classList.add('connecting');
+        dot.classList.remove('error');
+        TwitchX.setChatNotice('Reconnecting to chat...', 'connecting');
       } else {
         dot.classList.remove('connecting');
+        dot.classList.toggle('error', !!status.error);
+        TwitchX.setChatNotice(status.error || 'Chat disconnected', status.error ? 'error' : 'disconnected');
       }
       if (status.error) {
         TwitchX._chatDisconnectToast = TwitchX.showToast(status.error, 'error');
@@ -794,27 +874,49 @@ window.onStatusUpdate = function(data) {
   }
 };
 
-window.onBrowseCategories = function(categories) {
+window.onBrowseCategories = function(payload) {
   document.getElementById('browse-loading').classList.add('hidden');
   const grid = document.getElementById('browse-categories-grid');
   grid.replaceChildren();
+  const categories = Array.isArray(payload) ? payload : (payload && payload.items) || [];
+  const errors = Array.isArray(payload) ? {} : (payload && payload.errors) || {};
+  const errorSummary = TwitchX.browseErrorSummary ? TwitchX.browseErrorSummary(errors) : '';
   if (!categories || !categories.length) {
-    var emptyEl = document.getElementById('browse-empty');
-    emptyEl.textContent = 'No categories found.';
-    emptyEl.classList.remove('hidden');
+    if (TwitchX.setBrowseEmpty) {
+      TwitchX.setBrowseEmpty(
+        'No categories found.',
+        errorSummary || 'Try another platform filter or check API credentials in Settings.',
+        errorSummary ? 'error' : 'empty'
+      );
+    }
     return;
   }
+  if (TwitchX.clearBrowseEmpty) TwitchX.clearBrowseEmpty();
   categories.forEach(function(cat) {
-    const card = document.createElement('div');
+    const card = document.createElement('button');
+    card.type = 'button';
     card.className = 'browse-category-card card-enter';
+    card.setAttribute('aria-label', 'Browse ' + cat.name);
     card.addEventListener('animationend', function() { card.classList.remove('card-enter'); }, { once: true });
     card.onclick = function() { TwitchX._triggerBrowseTopStreams(cat); };
 
-    const img = document.createElement('img');
-    img.className = 'browse-category-art';
-    img.alt = '';
-    if (cat.box_art_url) img.src = cat.box_art_url;
-    img.onerror = function() { img.classList.add('hidden'); };
+    const artWrap = document.createElement('div');
+    artWrap.className = 'browse-category-art-wrap';
+    if (cat.box_art_url) {
+      const img = document.createElement('img');
+      img.className = 'browse-category-art';
+      img.alt = '';
+      img.src = cat.box_art_url;
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.onerror = function() {
+        img.remove();
+        artWrap.appendChild(TwitchX.createImageFallback(cat.name, 'browse-category-fallback'));
+      };
+      artWrap.appendChild(img);
+    } else {
+      artWrap.appendChild(TwitchX.createImageFallback(cat.name, 'browse-category-fallback'));
+    }
 
     const info = document.createElement('div');
     info.className = 'browse-category-info';
@@ -826,15 +928,12 @@ window.onBrowseCategories = function(categories) {
     const badges = document.createElement('div');
     badges.className = 'browse-category-platforms';
     (cat.platforms || []).forEach(function(p) {
-      const badge = document.createElement('span');
-      badge.className = 'platform-badge ' + p;
-      badge.textContent = p.charAt(0).toUpperCase();
-      badges.appendChild(badge);
+      badges.appendChild(TwitchX.createPlatformBadge(p, TwitchX.platformLabel(p)));
     });
 
     info.appendChild(nameEl);
     info.appendChild(badges);
-    card.appendChild(img);
+    card.appendChild(artWrap);
     card.appendChild(info);
     grid.appendChild(card);
   });
@@ -849,69 +948,157 @@ window.onBrowseTopStreams = function(payload) {
   if (!payload || !payload.category || payload.category !== (TwitchX.state.browseCategory && TwitchX.state.browseCategory.name)) return;
   const grid = document.getElementById('browse-streams-grid');
   grid.replaceChildren();
+  const errorSummary = TwitchX.browseErrorSummary ? TwitchX.browseErrorSummary(payload.errors || {}) : '';
   if (!payload || !payload.streams || !payload.streams.length) {
-    var emptyEl = document.getElementById('browse-empty');
-    emptyEl.textContent = 'No streams found for this category.';
-    emptyEl.classList.remove('hidden');
+    if (TwitchX.setBrowseEmpty) {
+      TwitchX.setBrowseEmpty(
+        'No live streams found for this category.',
+        errorSummary || 'Some platforms may not expose this category or may be offline right now.',
+        errorSummary ? 'error' : 'empty'
+      );
+    }
     return;
   }
+  if (TwitchX.clearBrowseEmpty) TwitchX.clearBrowseEmpty();
   payload.streams.forEach(function(stream) {
     const card = document.createElement('div');
-    card.className = 'browse-stream-card card-enter';
+    const restriction = TwitchX.browseStreamRestriction
+      ? TwitchX.browseStreamRestriction(stream)
+      : { canWatch: stream.platform !== 'youtube', reason: '' };
+    card.className = 'browse-stream-card card-enter platform-' + (stream.platform || 'twitch');
+    card.dataset.platform = stream.platform || 'twitch';
+    card.dataset.login = stream.channel_login || '';
+    card.dataset.key = TwitchX.channelKey(stream.channel_login, stream.platform || 'twitch');
+    card.tabIndex = 0;
+    card.setAttribute('role', 'button');
+    card.setAttribute('aria-label', 'View ' + (stream.display_name || stream.channel_login) + ' on ' + TwitchX.platformLabel(stream.platform || 'twitch'));
     card.addEventListener('animationend', function() { card.classList.remove('card-enter'); }, { once: true });
+    card.addEventListener('click', function() {
+      TwitchX.showChannelView(stream.channel_login, stream.platform, 'browse');
+    });
+    card.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        card.click();
+      }
+    });
+    card.addEventListener('contextmenu', function(e) {
+      if (TwitchX.showContextMenu) TwitchX.showContextMenu(e, stream.channel_login, stream.platform);
+    });
 
-    if (stream.platform !== 'youtube') {
-      card.onclick = function() {
-        TwitchX.hideBrowseView();
-        const quality = document.getElementById('quality-select')
-          ? document.getElementById('quality-select').value
-          : 'best';
-        if (TwitchX.api) TwitchX.api.watch_direct(stream.channel_login, stream.platform, quality);
+    const thumbWrap = document.createElement('div');
+    thumbWrap.className = 'browse-stream-thumb-wrap';
+    if (stream.thumbnail_url) {
+      const thumb = document.createElement('img');
+      thumb.className = 'browse-stream-thumb';
+      thumb.alt = '';
+      thumb.src = stream.thumbnail_url;
+      thumb.loading = 'lazy';
+      thumb.decoding = 'async';
+      thumb.onerror = function() {
+        thumb.remove();
+        thumbWrap.appendChild(TwitchX.createImageFallback(stream.display_name || stream.channel_login, 'browse-stream-thumb-fallback'));
       };
+      thumbWrap.appendChild(thumb);
+    } else {
+      thumbWrap.appendChild(TwitchX.createImageFallback(stream.display_name || stream.channel_login, 'browse-stream-thumb-fallback'));
     }
-
-    const thumb = document.createElement('img');
-    thumb.className = 'browse-stream-thumb';
-    thumb.alt = '';
-    if (stream.thumbnail_url) thumb.src = stream.thumbnail_url;
-    thumb.onerror = function() { thumb.classList.add('hidden'); };
+    const liveBadge = document.createElement('span');
+    liveBadge.className = 'browse-live-badge';
+    liveBadge.textContent = stream.platform === 'youtube' ? 'LIVE SEARCH' : 'LIVE';
+    thumbWrap.appendChild(liveBadge);
+    thumbWrap.appendChild(TwitchX.createPlatformBadge(stream.platform || 'twitch', TwitchX.platformLabel(stream.platform || 'twitch')));
 
     const info = document.createElement('div');
     info.className = 'browse-stream-info';
 
-    const badge = document.createElement('span');
-    badge.className = 'platform-badge ' + stream.platform;
-    badge.textContent = stream.platform.charAt(0).toUpperCase();
-
     const nameEl = document.createElement('span');
     nameEl.className = 'browse-stream-name';
-    nameEl.textContent = stream.display_name;
+    nameEl.textContent = stream.display_name || stream.channel_login || 'Unknown channel';
 
     const titleEl = document.createElement('span');
     titleEl.className = 'browse-stream-title';
-    titleEl.textContent = stream.title;
+    titleEl.textContent = stream.title || 'Untitled stream';
+
+    const categoryEl = document.createElement('span');
+    categoryEl.className = 'browse-stream-category';
+    categoryEl.textContent = stream.category || payload.category || '';
 
     const viewersEl = document.createElement('span');
     viewersEl.className = 'browse-stream-viewers';
-    if (stream.viewers) viewersEl.textContent = TwitchX.formatViewers(stream.viewers);
+    viewersEl.textContent = stream.viewers
+      ? TwitchX.formatViewers(stream.viewers) + ' viewers'
+      : (stream.platform === 'youtube' ? 'Viewer count unavailable' : '');
 
-    info.appendChild(badge);
     info.appendChild(nameEl);
     info.appendChild(titleEl);
-    info.appendChild(viewersEl);
-    card.appendChild(thumb);
+    if (categoryEl.textContent) info.appendChild(categoryEl);
+    if (viewersEl.textContent) info.appendChild(viewersEl);
+    card.appendChild(thumbWrap);
     card.appendChild(info);
 
-    const profileLink = document.createElement('div');
-    profileLink.className = 'browse-stream-profile-link';
-    profileLink.textContent = 'View Channel';
-    (function(s) {
-      profileLink.onclick = function(e) {
-        e.stopPropagation();
-        TwitchX.showChannelView(s.channel_login, s.platform, 'browse');
+    const actions = document.createElement('div');
+    actions.className = 'browse-stream-actions';
+
+    const watchBtn = document.createElement('button');
+    watchBtn.className = 'browse-stream-action primary';
+    watchBtn.type = 'button';
+    watchBtn.textContent = 'Watch';
+    if (!restriction.canWatch) {
+      watchBtn.classList.add('disabled');
+      watchBtn.setAttribute('aria-disabled', 'true');
+      watchBtn.title = restriction.reason;
+      watchBtn.setAttribute('aria-label', 'Watch unavailable: ' + restriction.reason);
+    } else {
+      watchBtn.setAttribute('aria-disabled', 'false');
+    }
+    watchBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (!restriction.canWatch) {
+        TwitchX.setStatus(restriction.reason, 'warn');
+        TwitchX.showToast(restriction.reason, 'warn');
+        return;
+      }
+      TwitchX.hideBrowseView();
+      const quality = document.getElementById('quality-select')
+        ? document.getElementById('quality-select').value
+        : 'best';
+      if (TwitchX.api) TwitchX.api.watch_direct(stream.channel_login, stream.platform, quality);
+    });
+    actions.appendChild(watchBtn);
+
+    const profileBtn = document.createElement('button');
+    profileBtn.className = 'browse-stream-action secondary';
+    profileBtn.type = 'button';
+    profileBtn.textContent = 'Channel';
+    profileBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      TwitchX.showChannelView(stream.channel_login, stream.platform, 'browse');
+    });
+    actions.appendChild(profileBtn);
+
+    const favKey = TwitchX.channelKey(stream.channel_login, stream.platform || 'twitch');
+    const favBtn = document.createElement('button');
+    favBtn.className = 'browse-stream-action icon';
+    favBtn.type = 'button';
+    favBtn.title = TwitchX.state.favoritesMeta[favKey] ? 'Remove from favorites' : 'Add to favorites';
+    favBtn.setAttribute('aria-label', favBtn.title);
+    favBtn.classList.toggle('active', !!TwitchX.state.favoritesMeta[favKey]);
+    TwitchX.setIconOnly(favBtn, 'star', 14);
+    favBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (!TwitchX.api) return;
+      if (TwitchX.state.favoritesMeta[favKey]) {
+        TwitchX.api.remove_channel(stream.channel_login, stream.platform);
+        TwitchX.setStatus('Removed ' + (stream.display_name || stream.channel_login) + ' from favorites', 'info');
+      } else {
+        TwitchX.api.add_channel(stream.channel_login, stream.platform, stream.display_name || '');
+        TwitchX.setStatus('Added ' + (stream.display_name || stream.channel_login) + ' to favorites', 'success');
       };
-    })(stream);
-    card.appendChild(profileLink);
+    });
+    actions.appendChild(favBtn);
+
+    card.appendChild(actions);
 
     grid.appendChild(card);
   });
@@ -931,31 +1118,76 @@ window.onChannelProfile = function(profile) {
   document.getElementById('channel-header-title').textContent = profile.display_name || profile.login;
   document.getElementById('channel-display-name').textContent = profile.display_name || profile.login;
   document.getElementById('channel-login-text').textContent = '@' + profile.login;
+  const platformBadge = document.getElementById('channel-platform-badge');
+  if (platformBadge) {
+    platformBadge.className = 'platform-badge ' + (profile.platform || 'twitch');
+    platformBadge.textContent = TwitchX.platformLabel(profile.platform || 'twitch');
+    platformBadge.classList.remove('hidden');
+  }
 
   const followersEl = document.getElementById('channel-followers');
   followersEl.textContent = profile.followers >= 0
     ? TwitchX.formatViewers(profile.followers) + ' followers'
     : '';
 
+  const platformNote = document.getElementById('channel-platform-note');
+  if (platformNote) {
+    platformNote.textContent = profile.platform_note || '';
+    platformNote.classList.toggle('hidden', !profile.platform_note);
+  }
+
   var bioEl = document.getElementById('channel-bio');
   bioEl.textContent = profile.bio || '';
   bioEl.classList.toggle('hidden', !profile.bio);
 
   const avatarEl = document.getElementById('channel-avatar');
+  const avatarFallback = document.getElementById('channel-avatar-fallback');
+  if (avatarFallback) {
+    avatarFallback.textContent = (profile.display_name || profile.login || '?').charAt(0).toUpperCase();
+    avatarFallback.classList.remove('hidden');
+  }
   if (profile.avatar_url) {
     avatarEl.src = profile.avatar_url;
+    avatarEl.alt = (profile.display_name || profile.login) + ' avatar';
     avatarEl.classList.remove('hidden');
+    avatarEl.onerror = function() {
+      avatarEl.classList.add('hidden');
+      if (avatarFallback) avatarFallback.classList.remove('hidden');
+    };
+    avatarEl.onload = function() {
+      if (avatarFallback) avatarFallback.classList.add('hidden');
+    };
+  } else {
+    avatarEl.classList.add('hidden');
   }
 
   document.getElementById('channel-live-badge').classList.toggle('hidden', !profile.is_live);
-  document.getElementById('channel-live-empty').classList.toggle('hidden', !!profile.is_live);
+  const liveEmpty = document.getElementById('channel-live-empty');
+  if (profile.is_live) {
+    liveEmpty.textContent = profile.platform === 'youtube'
+      ? 'This YouTube channel appears live, but direct playback from channel profiles is limited. Use Browser or available media items.'
+      : 'Channel is live. Use Watch Now to start playback.';
+  } else {
+    liveEmpty.textContent = profile.platform === 'youtube'
+      ? 'No live YouTube stream is known right now. YouTube live discovery depends on API quota and login.'
+      : 'Channel is not live right now.';
+  }
+  liveEmpty.classList.toggle('hidden', !!profile.is_live && profile.watch_supported);
 
   const followBtn = document.getElementById('channel-follow-btn');
   followBtn.textContent = profile.is_favorited ? 'Following' : 'Follow';
   followBtn.classList.toggle('following', !!profile.is_favorited);
 
-  const canWatch = profile.is_live && profile.platform !== 'youtube';
-  document.getElementById('channel-watch-btn').classList.toggle('hidden', !canWatch);
+  const watchBtn = document.getElementById('channel-watch-btn');
+  const actionNote = document.getElementById('channel-action-note');
+  watchBtn.classList.remove('hidden');
+  watchBtn.disabled = !profile.watch_supported;
+  watchBtn.title = profile.watch_supported ? 'Watch this live stream' : (profile.watch_disabled_reason || 'Unavailable');
+  watchBtn.setAttribute('aria-disabled', String(!profile.watch_supported));
+  if (actionNote) {
+    actionNote.textContent = profile.watch_supported ? '' : (profile.watch_disabled_reason || '');
+    actionNote.classList.toggle('hidden', profile.watch_supported || !actionNote.textContent);
+  }
 
   document.getElementById('channel-profile-card').style.opacity = '1';
   TwitchX.ensureChannelTabLoaded(TwitchX.state.channelTabs.active);

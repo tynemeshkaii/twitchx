@@ -100,6 +100,7 @@
   flex-wrap: wrap;
   gap: 6px;
   flex-shrink: 0;
+  max-width: 320px;
 }
 
 #channel-tabs {
@@ -138,7 +139,7 @@
   color: var(--text-primary);
   flex: 1;
 }
-#ms-sidebar-btn, #ms-toggle-chat-btn, #ms-close-btn {
+#ms-add-slot-btn, #ms-sidebar-btn, #ms-toggle-chat-btn, #ms-close-btn {
   width: 32px; height: 32px; padding: 0;
   border-radius: var(--radius-sm);
   border: none;
@@ -150,9 +151,14 @@
   flex-shrink: 0;
   transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
 }
-#ms-sidebar-btn:hover, #ms-toggle-chat-btn:hover, #ms-close-btn:hover {
+#ms-add-slot-btn:hover, #ms-sidebar-btn:hover, #ms-toggle-chat-btn:hover, #ms-close-btn:hover {
   color: var(--text-primary);
   background: rgba(255,255,255,0.08);
+}
+#ms-add-slot-btn.disabled,
+#ms-add-slot-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 #ms-sidebar-btn.active {
   background: rgba(255,255,255,0.10);
@@ -185,16 +191,63 @@
   grid-template-rows: 1fr 1fr;
   gap: 4px;
   flex: 1;
+  min-width: 0;
+  min-height: 0;
   background: var(--bg-base);
 }
 
-.ms-slot { position: relative; overflow: hidden; background: var(--bg-elevated); }
+#multistream-grid.ms-grid-empty {
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  grid-template-rows: repeat(2, minmax(140px, 1fr));
+}
+
+#multistream-grid.ms-grid-count-1 {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+#multistream-grid.ms-grid-count-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
+}
+
+#multistream-grid.ms-grid-count-3,
+#multistream-grid.ms-grid-count-4 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+
+#multistream-grid:not(.ms-grid-empty) .ms-slot.ms-state-empty {
+  display: none;
+}
+
+#multistream-grid .ms-slot.ms-add-form-open {
+  display: block;
+}
+
+.ms-slot {
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg-elevated);
+  transition: opacity var(--duration-fast) ease;
+}
+
+.ms-slot.ms-state-removing {
+  opacity: 0.45;
+  pointer-events: none;
+}
 
 .ms-slot-empty {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   height: 100%;
+  padding: 16px;
+  text-align: center;
 }
 
 .ms-slot-active { display: block; position: relative; height: 100%; }
@@ -213,7 +266,7 @@
 .ms-error-msg {
   position: absolute;
   inset: 0;
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: center;
   color: var(--error-red);
@@ -222,13 +275,36 @@
   padding: var(--space-12);
   background: var(--bg-elevated);
 }
+.ms-error-msg.hidden { display: none; }
 
 #ms-chat-panel {
-  width: 280px;
+  width: clamp(240px, 28vw, 320px);
   flex-shrink: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   background: var(--bg-surface);
   border-left: 1px solid var(--border-subtle);
 }
 #ms-chat-panel.hidden { display: none; }
+
+@media (max-width: 760px) {
+  #multistream-body {
+    flex-direction: column;
+  }
+
+  #multistream-grid.ms-grid-empty,
+  #multistream-grid.ms-grid-count-2,
+  #multistream-grid.ms-grid-count-3,
+  #multistream-grid.ms-grid-count-4 {
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-rows: minmax(180px, 1fr);
+  }
+
+  #ms-chat-panel {
+    width: 100%;
+    height: min(38vh, 280px);
+    border-left: none;
+    border-top: 1px solid var(--border-subtle);
+  }
+}

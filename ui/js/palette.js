@@ -16,9 +16,13 @@ var PALETTE_COMMANDS = [
 TwitchX._paletteActiveIdx = -1;
 TwitchX._paletteItems = [];
 TwitchX._paletteItemCounter = 0;
+TwitchX._paletteReturnFocus = null;
 
 function openPalette() {
-  document.getElementById('palette-overlay').classList.remove('hidden');
+  var overlay = document.getElementById('palette-overlay');
+  if (!overlay || !overlay.classList.contains('hidden')) return;
+  TwitchX._paletteReturnFocus = document.activeElement;
+  overlay.classList.remove('hidden');
   var input = document.getElementById('palette-input');
   input.value = '';
   TwitchX._paletteActiveIdx = -1;
@@ -28,11 +32,18 @@ function openPalette() {
 }
 
 function closePalette() {
-  document.getElementById('palette-overlay').classList.add('hidden');
+  var overlay = document.getElementById('palette-overlay');
+  if (!overlay || overlay.classList.contains('hidden')) return;
+  overlay.classList.add('hidden');
   var input = document.getElementById('palette-input');
   if (input) input.setAttribute('aria-activedescendant', '');
   TwitchX._paletteActiveIdx = -1;
   TwitchX._paletteItems = [];
+  var returnFocus = TwitchX._paletteReturnFocus;
+  TwitchX._paletteReturnFocus = null;
+  if (returnFocus && document.contains(returnFocus) && returnFocus.focus) {
+    setTimeout(function() { returnFocus.focus(); }, 0);
+  }
 }
 
 function _setPaletteActive(idx) {
@@ -56,10 +67,37 @@ function _setPaletteActive(idx) {
   }
 }
 
-function _buildPaletteItem(icon, label, hint, action) {
+function _buildPaletteState(title, detail) {
+  var state = document.createElement('div');
+  state.className = 'palette-state';
+
+  var titleEl = document.createElement('div');
+  titleEl.className = 'palette-state-title';
+  titleEl.textContent = title;
+
+  var detailEl = document.createElement('div');
+  detailEl.className = 'palette-state-detail';
+  detailEl.textContent = detail;
+
+  state.appendChild(titleEl);
+  state.appendChild(detailEl);
+  return state;
+}
+
+function _buildPaletteItem(icon, label, hint, action, options) {
+  options = options || {};
   var item = document.createElement('div');
   item.className = 'palette-item';
   item.setAttribute('role', 'option');
+  if (options.key) item.dataset.key = options.key;
+  if (options.login) item.dataset.login = options.login;
+  if (options.platform) item.dataset.platform = options.platform;
+  if (options.platform) {
+    item.setAttribute(
+      'aria-label',
+      label + ' on ' + TwitchX.platformLabel(options.platform) + (hint ? ', ' + hint : '')
+    );
+  }
   TwitchX._paletteItemCounter += 1;
   item.id = 'palette-item-' + TwitchX._paletteItemCounter;
 
@@ -67,16 +105,23 @@ function _buildPaletteItem(icon, label, hint, action) {
   iconEl.className = 'palette-item-icon';
   TwitchX.setIconOnly(iconEl, icon, 16);
 
+  var labelWrap = document.createElement('span');
+  labelWrap.className = 'palette-item-label';
+
   var labelEl = document.createElement('span');
-  labelEl.className = 'palette-item-label';
+  labelEl.className = 'palette-item-title';
   labelEl.textContent = label;
+  labelWrap.appendChild(labelEl);
+  if (options.platform) {
+    labelWrap.appendChild(TwitchX.createPlatformBadge(options.platform, TwitchX.platformLabel(options.platform)));
+  }
 
   var hintEl = document.createElement('span');
   hintEl.className = 'palette-item-hint';
   hintEl.textContent = hint;
 
   item.appendChild(iconEl);
-  item.appendChild(labelEl);
+  item.appendChild(labelWrap);
   item.appendChild(hintEl);
 
   item.addEventListener('click', function() {
@@ -95,11 +140,16 @@ function renderPaletteResults(query) {
   container.replaceChildren();
   var allItems = [];
 
+  if (!q && !TwitchX.state.streamsLoaded) {
+    container.appendChild(_buildPaletteState('Loading channels...', 'Commands are available while streams load.'));
+  }
+
   // Live channels
   var liveMatches = TwitchX.state.streams.filter(function(s) {
     if (!q) return true;
+    var displayName = s.display_name || s.login || '';
     return s.login.toLowerCase().indexOf(q) !== -1 ||
-           s.display_name.toLowerCase().indexOf(q) !== -1;
+           displayName.toLowerCase().indexOf(q) !== -1;
   }).slice(0, 5);
 
   if (liveMatches.length > 0) {
@@ -108,11 +158,14 @@ function renderPaletteResults(query) {
     liveHeader.textContent = 'Live Now';
     container.appendChild(liveHeader);
     liveMatches.forEach(function(s) {
+      var platform = s.platform || 'twitch';
+      var key = TwitchX.channelKey(s.login, platform);
       var item = _buildPaletteItem(
         'live-dot',
-        s.display_name,
-        TwitchX.platformLabel(s.platform || 'twitch') + ' • ' + TwitchX.formatViewers(s.viewers) + ' viewers',
-        function() { TwitchX.selectChannel(s.login, s.platform || 'twitch'); TwitchX.doWatch(); }
+        s.display_name || s.login,
+        TwitchX.formatViewers(s.viewers) + ' viewers',
+        function() { TwitchX.selectChannel(s.login, platform); TwitchX.doWatch(); },
+        { key: key, login: s.login, platform: platform }
       );
       container.appendChild(item);
       allItems.push(item);
@@ -137,9 +190,9 @@ function renderPaletteResults(query) {
     container.appendChild(favHeader);
     favMatches.forEach(function(entry) {
       var displayName = entry.display_name || entry.login;
-      var item = _buildPaletteItem('star', displayName, TwitchX.platformLabel(entry.platform) + ' • Offline', function() {
+      var item = _buildPaletteItem('star', displayName, 'Offline', function() {
         TwitchX.selectChannel(entry.login, entry.platform);
-      });
+      }, { key: entry.key, login: entry.login, platform: entry.platform });
       container.appendChild(item);
       allItems.push(item);
     });
@@ -166,6 +219,11 @@ function renderPaletteResults(query) {
   if (allItems.length > 0) {
     _setPaletteActive(0);
   } else {
+    if (q) {
+      container.appendChild(_buildPaletteState('No results', 'No channels or commands match "' + query.trim() + '".'));
+    } else {
+      container.appendChild(_buildPaletteState('No channels yet', 'Use search to add favorites or refresh streams.'));
+    }
     _setPaletteActive(-1);
   }
 }

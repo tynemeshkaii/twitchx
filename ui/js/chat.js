@@ -16,13 +16,34 @@ function clearChatReply() {
   document.getElementById('chat-reply-bar').classList.remove('active');
 }
 
+function _getChatInputEl() {
+  return document.getElementById(
+    TwitchX.multiState.open ? 'ms-chat-input' : 'chat-input'
+  );
+}
+
+function _getChatSendBtnEl() {
+  return document.getElementById(
+    TwitchX.multiState.open ? 'ms-chat-send-btn' : 'chat-send-btn'
+  );
+}
+
 function submitChatMessage() {
-  const input = document.getElementById('chat-input');
+  const input = _getChatInputEl();
   if (!input) return;
+  if (input.disabled) {
+    TwitchX.showToast(input.placeholder || 'Chat is not available right now', 'warn');
+    return;
+  }
   const text = input.value.trim();
   if (!text) return;
+  if (!TwitchX.api) {
+    TwitchX.showToast('Chat bridge is not ready yet', 'error');
+    return;
+  }
   const r = TwitchX.chatReplyTo;
-  const requestId = 'chat-send-' + Date.now() + '-' + (++TwitchX.chatSendCounter);
+  const requestId = (TwitchX.multiState.open ? 'ms-send-' : 'chat-send-') +
+    Date.now() + '-' + (++TwitchX.chatSendCounter);
   TwitchX.chatPendingSends[requestId] = {
     text: text,
     reply: r ? { id: r.id, display: r.display, body: r.body } : null
@@ -32,7 +53,10 @@ function submitChatMessage() {
       delete TwitchX.chatPendingSends[requestId];
     }
   }, 30000);
-  if (TwitchX.api) TwitchX.api.send_chat(
+  const sendBtn = _getChatSendBtnEl();
+  if (sendBtn) sendBtn.disabled = true;
+  TwitchX.setStatus('Sending chat message...', 'info');
+  TwitchX.api.send_chat(
     text,
     r ? r.id : null,
     r ? r.display : null,
@@ -108,11 +132,23 @@ function renderChatEmotes(parent, text, emotes) {
       parent.appendChild(document.createTextNode(text.slice(lastIdx, emote.start)));
     }
     var img = document.createElement('img');
+    var emoteCode = emote.code;
     img.className = 'emote';
     img.src = emote.url;
-    img.alt = emote.code;
-    img.title = emote.code;
-    img.onerror = function() { this.classList.add('hidden'); };
+    img.alt = emoteCode;
+    img.width = 24;
+    img.height = 24;
+    img.decoding = 'async';
+    img.loading = 'lazy';
+    img.setAttribute('aria-label', emoteCode);
+    img.title = emoteCode;
+    img.onerror = function() {
+      var fallback = document.createElement('span');
+      fallback.className = 'emote-fallback';
+      fallback.textContent = emoteCode;
+      fallback.title = emoteCode;
+      this.replaceWith(fallback);
+    };
     parent.appendChild(img);
     lastIdx = emote.end + 1;
   }
@@ -121,24 +157,41 @@ function renderChatEmotes(parent, text, emotes) {
   }
 }
 
-function clearChatMessages() {
+function _clearElement(el) {
+  if (!el) return;
+  while (el.firstChild) {
+    el.removeChild(el.firstChild);
+  }
+}
+
+function showChatNotice(container, text, kind) {
+  if (!container) return;
+  var emptyEl = document.createElement('div');
+  emptyEl.className = 'chat-empty-state' + (kind ? ' ' + kind : '');
+  emptyEl.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+  emptyEl.textContent = text || 'No messages yet';
+  container.appendChild(emptyEl);
+}
+
+function setChatNotice(text, kind, target) {
+  var container = target === 'multi'
+    ? document.getElementById('ms-chat-messages')
+    : document.getElementById('chat-messages');
+  _clearElement(container);
+  showChatNotice(container, text, kind);
+}
+
+function clearChatMessages(message) {
   const container = document.getElementById('chat-messages');
   if (container) {
-    while (container.firstChild) {
-      container.removeChild(container.firstChild);
-    }
-    var emptyEl = document.createElement('div');
-    emptyEl.className = 'chat-empty-state';
-    emptyEl.style.cssText = 'text-align:center;padding:20px;color:var(--text-muted);font-size:12px;';
-    emptyEl.textContent = 'No messages yet';
-    container.appendChild(emptyEl);
+    _clearElement(container);
+    showChatNotice(container, message || 'No messages yet', 'empty');
   }
   if (TwitchX.multiState.open) {
     const msContainer = document.getElementById('ms-chat-messages');
     if (msContainer) {
-      while (msContainer.firstChild) {
-        msContainer.removeChild(msContainer.firstChild);
-      }
+      _clearElement(msContainer);
+      showChatNotice(msContainer, message || 'No messages yet', 'empty');
     }
   }
   clearChatReply();
@@ -152,10 +205,15 @@ TwitchX.clearChatReply = clearChatReply;
 TwitchX.submitChatMessage = submitChatMessage;
 TwitchX.renderChatEmotes = renderChatEmotes;
 TwitchX.clearChatMessages = clearChatMessages;
+TwitchX.setChatNotice = setChatNotice;
+TwitchX.showChatNotice = showChatNotice;
+TwitchX._clearElement = _clearElement;
 TwitchX._getChatMessagesEl = _getChatMessagesEl;
 TwitchX._getChatNewMsgEl = _getChatNewMsgEl;
 TwitchX._getChatAutoScroll = _getChatAutoScroll;
 TwitchX._setChatAutoScroll = _setChatAutoScroll;
+TwitchX._getChatInputEl = _getChatInputEl;
+TwitchX._getChatSendBtnEl = _getChatSendBtnEl;
 
 /* ── Chat filter state ──────────────────────────────────── */
 
@@ -296,8 +354,29 @@ function renderEmotePicker(filter) {
     img.className = 'emote emote-pick';
     img.src = emotes[code];
     img.alt = code;
+    img.width = 24;
+    img.height = 24;
+    img.decoding = 'async';
+    img.loading = 'lazy';
+    img.setAttribute('aria-label', 'Insert emote ' + code);
     img.title = code;
-    img.onerror = function() { this.classList.add('hidden'); };
+    img.onerror = function() {
+      var fallback = document.createElement('button');
+      fallback.type = 'button';
+      fallback.className = 'emote-pick-fallback';
+      fallback.textContent = code;
+      fallback.title = code;
+      fallback.addEventListener('click', function() {
+        var input = document.getElementById('chat-input');
+        if (input) {
+          var v = input.value;
+          input.value = v + (v && !v.endsWith(' ') ? ' ' : '') + code + ' ';
+          input.focus();
+        }
+        closeEmotePicker();
+      });
+      this.replaceWith(fallback);
+    };
     img.addEventListener('click', function() {
       var input = document.getElementById('chat-input');
       if (input) {
@@ -312,7 +391,7 @@ function renderEmotePicker(filter) {
 
   if (codes.length === 0) {
     var empty = document.createElement('span');
-    empty.style.cssText = 'font-size:11px;color:var(--text-muted);padding:8px;';
+    empty.className = 'emote-picker-empty';
     empty.textContent = filter ? 'No matches' : 'No emotes loaded yet';
     grid.appendChild(empty);
   }

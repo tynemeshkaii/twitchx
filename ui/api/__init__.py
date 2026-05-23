@@ -436,6 +436,8 @@ class TwitchXApi:
                 yt_conf.get("client_id") and yt_conf.get("client_secret")
             ),
             "youtube_using_bundled_api_key": not bool(yt_conf.get("api_key")),
+            # YouTube has no real bundled credentials — placeholder values only
+            "youtube_bundled_available": False,
         }
 
     def save_settings(self, data: str) -> None:

@@ -532,6 +532,18 @@ class StreamsComponent(BaseApiComponent):
     ) -> None:
         if not 0 <= slot_idx <= 3:
             return
+        if platform not in ("twitch", "kick", "youtube"):
+            error_payload = json.dumps(
+                {
+                    "slot_idx": slot_idx,
+                    "channel": channel,
+                    "platform": platform,
+                    "title": "",
+                    "error": f"{platform} is not supported in multistream",
+                }
+            )
+            self._eval_js(f"window.onMultiSlotReady({error_payload})")
+            return
         title = ""
         youtube_video_id: str | None = None
         for s in self._live_streams:
@@ -550,7 +562,7 @@ class StreamsComponent(BaseApiComponent):
                     "channel": channel,
                     "platform": platform,
                     "title": title,
-                    "error": "YouTube channel is not currently live or stream info unavailable",
+                    "error": "YouTube multistream works only for live channels already loaded in TwitchX",
                 }
             )
             self._eval_js(f"window.onMultiSlotReady({error_payload})")

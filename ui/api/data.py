@@ -594,11 +594,30 @@ class DataComponent(BaseApiComponent):
             for p in platforms
             if config.get("platforms", {}).get(p, {}).get("enabled", False)
         ]
+        errors: dict[str, str] = {}
+        for p in platforms:
+            if p not in enabled:
+                errors[p] = f"{p.title()} is disabled in Settings."
+        yt_conf = get_platform_config(config, "youtube")
+        if "youtube" in enabled:
+            if not yt_conf.get("access_token") and not yt_conf.get("refresh_token"):
+                errors["youtube"] = (
+                    "YouTube Browse requires YouTube login. Sign in from Settings to "
+                    "load categories and live results."
+                )
+            elif self._youtube.quota_remaining() < 1:
+                errors["youtube"] = (
+                    "YouTube API quota is exhausted for today. Try again after the "
+                    "daily reset or add a personal API key in Settings."
+                )
         cache = load_browse_cache()
         now = time.time()
         results: dict[str, list[dict[str, Any]]] = {}
         to_fetch: list[str] = []
         for platform in enabled:
+            if platform in errors:
+                results[platform] = []
+                continue
             slot = f"categories_{platform}"
             if is_browse_slot_fresh(cache, slot):
                 results[platform] = cache[slot]["data"]
@@ -628,6 +647,7 @@ class DataComponent(BaseApiComponent):
                                 "browse categories failed for %s: %s", p, result
                             )
                             results[p] = []
+                            errors[p] = self._browse_error_message(p, result)
                         else:
                             results[p] = result
                             cache[f"categories_{p}"] = {
@@ -640,7 +660,13 @@ class DataComponent(BaseApiComponent):
             finally:
                 self._close_thread_loop(loop)
         merged = _aggregate_categories(results)
-        self._eval_js(f"window.onBrowseCategories({json.dumps(merged)})")
+        payload = {
+            "items": merged,
+            "errors": errors,
+            "platform_filter": platform_filter,
+            "enabled_platforms": enabled,
+        }
+        self._eval_js(f"window.onBrowseCategories({json.dumps(payload)})")
         self._check_youtube_quota_warning()
 
     def get_browse_top_streams(
@@ -665,11 +691,36 @@ class DataComponent(BaseApiComponent):
             list(platform_ids.keys()) if platform_filter == "all" else [platform_filter]
         )
         platforms_to_query = [p for p in in_filter if p in platform_ids]
+        errors: dict[str, str] = {}
+        if not platforms_to_query:
+            if platform_filter == "youtube":
+                errors["youtube"] = (
+                    "This category is not available from YouTube Browse results."
+                )
+            elif platform_filter != "all":
+                errors[platform_filter] = (
+                    f"{platform_filter.title()} does not expose this category here."
+                )
+        config = load_config()
+        yt_conf = get_platform_config(config, "youtube")
+        if "youtube" in platforms_to_query:
+            if not yt_conf.get("access_token") and not yt_conf.get("refresh_token"):
+                errors["youtube"] = (
+                    "YouTube live Browse requires YouTube login. Sign in from "
+                    "Settings to search live streams."
+                )
+            elif self._youtube.quota_remaining() < 100:
+                errors["youtube"] = (
+                    "YouTube live Browse needs 100 quota units and today's remaining "
+                    "quota is too low."
+                )
         cache = load_browse_cache()
         now = time.time()
         all_streams: list[dict[str, Any]] = []
         to_fetch: list[str] = []
         for platform in platforms_to_query:
+            if platform in errors:
+                continue
             cat_id = platform_ids[platform]
             slot = f"top_streams_{platform}_{cat_id}"
             if is_browse_slot_fresh(cache, slot):
@@ -702,6 +753,7 @@ class DataComponent(BaseApiComponent):
                             logger.warning(
                                 "browse top streams failed for %s: %s", p, result
                             )
+                            errors[p] = self._browse_error_message(p, result)
                         else:
                             all_streams.extend(result)
                             cache[f"top_streams_{p}_{platform_ids[p]}"] = {
@@ -714,9 +766,35 @@ class DataComponent(BaseApiComponent):
                 self._close_thread_loop(loop)
             save_browse_cache(cache)
         all_streams.sort(key=lambda s: s.get("viewers", 0), reverse=True)
-        payload = {"category": category_name, "streams": all_streams[:40]}
+        payload = {
+            "category": category_name,
+            "streams": all_streams[:40],
+            "errors": errors,
+            "platform_filter": platform_filter,
+        }
         self._eval_js(f"window.onBrowseTopStreams({json.dumps(payload)})")
         self._check_youtube_quota_warning()
+
+    @staticmethod
+    def _browse_error_message(platform: str, exc: BaseException) -> str:
+        msg = str(exc).strip()
+        if platform == "youtube":
+            if "quota" in msg.lower():
+                return (
+                    "YouTube API quota is exhausted or too low for this request. "
+                    "Try again after reset or add a personal API key in Settings."
+                )
+            if "auth" in msg.lower() or "token" in msg.lower():
+                return "YouTube Browse requires YouTube login in Settings."
+            return (
+                "YouTube data is limited by the Data API. This section could not "
+                "be loaded right now."
+            )
+        if platform == "kick":
+            return "Kick Browse could not be loaded right now."
+        if platform == "twitch":
+            return "Twitch Browse could not be loaded right now."
+        return msg[:120] or "Browse could not be loaded right now."
 
     # ── Channel profile ─────────────────────────────────────────
 
@@ -735,6 +813,9 @@ class DataComponent(BaseApiComponent):
                 "followers": raw.get("followers", -1),
                 "is_live": bool(raw.get("is_live", False)),
                 "can_follow_via_api": False,
+                "watch_supported": bool(raw.get("is_live", False)),
+                "watch_disabled_reason": "Channel is offline.",
+                "platform_note": "Twitch live streams can be watched in app.",
             }
         if platform == "kick":
             user = raw.get("user") or {}
@@ -755,6 +836,10 @@ class DataComponent(BaseApiComponent):
                 "followers": raw.get("followers_count", 0),
                 "is_live": bool(raw.get("is_live", False)) or bool(raw.get("stream")),
                 "can_follow_via_api": False,
+                "watch_supported": bool(raw.get("is_live", False))
+                or bool(raw.get("stream")),
+                "watch_disabled_reason": "Channel is offline.",
+                "platform_note": "Kick live streams can be watched in app.",
             }
         if platform == "youtube":
             channel_id = raw.get("channel_id", login)
@@ -768,6 +853,15 @@ class DataComponent(BaseApiComponent):
                 "followers": raw.get("followers", 0),
                 "is_live": False,
                 "can_follow_via_api": False,
+                "watch_supported": False,
+                "watch_disabled_reason": (
+                    "YouTube channel pages cannot be played directly from this "
+                    "profile. Open the channel or play a listed VOD when available."
+                ),
+                "platform_note": (
+                    "YouTube Browse is quota-limited and channel IDs are "
+                    "case-sensitive."
+                ),
             }
         return {}
 
@@ -794,6 +888,11 @@ class DataComponent(BaseApiComponent):
                         for s in self._live_streams
                         if s.get("platform") == "youtube"
                     )
+                    profile["watch_supported"] = False
+                else:
+                    profile["watch_supported"] = bool(profile.get("is_live"))
+                    if profile["watch_supported"]:
+                        profile["watch_disabled_reason"] = ""
                 fresh_config = load_config()
                 favs = get_favorites(fresh_config)
                 profile["is_favorited"] = any(

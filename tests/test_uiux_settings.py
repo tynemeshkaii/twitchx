@@ -5,7 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from core.storage import DEFAULT_CONFIG, DEFAULT_SETTINGS, load_config, save_config
+from core.storage import (
+    DEFAULT_CONFIG,
+    DEFAULT_SETTINGS,
+    load_config,
+    save_config,
+)
 from ui.api import TwitchXApi
 
 
@@ -54,3 +59,81 @@ def test_save_settings_rejects_invalid_accent_color(
     config = load_config()
     # Falls back to default because the value is not in the allowed palette
     assert config["settings"]["accent_color"] == "#FF9F0A"
+
+
+# ── Credential state fields ──────────────────────────────────────────────────
+
+def test_twitch_using_bundled_is_true_by_default(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fresh install: no custom Twitch credentials → twitch_using_bundled=True."""
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "_eval_js", lambda js: None)
+    result = api.get_full_config_for_settings()
+    assert result["twitch_using_bundled"] is True
+
+
+def test_twitch_using_bundled_is_false_when_custom_creds_saved(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """After saving custom Twitch credentials → twitch_using_bundled=False."""
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "_eval_js", lambda js: None)
+    api.save_settings(json.dumps({"client_id": "myid", "client_secret": "mysecret"}))
+    result = api.get_full_config_for_settings()
+    assert result["twitch_using_bundled"] is False
+
+
+def test_kick_using_bundled_is_true_by_default(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fresh install: no custom Kick credentials → kick_using_bundled=True."""
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "_eval_js", lambda js: None)
+    result = api.get_full_config_for_settings()
+    assert result["kick_using_bundled"] is True
+
+
+def test_youtube_bundled_available_is_always_false(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """YouTube has no real bundled credentials; youtube_bundled_available must be False."""
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "_eval_js", lambda js: None)
+    result = api.get_full_config_for_settings()
+    assert result["youtube_bundled_available"] is False
+
+
+def test_youtube_using_bundled_api_key_true_when_no_custom_key(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No custom API key configured → youtube_using_bundled_api_key=True (no custom key)."""
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "_eval_js", lambda js: None)
+    result = api.get_full_config_for_settings()
+    assert result["youtube_using_bundled_api_key"] is True
+
+
+def test_youtube_using_bundled_api_key_false_when_custom_key_saved(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """After saving a custom YouTube API key → youtube_using_bundled_api_key=False."""
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "_eval_js", lambda js: None)
+    api.save_settings(json.dumps({"youtube_api_key": "AIzaSy_my_key"}))
+    result = api.get_full_config_for_settings()
+    assert result["youtube_using_bundled_api_key"] is False
+    assert result["youtube_bundled_available"] is False  # still False regardless
+
+
+def test_credential_state_fields_all_present(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """All credential state fields are present in get_full_config_for_settings."""
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "_eval_js", lambda js: None)
+    result = api.get_full_config_for_settings()
+    for key in ("twitch_using_bundled", "kick_using_bundled",
+                "youtube_using_bundled_oauth", "youtube_using_bundled_api_key",
+                "youtube_bundled_available"):
+        assert key in result, f"Missing credential state field: {key}"
