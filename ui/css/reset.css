@@ -22,7 +22,7 @@ body {
 
 /* Accent-tinted text selection */
 ::selection {
-  background: rgba(255, 159, 10, 0.30);
+  background: var(--accent-muted);
   color: var(--text-primary);
 }
 
@@ -33,7 +33,7 @@ body {
   z-index: var(--z-modal);
   padding: var(--space-8) var(--space-16);
   background: var(--accent);
-  color: #0A0A0C;
+  color: var(--text-on-accent);
   border-radius: var(--radius-sm);
   font-size: var(--font-md); font-weight: 600;
   text-decoration: none;
@@ -75,9 +75,12 @@ body {
 
 /* ── Global utilities ──────────────────────────────────── */
 .hidden { display: none !important; }
+.hover-bg:hover { background: var(--hover-bg); }
+.pressed-bg:active { background: var(--pressed-bg); }
+.disabled { opacity: var(--disabled-opacity); pointer-events: none; }
 
 /* ── Scrollbar ──────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 999px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
+::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }

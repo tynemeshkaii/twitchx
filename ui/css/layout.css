@@ -1,6 +1,6 @@
 /* ── Layout ─────────────────────────────────────────────── */
 #app { display: flex; flex-direction: column; height: 100vh; }
-#main { display: flex; flex: 1; overflow: hidden; }
+#main { display: flex; flex: 1; min-width: 0; overflow: hidden; }
 
 /* ── Sidebar ────────────────────────────────────────────── */
 #sidebar {
@@ -8,35 +8,36 @@
   background: var(--bg-surface);
   border-right: 1px solid var(--bg-border);
   display: flex; flex-direction: column;
+  overflow: hidden;
 }
 
 #profile-area {
-  padding: 10px; border-bottom: 1px solid var(--bg-border);
+  padding: var(--space-10); border-bottom: 1px solid var(--bg-border);
   min-height: 48px;
 }
 
 #kick-profile-area {
-  padding: 6px 10px; border-bottom: 1px solid var(--bg-border);
+  padding: var(--space-6) var(--space-10); border-bottom: 1px solid var(--bg-border);
 }
 
 #platform-tabs {
   display: flex; gap: 0;
-  padding: 0 10px;
+  padding: 0 var(--space-10);
   border-bottom: 1px solid var(--bg-border);
 }
 
 #favorites-header {
-  padding: 10px 10px 6px;
+  padding: var(--space-10) var(--space-10) var(--space-6);
   display: flex; align-items: center; justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-8);
 }
 
 #channel-list {
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  padding: 0 6px 8px;
-  display: flex; flex-direction: column; gap: 8px;
+  padding: 0 var(--space-6) var(--space-8);
+  display: flex; flex-direction: column; gap: var(--space-8);
 }
 
 .section-body {
@@ -59,13 +60,20 @@
 
 /* ── Search area ────────────────────────────────────────── */
 #search-area {
-  padding: 6px 10px; border-top: 1px solid var(--bg-border);
+  padding: var(--space-6) var(--space-10); border-top: 1px solid var(--bg-border);
   position: relative;
 }
-#search-row { display: flex; gap: 5px; }
+#search-row { display: flex; gap: var(--space-4); }
 
 /* ── Content area ───────────────────────────────────────── */
-#content { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-base); }
+#content {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-base);
+}
 
 #toolbar {
   height: 44px;
@@ -75,10 +83,12 @@
   border-bottom: 1px solid var(--bg-border);
   display: flex; align-items: center; padding: 0 var(--space-12); gap: var(--space-8);
   flex-shrink: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 #toolbar.hidden { display: none; }
 
-#browse-nav-wrapper { padding: 0 8px 6px; }
+#browse-nav-wrapper { padding: 0 var(--space-8) var(--space-6); }
 
 /* ── Mini Mode ──────────────────────────────────────────── */
 #app.mini #content {

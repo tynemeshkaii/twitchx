@@ -118,11 +118,13 @@ TwitchX._bindSidebarEvents = function() {
   var collapseBtn = document.getElementById('sidebar-collapse-btn');
   if (collapseBtn) collapseBtn.addEventListener('click', function() {
     var sidebar = document.getElementById('sidebar');
+    var list = document.getElementById('channel-list');
+    // Clear early so no stale expanded content is present during width transition
+    while (list.firstChild) list.removeChild(list.firstChild);
     var collapsed = sidebar.classList.toggle('collapsed-sidebar');
     localStorage.setItem('twitchx.sidebar.collapsed', collapsed ? '1' : '0');
-    // Explicitly clear channel-list so renderSidebar always starts from clean DOM
-    var list = document.getElementById('channel-list');
-    while (list.firstChild) list.removeChild(list.firstChild);
+    // Force reflow so browser commits the new width before rebuilding
+    sidebar.offsetHeight;
     TwitchX.renderSidebar();
   });
 

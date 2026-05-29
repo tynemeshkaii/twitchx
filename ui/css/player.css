@@ -1,7 +1,7 @@
 /* ── Player bar ─────────────────────────────────────────── */
 #player-bar {
   height: 44px;
-  background: rgba(28, 28, 30, 0.82);
+  background: var(--bg-player-bar);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   border-top: 1px solid var(--bg-border);
@@ -29,7 +29,7 @@
   height: 32px; padding: 0 var(--space-8);
   background: var(--bg-elevated); border: 1px solid var(--bg-border);
   border-radius: var(--radius-sm); color: var(--text-primary);
-  font-size: 12px; font-family: inherit; cursor: pointer;
+  font-size: var(--font-sm); font-family: inherit; cursor: pointer;
 }
 
 /* ── Volume Slider ───────────────────────────────────── */
@@ -102,8 +102,8 @@
 #seek-tooltip {
   position: absolute; bottom: calc(100% + 4px); left: 0;
   transform: translateX(-50%);
-  background: rgba(0,0,0,0.85); color: var(--text-primary);
-  font-size: 11px; font-family: ui-monospace, monospace;
+  background: var(--bg-tooltip-dark); color: var(--text-primary);
+  font-size: var(--font-xs); font-family: ui-monospace, monospace;
   padding: 3px 7px; border-radius: var(--radius-sm);
   white-space: nowrap; pointer-events: none;
   z-index: calc(var(--z-sticky) + 1);
@@ -113,11 +113,11 @@
 /* ── Buffer visualization bar ─────────────────────────── */
 #buffer-bar {
   position: absolute; bottom: 0; left: 0; right: 0;
-  height: 3px; background: rgba(255,255,255,0.06);
+  height: 3px; background: var(--surface-pressed);
   z-index: var(--z-sticky); pointer-events: none;
 }
 #buffer-loaded {
-  height: 100%; background: rgba(255,255,255,0.15);
+  height: 100%; background: var(--buffer-loaded-bg);
   width: 0%; transition: width var(--duration-slow) ease;
 }
 #buffer-position {
@@ -146,7 +146,7 @@
   content: '';
   width: 2px; height: 32px;
   border-radius: 1px;
-  background: rgba(255,255,255,0.12);
+  background: var(--border-default);
   transition: background var(--duration-fast) ease;
   pointer-events: none;
 }
@@ -162,12 +162,12 @@
 }
 #live-dot {
   animation: pulse 1.8s ease-in-out infinite;
-  color: var(--live-red); font-size: 12px; display: none;
+  color: var(--live-red); font-size: var(--font-sm); display: none;
 }
 #live-dot.visible { display: inline; }
 
 #status-text {
-  font-size: 12px; color: var(--text-secondary);
+  font-size: var(--font-sm); color: var(--text-secondary);
   flex: 1; min-width: 0; margin-left: 2px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -186,12 +186,12 @@
 /* Phase 9: PiP button active state */
 #pip-player-btn.active {
   background: var(--accent);
-  color: #000;
+  color: var(--text-on-accent);
   border-color: var(--accent);
 }
 .ms-pip-btn.active {
   background: var(--accent);
-  color: #000;
+  color: var(--text-on-accent);
 }
 
 /* -- Recording button -- */
@@ -206,7 +206,7 @@
 }
 
 #record-btn:hover {
-  background: rgba(255,255,255,0.08);
+  background: var(--hover-bg-strong);
   color: var(--error-red);
 }
 
@@ -262,7 +262,7 @@
   position: absolute;
   top: var(--space-8);
   right: var(--space-8);
-  background: rgba(0,0,0,0.72);
+  background: var(--bg-tooltip-dark);
   backdrop-filter: blur(6px);
   border-radius: var(--radius-sm);
   padding: var(--space-8) var(--space-12);
@@ -301,7 +301,7 @@
 }
 
 #stats-overlay-btn:hover {
-  background: rgba(255,255,255,0.08);
+  background: var(--hover-bg-strong);
   color: var(--text-primary);
 }
 
@@ -334,7 +334,7 @@
 
 /* -- VOD time display -- */
 #vod-time-display {
-  font-size: 12px;
+  font-size: var(--font-sm);
   color: var(--text-muted);
   font-family: ui-monospace, monospace;
   white-space: nowrap;
@@ -356,7 +356,7 @@
   transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
 }
 .player-header-btn:hover {
-  background: rgba(255,255,255,0.08);
+  background: var(--hover-bg-strong);
   color: var(--text-primary);
 }
 
@@ -374,7 +374,7 @@
   transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
 }
 .chat-header-btn:hover {
-  background: rgba(255,255,255,0.08);
+  background: var(--hover-bg-strong);
   color: var(--text-secondary);
 }
 
@@ -383,7 +383,7 @@
   padding: 6px 8px;
   background: var(--bg-elevated);
   border-bottom: 1px solid var(--border-default);
-  font-size: 11px;
+  font-size: var(--font-xs);
 }
 .filter-row {
   display: flex;
@@ -394,7 +394,7 @@
 }
 .chat-filter-input {
   width: 100%;
-  font-size: 11px;
+  font-size: var(--font-xs);
   padding: 2px 4px;
   background: var(--bg-base);
   border: 1px solid var(--border-default);
@@ -417,7 +417,7 @@
   border-bottom: 1px solid var(--border-default);
   background: var(--bg-elevated);
   color: var(--text-primary);
-  font-size: 11px;
+  font-size: var(--font-xs);
   box-sizing: border-box;
 }
 .userlist-items {
@@ -431,10 +431,10 @@
   padding: 6px 8px;
   background: var(--bg-elevated);
   border-bottom: 1px solid var(--border-default);
-  font-size: 11px;
+  font-size: var(--font-xs);
 }
 .mod-panel-hint {
-  font-size: 10px;
+  font-size: var(--font-2xs);
   color: var(--text-muted);
   margin-bottom: 6px;
 }
@@ -446,7 +446,7 @@
   cursor: pointer;
 }
 .mod-select {
-  font-size: 11px;
+  font-size: var(--font-xs);
   padding: 1px 2px;
   margin-left: 4px;
 }
@@ -484,7 +484,7 @@
   border-bottom: 1px solid var(--border-default);
   background: var(--bg-elevated);
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: var(--font-sm);
   box-sizing: border-box;
 }
 .emote-grid {

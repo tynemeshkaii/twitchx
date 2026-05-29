@@ -3,7 +3,6 @@
   --accent:       #FF9F0A;
   --accent-hover: #E8920A;
   --accent-dim:   rgba(255, 159, 10, 0.10);
-  --accent-subtle: rgba(255, 159, 10, 0.10);
   --accent-muted: rgba(255, 159, 10, 0.25);
   --accent-text:  #FF9F0A;
 
@@ -17,7 +16,7 @@
   /* ── Apple-style label hierarchy ─────────────────────── */
   --text-primary:   #F2F2F7;
   --text-secondary: #AEAEB2;
-  --text-muted:     #8E8E93;
+  --text-muted:     #98989D;
   --text-muted-elevated: #99999F;
 
   /* ── Semantic status ────────────────────────────────── */
@@ -46,7 +45,7 @@
 
   /* ── Typography scale ───────────────────────────────── */
   --font-xs:   11px;
-  --font-sm:   11px;
+  --font-sm:   12px;
   --font-md:   13px;
   --font-base: 14px;
   --font-lg:   16px;
@@ -123,4 +122,54 @@
   /* ── Scroll shadow tokens ───────────────────────────── */
   --scroll-shadow-size:  16px;
   --scroll-shadow-color: rgba(0, 0, 0, 0.45);
+
+  /* ── Text on accent / inverse ─────────────────────────── */
+  --text-on-accent: #0A0A0C;
+  --text-inverse:   #FFFFFF;
+
+  /* ── Interaction backgrounds ─────────────────────────── */
+  --hover-bg:        rgba(255, 255, 255, 0.06);
+  --hover-bg-strong: rgba(255, 255, 255, 0.10);
+  --pressed-bg:      rgba(255, 255, 255, 0.08);
+  --surface-pressed: rgba(255, 255, 255, 0.03);
+
+  /* ── Focus system ────────────────────────────────────── */
+  --focus-ring:       rgba(255, 159, 10, 0.40);
+  --focus-ring-offset: rgba(255, 159, 10, 0.12);
+
+  /* ── Disabled state ──────────────────────────────────── */
+  --disabled-opacity: 0.45;
+
+  /* ── Overlays / structural dark ──────────────────────── */
+  --overlay-bg:        rgba(0, 0, 0, 0.55);
+  --bg-player-bar:     rgba(28, 28, 30, 0.82);
+  --bg-tooltip-dark:   rgba(0, 0, 0, 0.85);
+  --bg-modal:          rgba(30, 30, 32, 0.97);
+  --bg-video:          #000;
+  --bg-dark-50:        rgba(0, 0, 0, 0.50);
+
+  /* ── Semantic borders (subtle) ─────────────────────── */
+  --border-card:      rgba(255, 255, 255, 0.07);
+  --border-accent:    rgba(255, 159, 10, 0.22);
+  --border-error:     rgba(255, 69, 58, 0.26);
+  --border-accent-strong: rgba(255, 159, 10, 0.45);
+
+  /* ── Status backgrounds (subtle) ───────────────────── */
+  --status-bg-green: rgba(48, 209, 88, 0.18);
+  --status-bg-red:   rgba(255, 69, 58, 0.18);
+  --status-border-red: rgba(255, 69, 58, 0.25);
+
+  /* ── Primary button background ─────────────────────── */
+  --btn-primary-bg: linear-gradient(135deg, #FF9F0A, #F07800);
+
+  /* ── Spacing additions ─────────────────────────────── */
+  --space-1:  1px;
+  --space-10: 10px;
+  --space-14: 14px;
+
+  /* ── Typography additions ──────────────────────────── */
+  --font-2xs: 10px;
+
+  /* ── Buffer / loader specifics ─────────────────────── */
+  --buffer-loaded-bg: rgba(255, 255, 255, 0.15);
 }
