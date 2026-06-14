@@ -18,6 +18,10 @@ def test_default_settings_has_accent_color():
     assert DEFAULT_SETTINGS["accent_color"] == "#FF9F0A"
 
 
+def test_default_settings_has_theme():
+    assert DEFAULT_SETTINGS["theme"] == "dark"
+
+
 def test_load_config_fills_accent_color_when_missing(temp_config_dir: Path) -> None:
     """Deep merge adds accent_color even if stored config lacks it."""
     stored = {
@@ -30,6 +34,18 @@ def test_load_config_fills_accent_color_when_missing(temp_config_dir: Path) -> N
     assert config["settings"]["accent_color"] == "#FF9F0A"
 
 
+def test_load_config_fills_theme_when_missing(temp_config_dir: Path) -> None:
+    """Deep merge adds theme even if stored config lacks it."""
+    stored = {
+        "platforms": DEFAULT_CONFIG["platforms"],
+        "favorites": [],
+        "settings": {"quality": "best"},  # no theme
+    }
+    save_config(stored)
+    config = load_config()
+    assert config["settings"]["theme"] == "dark"
+
+
 def test_get_full_config_returns_accent_color(
     temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -37,6 +53,15 @@ def test_get_full_config_returns_accent_color(
     monkeypatch.setattr(api, "_eval_js", lambda js: None)
     result = api.get_full_config_for_settings()
     assert result["accent_color"] == "#FF9F0A"
+
+
+def test_get_full_config_returns_theme(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "_eval_js", lambda js: None)
+    result = api.get_full_config_for_settings()
+    assert result["theme"] == "dark"
 
 
 def test_save_settings_persists_accent_color(
@@ -47,6 +72,28 @@ def test_save_settings_persists_accent_color(
     api.save_settings(json.dumps({"accent_color": "#BF5AF2"}))
     config = load_config()
     assert config["settings"]["accent_color"] == "#BF5AF2"
+
+
+@pytest.mark.parametrize("theme", ["auto", "dark", "light"])
+def test_save_settings_persists_theme(
+    theme: str, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "_eval_js", lambda js: None)
+    api.save_settings(json.dumps({"theme": theme}))
+    config = load_config()
+    assert config["settings"]["theme"] == theme
+
+
+def test_save_settings_rejects_invalid_theme(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only auto/dark/light are accepted; unknown values are ignored."""
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "_eval_js", lambda js: None)
+    api.save_settings(json.dumps({"theme": "hacker"}))
+    config = load_config()
+    assert config["settings"]["theme"] == "dark"
 
 
 def test_save_settings_rejects_invalid_accent_color(
@@ -62,6 +109,7 @@ def test_save_settings_rejects_invalid_accent_color(
 
 
 # ── Credential state fields ──────────────────────────────────────────────────
+
 
 def test_twitch_using_bundled_is_true_by_default(
     temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
@@ -133,7 +181,11 @@ def test_credential_state_fields_all_present(
     api = TwitchXApi()
     monkeypatch.setattr(api, "_eval_js", lambda js: None)
     result = api.get_full_config_for_settings()
-    for key in ("twitch_using_bundled", "kick_using_bundled",
-                "youtube_using_bundled_oauth", "youtube_using_bundled_api_key",
-                "youtube_bundled_available"):
+    for key in (
+        "twitch_using_bundled",
+        "kick_using_bundled",
+        "youtube_using_bundled_oauth",
+        "youtube_using_bundled_api_key",
+        "youtube_bundled_available",
+    ):
         assert key in result, f"Missing credential state field: {key}"

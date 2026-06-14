@@ -10,6 +10,7 @@ def test_excepthook_writes_crash_log(temp_config_dir: Path, monkeypatch) -> None
     import importlib
 
     import main as _main
+
     importlib.reload(_main)
 
     _main._configure_crash_logging()
@@ -32,6 +33,7 @@ def test_thread_excepthook_writes_crash_log(temp_config_dir: Path) -> None:
     import importlib
 
     import main as _main
+
     importlib.reload(_main)
 
     _main._configure_crash_logging()
@@ -41,7 +43,9 @@ def test_thread_excepthook_writes_crash_log(temp_config_dir: Path) -> None:
         raise ValueError("thread crash")
     except ValueError:
         exc_type, exc_val, exc_tb = sys.exc_info()
-        args = threading.ExceptHookArgs((exc_type, exc_val, exc_tb, threading.current_thread()))
+        args = threading.ExceptHookArgs(
+            (exc_type, exc_val, exc_tb, threading.current_thread())
+        )
         threading.excepthook(args)
 
     assert crash_log.exists(), "crash.log was not created"

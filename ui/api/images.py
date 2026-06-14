@@ -45,9 +45,9 @@ class ImagesComponent(BaseApiComponent):
                             "Cached avatar decode failed for %s: %s", login_key, exc
                         )
 
-                url = self._api._user_avatars.get(login_key, "") or self._api._user_avatars.get(
-                    login.lower(), ""
-                )
+                url = self._api._user_avatars.get(
+                    login_key, ""
+                ) or self._api._user_avatars.get(login.lower(), "")
                 if not url:
                     return
 
@@ -67,7 +67,9 @@ class ImagesComponent(BaseApiComponent):
                 self._eval_js(f"window.onAvatar({result})")
                 save_avatar(login_key, resized_bytes, platform)
             except Exception as e:
-                logger.warning("get_avatar failed for %s/%s: %s", platform, login_key, e)
+                logger.warning(
+                    "get_avatar failed for %s/%s: %s", platform, login_key, e
+                )
             finally:
                 self._api._fetching_avatars.discard(dedup_key)
 

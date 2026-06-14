@@ -4,11 +4,42 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>TwitchX</title>
+<script>
+  (function() {
+    var mode = localStorage.getItem('twitchx.theme.mode') || 'dark';
+    var resolved = mode;
+    if (mode === 'auto') {
+      resolved = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    }
+    if (resolved === 'light' || resolved === 'dark') {
+      document.documentElement.setAttribute('data-theme', resolved);
+    }
+  })();
+</script>
 <!-- CSS -->
 <link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/themes/dark.css">
+<link rel="stylesheet" href="css/themes/light.css">
 <link rel="stylesheet" href="css/reset.css">
 <link rel="stylesheet" href="css/layout.css">
-<link rel="stylesheet" href="css/components.css">
+<link rel="stylesheet" href="css/components/buttons.css">
+<link rel="stylesheet" href="css/components/sidebar.css">
+<link rel="stylesheet" href="css/components/search-toolbar.css">
+<link rel="stylesheet" href="css/components/stream-card.css">
+<link rel="stylesheet" href="css/components/empty-state.css">
+<link rel="stylesheet" href="css/components/player-bar.css">
+<link rel="stylesheet" href="css/components/chat.css">
+<link rel="stylesheet" href="css/components/context-menu.css">
+<link rel="stylesheet" href="css/components/settings.css">
+<link rel="stylesheet" href="css/components/browse.css">
+<link rel="stylesheet" href="css/components/channel.css">
+<link rel="stylesheet" href="css/components/multistream.css">
+<link rel="stylesheet" href="css/components/statistics.css">
+<link rel="stylesheet" href="css/components/stream-extras.css">
+<link rel="stylesheet" href="css/components/utilities.css">
+<link rel="stylesheet" href="css/components/skeleton.css">
+<link rel="stylesheet" href="css/components/micro-interactions.css">
+<link rel="stylesheet" href="css/components/toast.css">
 <link rel="stylesheet" href="css/views.css">
 <link rel="stylesheet" href="css/player.css">
 </head>
@@ -536,6 +567,23 @@
 
     <!-- Appearance panel -->
     <div class="settings-panel" id="settings-panel-appearance" role="tabpanel">
+      <div class="setting-group">
+        <div class="setting-label" id="theme-label">Theme</div>
+        <div class="theme-options" role="radiogroup" aria-labelledby="theme-label">
+          <label class="theme-option">
+            <input type="radio" name="theme" value="auto">
+            <span>Auto</span>
+          </label>
+          <label class="theme-option">
+            <input type="radio" name="theme" value="dark">
+            <span>Dark</span>
+          </label>
+          <label class="theme-option">
+            <input type="radio" name="theme" value="light">
+            <span>Light</span>
+          </label>
+        </div>
+      </div>
       <div class="setting-group">
         <div class="setting-label" id="accent-color-label">Accent Color</div>
         <div id="accent-swatches" class="accent-swatches"></div>

@@ -23,6 +23,7 @@ from core.recorder import Recorder
 from core.storage import (
     CONFIG_DIR,
     DEFAULT_SETTINGS,
+    build_favorites_meta,
     get_favorite_logins,
     get_platform_config,
     get_settings,
@@ -260,7 +261,9 @@ class TwitchXApi:
     def watch_external(self, channel: str, quality: str) -> None:
         self._streams.watch_external(channel, quality)
 
-    def watch_external_platform(self, channel: str, platform: str, quality: str) -> None:
+    def watch_external_platform(
+        self, channel: str, platform: str, quality: str
+    ) -> None:
         self._streams.watch_external_platform(channel, platform, quality)
 
     def watch_media(
@@ -358,6 +361,7 @@ class TwitchXApi:
             "quality": settings.get("quality", "best"),
             "refresh_interval": settings.get("refresh_interval", 60),
             "favorites": all_favs,
+            "favorites_meta": build_favorites_meta(self._config),
         }
         if self._current_user:
             masked["current_user"] = self._current_user
@@ -426,6 +430,7 @@ class TwitchXApi:
             "chat_anti_spam": settings.get("chat_anti_spam", True),
             "keyboard_shortcuts": settings.get("keyboard_shortcuts", {}),
             "accent_color": settings.get("accent_color", "#FF9F0A"),
+            "theme": settings.get("theme", "dark"),
             "twitch_using_bundled": not bool(
                 twitch_conf.get("client_id") and twitch_conf.get("client_secret")
             ),
@@ -507,6 +512,8 @@ class TwitchXApi:
                 st["keyboard_shortcuts"] = validated
             if "accent_color" in parsed and parsed["accent_color"] in _ACCENT_PALETTE:
                 st["accent_color"] = parsed["accent_color"]
+            if "theme" in parsed and parsed["theme"] in ("auto", "dark", "light"):
+                st["theme"] = parsed["theme"]
 
         self._config = update_config(_apply)
 

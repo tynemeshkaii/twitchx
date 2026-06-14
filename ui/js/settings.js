@@ -2,21 +2,73 @@ window.TwitchX = window.TwitchX || {};
 const TwitchX = window.TwitchX;
 
 const ACCENT_PALETTE = [
-  { value: '#FF9F0A', hover: '#E8920A', dim: 'rgba(255,159,10,0.10)',  label: 'Amber' },
-  { value: '#BF5AF2', hover: '#A84ADE', dim: 'rgba(191,90,242,0.10)', label: 'Purple' },
-  { value: '#0A84FF', hover: '#0070E0', dim: 'rgba(10,132,255,0.10)', label: 'Blue' },
-  { value: '#30D158', hover: '#28B94D', dim: 'rgba(48,209,88,0.10)',  label: 'Green' },
-  { value: '#FF453A', hover: '#E03C31', dim: 'rgba(255,69,58,0.10)',  label: 'Red' },
-  { value: '#FF2D55', hover: '#E02849', dim: 'rgba(255,45,85,0.10)',  label: 'Pink' },
+  { value: '#FF9F0A', label: 'Amber' },
+  { value: '#BF5AF2', label: 'Purple' },
+  { value: '#0A84FF', label: 'Blue' },
+  { value: '#30D158', label: 'Green' },
+  { value: '#FF453A', label: 'Red' },
+  { value: '#FF2D55', label: 'Pink' },
 ];
+
+function _hexToRgb(hex) {
+  var m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!m) return null;
+  return {
+    r: parseInt(m[1], 16) / 255,
+    g: parseInt(m[2], 16) / 255,
+    b: parseInt(m[3], 16) / 255,
+  };
+}
+
+function _rgbToHsl(r, g, b) {
+  var max = Math.max(r, g, b);
+  var min = Math.min(r, g, b);
+  var h = 0;
+  var s = 0;
+  var l = (max + min) / 2;
+
+  if (max !== min) {
+    var d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / d + 2; break;
+      case b: h = (r - g) / d + 4; break;
+    }
+    h = h / 6;
+  }
+
+  return {
+    h: Math.round(h * 360),
+    s: Math.round(s * 100),
+    l: Math.round(l * 100),
+  };
+}
 
 function applyAccentColor(color) {
   var entry = ACCENT_PALETTE.find(function(p) { return p.value === color; }) || ACCENT_PALETTE[0];
+  var rgb = _hexToRgb(entry.value);
+  if (!rgb) return;
+  var hsl = _rgbToHsl(rgb.r, rgb.g, rgb.b);
   var root = document.documentElement;
-  root.style.setProperty('--accent', entry.value);
-  root.style.setProperty('--accent-hover', entry.hover);
-  root.style.setProperty('--accent-dim', entry.dim);
+  root.style.setProperty('--accent-h', hsl.h);
+  root.style.setProperty('--accent-s', hsl.s + '%');
+  root.style.setProperty('--accent-l', hsl.l + '%');
   localStorage.setItem('twitchx.accent', entry.value);
+}
+
+function resolveTheme(mode) {
+  if (mode === 'auto') {
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  }
+  return mode === 'light' ? 'light' : 'dark';
+}
+
+function applyTheme(mode) {
+  var resolved = resolveTheme(mode);
+  document.documentElement.setAttribute('data-theme', resolved);
+  localStorage.setItem('twitchx.theme.mode', mode);
+  localStorage.setItem('twitchx.theme.resolved', resolved);
 }
 
 function formatDuration(seconds) {
@@ -170,9 +222,15 @@ function _applyStatsCompact(compact) {
   if (toggleBtn) toggleBtn.textContent = compact ? 'Normal' : 'Compact';
 }
 
+function _getSelectedTheme() {
+  var checked = document.querySelector('input[name="theme"]:checked');
+  return checked ? checked.value : 'dark';
+}
+
 function _readAllFormValues() {
   var activeSwatch = document.querySelector('.accent-swatch.active');
   return {
+    theme: _getSelectedTheme(),
     client_id: document.getElementById('s-client-id').value.trim(),
     client_secret: document.getElementById('s-client-secret').value.trim(),
     streamlink_path: document.getElementById('s-streamlink').value.trim(),
@@ -247,6 +305,10 @@ function openSettings() {
   }
   document.getElementById('s-pip-enabled').checked = !!config.pip_enabled;
   document.getElementById('s-low-latency').checked = !!config.low_latency_mode;
+  var currentTheme = config.theme || 'dark';
+  document.querySelectorAll('input[name="theme"]').forEach(function(radio) {
+    radio.checked = radio.value === currentTheme;
+  });
   var currentAccent = config.accent_color || '#FF9F0A';
   var swatchContainer = document.getElementById('accent-swatches');
   if (swatchContainer) {
@@ -405,6 +467,7 @@ function saveSettings() {
   var activeSwatchEl = document.querySelector('.accent-swatch.active');
   var accentColor = activeSwatchEl ? activeSwatchEl.dataset.color : '#FF9F0A';
   const data = {
+    theme: _getSelectedTheme(),
     client_id: document.getElementById('s-client-id').value.trim(),
     client_secret: document.getElementById('s-client-secret').value.trim(),
     streamlink_path: document.getElementById('s-streamlink').value.trim(),
@@ -438,6 +501,8 @@ function saveSettings() {
 
 TwitchX.ACCENT_PALETTE = ACCENT_PALETTE;
 TwitchX.applyAccentColor = applyAccentColor;
+TwitchX.applyTheme = applyTheme;
+TwitchX.resolveTheme = resolveTheme;
 TwitchX.openSettings = openSettings;
 TwitchX.openSettingsToTab = openSettingsToTab;
 TwitchX.closeSettings = closeSettings;

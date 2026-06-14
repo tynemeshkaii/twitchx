@@ -8,6 +8,7 @@ from pathlib import Path
 from core.storage import (
     DEFAULT_CONFIG,
     DEFAULT_SETTINGS,
+    build_favorites_meta,
     get_cached_avatar,
     get_favorite_logins,
     get_favorites,
@@ -238,6 +239,34 @@ def test_get_favorites_filtered() -> None:
     assert len(get_favorites(config, "twitch")) == 2
     assert len(get_favorites(config, "kick")) == 1
     assert len(get_favorites(config, "youtube")) == 0
+
+
+def test_build_favorites_meta_keeps_platform_identity() -> None:
+    config = {
+        "favorites": [
+            {"platform": "twitch", "login": "same", "display_name": "Same Twitch"},
+            {"platform": "kick", "login": "same", "display_name": "Same Kick"},
+            {"platform": "youtube", "login": "UCAbC", "display_name": "Same YouTube"},
+        ]
+    }
+
+    assert build_favorites_meta(config) == {
+        "twitch:same": {
+            "login": "same",
+            "platform": "twitch",
+            "display_name": "Same Twitch",
+        },
+        "kick:same": {
+            "login": "same",
+            "platform": "kick",
+            "display_name": "Same Kick",
+        },
+        "youtube:UCAbC": {
+            "login": "UCAbC",
+            "platform": "youtube",
+            "display_name": "Same YouTube",
+        },
+    }
 
 
 def test_get_favorite_logins() -> None:

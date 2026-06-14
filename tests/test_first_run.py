@@ -68,6 +68,7 @@ def test_no_oauth_tokens_does_not_crash_load_config(temp_config_dir: Path) -> No
 
 # ── First-run credential / onboarding state ──────────────────────────────────
 
+
 def test_first_run_twitch_kick_use_bundled_credentials(
     temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -75,7 +76,9 @@ def test_first_run_twitch_kick_use_bundled_credentials(
     api = TwitchXApi()
     monkeypatch.setattr(api, "_eval_js", lambda js: None)
     result = api.get_full_config_for_settings()
-    assert result["twitch_using_bundled"] is True, "Twitch should use bundled on first run"
+    assert result["twitch_using_bundled"] is True, (
+        "Twitch should use bundled on first run"
+    )
     assert result["kick_using_bundled"] is True, "Kick should use bundled on first run"
 
 

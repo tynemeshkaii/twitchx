@@ -1,8 +1,12 @@
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
+html {
+  color-scheme: dark light;
+}
+
 body {
   font: -apple-system-body;
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', sans-serif;
   background: var(--bg-base);
   color: var(--text-primary);
   overflow: hidden;
@@ -64,9 +68,8 @@ body {
 }
 @media (prefers-contrast: more) {
   :root {
-    --text-muted: #AEAEB2;
-    --text-secondary: #C7C7CC;
-    --bg-border: #3A3A3F;
+    --text-muted: var(--text-secondary);
+    --bg-border: var(--border-strong);
   }
   #settings-modal, #context-menu {
     border-width: 2px;

@@ -1,55 +1,68 @@
 :root {
-  /* ── Amber accent ─────────────────────────────────────── */
-  --accent:       #FF9F0A;
-  --accent-hover: #E8920A;
-  --accent-dim:   rgba(255, 159, 10, 0.10);
-  --accent-muted: rgba(255, 159, 10, 0.25);
-  --accent-text:  #FF9F0A;
+  /* ── Accent system (HSL) ──────────────────────────────── */
+  /* Base HSL values are overridden by settings.js when the user picks an accent color. */
+  --accent-h: 36;
+  --accent-s: 100%;
+  --accent-l: 52%;
 
-  /* ── Depth system (macOS dark mode aligned) ──────────── */
-  --bg-base:      #141416;
-  --bg-surface:   #1C1C1E;
-  --bg-elevated:  #252528;
-  --bg-overlay:   #2E2E32;
-  --bg-border:    #2C2C2E;
+  --accent:       hsl(var(--accent-h) var(--accent-s) var(--accent-l));
+  --accent-hover: hsl(var(--accent-h) var(--accent-s) calc(var(--accent-l) - 5%));
+  --accent-dim:   hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.10);
+  --accent-muted: hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.25);
+  --accent-text:  var(--accent);
 
-  /* ── Apple-style label hierarchy ─────────────────────── */
-  --text-primary:   #F2F2F7;
-  --text-secondary: #AEAEB2;
-  --text-muted:     #98989D;
-  --text-muted-elevated: #99999F;
+  /* ── Focus system (accent-derived) ───────────────────── */
+  --focus-ring:       hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.40);
+  --focus-ring-offset: hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.12);
 
-  /* ── Semantic status ────────────────────────────────── */
-  --live-green:  #30D158;
-  --live-red:    #FF453A;
-  --warn-yellow: #FF9F0A;
-  --error-red:   #FF453A;
-  --error-red-bright: #FF6961;
+  /* ── Primary button background (accent-derived) ──────── */
+  --btn-primary-bg: linear-gradient(135deg,
+    var(--accent),
+    hsl(var(--accent-h) var(--accent-s) calc(var(--accent-l) - 12%)));
+  --btn-primary-bg-hover: linear-gradient(135deg,
+    hsl(var(--accent-h) var(--accent-s) calc(var(--accent-l) + 6%)),
+    hsl(var(--accent-h) var(--accent-s) calc(var(--accent-l) - 4%)));
 
-  /* ── Radii ──────────────────────────────────────────── */
+  /* ── Accent-derived surfaces & borders ───────────────── */
+  --surface-selected: linear-gradient(135deg,
+    hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.16),
+    hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.055));
+  --border-accent:    hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.22);
+  --border-accent-strong: hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.45);
+  --shadow-glow-accent: 0 0 22px hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.24);
+
+  /* ── Radii ────────────────────────────────────────────── */
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
   --radius-xl: 20px;
+  --radius-full: 9999px;
 
-  /* ── Spacing scale ──────────────────────────────────── */
+  /* ── Spacing scale ────────────────────────────────────── */
+  --space-1:  1px;
   --space-2:  2px;
   --space-4:  4px;
   --space-6:  6px;
   --space-8:  8px;
+  --space-10: 10px;
   --space-12: 12px;
+  --space-14: 14px;
   --space-16: 16px;
   --space-20: 20px;
   --space-24: 24px;
   --space-32: 32px;
+  --space-40: 40px;
 
   /* ── Typography scale ───────────────────────────────── */
-  --font-xs:   11px;
-  --font-sm:   12px;
-  --font-md:   13px;
+  --font-2xs: 10px;
+  --font-xs:  11px;
+  --font-sm:  12px;
+  --font-md:  13px;
   --font-base: 14px;
-  --font-lg:   16px;
-  --font-xl:   20px;
+  --font-lg:  16px;
+  --font-xl:  20px;
+  --font-2xl: 24px;
+  --font-3xl: 32px;
 
   /* ── Tracking (letter-spacing) ──────────────────────── */
   --tracking-tight:  -0.02em;
@@ -58,19 +71,9 @@
   --tracking-wide:    0.04em;
 
   /* ── Leading (line-height) ──────────────────────────── */
-  --leading-tight: 1.2;
-  --leading-normal: 1.4;
+  --leading-tight:   1.2;
+  --leading-normal:  1.4;
   --leading-relaxed: 1.6;
-
-  /* ── Border tokens ──────────────────────────────────── */
-  --border-subtle:  rgba(255, 255, 255, 0.08);
-  --border-default: rgba(255, 255, 255, 0.13);
-  --border-strong:  rgba(255, 255, 255, 0.22);
-
-  /* ── Shadow tokens ──────────────────────────────────── */
-  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.22);
-  --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.48), 0 2px 8px rgba(0, 0, 0, 0.22);
-  --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.65);
 
   /* ── Z-index scale ──────────────────────────────────── */
   --z-base:     1;
@@ -82,32 +85,21 @@
   --z-tooltip:  9999;
 
   /* ── Animation tokens ───────────────────────────────── */
-  --duration-fast:   0.12s;
-  --duration-normal: 0.20s;
-  --duration-slow:   0.30s;
-  --duration-view:   0.18s;
-  --ease-default:    ease;
-  --ease-spring:     cubic-bezier(0.34, 1.56, 0.64, 1);
-  --ease-view:       cubic-bezier(0.25, 0.1, 0.25, 1);
+  --duration-instant: 0.05s;
+  --duration-fast:    0.12s;
+  --duration-normal:  0.20s;
+  --duration-slow:    0.30s;
+  --duration-view:    0.28s;
+  --ease-default:     ease;
+  --ease-spring:      cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out-expo:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-view:        cubic-bezier(0.25, 0.1, 0.25, 1);
 
   /* ── Micro-interaction tokens ───────────────────────── */
   --scale-press:      0.96;
-  --highlight-press:  rgba(255, 255, 255, 0.08);
 
-  /* ── Toast notification tokens ──────────────────────── */
-  --toast-duration: 4s;
-  --toast-bg-success: rgba(48, 209, 88, 0.14);
-  --toast-bg-error:   rgba(255, 69, 58, 0.14);
-  --toast-bg-info:    rgba(255, 255, 255, 0.07);
-  --toast-bg-warn:    rgba(255, 159, 10, 0.14);
-  --toast-border-success: rgba(48, 209, 88, 0.35);
-  --toast-border-error:   rgba(255, 69, 58, 0.35);
-  --toast-border-info:    rgba(255, 255, 255, 0.12);
-  --toast-border-warn:    rgba(255, 159, 10, 0.35);
-  --toast-text-success: var(--live-green);
-  --toast-text-error:   var(--error-red);
-  --toast-text-info:    var(--text-secondary);
-  --toast-text-warn:    var(--warn-yellow);
+  /* ── Disabled state ─────────────────────────────────── */
+  --disabled-opacity: 0.45;
 
   /* ── Icon sizing tokens ────────────────────────────── */
   --icon-sm: 16px;
@@ -118,58 +110,10 @@
   --platform-kick:    #53FC18;
   --platform-kick-text: #0A0A0C;
   --platform-youtube: #FF0000;
-
-  /* ── Scroll shadow tokens ───────────────────────────── */
-  --scroll-shadow-size:  16px;
-  --scroll-shadow-color: rgba(0, 0, 0, 0.45);
-
-  /* ── Text on accent / inverse ─────────────────────────── */
-  --text-on-accent: #0A0A0C;
-  --text-inverse:   #FFFFFF;
-
-  /* ── Interaction backgrounds ─────────────────────────── */
-  --hover-bg:        rgba(255, 255, 255, 0.06);
-  --hover-bg-strong: rgba(255, 255, 255, 0.10);
-  --pressed-bg:      rgba(255, 255, 255, 0.08);
-  --surface-pressed: rgba(255, 255, 255, 0.03);
-
-  /* ── Focus system ────────────────────────────────────── */
-  --focus-ring:       rgba(255, 159, 10, 0.40);
-  --focus-ring-offset: rgba(255, 159, 10, 0.12);
-
-  /* ── Disabled state ──────────────────────────────────── */
-  --disabled-opacity: 0.45;
-
-  /* ── Overlays / structural dark ──────────────────────── */
-  --overlay-bg:        rgba(0, 0, 0, 0.55);
-  --bg-player-bar:     rgba(28, 28, 30, 0.82);
-  --bg-tooltip-dark:   rgba(0, 0, 0, 0.85);
-  --bg-modal:          rgba(30, 30, 32, 0.97);
-  --bg-video:          #000;
-  --bg-dark-50:        rgba(0, 0, 0, 0.50);
-
-  /* ── Semantic borders (subtle) ─────────────────────── */
-  --border-card:      rgba(255, 255, 255, 0.07);
-  --border-accent:    rgba(255, 159, 10, 0.22);
-  --border-error:     rgba(255, 69, 58, 0.26);
-  --border-accent-strong: rgba(255, 159, 10, 0.45);
-
-  /* ── Status backgrounds (subtle) ───────────────────── */
-  --status-bg-green: rgba(48, 209, 88, 0.18);
-  --status-bg-red:   rgba(255, 69, 58, 0.18);
-  --status-border-red: rgba(255, 69, 58, 0.25);
-
-  /* ── Primary button background ─────────────────────── */
-  --btn-primary-bg: linear-gradient(135deg, #FF9F0A, #F07800);
-
-  /* ── Spacing additions ─────────────────────────────── */
-  --space-1:  1px;
-  --space-10: 10px;
-  --space-14: 14px;
-
-  /* ── Typography additions ──────────────────────────── */
-  --font-2xs: 10px;
-
-  /* ── Buffer / loader specifics ─────────────────────── */
-  --buffer-loaded-bg: rgba(255, 255, 255, 0.15);
 }
+
+/*
+  Theme-aware tokens are defined in:
+    ui/css/themes/dark.css  → :root, [data-theme="dark"]
+    ui/css/themes/light.css → [data-theme="light"]
+*/

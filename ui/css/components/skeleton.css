@@ -1,0 +1,55 @@
+@keyframes skeleton-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg,
+    var(--bg-elevated) 25%,
+    var(--bg-overlay) 50%,
+    var(--bg-elevated) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+.skeleton-card {
+  display: flex; flex-direction: column; gap: var(--space-8);
+  padding: var(--space-8);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.skeleton-thumb {
+  width: 100%; aspect-ratio: 16/9;
+  border-radius: var(--radius-sm);
+}
+.skeleton-text {
+  height: 12px; border-radius: var(--radius-sm);
+}
+.skeleton-text-short { width: 60%; }
+.skeleton-text-medium { width: 80%; }
+.skeleton-avatar {
+  width: 48px; height: 48px; border-radius: 50%;
+  flex-shrink: 0;
+}
+.skeleton-browse-card {
+  width: 100%; aspect-ratio: 3/4;
+  border-radius: var(--radius-md);
+}
+.skeleton-stream-card {
+  width: 100%; aspect-ratio: 16/9;
+  border-radius: var(--radius-md);
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.ms-spinner {
+  width: 24px; height: 24px;
+  border: 2px solid var(--border-subtle);
+  border-top-color: var(--text-secondary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: var(--space-8);
+}

@@ -63,6 +63,20 @@ function doRefresh() {
   if (TwitchX.api) TwitchX.api.refresh();
 }
 
+function hydrateFavoritesFromConfig(config) {
+  if (!config) return;
+  if (Array.isArray(config.favorites)) {
+    TwitchX.state.favorites = config.favorites;
+  }
+  if (config.favorites_meta) {
+    TwitchX.state.favoritesMeta = config.favorites_meta;
+  }
+  TwitchX.state.favoritesHydrated = true;
+  if (TwitchX.renderSidebar) {
+    TwitchX.renderSidebar();
+  }
+}
+
 /* ── pywebview ready ────────────────────────────────────── */
 window.addEventListener('pywebviewready', function() {
   TwitchX.api = window.pywebview.api;
@@ -82,6 +96,7 @@ window.addEventListener('pywebviewready', function() {
     TwitchX.state.pipEnabled = !!(config && config.pip_enabled);
     const pipBtn = document.getElementById('pip-player-btn');
     if (pipBtn) pipBtn.classList.toggle('hidden', !TwitchX.state.pipEnabled);
+    hydrateFavoritesFromConfig(config);
   } catch(e) {
     setTimeout(function() {
       if (TwitchX.api) {
@@ -93,6 +108,7 @@ window.addEventListener('pywebviewready', function() {
           if (retryConfig && retryConfig.keyboard_shortcuts) {
             TwitchX.state.shortcuts = Object.assign({}, TwitchX.DEFAULT_SHORTCUTS, retryConfig.keyboard_shortcuts);
           }
+          hydrateFavoritesFromConfig(retryConfig);
         } catch(e2) {}
       }
     }, 200);
@@ -105,6 +121,8 @@ window.addEventListener('resize', function() {
   }
   TwitchX.sidebarResizeFrame = requestAnimationFrame(function() {
     TwitchX.sidebarResizeFrame = null;
+    var sidebar = document.getElementById('sidebar');
+    if (sidebar && sidebar.classList.contains('collapsed-sidebar')) return;
     if (TwitchX.state.favorites.length > 0) {
       TwitchX.applySidebarLayout(TwitchX.getSidebarGroups());
     }
@@ -119,3 +137,4 @@ TwitchX.hideKickProfile = hideKickProfile;
 TwitchX.doLogout = doLogout;
 TwitchX.doBrowser = doBrowser;
 TwitchX.doRefresh = doRefresh;
+TwitchX.hydrateFavoritesFromConfig = hydrateFavoritesFromConfig;

@@ -89,7 +89,9 @@ class StreamsComponent(BaseApiComponent):
             return
 
         stream = self._api._data._find_live_stream(channel, platform or None)
-        platform = self._api._data._stream_platform(stream) if stream else platform or "twitch"
+        platform = (
+            self._api._data._stream_platform(stream) if stream else platform or "twitch"
+        )
 
         safe_ch = json.dumps(channel)
         _watching = self._api._watching_channel
@@ -370,7 +372,9 @@ class StreamsComponent(BaseApiComponent):
     def watch_external(self, channel: str, quality: str) -> None:
         self.watch_external_platform(channel, "", quality)
 
-    def watch_external_platform(self, channel: str, platform: str, quality: str) -> None:
+    def watch_external_platform(
+        self, channel: str, platform: str, quality: str
+    ) -> None:
         if not channel:
             self._eval_js(
                 "window.onLaunchResult({success: false, message: 'Select a channel first', channel: ''})"
@@ -378,7 +382,9 @@ class StreamsComponent(BaseApiComponent):
             return
 
         stream = self._api._data._find_live_stream(channel, platform or None)
-        platform = self._api._data._stream_platform(stream) if stream else platform or "twitch"
+        platform = (
+            self._api._data._stream_platform(stream) if stream else platform or "twitch"
+        )
 
         if not any(
             self._api._data._stream_matches_channel(s, channel, platform or None)

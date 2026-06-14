@@ -1,0 +1,206 @@
+
+/* ── Grid / List Toggle ─────────────────────────────────── */
+#stream-grid.list-mode {
+  grid-template-columns: 1fr;
+  gap: 4px;
+  padding: 8px 12px;
+}
+#stream-grid.list-mode .stream-card {
+  flex-direction: row;
+  height: 52px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+#stream-grid.list-mode .card-thumb {
+  width: 80px;
+  height: 52px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+#stream-grid.list-mode .thumb-img {
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+#stream-grid.list-mode .thumb-shimmer {
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+#stream-grid.list-mode .card-info {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex: 1;
+  padding: 0 12px;
+  gap: 10px;
+  min-width: 0;
+  overflow: hidden;
+}
+#stream-grid.list-mode .card-meta { margin: 0; flex-shrink: 0; }
+#stream-grid.list-mode .card-channel { font-size: var(--font-md); font-weight: 600; white-space: nowrap; }
+#stream-grid.list-mode .card-title {
+  flex: 1;
+  font-size: var(--font-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+#stream-grid.list-mode .card-game { font-size: var(--font-sm); color: var(--text-muted); white-space: nowrap; }
+#stream-grid.list-mode .live-badge,
+#stream-grid.list-mode .uptime-badge { display: none; }
+#stream-grid.list-mode .watching-badge { font-size: var(--font-xs); padding: 1px 4px; }
+
+/* ── Pin Badge ──────────────────────────────────────────── */
+.pin-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  font-size: var(--font-sm);
+  line-height: 1;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6));
+  pointer-events: none;
+}
+
+/* ── Command Palette ────────────────────────────────────── */
+#palette-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  background: var(--overlay-bg);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 80px;
+}
+#palette-overlay.hidden { display: none; }
+
+#palette-modal {
+  width: 560px;
+  max-width: calc(100vw - 32px);
+  background: var(--bg-modal);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+}
+
+#palette-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--space-16) var(--space-20);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--bg-border);
+  color: var(--text-primary);
+  font-size: var(--font-lg);
+  font-family: inherit;
+  outline: none;
+}
+#palette-input::placeholder { color: var(--text-muted); }
+
+#palette-results {
+  max-height: 340px;
+  overflow-y: auto;
+  padding-bottom: 4px;
+}
+
+.palette-section-header {
+  padding: 8px 20px 4px;
+  font-size: var(--font-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  background: var(--bg-base);
+}
+
+.palette-item {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: 10px 20px;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: var(--font-md);
+  transition: background var(--duration-fast) ease;
+}
+.palette-item:hover,
+.palette-item.palette-active { background: var(--bg-elevated); }
+
+.palette-item-icon {
+  font-size: 15px;
+  width: 22px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.palette-item-label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+.palette-item-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.palette-item .platform-badge {
+  position: static;
+  flex-shrink: 0;
+}
+.palette-item-hint {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.palette-state {
+  padding: 24px 20px 28px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+.palette-state-title {
+  font-size: var(--font-md);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.palette-state-detail {
+  margin-top: 5px;
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+}
+
+/* ── Staggered card entrance ──────────────────────────── */
+@keyframes card-enter {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.stream-card.card-enter,
+.browse-category-card.card-enter,
+.browse-stream-card.card-enter {
+  animation: card-enter var(--duration-slow) var(--ease-view) both;
+}
+.stream-card.card-enter:nth-child(1)  { animation-delay: 0ms; }
+.stream-card.card-enter:nth-child(2)  { animation-delay: 30ms; }
+.stream-card.card-enter:nth-child(3)  { animation-delay: 60ms; }
+.stream-card.card-enter:nth-child(4)  { animation-delay: 90ms; }
+.stream-card.card-enter:nth-child(5)  { animation-delay: 120ms; }
+.stream-card.card-enter:nth-child(6)  { animation-delay: 150ms; }
+.stream-card.card-enter:nth-child(7)  { animation-delay: 180ms; }
+.stream-card.card-enter:nth-child(8)  { animation-delay: 210ms; }
+.stream-card.card-enter:nth-child(n+9) { animation-delay: 240ms; }
+.browse-category-card.card-enter:nth-child(1)  { animation-delay: 0ms; }
+.browse-category-card.card-enter:nth-child(2)  { animation-delay: 25ms; }
+.browse-category-card.card-enter:nth-child(3)  { animation-delay: 50ms; }
+.browse-category-card.card-enter:nth-child(4)  { animation-delay: 75ms; }
+.browse-category-card.card-enter:nth-child(5)  { animation-delay: 100ms; }
+.browse-category-card.card-enter:nth-child(6)  { animation-delay: 125ms; }
+.browse-category-card.card-enter:nth-child(n+7) { animation-delay: 150ms; }
+.browse-stream-card.card-enter:nth-child(1)  { animation-delay: 0ms; }
+.browse-stream-card.card-enter:nth-child(2)  { animation-delay: 25ms; }
+.browse-stream-card.card-enter:nth-child(3)  { animation-delay: 50ms; }
+.browse-stream-card.card-enter:nth-child(4)  { animation-delay: 75ms; }
+.browse-stream-card.card-enter:nth-child(5)  { animation-delay: 100ms; }
+.browse-stream-card.card-enter:nth-child(6)  { animation-delay: 125ms; }
+.browse-stream-card.card-enter:nth-child(n+7) { animation-delay: 150ms; }

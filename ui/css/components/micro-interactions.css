@@ -1,0 +1,55 @@
+
+/* ── Micro-interactions: button press feedback ────────── */
+button:not(:disabled):active,
+.login-btn:active,
+.bar-btn:active,
+.player-header-btn:active,
+.onboarding-btn:active,
+.browse-back-btn:active,
+.channel-follow-btn:active,
+.channel-watch-btn:active,
+.ms-confirm-btn:active,
+.ms-cancel-btn:active,
+#watch-btn.active:active,
+#stop-player-btn:active,
+#watch-external-btn:active,
+#fullscreen-player-btn:active,
+#pip-player-btn:active,
+#close-player-btn:active,
+.oauth-login-btn:active,
+.import-btn:active,
+.eye-btn:active,
+#chat-send-btn:not(:disabled):active,
+#ms-chat-send-btn:not(:disabled):active,
+.channel-media-btn:active,
+.browse-platform-tab:not(.active):active,
+#browse-nav-btn:active,
+#add-btn:active,
+#save-btn:active,
+#test-btn:active,
+#kick-test-btn:active,
+#yt-test-btn:active,
+#close-settings:active {
+  transform: scale(var(--scale-press));
+}
+
+.channel-item:active {
+  background: var(--pressed-bg);
+  transform: scale(0.98);
+}
+
+/* Missing hover states */
+.ms-confirm-btn:hover {
+  opacity: 0.9;
+}
+.ms-cancel-btn:hover {
+  border-color: var(--border-strong);
+  color: var(--text-secondary);
+}
+#ms-chat-send-btn:not(:disabled):hover,
+.chat-header-btn:hover {
+  color: var(--text-primary);
+}
+.emote-picker-btn:hover {
+  color: var(--text-primary);
+}

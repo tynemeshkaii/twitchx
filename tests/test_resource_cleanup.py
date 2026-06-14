@@ -1,4 +1,5 @@
 """Resource-cleanup tests: timer cancel, shutdown event, dedup caps, avatar idempotency."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -14,7 +15,9 @@ from core.storage import save_avatar
 from ui.api import TwitchXApi
 
 
-def test_close_cancels_polling_timer(temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_close_cancels_polling_timer(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """close() must cancel the polling timer."""
     api = TwitchXApi()
     mock_timer = MagicMock()

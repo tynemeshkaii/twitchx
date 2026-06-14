@@ -1,0 +1,175 @@
+
+.bar-btn {
+  width: 32px; height: 32px;
+  background: transparent; border: none;
+  border-radius: var(--radius-sm); color: var(--text-muted);
+  cursor: pointer; font-size: var(--font-base); font-family: inherit;
+  display: flex; align-items: center; justify-content: center;
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
+}
+.bar-btn:hover { background: var(--hover-bg-strong); color: var(--text-primary); }
+.bar-btn:focus-visible { outline-offset: -1px; }
+
+/* ── SVG icon sizing ────────────────────────────────── */
+.bar-btn svg,
+.player-header-btn svg,
+.chat-header-btn svg,
+#channel-watch-btn svg,
+#watch-btn svg,
+#stop-player-btn svg,
+#watch-external-btn svg,
+#ms-sidebar-btn svg,
+#ms-toggle-chat-btn svg,
+#ms-close-btn svg {
+  width: var(--icon-md); height: var(--icon-md);
+  display: block; flex-shrink: 0;
+}
+.ctx-item svg,
+.palette-item-icon svg,
+.toast-icon svg,
+#chat-reply-close svg,
+#emote-picker-btn svg,
+.sr-add svg,
+#add-btn svg,
+#grid-toggle-btn svg,
+.reply-btn svg {
+  width: var(--icon-sm); height: var(--icon-sm);
+  display: block; flex-shrink: 0;
+}
+
+#watch-btn {
+  min-height: 32px; padding: 0 16px;
+  background: var(--bg-control); color: var(--text-muted);
+  border: none;
+  border-radius: var(--radius-md); font-size: var(--font-sm); font-weight: 700;
+  cursor: not-allowed; font-family: inherit; letter-spacing: -0.01em;
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease,
+              opacity var(--duration-fast) ease;
+}
+#watch-btn.active {
+  background: var(--btn-primary-bg);
+  color: var(--text-on-accent);
+  cursor: pointer;
+  box-shadow: var(--shadow-glow-accent);
+}
+#watch-btn.active:hover {
+  opacity: 0.95;
+  background: var(--btn-primary-bg-hover);
+  box-shadow: var(--shadow-glow-accent);
+}
+
+#stop-player-btn {
+  width: 32px; height: 32px; padding: 0;
+  background: transparent; color: var(--live-red);
+  opacity: 0.55;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer; font-family: inherit;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
+}
+#stop-player-btn:hover {
+  background: var(--hover-bg-strong); color: var(--live-red); opacity: 1;
+}
+
+#watch-external-btn {
+  width: 32px; height: 32px; padding: 0;
+  background: transparent; color: var(--text-muted);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer; font-family: inherit;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
+}
+#watch-external-btn:hover {
+  background: var(--hover-bg-strong);
+  color: var(--text-secondary);
+}
+
+#player-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 12px;
+  background: var(--glass-bar);
+  border-bottom: 1px solid var(--border-glass);
+  flex-shrink: 0;
+}
+#player-channel-name {
+  font-size: var(--font-base); font-weight: 750;
+  color: var(--text-primary); letter-spacing: -0.01em;
+}
+#player-stream-title {
+  font-size: var(--font-sm); color: var(--text-secondary);
+  flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#player-header-actions {
+  display: flex; gap: 5px; flex-shrink: 0;
+}
+#fullscreen-player-btn {
+  width: 32px; height: 32px; padding: 0;
+  background: transparent; color: var(--text-secondary);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer; font-family: inherit;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
+}
+#fullscreen-player-btn:hover {
+  background: var(--hover-bg-strong); color: var(--text-primary);
+}
+#pip-player-btn:hover {
+  background: var(--hover-bg-strong); color: var(--text-primary);
+}
+#close-player-btn:hover {
+  background: var(--hover-bg-strong); color: var(--text-primary);
+}
+#toggle-chat-btn:hover {
+  background: var(--hover-bg-strong); color: var(--text-primary);
+}
+#pip-player-btn {
+  width: 32px; height: 32px; padding: 0;
+  background: transparent; color: var(--text-secondary);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer; font-family: inherit;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
+}
+#pip-player-btn:hover {
+  background: var(--hover-bg-strong); color: var(--text-primary);
+}
+#close-player-btn {
+  width: 32px; height: 32px; padding: 0;
+  background: transparent; color: var(--text-secondary);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer; font-family: inherit;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
+}
+#close-player-btn:hover {
+  background: var(--hover-bg-strong); color: var(--text-primary);
+}
+#toggle-chat-btn {
+  height: 32px; width: 32px;
+  background: transparent; color: var(--text-secondary);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer; font-family: inherit;
+  display: flex; align-items: center; justify-content: center;
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
+  flex-shrink: 0;
+}
+#toggle-chat-btn:hover {
+  background: var(--hover-bg-strong); color: var(--text-primary);
+}
+#toggle-chat-btn.active {
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-muted);
+  color: var(--accent);
+}

@@ -604,7 +604,8 @@ class TestGetLiveStreamsCache:
     @pytest.mark.asyncio
     async def test_cache_hit_skips_http(self, monkeypatch) -> None:
         import time
-        monkeypatch.setattr(time, 'time', lambda: 1000.0)
+
+        monkeypatch.setattr(time, "time", lambda: 1000.0)
         client = KickClient()
         call_count = 0
 

@@ -4,6 +4,7 @@ const TwitchX = window.TwitchX;
 window.onStreamsUpdate = function(data) {
   TwitchX.state.hasCredentials = data.has_credentials !== false;
   TwitchX.state.streamsLoaded = true;
+  TwitchX.state.favoritesHydrated = true;
   TwitchX.state.favorites = data.favorites || [];
   TwitchX.state.favoritesMeta = data.favorites_meta || {};
   const newStreams = data.streams || [];

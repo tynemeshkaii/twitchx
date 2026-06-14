@@ -1,0 +1,16 @@
+.login-btn {
+  width: 100%; min-height: 32px; padding: var(--space-8) var(--space-12);
+  color: var(--text-inverse);
+  border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+  font-size: var(--font-sm); font-weight: 600; cursor: pointer;
+  font-family: inherit; letter-spacing: -0.01em;
+  box-shadow: inset 0 1px 0 var(--border-subtle), var(--shadow-sm);
+  transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease,
+              box-shadow var(--duration-fast) ease;
+}
+.login-btn:active { transform: scale(0.98); }
+#login-btn { background: var(--platform-twitch); }
+#login-btn:hover { opacity: 0.90; box-shadow: 0 0 18px rgba(145, 70, 255, 0.22); }
+#kick-login-sidebar-btn { background: var(--platform-kick); color: var(--platform-kick-text); }
+#kick-login-sidebar-btn:hover { opacity: 0.90; box-shadow: 0 0 18px rgba(83, 252, 24, 0.18); }
+

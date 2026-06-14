@@ -19,9 +19,16 @@ from ui.api import TwitchXApi
 @pytest.fixture(autouse=True)
 def _no_socks_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
     """Remove SOCKS proxy env vars so httpx.Client() initializes without socksio."""
-    for key in ("ALL_PROXY", "all_proxy", "FTP_PROXY", "ftp_proxy",
-                "GRPC_PROXY", "grpc_proxy"):
+    for key in (
+        "ALL_PROXY",
+        "all_proxy",
+        "FTP_PROXY",
+        "ftp_proxy",
+        "GRPC_PROXY",
+        "grpc_proxy",
+    ):
         monkeypatch.delenv(key, raising=False)
+
 
 # ==========================================================================
 # Config / Storage fixtures

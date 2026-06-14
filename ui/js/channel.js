@@ -18,6 +18,11 @@ function selectChannel(login, platform) {
     c.classList.toggle('selected', isSelected);
     c.setAttribute('aria-pressed', String(isSelected));
   });
+  document.querySelectorAll('.rail-avatar').forEach(function(c) {
+    const isSelected = c.dataset.key === key;
+    c.classList.toggle('selected', isSelected);
+    c.setAttribute('aria-pressed', String(isSelected));
+  });
   document.getElementById('watch-btn').classList.add('active');
   TwitchX.setStatus('Selected: ' + login + ' on ' + TwitchX.platformLabel(resolvedPlatform), 'info');
 }

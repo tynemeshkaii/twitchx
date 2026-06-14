@@ -81,6 +81,7 @@ TwitchX.state = {
   pipEnabled: false,
   gridMode: 'grid',
   streamsLoaded: false,
+  favoritesHydrated: false,
 };
 
 TwitchX.state.pinnedStreams = new Set();

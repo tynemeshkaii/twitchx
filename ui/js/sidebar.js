@@ -70,6 +70,8 @@ function getSidebarGroups() {
 }
 
 function applySidebarLayout(groups) {
+  const sidebar = document.getElementById('sidebar');
+  if (sidebar && sidebar.classList.contains('collapsed-sidebar')) return;
   const list = document.getElementById('channel-list');
   const onlineSection = list.querySelector('.sidebar-section.online');
   const offlineSection = list.querySelector('.sidebar-section.offline');
@@ -159,21 +161,27 @@ function _setupSidebarTooltip(item, entry, streamMap) {
     var tooltip = document.getElementById('sidebar-tooltip');
     if (!tooltip) return;
     var stream = streamMap[entry.key];
-    if (!stream) return;
     var thumb = document.getElementById('tooltip-thumb');
     var title = document.getElementById('tooltip-title');
     var game = document.getElementById('tooltip-game');
     var viewers = document.getElementById('tooltip-viewers');
-    if (thumb && stream.thumbnail_url) {
+    if (thumb && stream && stream.thumbnail_url) {
       thumb.src = stream.thumbnail_url;
       thumb.classList.remove('hidden');
     } else if (thumb) {
       thumb.classList.add('hidden');
     }
-    if (title) title.textContent = stream.display_name || entry.display_name || entry.login;
-    if (game) game.textContent = stream.game || (stream.title ? stream.title : '');
+    if (title) title.textContent = (stream && stream.display_name) || entry.display_name || entry.login;
+    if (game) {
+      game.textContent = stream
+        ? (stream.game || (stream.title ? stream.title : 'Live now'))
+        : 'Offline on ' + TwitchX.platformLabel(entry.platform);
+    }
     if (viewers) {
-      viewers.textContent = TwitchX.formatViewers(stream.viewers) + ' viewers';
+      viewers.textContent = stream
+        ? TwitchX.formatViewers(stream.viewers) + ' viewers'
+        : TwitchX.platformLabel(entry.platform);
+      viewers.classList.toggle('offline', !stream);
     }
     var r = item.getBoundingClientRect();
     var tx = r.right + 8;
@@ -191,11 +199,14 @@ function _setupSidebarTooltip(item, entry, streamMap) {
     if (tooltip) { tooltip.classList.remove('visible'); tooltip.classList.add('hidden'); }
   }
   item.addEventListener('mouseenter', function(e) {
-    tooltipTimer = setTimeout(function() { showTooltip(e); }, 400);
+    tooltipTimer = setTimeout(function() {
+      tooltipTimer = null;
+      showTooltip(e);
+    }, 180);
   });
   item.addEventListener('mousemove', function(e) {
-    if (tooltipTimer) { clearTimeout(tooltipTimer); tooltipTimer = null; }
-    tooltipTimer = setTimeout(function() { showTooltip(e); }, 400);
+    if (tooltipTimer) return;
+    showTooltip(e);
   });
   item.addEventListener('mouseleave', function() {
     if (tooltipTimer) { clearTimeout(tooltipTimer); tooltipTimer = null; }
@@ -480,19 +491,24 @@ function createRailAvatar(entry, isLive, streamMap) {
   var platform = entry.platform;
   var item = document.createElement('div');
   var isWatching = _matchWatching(login, key);
+  var isSelected = TwitchX.state.selectedChannelKey === key;
+  var isNewLive = TwitchX._notifBadgeLogins && TwitchX._notifBadgeLogins.indexOf(key) !== -1;
+  var stream = streamMap[key] || null;
   item.className = 'rail-avatar' +
     (isLive ? ' live' : ' offline') +
+    (isSelected ? ' selected' : '') +
     (isWatching ? ' watching' : '');
   item.dataset.login = login;
   item.dataset.key = key;
   item.dataset.platform = platform;
   item.tabIndex = 0;
   item.setAttribute('role', 'button');
+  item.setAttribute('aria-pressed', String(isSelected));
   item.setAttribute(
     'aria-label',
     isLive
-      ? login + ', live'
-      : login + ', offline'
+      ? login + ', live on ' + TwitchX.platformLabel(platform) + ', ' + Number((stream && stream.viewers) || 0).toLocaleString() + ' viewers'
+      : login + ', offline on ' + TwitchX.platformLabel(platform)
   );
 
   var img = document.createElement('img');
@@ -513,6 +529,11 @@ function createRailAvatar(entry, isLive, streamMap) {
     item.appendChild(dot);
   }
 
+  var newDot = document.createElement('span');
+  newDot.className = 'rail-notif-dot' + (isNewLive ? ' visible' : '');
+  newDot.setAttribute('aria-label', 'New live channel');
+  item.appendChild(newDot);
+
   _setupSidebarTooltip(item, entry, streamMap);
 
   item.addEventListener('click', function() { TwitchX.selectChannel(login, platform); });
@@ -532,6 +553,14 @@ function renderRail(groups) {
   var list = document.getElementById('channel-list');
   var liveLogins = groups.online;
   var offlineLogins = groups.offline;
+  if (
+    liveLogins.length === 0 &&
+    offlineLogins.length === 0 &&
+    !TwitchX.state.favoritesHydrated &&
+    !TwitchX.state.streamsLoaded
+  ) {
+    return;
+  }
 
   // If #channel-list still has expanded-sidebar DOM, skip diff and force full rebuild
   var hasStaleDom = !!list.querySelector('.sidebar-section');
@@ -550,21 +579,34 @@ function renderRail(groups) {
   if (!hasStaleDom && !liveChanged && !offlineChanged) {
     list.querySelectorAll('.rail-avatar').forEach(function(el) {
       var key = el.dataset.key;
+      var platform = el.dataset.platform || TwitchX.getChannelPlatform(el.dataset.login, key);
+      var stream = groups.streamMap[key] || null;
 
       // Sync avatar image
       var img = el.querySelector('.rail-av-img');
       var newSrc = TwitchX.state.avatars[key] || '';
-      if (img && newSrc && img.src !== newSrc) {
+      if (img && img.src !== newSrc) {
         img.src = newSrc;
       }
 
       // Sync selected state
       var isSelected = TwitchX.state.selectedChannelKey === key;
       el.classList.toggle('selected', isSelected);
+      el.setAttribute('aria-pressed', String(isSelected));
+      el.setAttribute(
+        'aria-label',
+        stream
+          ? el.dataset.login + ', live on ' + TwitchX.platformLabel(platform) + ', ' + Number(stream.viewers || 0).toLocaleString() + ' viewers'
+          : el.dataset.login + ', offline on ' + TwitchX.platformLabel(platform)
+      );
 
       // Sync watching state
       var isWatching = _matchWatching(el.dataset.login, key);
       el.classList.toggle('watching', isWatching);
+
+      var notif = el.querySelector('.rail-notif-dot');
+      var isNewLive = TwitchX._notifBadgeLogins && TwitchX._notifBadgeLogins.indexOf(key) !== -1;
+      if (notif) notif.classList.toggle('visible', !!isNewLive);
     });
     return;
   }
@@ -596,6 +638,13 @@ function renderSidebar() {
 
   const list = document.getElementById('channel-list');
   const groups = getSidebarGroups();
+  if (
+    TwitchX.state.favorites.length === 0 &&
+    !TwitchX.state.favoritesHydrated &&
+    !TwitchX.state.streamsLoaded
+  ) {
+    return;
+  }
   const selectedExpanded = expandSidebarSectionForLogin(
     TwitchX.state.selectedChannel,
     TwitchX.state.selectedChannelKey
@@ -806,6 +855,13 @@ function _updateNotifBadges() {
     } else {
       dot.classList.remove('visible');
     }
+  });
+  var railItems = document.querySelectorAll('.rail-avatar');
+  railItems.forEach(function(item) {
+    var dot = item.querySelector('.rail-notif-dot');
+    if (!dot) return;
+    var key = item.dataset.key || item.dataset.login;
+    dot.classList.toggle('visible', badgeLogins.indexOf(key) !== -1);
   });
 }
 

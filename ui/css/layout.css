@@ -4,11 +4,14 @@
 
 /* ── Sidebar ────────────────────────────────────────────── */
 #sidebar {
-  width: 240px; flex-shrink: 0;
-  background: var(--bg-surface);
+  width: 244px; flex-shrink: 0;
+  background:
+    linear-gradient(180deg, var(--border-subtle), transparent 120px),
+    var(--bg-surface);
   border-right: 1px solid var(--bg-border);
   display: flex; flex-direction: column;
   overflow: hidden;
+  transition: width var(--duration-normal) var(--ease-view);
 }
 
 #profile-area {
@@ -36,8 +39,8 @@
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  padding: 0 var(--space-6) var(--space-8);
-  display: flex; flex-direction: column; gap: var(--space-8);
+  padding: 0 var(--space-8) var(--space-8);
+  display: flex; flex-direction: column; gap: var(--space-6);
 }
 
 .section-body {
@@ -72,16 +75,18 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--bg-base);
+  background:
+    radial-gradient(circle at 36% -18%, var(--accent-dim), transparent 34%),
+    var(--bg-base);
 }
 
 #toolbar {
-  height: 44px;
-  background: rgba(28, 28, 30, 0.82);
+  height: 46px;
+  background: var(--glass-bar);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border-bottom: 1px solid var(--bg-border);
-  display: flex; align-items: center; padding: 0 var(--space-12); gap: var(--space-8);
+  border-bottom: 1px solid var(--border-glass);
+  display: flex; align-items: center; padding: 0 var(--space-14); gap: var(--space-8);
   flex-shrink: 0;
   min-width: 0;
   overflow: hidden;

@@ -1,0 +1,51 @@
+/* ── Statistics ────────────────────────────────────────────── */
+
+.stats-grid {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--space-8);
+}
+.stat-card {
+  background: var(--bg-elevated); border-radius: var(--radius-sm);
+  padding: var(--space-12); text-align: center; border: 1px solid var(--border-default);
+}
+.stat-value {
+  display: block; font-size: 22px; font-weight: 700;
+  color: var(--text-primary); letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+.stat-label {
+  display: block; font-size: var(--font-sm); color: var(--text-muted);
+  margin-top: var(--space-2); letter-spacing: 0.02em;
+}
+
+.stats-table {
+  width: 100%; border-collapse: collapse; font-size: var(--font-sm);
+}
+.stats-table th {
+  text-align: left; padding: 6px 8px; color: var(--text-muted);
+  font-weight: 600; border-bottom: 1px solid var(--border-default);
+  font-size: var(--font-sm); text-transform: uppercase; letter-spacing: 0.04em;
+}
+.stats-table td {
+  padding: 6px 8px; border-bottom: 1px solid var(--border-default);
+  color: var(--text-secondary);
+}
+.stats-table tr:last-child td { border-bottom: none; }
+
+.stats-list { display: flex; flex-direction: column; gap: 4px; }
+.stats-list-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 8px; border-radius: var(--radius-sm);
+  background: var(--bg-elevated); font-size: var(--font-sm);
+}
+.stats-list-item .stats-channel {
+  color: var(--text-primary); font-weight: 500;
+}
+.stats-list-item .stats-value {
+  color: var(--text-muted); font-size: var(--font-sm);
+}
+.stats-list-item .stats-platform-badge {
+  font-size: var(--font-xs); color: var(--text-muted); margin-left: 6px;
+}
+.stats-empty-msg {
+  font-size: var(--font-sm); color: var(--text-muted); padding: 8px 0;
+}

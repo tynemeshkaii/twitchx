@@ -97,6 +97,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "chat_block_list": [],
     "chat_anti_spam": True,
     "accent_color": "#FF9F0A",
+    "theme": "dark",
     "keyboard_shortcuts": {
         "refresh": "r",
         "watch": " ",
@@ -365,7 +366,9 @@ def load_config() -> dict[str, Any]:
         with open(CONFIG_FILE) as f:
             stored = json.load(f)
     except json.JSONDecodeError as exc:
-        logger.warning("Corrupt config file %s, restoring defaults: %s", CONFIG_FILE, exc)
+        logger.warning(
+            "Corrupt config file %s, restoring defaults: %s", CONFIG_FILE, exc
+        )
         save_config(DEFAULT_CONFIG)
         return _deep_merge(DEFAULT_CONFIG, {})
 
@@ -445,6 +448,24 @@ def get_favorites(
 def get_favorite_logins(config: dict[str, Any], platform: str) -> list[str]:
     """Get just the login names for a specific platform's favorites."""
     return [f["login"] for f in get_favorites(config, platform)]
+
+
+def build_favorites_meta(config: dict[str, Any]) -> dict[str, dict[str, str]]:
+    """Build UI metadata keyed by platform:login."""
+    favorites_meta: dict[str, dict[str, str]] = {}
+    for fav in get_favorites(config):
+        login = str(fav.get("login", ""))
+        if not login:
+            continue
+        platform = str(fav.get("platform") or "twitch")
+        key = f"{platform}:{login}"
+        if key not in favorites_meta:
+            favorites_meta[key] = {
+                "login": login,
+                "platform": platform,
+                "display_name": str(fav.get("display_name") or login),
+            }
+    return favorites_meta
 
 
 # ── Avatar disk cache ────────────────────────────────────────

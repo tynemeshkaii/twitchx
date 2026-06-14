@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 def test_get_version_returns_semver_string(temp_config_dir):
     from ui.api import TwitchXApi
+
     with patch("httpx.Client"):
         api = TwitchXApi()
     version = api.get_version()

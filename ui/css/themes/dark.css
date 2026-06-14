@@ -1,0 +1,100 @@
+/* ── TwitchX Dark Theme ─────────────────────────────────── */
+:root,
+[data-theme="dark"] {
+  /* ── Depth system (macOS dark mode aligned) ──────────── */
+  --bg-base:      #111113;
+  --bg-surface:   #1A1A1D;
+  --bg-elevated:  #242427;
+  --bg-overlay:   #303034;
+  --bg-border:    #2B2B2F;
+  --bg-panel:     #202024;
+  --bg-control:   #27272B;
+  --bg-control-hover: #323238;
+
+  /* ── Apple-style label hierarchy ─────────────────────── */
+  --text-primary:   #F2F2F7;
+  --text-secondary: #AEAEB2;
+  --text-muted:     #98989D;
+  --text-muted-elevated: #99999F;
+
+  /* ── Semantic status ────────────────────────────────── */
+  --live-green:  #30D158;
+  --live-red:    #FF453A;
+  --warn-yellow: hsl(36 100% 52%);
+  --error-red:   #FF453A;
+  --error-red-bright: #FF6961;
+  --info-blue:   #64B5FF;
+
+  /* ── Border tokens ──────────────────────────────────── */
+  --border-subtle:  rgba(255, 255, 255, 0.08);
+  --border-default: rgba(255, 255, 255, 0.13);
+  --border-strong:  rgba(255, 255, 255, 0.22);
+
+  /* ── Shadow tokens ──────────────────────────────────── */
+  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.24);
+  --shadow-md: 0 10px 34px rgba(0, 0, 0, 0.50), 0 2px 8px rgba(0, 0, 0, 0.24);
+  --shadow-lg: 0 24px 70px rgba(0, 0, 0, 0.68);
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.025), 0 12px 28px rgba(0, 0, 0, 0.26);
+  --shadow-card-hover: 0 18px 46px rgba(0, 0, 0, 0.46), 0 0 0 1px rgba(255, 255, 255, 0.025);
+  --shadow-modal: 0 28px 76px rgba(0, 0, 0, 0.62), 0 0 0 0.5px rgba(255, 255, 255, 0.08);
+
+  /* ── Toast notification tokens ──────────────────────── */
+  --toast-duration: 4s;
+  --toast-bg-success: rgba(48, 209, 88, 0.14);
+  --toast-bg-error:   rgba(255, 69, 58, 0.14);
+  --toast-bg-info:    rgba(255, 255, 255, 0.07);
+  --toast-bg-warn:    hsl(36 100% 52% / 0.14);
+  --toast-border-success: rgba(48, 209, 88, 0.35);
+  --toast-border-error:   rgba(255, 69, 58, 0.35);
+  --toast-border-info:    rgba(255, 255, 255, 0.12);
+  --toast-border-warn:    hsl(36 100% 52% / 0.35);
+  --toast-text-success: var(--live-green);
+  --toast-text-error:   var(--error-red);
+  --toast-text-info:    var(--text-secondary);
+  --toast-text-warn:    var(--warn-yellow);
+
+  /* ── Scroll shadow tokens ───────────────────────────── */
+  --scroll-shadow-size:  16px;
+  --scroll-shadow-color: rgba(0, 0, 0, 0.45);
+
+  /* ── Text on accent / inverse ───────────────────────── */
+  --text-on-accent: #0A0A0C;
+  --text-inverse:   #FFFFFF;
+
+  /* ── Interaction backgrounds ─────────────────────────── */
+  --hover-bg:        rgba(255, 255, 255, 0.055);
+  --hover-bg-strong: rgba(255, 255, 255, 0.095);
+  --pressed-bg:      rgba(255, 255, 255, 0.08);
+  --surface-pressed: rgba(255, 255, 255, 0.03);
+  --highlight-press: rgba(255, 255, 255, 0.08);
+
+  /* ── Buffer / loader specifics ─────────────────────── */
+  --buffer-loaded-bg: rgba(255, 255, 255, 0.15);
+
+  /* ── Surface cards ──────────────────────────────────── */
+  --surface-card:    linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(255, 255, 255, 0.012));
+  --surface-card-hover: linear-gradient(180deg, rgba(255, 255, 255, 0.060), rgba(255, 255, 255, 0.025));
+
+  /* ── Overlays / structural ───────────────────────────── */
+  --overlay-bg:        rgba(0, 0, 0, 0.62);
+  --bg-player-bar:     rgba(24, 24, 27, 0.88);
+  --bg-tooltip-dark:   rgba(0, 0, 0, 0.86);
+  --bg-modal:          rgba(31, 31, 35, 0.97);
+  --bg-video:          #000;
+  --bg-dark-50:        rgba(0, 0, 0, 0.50);
+  --glass-bar:         linear-gradient(180deg, rgba(32, 32, 36, 0.92), rgba(24, 24, 27, 0.86));
+
+  /* ── Semantic borders (subtle) ─────────────────────── */
+  --border-card:      rgba(255, 255, 255, 0.085);
+  --border-error:     rgba(255, 69, 58, 0.26);
+  --border-glass:     rgba(255, 255, 255, 0.105);
+
+  /* ── Status backgrounds (subtle) ───────────────────── */
+  --status-bg-green: rgba(48, 209, 88, 0.18);
+  --status-bg-red:   rgba(255, 69, 58, 0.18);
+  --status-border-green: rgba(48, 209, 88, 0.25);
+  --status-border-red: rgba(255, 69, 58, 0.25);
+
+  /* ── Thumb overlay ──────────────────────────────────── */
+  --thumb-overlay: linear-gradient(180deg, rgba(0, 0, 0, 0.08) 0%, rgba(0, 0, 0, 0.18) 46%, rgba(0, 0, 0, 0.58) 100%);
+}

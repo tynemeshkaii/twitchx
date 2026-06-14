@@ -56,9 +56,7 @@ def _configure_crash_logging() -> None:
         except OSError:
             pass
 
-    def _excepthook(
-        exc_type: type, exc_value: BaseException, exc_tb: object
-    ) -> None:
+    def _excepthook(exc_type: type, exc_value: BaseException, exc_tb: object) -> None:
         if issubclass(exc_type, (KeyboardInterrupt, SystemExit)):
             sys.__excepthook__(exc_type, exc_value, exc_tb)
             return

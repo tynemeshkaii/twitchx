@@ -53,10 +53,28 @@ document.addEventListener('DOMContentLoaded', function() {
   TwitchX._initMultistreamSlots();
   TwitchX._watchFullscreenChanges();
 
-  // Apply saved accent color immediately from localStorage cache
+  // Apply saved theme and accent color immediately from localStorage cache
   (function() {
+    var savedTheme = localStorage.getItem('twitchx.theme.mode') || 'dark';
+    if (TwitchX.applyTheme) TwitchX.applyTheme(savedTheme);
     var saved = localStorage.getItem('twitchx.accent') || '#FF9F0A';
     if (TwitchX.applyAccentColor) TwitchX.applyAccentColor(saved);
+  })();
+
+  // Watch system theme changes when in Auto mode
+  (function() {
+    var mediaQuery = window.matchMedia('(prefers-color-scheme: light)');
+    var handler = function() {
+      var mode = localStorage.getItem('twitchx.theme.mode') || 'dark';
+      if (mode === 'auto' && TwitchX.applyTheme) {
+        TwitchX.applyTheme('auto');
+      }
+    };
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handler);
+    } else if (mediaQuery.addListener) {
+      mediaQuery.addListener(handler);
+    }
   })();
 
   // Restore saved grid mode
@@ -118,9 +136,6 @@ TwitchX._bindSidebarEvents = function() {
   var collapseBtn = document.getElementById('sidebar-collapse-btn');
   if (collapseBtn) collapseBtn.addEventListener('click', function() {
     var sidebar = document.getElementById('sidebar');
-    var list = document.getElementById('channel-list');
-    // Clear early so no stale expanded content is present during width transition
-    while (list.firstChild) list.removeChild(list.firstChild);
     var collapsed = sidebar.classList.toggle('collapsed-sidebar');
     localStorage.setItem('twitchx.sidebar.collapsed', collapsed ? '1' : '0');
     // Force reflow so browser commits the new width before rebuilding
@@ -555,6 +570,15 @@ TwitchX._bindSettingsEvents = function() {
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
       e.preventDefault();
       TwitchX.focusAdjacentTab(Array.from(document.querySelectorAll('.settings-tab')), btn, e.key === 'ArrowRight' ? 1 : -1);
+    });
+  });
+
+  // Theme radio buttons
+  document.querySelectorAll('input[name="theme"]').forEach(function(radio) {
+    radio.addEventListener('change', function() {
+      if (this.checked && TwitchX.applyTheme) {
+        TwitchX.applyTheme(this.value);
+      }
     });
   });
 

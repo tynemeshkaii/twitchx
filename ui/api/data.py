@@ -14,6 +14,7 @@ from typing import Any
 import httpx
 
 from core.storage import (
+    build_favorites_meta,
     get_favorite_logins,
     get_favorites,
     get_platform_config,
@@ -133,6 +134,7 @@ class DataComponent(BaseApiComponent):
                 {
                     "streams": [],
                     "favorites": [],
+                    "favorites_meta": build_favorites_meta(self._config),
                     "live_set": [],
                     "updated_time": "",
                     "total_viewers": 0,
@@ -150,6 +152,7 @@ class DataComponent(BaseApiComponent):
                 {
                     "streams": [],
                     "favorites": all_favorites,
+                    "favorites_meta": build_favorites_meta(self._config),
                     "live_set": [],
                     "updated_time": "",
                     "total_viewers": 0,
@@ -470,17 +473,7 @@ class DataComponent(BaseApiComponent):
         now = datetime.now().strftime("%H:%M:%S")
         total = sum(item.get("viewers", 0) for item in stream_items)
 
-        favorites_meta = {}
-        for f in get_favorites(self._config):
-            login = f["login"]
-            platform = f.get("platform", "twitch")
-            key = f"{platform}:{login}"
-            if key not in favorites_meta:
-                favorites_meta[key] = {
-                    "display_name": f.get("display_name", login),
-                    "platform": platform,
-                    "login": login,
-                }
+        favorites_meta = build_favorites_meta(self._config)
 
         data = json.dumps(
             {

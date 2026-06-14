@@ -1,21 +1,21 @@
 /* ── Player bar ─────────────────────────────────────────── */
 #player-bar {
-  height: 44px;
-  background: var(--bg-player-bar);
+  height: 46px;
+  background: var(--glass-bar), var(--bg-player-bar);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border-top: 1px solid var(--bg-border);
-  display: flex; align-items: center; padding: 0 var(--space-12); gap: 0;
+  border-top: 1px solid var(--border-glass);
+  display: flex; align-items: center; padding: 0 var(--space-12); gap: 2px;
   flex-shrink: 0; position: relative;
   container-type: inline-size;
 }
 
 .bar-group {
-  display: flex; align-items: center; gap: 4px; flex-shrink: 0;
+  display: flex; align-items: center; gap: 5px; flex-shrink: 0;
 }
 .bar-group + .bar-group {
   border-left: 1px solid var(--border-subtle);
-  padding-left: 8px; margin-left: 4px;
+  padding-left: 10px; margin-left: 6px;
 }
 .bar-group--status {
   flex: 1; min-width: 0; overflow: hidden;
@@ -27,8 +27,8 @@
 
 #player-bar select {
   height: 32px; padding: 0 var(--space-8);
-  background: var(--bg-elevated); border: 1px solid var(--bg-border);
-  border-radius: var(--radius-sm); color: var(--text-primary);
+  background: var(--bg-control); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md); color: var(--text-primary);
   font-size: var(--font-sm); font-family: inherit; cursor: pointer;
 }
 
@@ -75,8 +75,8 @@
   background: linear-gradient(to right,
     var(--accent) 0%,
     var(--accent) var(--seek-pct, 0%),
-    rgba(255,255,255,0.10) var(--seek-pct, 0%),
-    rgba(255,255,255,0.10) 100%);
+    var(--border-default) var(--seek-pct, 0%),
+    var(--border-default) 100%);
   outline: none; cursor: pointer; margin: 0; padding: 0;
   transition: height var(--duration-fast) ease;
 }
@@ -113,7 +113,7 @@
 /* ── Buffer visualization bar ─────────────────────────── */
 #buffer-bar {
   position: absolute; bottom: 0; left: 0; right: 0;
-  height: 3px; background: var(--surface-pressed);
+  height: 3px; background: var(--bg-control);
   z-index: var(--z-sticky); pointer-events: none;
 }
 #buffer-loaded {
@@ -130,14 +130,16 @@
   width: var(--chat-width, 320px);
   min-width: 240px; max-width: 480px;
   display: flex; flex-direction: column;
-  background: var(--bg-surface);
-  border-left: 1px solid var(--bg-border);
+  background:
+    linear-gradient(180deg, var(--border-subtle), transparent 120px),
+    var(--bg-surface);
+  border-left: 1px solid var(--border-glass);
   contain: layout style paint;
   position: relative;
 }
 #chat-resize-handle {
   width: 6px; cursor: col-resize;
-  background: var(--bg-border); flex-shrink: 0;
+  background: var(--bg-control); flex-shrink: 0;
   transition: background var(--duration-fast) ease;
   position: relative;
   display: flex; align-items: center; justify-content: center;
@@ -153,8 +155,8 @@
 #chat-resize-handle::after {
   content: ''; position: absolute; inset: 0 -6px;
 }
-#chat-resize-handle:hover { background: rgba(255,159,10,0.20); }
-#chat-resize-handle:hover::before { background: rgba(255,159,10,0.60); }
+#chat-resize-handle:hover { background: var(--accent-dim); }
+#chat-resize-handle:hover::before { background: var(--accent); }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
@@ -262,9 +264,11 @@
   position: absolute;
   top: var(--space-8);
   right: var(--space-8);
-  background: var(--bg-tooltip-dark);
-  backdrop-filter: blur(6px);
-  border-radius: var(--radius-sm);
+  background: var(--bg-modal);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
   padding: var(--space-8) var(--space-12);
   font-size: var(--font-sm);
   font-family: ui-monospace, monospace;
