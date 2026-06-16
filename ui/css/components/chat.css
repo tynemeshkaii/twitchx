@@ -66,7 +66,7 @@
   font-weight: 700;
   vertical-align: middle;
 }
-.chat-msg .nick { font-weight: 700; cursor: pointer; }
+.chat-msg .nick { font-weight: 700; cursor: pointer; color: var(--author-color, var(--text-primary)); }
 .chat-msg .emote {
   width: 24px;
   height: 24px;
@@ -90,7 +90,7 @@
 .chat-msg.self .nick { color: var(--accent) !important; }
 .chat-msg .reply-btn {
   display: none; position: absolute; right: 4px; top: 2px;
-  background: var(--bg-overlay); border: 1px solid var(--bg-border);
+  background: var(--bg-overlay); border: 1px solid var(--border-subtle);
   border-radius: 4px; color: var(--text-muted);
   font-size: var(--font-md); cursor: pointer; padding: 1px 5px; line-height: 1;
 }
@@ -108,7 +108,7 @@
   display: none; align-items: center; gap: 6px;
   padding: 4px 8px;
   background: var(--bg-elevated);
-  border-top: 1px solid var(--bg-border);
+  border-top: 1px solid var(--border-subtle);
   font-size: var(--font-sm); color: var(--text-secondary);
   max-width: 100%; overflow: hidden;
 }
@@ -130,7 +130,7 @@
   background: var(--bg-elevated);
   color: var(--accent); cursor: pointer;
   font-size: var(--font-sm); font-weight: 600;
-  border-top: 1px solid var(--bg-border);
+  border-top: 1px solid var(--border-subtle);
 }
 #chat-new-messages.visible { display: block; }
 .chat-empty-state {
@@ -176,7 +176,7 @@
   transition: opacity var(--duration-fast) ease;
 }
 #chat-send-btn:hover { opacity: 0.88; }
-#chat-send-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+#chat-send-btn:disabled { opacity: var(--disabled-opacity); cursor: not-allowed; }
 .emote-picker-empty {
   color: var(--text-muted);
   font-size: var(--font-xs);
@@ -253,6 +253,11 @@
 }
 #emote-grid img.emote-pick:hover {
   background: var(--bg-elevated);
+}
+#emote-grid img.emote-pick:focus-visible {
+  outline: none;
+  background: var(--bg-elevated);
+  box-shadow: 0 0 0 2px var(--focus-ring);
 }
 #chat-status-dot.connecting,
 #ms-chat-status-dot.connecting {

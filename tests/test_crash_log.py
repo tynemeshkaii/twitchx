@@ -20,6 +20,9 @@ def test_excepthook_writes_crash_log(temp_config_dir: Path, monkeypatch) -> None
         raise RuntimeError("test crash")
     except RuntimeError:
         exc_type, exc_val, exc_tb = sys.exc_info()
+        assert exc_type is not None
+        assert exc_val is not None
+        assert exc_tb is not None
         sys.excepthook(exc_type, exc_val, exc_tb)
 
     assert crash_log.exists(), "crash.log was not created"

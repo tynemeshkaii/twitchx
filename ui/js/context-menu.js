@@ -166,8 +166,45 @@ function showSidebarContextMenu(e, login, platform) {
   }
 }
 
+function showGroupContextMenu(e, groupName) {
+  TwitchX._ctxGroupName = groupName;
+  TwitchX._groupContextReturnFocus = document.activeElement;
+  const menu = document.getElementById('group-context-menu');
+  if (!menu) return;
+  menu.classList.remove('menu-visible');
+  menu.style.left = '0';
+  menu.style.top = '0';
+  menu.offsetHeight;
+  let left = e.clientX;
+  let top = e.clientY;
+  const mw = menu.offsetWidth;
+  const mh = menu.offsetHeight;
+  if (left + mw > window.innerWidth - 8) left = window.innerWidth - mw - 8;
+  if (top + mh > window.innerHeight - 8) top = window.innerHeight - mh - 8;
+  if (left < 0) left = 0;
+  if (top < 0) top = 0;
+  menu.style.left = left + 'px';
+  menu.style.top = top + 'px';
+  requestAnimationFrame(function() {
+    menu.classList.add('menu-visible');
+    _focusMenuItem(menu, 0);
+  });
+}
+
+function closeGroupContextMenu() {
+  const menu = document.getElementById('group-context-menu');
+  if (menu) menu.classList.remove('menu-visible');
+  TwitchX._ctxGroupName = null;
+  if (TwitchX._groupContextReturnFocus && TwitchX._groupContextReturnFocus.focus) {
+    TwitchX._groupContextReturnFocus.focus();
+  }
+  TwitchX._groupContextReturnFocus = null;
+}
+
 TwitchX.showContextMenu = showContextMenu;
 TwitchX.showSidebarContextMenu = showSidebarContextMenu;
+TwitchX.showGroupContextMenu = showGroupContextMenu;
 TwitchX.closeContextMenu = closeContextMenu;
+TwitchX.closeGroupContextMenu = closeGroupContextMenu;
 TwitchX.focusContextMenuItem = _focusMenuItem;
 TwitchX.getVisibleContextMenuItems = _visibleMenuItems;

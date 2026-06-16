@@ -82,6 +82,7 @@
   --z-overlay:  500;
   --z-modal:    1000;
   --z-toast:    2000;
+  --z-palette:  3000;
   --z-tooltip:  9999;
 
   /* ── Animation tokens ───────────────────────────────── */
@@ -110,6 +111,31 @@
   --platform-kick:    #53FC18;
   --platform-kick-text: #0A0A0C;
   --platform-youtube: #FF0000;
+
+  /* ── Glass shell surfaces (overlaid on theme backgrounds) ── */
+  --glass-thin:   blur(12px) saturate(160%);
+  --glass-thick:  blur(32px) saturate(180%);
+  --glass-modal:  blur(40px) saturate(200%);
+
+  --glass-sidebar:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, transparent 120px);
+  --glass-content:
+    radial-gradient(circle at 36% -18%, var(--accent-dim), transparent 34%);
+
+  /* ── Elevation & modal surfaces ───────────────────────── */
+  --elevation-1: 0 1px 4px rgba(0, 0, 0, 0.08);
+  --elevation-2: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --elevation-3: 0 12px 40px rgba(0, 0, 0, 0.18);
+
+  /* ── Subtle app noise texture (data-uri, 2% opacity) ───── */
+  --app-noise:
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+
+  /* ── Motion choreography ──────────────────────────────── */
+  --view-exit-duration: 180ms;
+  --view-enter-duration: 280ms;
+  --view-exit-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --view-enter-ease: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /*

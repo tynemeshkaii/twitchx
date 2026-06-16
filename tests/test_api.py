@@ -29,6 +29,8 @@ def test_add_channel_accepts_kick_url_with_hyphen(
             "platform": "kick",
             "login": "train-wreck",
             "display_name": "train-wreck",
+            "group": None,
+            "order": 0,
         }
     ]
 

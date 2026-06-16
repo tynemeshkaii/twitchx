@@ -83,7 +83,13 @@ def test_save_and_reload(temp_config_dir: Path) -> None:
     loaded = load_config()
     assert loaded["platforms"]["twitch"]["client_id"] == "abc"
     assert loaded["favorites"] == [
-        {"platform": "twitch", "login": "streamer1", "display_name": "streamer1"}
+        {
+            "platform": "twitch",
+            "login": "streamer1",
+            "display_name": "streamer1",
+            "group": None,
+            "order": 0,
+        }
     ]
 
 
@@ -129,8 +135,20 @@ def test_v1_migration_credentials(temp_config_dir: Path) -> None:
 
     # Favorites converted to objects
     assert config["favorites"] == [
-        {"platform": "twitch", "login": "xqc", "display_name": "xqc"},
-        {"platform": "twitch", "login": "shroud", "display_name": "shroud"},
+        {
+            "platform": "twitch",
+            "login": "xqc",
+            "display_name": "xqc",
+            "group": None,
+            "order": 0,
+        },
+        {
+            "platform": "twitch",
+            "login": "shroud",
+            "display_name": "shroud",
+            "group": None,
+            "order": 1,
+        },
     ]
 
     # Kick/YouTube defaults present
@@ -146,7 +164,13 @@ def test_v1_migration_minimal(temp_config_dir: Path) -> None:
     config = load_config()
     assert config["platforms"]["twitch"]["client_id"] == "x"
     assert config["favorites"] == [
-        {"platform": "twitch", "login": "a", "display_name": "a"}
+        {
+            "platform": "twitch",
+            "login": "a",
+            "display_name": "a",
+            "group": None,
+            "order": 0,
+        }
     ]
     # Defaults filled in
     assert config["settings"]["quality"] == "best"
@@ -167,7 +191,13 @@ def test_v2_config_no_remigration(temp_config_dir: Path) -> None:
     config = load_config()
     assert config["platforms"]["twitch"]["client_id"] == "already_v2"
     assert config["favorites"] == [
-        {"platform": "twitch", "login": "test", "display_name": "test"}
+        {
+            "platform": "twitch",
+            "login": "test",
+            "display_name": "test",
+            "group": None,
+            "order": 0,
+        }
     ]
     assert config["settings"]["quality"] == "1080p"
 
@@ -422,9 +452,27 @@ def test_migrate_favorites_v2_cleans_v1_urls(temp_config_dir: Path) -> None:
 
     config = load_config()
     assert config["favorites"] == [
-        {"platform": "twitch", "login": "xqc", "display_name": "xqc"},
-        {"platform": "twitch", "login": "just_ns", "display_name": "just_ns"},
-        {"platform": "twitch", "login": "good123", "display_name": "good123"},
+        {
+            "platform": "twitch",
+            "login": "xqc",
+            "display_name": "xqc",
+            "group": None,
+            "order": 0,
+        },
+        {
+            "platform": "twitch",
+            "login": "just_ns",
+            "display_name": "just_ns",
+            "group": None,
+            "order": 1,
+        },
+        {
+            "platform": "twitch",
+            "login": "good123",
+            "display_name": "good123",
+            "group": None,
+            "order": 2,
+        },
     ]
 
 
@@ -435,11 +483,19 @@ def test_migrate_favorites_v2_noop_clean_v2(temp_config_dir: Path) -> None:
             {
                 "platforms": {"twitch": {}, "kick": {}, "youtube": {}},
                 "favorites": [
-                    {"platform": "twitch", "login": "xqc", "display_name": "xQc"},
+                    {
+                        "platform": "twitch",
+                        "login": "xqc",
+                        "display_name": "xQc",
+                        "group": None,
+                        "order": 0,
+                    },
                     {
                         "platform": "kick",
                         "login": "trainwreck",
                         "display_name": "Trainwreck",
+                        "group": None,
+                        "order": 1,
                     },
                 ],
                 "settings": {},
@@ -453,11 +509,19 @@ def test_migrate_favorites_v2_noop_clean_v2(temp_config_dir: Path) -> None:
     # No save needed — already clean
     assert mtime_after == mtime_before
     assert config["favorites"] == [
-        {"platform": "twitch", "login": "xqc", "display_name": "xQc"},
+        {
+            "platform": "twitch",
+            "login": "xqc",
+            "display_name": "xQc",
+            "group": None,
+            "order": 0,
+        },
         {
             "platform": "kick",
             "login": "trainwreck",
             "display_name": "Trainwreck",
+            "group": None,
+            "order": 1,
         },
     ]
 
@@ -490,8 +554,20 @@ def test_migrate_favorites_v2_same_login_different_platforms_kept(
             {
                 "platforms": {"twitch": {}, "kick": {}, "youtube": {}},
                 "favorites": [
-                    {"platform": "twitch", "login": "xqc", "display_name": "xQc"},
-                    {"platform": "kick", "login": "xqc", "display_name": "xQc"},
+                    {
+                        "platform": "twitch",
+                        "login": "xqc",
+                        "display_name": "xQc",
+                        "group": None,
+                        "order": 0,
+                    },
+                    {
+                        "platform": "kick",
+                        "login": "xqc",
+                        "display_name": "xQc",
+                        "group": None,
+                        "order": 1,
+                    },
                 ],
                 "settings": {},
             }
@@ -515,6 +591,8 @@ def test_migrate_favorites_v2_keeps_kick_slug_hyphen(temp_config_dir: Path) -> N
                         "platform": "kick",
                         "login": "train-wreck",
                         "display_name": "Train Wreck",
+                        "group": None,
+                        "order": 0,
                     },
                 ],
                 "settings": {},

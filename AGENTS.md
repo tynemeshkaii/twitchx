@@ -37,6 +37,7 @@ make check   # lint + test
 
 - **Не блокировать main thread** — весь I/O в `threading.Thread`
 - **Не писать `style.display` в JS** — используй `classList.toggle('hidden')`
+- **Не использовать persistent inline-стили в JS** (`style.cssText`, `style.color`, `style.opacity`, `style.background`) — используй CSS-классы и CSS-переменные; исключение: эфемерные стили при drag/resize и динамические CSS-переменные (`--chat-width`, `--author-color`)
 - **Не читать конфиг напрямую в фоновом треде** — используй локальный `config = load_config()`
 - **Не использовать `_effective_creds()` bypass** — все проверки credentials только через него
 - **Не lower-case YouTube channel IDs** (`UCxxxx…`) — они case-sensitive везде
@@ -124,7 +125,7 @@ ChatClient (ABC)      ←  BaseChatClient      ←  TwitchChatClient/KickChatCli
    })();
    ```
 2. Добавь `<script src="ui/js/mymodule.js"></script>` в `ui/index.html` в правильном месте порядка загрузки
-3. Порядок: `state → utils → icons → api-bridge → render → sidebar → player → multistream → browse → channel → chat → settings → context-menu → keyboard → palette → toast → callbacks → init`
+3. Порядок: `state → utils → view-transitions → icons → api-bridge → render → sidebar → player → multistream → browse → channel → chat → settings → context-menu → keyboard → palette → toast → callbacks → init`
 
 ### Новый UI компонент
 1. HTML в `ui/index.html`

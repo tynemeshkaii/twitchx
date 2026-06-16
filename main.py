@@ -5,6 +5,7 @@ import sys
 import threading
 import traceback
 from pathlib import Path
+from types import TracebackType
 
 from app import TwitchXApp
 
@@ -40,9 +41,9 @@ def _configure_crash_logging() -> None:
 
     def _write_crash(
         header: str,
-        exc_type: type,
+        exc_type: type[BaseException],
         exc_value: BaseException | None,
-        exc_tb: object,
+        exc_tb: TracebackType | None,
     ) -> None:
         log_dir = _storage.CONFIG_DIR
         crash_log = log_dir / "crash.log"
@@ -56,7 +57,11 @@ def _configure_crash_logging() -> None:
         except OSError:
             pass
 
-    def _excepthook(exc_type: type, exc_value: BaseException, exc_tb: object) -> None:
+    def _excepthook(
+        exc_type: type[BaseException],
+        exc_value: BaseException,
+        exc_tb: TracebackType | None,
+    ) -> None:
         if issubclass(exc_type, (KeyboardInterrupt, SystemExit)):
             sys.__excepthook__(exc_type, exc_value, exc_tb)
             return

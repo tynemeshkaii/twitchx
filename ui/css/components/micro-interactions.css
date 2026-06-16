@@ -53,3 +53,75 @@ button:not(:disabled):active,
 .emote-picker-btn:hover {
   color: var(--text-primary);
 }
+
+/* ── Reduced motion overrides ─────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled):active,
+  .login-btn:active,
+  .bar-btn:active,
+  .player-header-btn:active,
+  .onboarding-btn:active,
+  .browse-back-btn:active,
+  .channel-follow-btn:active,
+  .channel-watch-btn:active,
+  .ms-confirm-btn:active,
+  .ms-cancel-btn:active,
+  #watch-btn.active:active,
+  #stop-player-btn:active,
+  #watch-external-btn:active,
+  #fullscreen-player-btn:active,
+  #pip-player-btn:active,
+  #close-player-btn:active,
+  .oauth-login-btn:active,
+  .import-btn:active,
+  .eye-btn:active,
+  #chat-send-btn:not(:disabled):active,
+  #ms-chat-send-btn:not(:disabled):active,
+  .channel-media-btn:active,
+  .browse-platform-tab:not(.active):active,
+  #browse-nav-btn:active,
+  #add-btn:active,
+  #save-btn:active,
+  #test-btn:active,
+  #kick-test-btn:active,
+  #yt-test-btn:active,
+  #close-settings:active,
+  .channel-item:active {
+    transform: none !important;
+  }
+
+  .stream-card,
+  .browse-category-card,
+  .browse-stream-card,
+  .channel-item,
+  .rail-avatar,
+  .rail-notif-dot,
+  .btn,
+  .bar-btn,
+  .player-header-btn,
+  .browse-back-btn,
+  .channel-follow-btn,
+  .channel-watch-btn,
+  .ms-confirm-btn,
+  .ms-cancel-btn,
+  #chat-send-btn,
+  #ms-chat-send-btn,
+  .channel-media-btn,
+  .browse-platform-tab,
+  #browse-nav-btn,
+  #add-btn,
+  #save-btn,
+  #test-btn,
+  #kick-test-btn,
+  #yt-test-btn,
+  #close-settings {
+    transition: none !important;
+  }
+
+  .stream-card:hover,
+  .browse-category-card:hover,
+  .browse-stream-card:hover,
+  .rail-avatar:hover {
+    transform: none !important;
+  }
+}

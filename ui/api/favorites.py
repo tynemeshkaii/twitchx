@@ -354,6 +354,50 @@ class FavoritesComponent(BaseApiComponent):
 
         self._config = update_config(_apply)
 
+    def reorder_favorites(self, payload_json: str) -> None:
+        """Persist favorite order/group after drag-and-drop or group edits.
+
+        Payload is a list of {key, group, order} objects where key is "platform:login".
+        """
+        try:
+            payload = (
+                json.loads(payload_json)
+                if isinstance(payload_json, str)
+                else payload_json
+            )
+        except Exception:
+            logger.warning("reorder_favorites received invalid JSON")
+            return
+        if not isinstance(payload, list):
+            return
+
+        order_map: dict[str, dict[str, Any]] = {}
+        for item in payload:
+            key = item.get("key", "")
+            group = item.get("group")
+            order = item.get("order", 0)
+            if not key:
+                continue
+            order_map[key] = {"group": group, "order": order}
+
+        def _apply(cfg: dict) -> None:
+            favorites = cfg.get("favorites", [])
+            for fav in favorites:
+                platform = fav.get("platform", "twitch")
+                login = fav.get("login", "")
+                key = f"{platform}:{login}"
+                meta = order_map.get(key)
+                if meta:
+                    group = meta.get("group")
+                    if group in {"Online", "Offline"}:
+                        group = None
+                    fav["group"] = group
+                    fav["order"] = int(meta.get("order", 0))
+            cfg["favorites"] = favorites
+
+        self._config = update_config(_apply)
+        self._api._data.refresh()
+
     # ── Search ──────────────────────────────────────────────────
 
     def search_channels(self, query: str, platform: str = "twitch") -> None:

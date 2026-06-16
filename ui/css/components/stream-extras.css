@@ -33,8 +33,17 @@
   min-width: 0;
   overflow: hidden;
 }
-#stream-grid.list-mode .card-meta { margin: 0; flex-shrink: 0; }
+#stream-grid.list-mode .card-title-row {
+  margin: 0;
+  flex: 0 0 260px;
+  min-width: 180px;
+}
+#stream-grid.list-mode .card-avatar {
+  width: 20px;
+  height: 20px;
+}
 #stream-grid.list-mode .card-channel { font-size: var(--font-md); font-weight: 600; white-space: nowrap; }
+#stream-grid.list-mode .card-viewers { margin-left: 8px; }
 #stream-grid.list-mode .card-title {
   flex: 1;
   font-size: var(--font-sm);
@@ -44,9 +53,34 @@
   min-width: 0;
 }
 #stream-grid.list-mode .card-game { font-size: var(--font-sm); color: var(--text-muted); white-space: nowrap; }
+#stream-grid.list-mode .platform-badge,
 #stream-grid.list-mode .live-badge,
 #stream-grid.list-mode .uptime-badge { display: none; }
 #stream-grid.list-mode .watching-badge { font-size: var(--font-xs); padding: 1px 4px; }
+
+/* ── Comfortable / Compact density modes ──────────────── */
+#stream-grid.compact-mode {
+  grid-template-columns: repeat(auto-fill, minmax(min(180px, 100%), 1fr));
+  gap: 10px;
+  padding: 10px 12px;
+}
+#stream-grid.compact-mode .card-info {
+  padding: var(--space-8) var(--space-8) var(--space-10);
+  gap: var(--space-4);
+}
+#stream-grid.compact-mode .card-title-row { margin-bottom: var(--space-4); }
+#stream-grid.compact-mode .card-avatar { width: 18px; height: 18px; }
+#stream-grid.compact-mode .card-channel { font-size: var(--font-sm); }
+#stream-grid.compact-mode .card-title { font-size: var(--font-sm); }
+#stream-grid.compact-mode .card-game { font-size: var(--font-xs); }
+#stream-grid.compact-mode .live-badge,
+#stream-grid.compact-mode .platform-badge,
+#stream-grid.compact-mode .uptime-badge { font-size: 8px; padding: 1px 4px; }
+#stream-grid.comfortable-mode {
+  grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
+  gap: var(--space-14);
+  padding: var(--space-14);
+}
 
 /* ── Pin Badge ──────────────────────────────────────────── */
 .pin-badge {
@@ -63,7 +97,7 @@
 #palette-overlay {
   position: fixed;
   inset: 0;
-  z-index: 3000;
+  z-index: var(--z-palette);
   background: var(--overlay-bg);
   backdrop-filter: blur(6px);
   display: flex;
@@ -89,11 +123,15 @@
   padding: var(--space-16) var(--space-20);
   background: transparent;
   border: none;
-  border-bottom: 1px solid var(--bg-border);
+  border-bottom: 1px solid var(--border-subtle);
   color: var(--text-primary);
   font-size: var(--font-lg);
   font-family: inherit;
   outline: none;
+}
+#palette-input:focus {
+  border-bottom-color: var(--focus-ring);
+  box-shadow: inset 0 -2px 0 var(--focus-ring);
 }
 #palette-input::placeholder { color: var(--text-muted); }
 
@@ -171,36 +209,24 @@
   color: var(--text-muted);
 }
 
-/* ── Staggered card entrance ──────────────────────────── */
-@keyframes card-enter {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.stream-card.card-enter,
+/* ── Staggered card entrance for browse cards ─────────── */
+/* @keyframes card-enter lives in ui/css/animations.css */
 .browse-category-card.card-enter,
 .browse-stream-card.card-enter {
   animation: card-enter var(--duration-slow) var(--ease-view) both;
+  opacity: 0;
 }
-.stream-card.card-enter:nth-child(1)  { animation-delay: 0ms; }
-.stream-card.card-enter:nth-child(2)  { animation-delay: 30ms; }
-.stream-card.card-enter:nth-child(3)  { animation-delay: 60ms; }
-.stream-card.card-enter:nth-child(4)  { animation-delay: 90ms; }
-.stream-card.card-enter:nth-child(5)  { animation-delay: 120ms; }
-.stream-card.card-enter:nth-child(6)  { animation-delay: 150ms; }
-.stream-card.card-enter:nth-child(7)  { animation-delay: 180ms; }
-.stream-card.card-enter:nth-child(8)  { animation-delay: 210ms; }
-.stream-card.card-enter:nth-child(n+9) { animation-delay: 240ms; }
-.browse-category-card.card-enter:nth-child(1)  { animation-delay: 0ms; }
-.browse-category-card.card-enter:nth-child(2)  { animation-delay: 25ms; }
-.browse-category-card.card-enter:nth-child(3)  { animation-delay: 50ms; }
-.browse-category-card.card-enter:nth-child(4)  { animation-delay: 75ms; }
-.browse-category-card.card-enter:nth-child(5)  { animation-delay: 100ms; }
-.browse-category-card.card-enter:nth-child(6)  { animation-delay: 125ms; }
-.browse-category-card.card-enter:nth-child(n+7) { animation-delay: 150ms; }
-.browse-stream-card.card-enter:nth-child(1)  { animation-delay: 0ms; }
-.browse-stream-card.card-enter:nth-child(2)  { animation-delay: 25ms; }
-.browse-stream-card.card-enter:nth-child(3)  { animation-delay: 50ms; }
-.browse-stream-card.card-enter:nth-child(4)  { animation-delay: 75ms; }
-.browse-stream-card.card-enter:nth-child(5)  { animation-delay: 100ms; }
-.browse-stream-card.card-enter:nth-child(6)  { animation-delay: 125ms; }
-.browse-stream-card.card-enter:nth-child(n+7) { animation-delay: 150ms; }
+.browse-category-card:nth-child(1).card-enter  { animation-delay: 0ms; }
+.browse-category-card:nth-child(2).card-enter  { animation-delay: 25ms; }
+.browse-category-card:nth-child(3).card-enter  { animation-delay: 50ms; }
+.browse-category-card:nth-child(4).card-enter  { animation-delay: 75ms; }
+.browse-category-card:nth-child(5).card-enter  { animation-delay: 100ms; }
+.browse-category-card:nth-child(6).card-enter  { animation-delay: 125ms; }
+.browse-category-card:nth-child(n+7).card-enter { animation-delay: 150ms; }
+.browse-stream-card:nth-child(1).card-enter  { animation-delay: 0ms; }
+.browse-stream-card:nth-child(2).card-enter  { animation-delay: 25ms; }
+.browse-stream-card:nth-child(3).card-enter  { animation-delay: 50ms; }
+.browse-stream-card:nth-child(4).card-enter  { animation-delay: 75ms; }
+.browse-stream-card:nth-child(5).card-enter  { animation-delay: 100ms; }
+.browse-stream-card:nth-child(6).card-enter  { animation-delay: 125ms; }
+.browse-stream-card:nth-child(n+7).card-enter { animation-delay: 150ms; }

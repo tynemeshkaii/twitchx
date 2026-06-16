@@ -5,3 +5,17 @@
 .text-xs { font-size: var(--font-xs); }
 .flex-center { display: flex; align-items: center; justify-content: center; }
 .gap-sm { gap: var(--space-8); }
+.ml-auto { margin-left: auto; }
+
+/* Inline-style replacements */
+.settings-title-icon { vertical-align: -2px; margin-right: 6px; }
+
+/* Feedback / status text colors */
+.feedback-success { color: var(--live-green); }
+.feedback-error { color: var(--error-red); }
+.feedback-warn { color: var(--warn-yellow); }
+.feedback-muted { color: var(--text-muted); }
+
+/* Fade utility for channel profile card */
+.fade-transparent { opacity: 0; }
+.fade-in { opacity: 1; transition: opacity var(--duration-normal) ease; }

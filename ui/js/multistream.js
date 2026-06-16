@@ -1,22 +1,22 @@
 window.TwitchX = window.TwitchX || {};
 const TwitchX = window.TwitchX;
 
+const MULTISTREAM_PRESETS = ['grid', 'focus-left', 'rows', 'columns'];
+const MULTISTREAM_PRESET_LABELS = {
+  grid: 'Grid',
+  'focus-left': 'Focus',
+  rows: 'Rows',
+  columns: 'Columns',
+};
+
 function openMultistreamView() {
   TwitchX.multiState.open = true;
   _updateMultiGridLayout();
-  if (document.getElementById('player-view').classList.contains('active')) {
-    TwitchX.hidePlayerView();
+  if (document.getElementById('player-view').classList.contains('view-active')) {
+    TwitchX.hidePlayerView(true);
   }
-  document.getElementById('browse-view').classList.add('hidden');
-  document.getElementById('channel-view').classList.add('hidden');
-  document.getElementById('toolbar').classList.add('hidden');
-  document.getElementById('stream-grid').classList.add('hidden');
-  var mv = document.getElementById('multistream-view');
-  mv.style.opacity = '0';
-  mv.classList.remove('hidden');
-  requestAnimationFrame(function() {
-    mv.style.opacity = '';
-  });
+  TwitchX.setChromeVisible(false);
+  TwitchX.switchView('multistream-view', 'forward');
   TwitchX.startMultiHealthMonitor();
 }
 
@@ -30,6 +30,40 @@ function _multiOccupiedCount() {
   }).length;
 }
 
+function _applyMultistreamPreset(preset) {
+  const grid = document.getElementById('multistream-grid');
+  if (!grid) return;
+  const valid = MULTISTREAM_PRESETS.indexOf(preset) >= 0 ? preset : 'grid';
+  TwitchX.multiState.activePreset = valid;
+  MULTISTREAM_PRESETS.forEach(function(p) {
+    grid.classList.remove('ms-preset-' + p);
+  });
+  grid.classList.add('ms-preset-' + valid);
+  const select = document.getElementById('ms-preset-select');
+  if (select && select.value !== valid) select.value = valid;
+}
+
+function _loadMultistreamPresets() {
+  if (!TwitchX.api) return;
+  try {
+    const data = TwitchX.api.get_multistream_presets();
+    const preset = (data && data.presets && data.presets[data.active]) || 'grid';
+    _applyMultistreamPreset(preset);
+  } catch (e) {
+    console.warn('[Multistream] failed to load presets', e);
+    _applyMultistreamPreset('grid');
+  }
+}
+
+function setMultistreamPreset(preset) {
+  const idx = MULTISTREAM_PRESETS.indexOf(preset);
+  if (idx < 0) return;
+  _applyMultistreamPreset(preset);
+  if (TwitchX.api) {
+    try { TwitchX.api.set_multistream_preset(idx); } catch (e) {}
+  }
+}
+
 function _updateMultiGridLayout() {
   const grid = document.getElementById('multistream-grid');
   if (!grid) return;
@@ -38,6 +72,7 @@ function _updateMultiGridLayout() {
   const visualCount = Math.min(4, count + openFormCount);
   grid.classList.remove('ms-grid-empty', 'ms-grid-count-1', 'ms-grid-count-2', 'ms-grid-count-3', 'ms-grid-count-4');
   grid.classList.add(visualCount === 0 ? 'ms-grid-empty' : 'ms-grid-count-' + visualCount);
+  _applyMultistreamPreset(TwitchX.multiState.activePreset);
 
   let nextEmptyMarked = false;
   document.querySelectorAll('.ms-slot').forEach(function(slotEl) {
@@ -101,17 +136,8 @@ function closeMultistreamView() {
   TwitchX.multiState.open = false;
   TwitchX.multiState.chatVisible = false;
   document.getElementById('main').classList.remove('ms-sidebar-open');
-  document.getElementById('multistream-view').classList.remove('ms-sidebar-open');
-  document.getElementById('multistream-view').classList.add('hidden');
-  document.getElementById('multistream-view').style.opacity = '';
-  document.getElementById('ms-chat-panel').classList.add('hidden');
-  document.getElementById('toolbar').classList.remove('hidden');
-  var grid = document.getElementById('stream-grid');
-  grid.style.opacity = '0';
-  grid.classList.remove('hidden');
-  requestAnimationFrame(function() {
-    grid.style.opacity = '';
-  });
+  TwitchX.switchView('stream-grid', 'back');
+  TwitchX.setChromeVisible(true);
   document.getElementById('ms-chat-messages').replaceChildren();
   const btn = document.getElementById('ms-sidebar-btn');
   if (btn) btn.classList.remove('active');
@@ -120,10 +146,8 @@ function closeMultistreamView() {
 
 function toggleMsSidebar() {
   const main = document.getElementById('main');
-  const mv = document.getElementById('multistream-view');
   const btn = document.getElementById('ms-sidebar-btn');
   const open = main.classList.toggle('ms-sidebar-open');
-  mv.classList.toggle('ms-sidebar-open', open);
   if (btn) btn.classList.toggle('active', open);
 }
 
@@ -170,10 +194,10 @@ function _clearMultiSlot(idx) {
   delete slotEl.dataset._frozenCount;
 }
 
-function addMultiSlot(idx, channel, platform) {
+function addMultiSlot(idx, channel, platform, quality) {
   const cfg = TwitchX.api ? TwitchX.api.get_full_config_for_settings() : {};
-  const quality = (cfg && cfg.quality) || 'best';
-  TwitchX.multiState.slots[idx] = { channel: channel, platform: platform, quality: quality, title: '', state: 'loading' };
+  const q = quality || (cfg && cfg.quality) || 'best';
+  TwitchX.multiState.slots[idx] = { channel: channel, platform: platform, quality: q, title: '', state: 'loading' };
   const slotEl = _getMultiSlotEl(idx);
   if (!slotEl) return;
   slotEl.dataset.platform = platform || 'twitch';
@@ -191,7 +215,37 @@ function addMultiSlot(idx, channel, platform) {
   const msVideo = active.querySelector('.ms-video');
   if (msVideo) msVideo.muted = true;
   _setMultiSlotState(idx, 'loading', 'Loading');
-  if (TwitchX.api) TwitchX.api.add_multi_slot(idx, channel, platform, quality);
+  if (TwitchX.api) TwitchX.api.add_multi_slot(idx, channel, platform, q);
+}
+
+function _swapMultiSlots(sourceIdx, targetIdx) {
+  if (sourceIdx === targetIdx) return;
+  const source = TwitchX.multiState.slots[sourceIdx];
+  const target = TwitchX.multiState.slots[targetIdx];
+  if (!source) return;
+
+  const sourceWasAudio = TwitchX.multiState.audioFocus === sourceIdx;
+  const sourceWasChat = TwitchX.multiState.chatSlot === sourceIdx;
+  const targetWasAudio = TwitchX.multiState.audioFocus === targetIdx;
+  const targetWasChat = TwitchX.multiState.chatSlot === targetIdx;
+
+  _clearMultiSlot(sourceIdx);
+  TwitchX.multiState.slots[sourceIdx] = null;
+  if (target) {
+    _clearMultiSlot(targetIdx);
+    TwitchX.multiState.slots[targetIdx] = null;
+    addMultiSlot(targetIdx, source.channel, source.platform, source.quality);
+    addMultiSlot(sourceIdx, target.channel, target.platform, target.quality);
+  } else {
+    addMultiSlot(targetIdx, source.channel, source.platform, source.quality);
+  }
+
+  if (sourceWasAudio) TwitchX.multiState.audioFocus = targetIdx;
+  else if (targetWasAudio) TwitchX.multiState.audioFocus = sourceIdx;
+  if (sourceWasChat) TwitchX.multiState.chatSlot = targetIdx;
+  else if (targetWasChat) TwitchX.multiState.chatSlot = sourceIdx;
+
+  _updateMultiGridLayout();
 }
 
 function removeMultiSlot(idx) {
@@ -332,23 +386,46 @@ function _createMultiSlot(idx) {
   empty.appendChild(addBtn);
   empty.appendChild(hint);
 
-  empty.addEventListener('dragover', function(e) {
+  slot.draggable = true;
+  slot.addEventListener('dragstart', function(e) {
+    const slotData = TwitchX.multiState.slots[idx];
+    if (!slotData || e.target.closest('button, input, select, video')) {
+      e.preventDefault();
+      return;
+    }
+    slot.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', JSON.stringify({
+      sourceSlot: idx,
+      login: slotData.channel,
+      platform: slotData.platform,
+      quality: slotData.quality,
+    }));
+  });
+  slot.addEventListener('dragend', function() {
+    slot.classList.remove('dragging');
+    document.querySelectorAll('.ms-slot.drag-over').forEach(function(el) {
+      el.classList.remove('drag-over');
+    });
+  });
+  slot.addEventListener('dragover', function(e) {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
+    e.dataTransfer.dropEffect = 'move';
     slot.classList.add('drag-over');
   });
-  empty.addEventListener('dragleave', function(e) {
-    // Only remove if leaving the slot entirely (not entering a child)
+  slot.addEventListener('dragleave', function(e) {
     if (!slot.contains(e.relatedTarget)) {
       slot.classList.remove('drag-over');
     }
   });
-  empty.addEventListener('drop', function(e) {
+  slot.addEventListener('drop', function(e) {
     e.preventDefault();
     slot.classList.remove('drag-over');
     try {
-      var data = JSON.parse(e.dataTransfer.getData('text/plain'));
-      if (data && data.login) {
+      const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+      if (data && typeof data.sourceSlot === 'number') {
+        _swapMultiSlots(data.sourceSlot, idx);
+      } else if (data && data.login) {
         addMultiSlot(idx, data.login, data.platform || 'twitch');
       }
     } catch (_) {}
@@ -619,11 +696,21 @@ TwitchX.switchMultiChat = switchMultiChat;
 TwitchX.openFirstEmptyMultiSlot = openFirstEmptyMultiSlot;
 TwitchX._setMultiSlotState = _setMultiSlotState;
 TwitchX._updateMultiGridLayout = _updateMultiGridLayout;
+TwitchX._applyMultistreamPreset = _applyMultistreamPreset;
+TwitchX._loadMultistreamPresets = _loadMultistreamPresets;
+TwitchX.setMultistreamPreset = setMultistreamPreset;
 TwitchX.toggleMsChat = toggleMsChat;
 TwitchX.toggleMsSlotFullscreen = toggleMsSlotFullscreen;
 TwitchX._clearMultiSlot = _clearMultiSlot;
+TwitchX._swapMultiSlots = _swapMultiSlots;
 TwitchX._createMultiSlot = _createMultiSlot;
 TwitchX.startMultiHealthMonitor = startMultiHealthMonitor;
 TwitchX.stopMultiHealthMonitor = stopMultiHealthMonitor;
 TwitchX.checkMultiHealth = checkMultiHealth;
 TwitchX._reloadMultiSlot = _reloadMultiSlot;
+
+window.onMultistreamPresetChanged = function(data) {
+  if (data && data.preset) {
+    _applyMultistreamPreset(data.preset);
+  }
+};

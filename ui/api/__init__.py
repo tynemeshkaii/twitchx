@@ -204,6 +204,9 @@ class TwitchXApi:
     def reorder_channels(self, new_order_json: str, platform: str = "twitch") -> None:
         self._favorites.reorder_channels(new_order_json, platform)
 
+    def reorder_favorites(self, payload_json: str) -> None:
+        self._favorites.reorder_favorites(payload_json)
+
     def import_follows(self) -> None:
         self._favorites.import_follows()
 
@@ -290,6 +293,12 @@ class TwitchXApi:
 
     def stop_multi(self) -> None:
         self._streams.stop_multi()
+
+    def get_multistream_presets(self) -> dict[str, Any]:
+        return self._streams.get_multistream_presets()
+
+    def set_multistream_preset(self, index: int) -> None:
+        self._streams.set_multistream_preset(index)
 
     def start_recording(self) -> None:
         self._streams.start_recording()

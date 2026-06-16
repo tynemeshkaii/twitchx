@@ -652,6 +652,46 @@ class StreamsComponent(BaseApiComponent):
             "window.onRecordingState({active: false, filename: null, elapsed: 0})"
         )
 
+    # ── Multistream layout presets ──────────────────────────────
+
+    def get_multistream_presets(self) -> dict[str, Any]:
+        """Return saved preset IDs and the active preset index."""
+        config = load_config()
+        settings = get_settings(config)
+        presets = settings.get(
+            "multistream_presets", ["grid", "focus-left", "rows", "columns"]
+        )
+        active = settings.get("multistream_active_preset", 0)
+        if not isinstance(presets, list) or len(presets) < 1:
+            presets = ["grid", "focus-left", "rows", "columns"]
+        if not isinstance(active, int) or active < 0 or active >= len(presets):
+            active = 0
+        return {"presets": presets, "active": active}
+
+    def set_multistream_preset(self, index: int) -> None:
+        """Persist the active multistream preset index."""
+        try:
+            idx = int(index)
+        except (TypeError, ValueError):
+            return
+        config = load_config()
+        settings = get_settings(config)
+        presets = settings.get(
+            "multistream_presets", ["grid", "focus-left", "rows", "columns"]
+        )
+        if not isinstance(presets, list) or len(presets) < 1:
+            presets = ["grid", "focus-left", "rows", "columns"]
+        if idx < 0 or idx >= len(presets):
+            return
+        update_config(
+            lambda cfg: cfg.setdefault("settings", {}).__setitem__(
+                "multistream_active_preset", idx
+            )
+        )
+        self._eval_js(
+            f"window.onMultistreamPresetChanged({json.dumps({'active': idx, 'preset': presets[idx]})})"
+        )
+
     # ── Launch timer ────────────────────────────────────────────
 
     def _start_launch_timer(self) -> None:

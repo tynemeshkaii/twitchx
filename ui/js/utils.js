@@ -25,14 +25,12 @@ function formatUptime(isoStr) {
 
 function setStatus(text, type) {
   const el = document.getElementById('status-text');
+  if (!el) return;
   el.textContent = text;
-  const colors = {
-    info: 'var(--text-secondary)',
-    success: 'var(--live-green)',
-    warn: 'var(--warn-yellow)',
-    error: 'var(--error-red)',
-  };
-  el.style.color = colors[type] || colors.info;
+  el.classList.remove('status-success', 'status-warn', 'status-error');
+  if (type === 'success' || type === 'warn' || type === 'error') {
+    el.classList.add('status-' + type);
+  }
 }
 
 function formatMediaDate(isoStr) {
@@ -54,6 +52,12 @@ function formatDuration(seconds) {
   if (h > 0) return h + 'h ' + m + 'm';
   if (m > 0) return m + 'm';
   return s + 's';
+}
+
+function setFeedbackClass(el, type) {
+  if (!el) return;
+  el.classList.remove('feedback-success', 'feedback-error', 'feedback-warn', 'feedback-muted');
+  if (type) el.classList.add('feedback-' + type);
 }
 
 function buildChannelMediaMeta(item, tab) {
@@ -89,7 +93,13 @@ function setActiveTab(buttons, activeBtn) {
   buttons.forEach(function(btn) {
     var active = btn === activeBtn;
     btn.classList.toggle('active', active);
-    btn.setAttribute('aria-selected', String(active));
+    if (btn.getAttribute('role') === 'radio') {
+      btn.setAttribute('aria-checked', String(active));
+      btn.removeAttribute('aria-selected');
+    } else {
+      btn.setAttribute('aria-selected', String(active));
+      btn.removeAttribute('aria-checked');
+    }
     btn.tabIndex = active ? 0 : -1;
   });
 }
@@ -112,34 +122,7 @@ TwitchX.formatDuration = formatDuration;
 TwitchX.buildChannelMediaMeta = buildChannelMediaMeta;
 TwitchX.makeIcon = makeIcon;
 TwitchX.setIconText = setIconText;
+TwitchX.setFeedbackClass = setFeedbackClass;
 TwitchX.setIconOnly = setIconOnly;
 TwitchX.setActiveTab = setActiveTab;
 TwitchX.focusAdjacentTab = focusAdjacentTab;
-
-function viewFadeIn(el, showClass) {
-  el.style.opacity = '0';
-  el.classList.add(showClass);
-  requestAnimationFrame(function() {
-    el.style.opacity = '';
-    el.addEventListener('transitionend', function handler() {
-      el.removeEventListener('transitionend', handler);
-    }, { once: true });
-  });
-}
-
-function viewFadeOut(el, hideClass, onDone) {
-  el.style.opacity = '0';
-  var done = false;
-  function finish() {
-    if (done) return;
-    done = true;
-    el.style.opacity = '';
-    el.classList.add(hideClass);
-    if (onDone) onDone();
-  }
-  el.addEventListener('transitionend', finish, { once: true });
-  setTimeout(finish, 250);
-}
-
-TwitchX.viewFadeIn = viewFadeIn;
-TwitchX.viewFadeOut = viewFadeOut;

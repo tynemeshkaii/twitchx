@@ -7,15 +7,32 @@
   opacity: 1;
   transition: opacity var(--duration-view) var(--ease-view);
 }
-#player-view.active { display: flex; }
+#player-view.view-active { display: flex; }
 
 #player-content {
   display: flex; flex: 1; overflow: hidden;
   contain: layout style paint;
+  position: relative;
 }
 #stream-video {
   flex: 1; min-width: 0; background: var(--bg-video);
   outline: none;
+  transition: opacity 0.15s ease;
+}
+#stream-video.video-shadow,
+#stream-video.video-fading {
+  transition: opacity 0.15s ease;
+}
+#stream-video.video-shadow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+}
+#stream-video.video-fading {
+  opacity: 0;
 }
 
 /* ── Browse view ────────────────────────────────────────── */
@@ -78,14 +95,30 @@
 }
 
 #channel-profile-card {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 14px;
-  padding: var(--space-16);
+  padding: 76px var(--space-16) var(--space-16);
   background: var(--surface-card), var(--bg-elevated);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-card);
   box-shadow: var(--shadow-card);
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity var(--duration-normal) ease;
+}
+#channel-profile-card.fade-transparent { opacity: 0; }
+#channel-profile-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 112px;
+  background:
+    radial-gradient(circle at 18% 20%, var(--accent-dim), transparent 36%),
+    linear-gradient(135deg, var(--bg-overlay), var(--bg-elevated));
+  border-bottom: 1px solid var(--border-subtle);
+  pointer-events: none;
 }
 
 #channel-meta {
@@ -93,6 +126,8 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
+  position: relative;
+  z-index: 1;
 }
 
 #channel-actions {
@@ -103,13 +138,18 @@
   gap: 6px;
   flex-shrink: 0;
   max-width: 320px;
+  position: relative;
+  z-index: 1;
 }
 
 #channel-tabs {
   display: flex;
-  gap: 2px;
-  border-bottom: 1px solid var(--bg-border);
-  padding-bottom: var(--space-8);
+  gap: 4px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-control);
+  border-radius: var(--radius-full);
+  padding: 4px;
+  width: fit-content;
 }
 
 .channel-tab-panel { display: flex; flex-direction: column; gap: var(--space-8); }
@@ -141,6 +181,27 @@
   color: var(--text-primary);
   flex: 1;
 }
+#ms-preset-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  padding: 4px 22px 4px 8px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='currentColor' d='M0 1l5 4 5-4z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  cursor: pointer;
+  min-width: 96px;
+}
+#ms-preset-select:focus {
+  outline: none;
+  border-color: var(--border-accent);
+}
+
 #ms-add-slot-btn, #ms-sidebar-btn, #ms-toggle-chat-btn, #ms-close-btn {
   width: 32px; height: 32px; padding: 0;
   border-radius: var(--radius-sm);
@@ -174,7 +235,7 @@
   z-index: var(--z-base);
   cursor: pointer;
 }
-#multistream-view.ms-sidebar-open #ms-sidebar-backdrop { display: block; }
+#main.ms-sidebar-open #ms-sidebar-backdrop { display: block; }
 #main.ms-sidebar-open #sidebar {
   position: relative;
   z-index: var(--z-dropdown);
@@ -221,6 +282,39 @@
 
 #multistream-grid:not(.ms-grid-empty) .ms-slot.ms-state-empty {
   display: none;
+}
+
+/* ── Multistream layout presets ─────────────────────────── */
+#multistream-grid.ms-preset-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+
+#multistream-grid.ms-preset-focus-left {
+  grid-template-columns: 2fr 1fr;
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+}
+#multistream-grid.ms-preset-focus-left .ms-slot[data-slot-idx="0"] {
+  grid-row: 1 / span 3;
+}
+#multistream-grid.ms-preset-focus-left .ms-slot[data-slot-idx="1"] {
+  grid-row: 1;
+}
+#multistream-grid.ms-preset-focus-left .ms-slot[data-slot-idx="2"] {
+  grid-row: 2;
+}
+#multistream-grid.ms-preset-focus-left .ms-slot[data-slot-idx="3"] {
+  grid-row: 3;
+}
+
+#multistream-grid.ms-preset-rows {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
+}
+
+#multistream-grid.ms-preset-columns {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: repeat(4, minmax(0, 1fr));
 }
 
 #multistream-grid .ms-slot.ms-add-form-open {

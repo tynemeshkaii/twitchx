@@ -49,10 +49,8 @@ function _bindPiPEvents(video) {
 /* ── Player view ────────────────────────────────────────── */
 
 function showPlayerView() {
-  document.getElementById('toolbar').classList.add('hidden');
-  document.getElementById('stream-grid').classList.add('hidden');
-  document.getElementById('empty-state').classList.add('hidden');
-  TwitchX.viewFadeIn(document.getElementById('player-view'), 'active');
+  TwitchX.setChromeVisible(false);
+  TwitchX.switchView('player-view', 'forward');
   var pLoader = document.getElementById('player-loader');
   if (pLoader) pLoader.classList.remove('hidden');
 
@@ -72,7 +70,7 @@ function showPlayerView() {
   } else {
     if (toggleBtn) toggleBtn.classList.remove('hidden');
     const cfg = TwitchX.api ? TwitchX.api.get_full_config_for_settings() : null;
-    if (cfg && cfg.chat_width) chatPanel.style.width = cfg.chat_width + 'px';
+    if (cfg && cfg.chat_width) chatPanel.style.setProperty('--chat-width', cfg.chat_width + 'px');
     if (cfg && cfg.chat_visible === false) {
       chatPanel.classList.add('hidden');
       if (chatHandle) chatHandle.classList.add('hidden');
@@ -138,8 +136,9 @@ function showPlayerView() {
   TwitchX.renderSidebar();
 }
 
-function hidePlayerView() {
-  if (!document.getElementById('player-view').classList.contains('active')) return;
+function hidePlayerView(skipViewTransition) {
+  const playerView = document.getElementById('player-view');
+  if (!playerView || !playerView.classList.contains('view-active')) return;
 
   // When hidePlayerView is called directly from JS (Escape key, opening multistream),
   // Python state is not cleared automatically. Notify Python to clear _watching_channel
@@ -162,7 +161,7 @@ function hidePlayerView() {
   if (TwitchX._recordingActive && TwitchX.api) TwitchX.api.stop_recording();
   TwitchX._recordingActive = false;
   var recordBtn = document.getElementById('record-btn');
-  if (recordBtn) { recordBtn.classList.add('hidden'); recordBtn.style.color = ''; }
+  if (recordBtn) { recordBtn.classList.add('hidden'); recordBtn.classList.remove('recording'); }
   var recordDot = document.getElementById('record-dot');
   if (recordDot) recordDot.classList.add('hidden');
   var statsBtn = document.getElementById('stats-overlay-btn');
@@ -192,29 +191,26 @@ function hidePlayerView() {
   fresh.controls = true;
   fresh.playsInline = true;
   const playerContent = document.getElementById('player-content');
-  playerContent.insertBefore(fresh, playerContent.firstChild);
+  if (playerContent) playerContent.insertBefore(fresh, playerContent.firstChild);
   _bindPiPEvents(fresh);
   TwitchX._playerVideo = null;
 
   // Restore external player button
   const extBtn = document.getElementById('watch-external-btn');
-  if (extBtn) { extBtn.disabled = false; extBtn.style.opacity = ''; }
+  if (extBtn) extBtn.disabled = false;
 
   // Clear chat
   TwitchX.clearChatMessages();
   if (TwitchX.clearChatBatch) TwitchX.clearChatBatch();
   if (TwitchX.api) TwitchX.api.stop_chat();
 
-  document.getElementById('player-view').classList.remove('active');
-  document.getElementById('player-view').style.opacity = '';
-  document.getElementById('toolbar').classList.remove('hidden');
-  var grid = document.getElementById('stream-grid');
-  grid.style.opacity = '0';
-  grid.classList.remove('hidden');
-  requestAnimationFrame(function() {
-    grid.style.opacity = '';
-  });
-  document.getElementById('empty-state').classList.remove('hidden');
+  if (!skipViewTransition) {
+    TwitchX.switchView('stream-grid', 'back');
+    TwitchX.setChromeVisible(true);
+  } else {
+    document.getElementById('player-view').classList.remove('view-active');
+    document.getElementById('player-view').classList.add('hidden');
+  }
 
   TwitchX.state.watchingChannel = null;
   TwitchX.state.watchingChannelKey = null;
@@ -234,7 +230,7 @@ function hidePlayerView() {
 }
 
 function getActiveVideo() {
-  if (document.getElementById('player-view').classList.contains('active')) {
+  if (document.getElementById('player-view').classList.contains('view-active')) {
     return getPlayerVideo();
   }
   if (TwitchX.multiState.open && TwitchX.multiState.audioFocus >= 0) {
@@ -608,7 +604,7 @@ function gentleResetVideo(reason) {
   newVideo.controls = true;
   newVideo.playsInline = true;
   newVideo.id = 'stream-video';
-  newVideo.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;transition:opacity 0.15s';
+  newVideo.className = 'video-shadow';
 
   newVideo.src = savedSrc;
   newVideo.muted = true;
@@ -629,9 +625,8 @@ function gentleResetVideo(reason) {
     TwitchX._gentleResetDoSwap = null;
     TwitchX._gentleResetNewVideo = null;
 
-    oldVideo.style.transition = 'opacity 0.15s';
-    oldVideo.style.opacity = '0';
-    newVideo.style.opacity = '1';
+    oldVideo.classList.add('video-fading');
+    newVideo.classList.remove('video-shadow');
 
     setTimeout(function() {
       oldVideo.pause();
@@ -639,12 +634,7 @@ function gentleResetVideo(reason) {
       oldVideo.load();
       oldVideo.remove();
 
-      newVideo.style.position = '';
-      newVideo.style.top = '';
-      newVideo.style.left = '';
-      newVideo.style.width = '';
-      newVideo.style.height = '';
-      newVideo.style.transition = '';
+      newVideo.classList.remove('video-shadow');
       newVideo.muted = savedMuted;
 
       TwitchX._playerVideo = newVideo;
@@ -825,11 +815,15 @@ function updateRecordButton() {
   if (!btn) return;
   if (TwitchX._recordingActive) {
     TwitchX.setIconText(btn, 'stop', 12, 'Stop REC');
-    btn.style.color = '#e53935';
+    btn.classList.add('recording');
+    btn.title = 'Stop Recording';
+    btn.setAttribute('aria-label', 'Stop Recording');
     if (dot) dot.classList.remove('hidden');
   } else {
     TwitchX.setIconText(btn, 'record', 12, 'REC');
-    btn.style.color = '';
+    btn.classList.remove('recording');
+    btn.title = 'Start Recording';
+    btn.setAttribute('aria-label', 'Start Recording');
     if (dot) dot.classList.add('hidden');
   }
 }
@@ -980,7 +974,7 @@ function _updateBufferBar(video) {
   var pos = document.getElementById('buffer-position');
   if (!loaded) return;
   if (!video || !video.src) {
-    loaded.style.width = '0%';
+    loaded.style.setProperty('--buffer-loaded-width', '0%');
     if (pos) pos.classList.add('hidden');
     return;
   }
@@ -992,11 +986,11 @@ function _updateBufferBar(video) {
       if (pos) {
         var pct = (video.currentTime / dur) * 100;
         pos.classList.remove('hidden');
-        pos.style.left = Math.min(pct, 100) + '%';
+        pos.style.setProperty('--buffer-position-left', Math.min(pct, 100) + '%');
       }
     }
   }
-  loaded.style.width = Math.min(w, 100) + '%';
+  loaded.style.setProperty('--buffer-loaded-width', Math.min(w, 100) + '%');
 }
 
 /* ── VOD Seek Bar ─────────────────────────────────────── */

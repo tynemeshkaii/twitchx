@@ -358,6 +358,8 @@ function renderEmotePicker(filter) {
     img.height = 24;
     img.decoding = 'async';
     img.loading = 'lazy';
+    img.tabIndex = 0;
+    img.setAttribute('role', 'button');
     img.setAttribute('aria-label', 'Insert emote ' + code);
     img.title = code;
     img.onerror = function() {
@@ -385,6 +387,12 @@ function renderEmotePicker(filter) {
         input.focus();
       }
       closeEmotePicker();
+    });
+    img.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        img.click();
+      }
     });
     grid.appendChild(img);
   });

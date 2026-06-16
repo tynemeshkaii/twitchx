@@ -2,14 +2,8 @@ window.TwitchX = window.TwitchX || {};
 const TwitchX = window.TwitchX;
 
 function showBrowseView() {
-  document.getElementById('toolbar').classList.add('hidden');
-  document.getElementById('stream-grid').classList.add('hidden');
-  var view = document.getElementById('browse-view');
-  view.style.opacity = '0';
-  view.classList.remove('hidden');
-  requestAnimationFrame(function() {
-    view.style.opacity = '';
-  });
+  TwitchX.setChromeVisible(false);
+  TwitchX.switchView('browse-view', 'forward');
   TwitchX.state.browseMode = 'categories';
   TwitchX.state.browseCategory = null;
   TwitchX.state.browsePlatformFilter = 'all';
@@ -27,16 +21,9 @@ function showBrowseView() {
 }
 
 function hideBrowseView() {
-  document.getElementById('browse-view').classList.add('hidden');
-  document.getElementById('browse-view').style.opacity = '';
-  if (document.getElementById('player-view').classList.contains('active')) return;
-  document.getElementById('toolbar').classList.remove('hidden');
-  var grid = document.getElementById('stream-grid');
-  grid.style.opacity = '0';
-  grid.classList.remove('hidden');
-  requestAnimationFrame(function() {
-    grid.style.opacity = '';
-  });
+  if (document.getElementById('player-view').classList.contains('view-active')) return;
+  TwitchX.switchView('stream-grid', 'back');
+  TwitchX.setChromeVisible(true);
   TwitchX.renderGrid();
 }
 
@@ -81,19 +68,13 @@ function loadBrowseCategories() {
 function setBrowseEmpty(message, detail, kind) {
   var emptyEl = document.getElementById('browse-empty');
   if (!emptyEl) return;
-  emptyEl.replaceChildren();
   emptyEl.className = 'browse-empty' + (kind ? ' ' + kind : '');
-  var title = document.createElement('div');
-  title.className = 'browse-empty-title';
-  title.textContent = message || 'No results found.';
-  emptyEl.appendChild(title);
-  if (detail) {
-    var desc = document.createElement('div');
-    desc.className = 'browse-empty-detail';
-    desc.textContent = detail;
-    emptyEl.appendChild(desc);
-  }
-  emptyEl.classList.remove('hidden');
+  TwitchX.renderEmptyState(emptyEl, {
+    illustration: 'empty-browse',
+    title: message || 'No results found.',
+    subtitle: detail || 'Try a different platform filter or search again.',
+    primaryAction: { label: 'Refresh Browse', callback: function() { loadBrowseCategories(); } },
+  });
 }
 
 function clearBrowseEmpty() {

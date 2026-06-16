@@ -51,20 +51,46 @@ function getSidebarGroups() {
   });
 
   const entries = TwitchX.getFavoriteEntries();
+  entries.forEach(function(entry) {
+    const meta = TwitchX.state.favoritesMeta[entry.key] || {};
+    entry.group = meta.group || null;
+    entry.order = typeof meta.order === 'number' ? meta.order : 0;
+  });
+
   const online = entries
-    .filter(function(entry) { return TwitchX.state.liveSet.has(entry.key); })
+    .filter(function(entry) { return TwitchX.state.liveSet.has(entry.key) && !entry.group; })
     .sort(function(a, b) {
-      const diff = (streamMap[b.key] ? streamMap[b.key].viewers : 0) - (streamMap[a.key] ? streamMap[a.key].viewers : 0);
-      return diff !== 0 ? diff : a.display_name.localeCompare(b.display_name);
+      const diff = a.order - b.order;
+      if (diff !== 0) return diff;
+      const viewerDiff = (streamMap[b.key] ? streamMap[b.key].viewers : 0) - (streamMap[a.key] ? streamMap[a.key].viewers : 0);
+      return viewerDiff !== 0 ? viewerDiff : a.display_name.localeCompare(b.display_name);
     });
 
   const offline = entries
-    .filter(function(entry) { return !TwitchX.state.liveSet.has(entry.key); })
-    .sort(function(a, b) { return a.display_name.localeCompare(b.display_name); });
+    .filter(function(entry) { return !TwitchX.state.liveSet.has(entry.key) && !entry.group; })
+    .sort(function(a, b) {
+      const diff = a.order - b.order;
+      if (diff !== 0) return diff;
+      return a.display_name.localeCompare(b.display_name);
+    });
+
+  const customGroups = {};
+  entries.forEach(function(entry) {
+    if (!entry.group) return;
+    if (!customGroups[entry.group]) customGroups[entry.group] = [];
+    customGroups[entry.group].push(entry);
+  });
+  Object.keys(customGroups).forEach(function(groupName) {
+    customGroups[groupName].sort(function(a, b) {
+      const diff = a.order - b.order;
+      return diff !== 0 ? diff : a.display_name.localeCompare(b.display_name);
+    });
+  });
 
   return {
     online: online,
     offline: offline,
+    custom: customGroups,
     streamMap: streamMap,
   };
 }
@@ -86,13 +112,21 @@ function applySidebarLayout(groups) {
   const onlineHeaderHeight = onlineSection.querySelector('.section-toggle').offsetHeight;
   const offlineHeaderHeight = offlineSection.querySelector('.section-toggle').offsetHeight;
 
-  onlineSection.style.flex = onlineCollapsed ? '0 0 auto' : '0 0 auto';
-  onlineSection.style.height = '';
-  onlineSection.style.minHeight = onlineCollapsed ? onlineHeaderHeight + 'px' : '';
+  function setVar(el, name, value) {
+    if (value === '' || value === null || value === undefined) {
+      el.style.removeProperty(name);
+    } else {
+      el.style.setProperty(name, value);
+    }
+  }
 
-  offlineSection.style.height = '';
-  offlineSection.style.minHeight = offlineHeaderHeight + 'px';
-  offlineSection.style.flex = offlineCollapsed ? '0 0 auto' : '1 1 0px';
+  setVar(onlineSection, '--section-flex', '0 0 auto');
+  setVar(onlineSection, '--section-height', '');
+  setVar(onlineSection, '--section-min-height', onlineCollapsed ? onlineHeaderHeight + 'px' : '');
+
+  setVar(offlineSection, '--section-height', '');
+  setVar(offlineSection, '--section-min-height', offlineHeaderHeight + 'px');
+  setVar(offlineSection, '--section-flex', offlineCollapsed ? '0 0 auto' : '1 1 0px');
 
   if (onlineCollapsed) {
     return;
@@ -120,14 +154,14 @@ function applySidebarLayout(groups) {
   );
   const onlineTargetHeight = Math.min(onlineNaturalHeight, onlineMaxHeight);
 
-  onlineSection.style.height = onlineTargetHeight + 'px';
-  onlineSection.style.minHeight = onlineTargetHeight + 'px';
+  setVar(onlineSection, '--section-height', onlineTargetHeight + 'px');
+  setVar(onlineSection, '--section-min-height', onlineTargetHeight + 'px');
 
   if (!offlineCollapsed) {
-    offlineSection.style.minHeight = Math.min(
+    setVar(offlineSection, '--section-min-height', Math.min(
       Math.max(offlineReservedHeight, offlineHeaderHeight + 72),
       Math.max(listHeight - onlineTargetHeight - sectionGap, offlineHeaderHeight)
-    ) + 'px';
+    ) + 'px');
   }
 }
 
@@ -238,6 +272,11 @@ function createSidebarItem(entry, streamMap) {
       : login + ', offline on ' + TwitchX.platformLabel(platform)
   );
 
+  const dragHandle = document.createElement('span');
+  dragHandle.className = 'drag-handle';
+  dragHandle.setAttribute('aria-hidden', 'true');
+  item.appendChild(dragHandle);
+
   const bar = document.createElement('div');
   bar.className = 'accent-bar';
   item.appendChild(bar);
@@ -301,16 +340,12 @@ function createSidebarItem(entry, streamMap) {
     }
   });
 
-  // Drag to multistream
+  // Drag to reorder or to multistream
   item.draggable = true;
   item.addEventListener('dragstart', function(e) {
-    e.dataTransfer.setData('text/plain', JSON.stringify({ login: login, platform: platform }));
-    e.dataTransfer.effectAllowed = 'copy';
+    e.dataTransfer.setData('text/plain', JSON.stringify({ login: login, platform: platform, key: key }));
+    e.dataTransfer.effectAllowed = 'move';
     item.classList.add('dragging');
-    // Auto-open multistream view so the user sees drop zones
-    if (!TwitchX.multiState.open) {
-      TwitchX.openMultistreamView();
-    }
   });
   item.addEventListener('dragend', function() {
     item.classList.remove('dragging');
@@ -372,6 +407,7 @@ function createSidebarSection(sectionKey, title, metaText, entries, streamMap) {
   const body = document.createElement('div');
   body.className = 'section-body';
   body.id = 'sidebar-section-body-' + sectionKey;
+  body.dataset.group = sectionKey === 'online' || sectionKey === 'offline' ? '' : null;
 
   if (entries.length === 0) {
     const empty = document.createElement('div');
@@ -397,6 +433,7 @@ function createSidebarSection(sectionKey, title, metaText, entries, streamMap) {
   }
 
   section.appendChild(body);
+  _bindSidebarDropZone(body);
   return section;
 }
 
@@ -629,6 +666,215 @@ function renderRail(groups) {
   });
 }
 
+function createSidebarGroupHeader(name, count, collapsed) {
+  const header = document.createElement('button');
+  header.className = 'group-header' + (collapsed ? ' collapsed' : '');
+  header.type = 'button';
+  header.dataset.group = name;
+  header.setAttribute('aria-expanded', String(!collapsed));
+  header.setAttribute('aria-controls', sidebarGroupBodyId(name));
+
+  const copy = document.createElement('div');
+  copy.className = 'section-copy';
+
+  const title = document.createElement('div');
+  title.className = 'section-title';
+  title.textContent = name;
+  copy.appendChild(title);
+
+  const meta = document.createElement('div');
+  meta.className = 'section-meta';
+  meta.textContent = count + ' channel' + (count !== 1 ? 's' : '');
+  copy.appendChild(meta);
+
+  header.appendChild(copy);
+
+  const chevron = document.createElement('span');
+  chevron.className = 'group-chevron';
+  TwitchX.setIconOnly(chevron, 'chevron-right', 12);
+  header.appendChild(chevron);
+
+  header.addEventListener('click', function() {
+    const key = 'group:' + name;
+    TwitchX.state.sidebarSections[key] = !TwitchX.state.sidebarSections[key];
+    saveSidebarSections();
+    renderSidebar();
+  });
+  header.addEventListener('contextmenu', function(e) {
+    e.preventDefault();
+    if (TwitchX.showGroupContextMenu) TwitchX.showGroupContextMenu(e, name);
+  });
+
+  return header;
+}
+
+function renderSidebarGroupBody(name, entries, streamMap) {
+  const body = document.createElement('div');
+  body.className = 'group-items';
+  body.id = sidebarGroupBodyId(name);
+  body.dataset.group = name;
+
+  entries.forEach(function(entry) {
+    body.appendChild(createSidebarItem(entry, streamMap));
+  });
+
+  _bindSidebarDropZone(body);
+  return body;
+}
+
+function sidebarGroupBodyId(name) {
+  return 'sidebar-group-body-' + String(name).replace(/[^a-zA-Z0-9_-]/g, '-');
+}
+
+function _bindSidebarDropZone(container) {
+  container.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const target = e.target.closest('.channel-item');
+    container.querySelectorAll('.channel-item').forEach(function(el) { el.classList.remove('drag-over'); });
+    if (target) target.classList.add('drag-over');
+  });
+
+  container.addEventListener('dragleave', function(e) {
+    const target = e.target.closest('.channel-item');
+    if (target) target.classList.remove('drag-over');
+  });
+
+  container.addEventListener('drop', function(e) {
+    e.preventDefault();
+    container.querySelectorAll('.channel-item').forEach(function(el) { el.classList.remove('drag-over'); });
+    var data;
+    try {
+      data = JSON.parse(e.dataTransfer.getData('text/plain'));
+    } catch (err) {
+      return;
+    }
+    if (!data || !data.key) return;
+
+    const target = e.target.closest('.channel-item');
+    const groupName = container.dataset.group || null;
+    const items = Array.from(container.querySelectorAll('.channel-item'));
+    let insertIndex = items.length;
+    if (target) {
+      insertIndex = items.indexOf(target);
+    }
+
+    TwitchX.moveFavoriteInGroup(data.key, groupName, insertIndex);
+  });
+}
+
+TwitchX.moveFavoriteInGroup = function(key, groupName, insertIndex) {
+  const allEntries = TwitchX.getFavoriteEntries();
+  const moving = allEntries.find(function(e) { return e.key === key; });
+  if (!moving) return;
+
+  const targetGroupEntries = allEntries.filter(function(e) {
+    const g = TwitchX.getFavoriteGroup(e.login, e.platform);
+    return g === groupName;
+  });
+
+  const currentIdx = targetGroupEntries.findIndex(function(e) { return e.key === key; });
+  if (currentIdx !== -1) targetGroupEntries.splice(currentIdx, 1);
+
+  const meta = TwitchX.state.favoritesMeta[key] || {};
+  meta.group = groupName;
+
+  targetGroupEntries.splice(Math.min(insertIndex, targetGroupEntries.length), 0, {
+    login: moving.login,
+    platform: moving.platform,
+    key: key,
+    display_name: moving.display_name,
+    group: groupName,
+    order: 0,
+  });
+
+  const payload = [];
+  const groupBuckets = {};
+
+  allEntries.forEach(function(e) {
+    const g = e.key === key ? groupName : TwitchX.getFavoriteGroup(e.login, e.platform);
+    if (!groupBuckets[g]) groupBuckets[g] = [];
+    groupBuckets[g].push(e);
+  });
+
+  Object.keys(groupBuckets).forEach(function(g) {
+    const list = groupBuckets[g];
+    if (g === groupName) {
+      targetGroupEntries.forEach(function(e, idx) {
+        payload.push({ key: e.key, group: g, order: idx });
+      });
+    } else {
+      list.forEach(function(e, idx) {
+        payload.push({ key: e.key, group: g, order: idx });
+      });
+    }
+  });
+
+  if (TwitchX.api) TwitchX.api.reorder_favorites(JSON.stringify(payload));
+  TwitchX._applyFavoriteOrder(payload);
+  TwitchX.renderSidebar();
+};
+
+TwitchX._applyFavoriteOrder = function(payload) {
+  payload.forEach(function(item) {
+    const meta = TwitchX.state.favoritesMeta[item.key];
+    if (meta) {
+      meta.group = item.group;
+      meta.order = item.order;
+    }
+  });
+};
+
+TwitchX.createFavoriteGroup = function(name) {
+  if (!name || TwitchX.SYSTEM_FAVORITE_GROUPS.indexOf(name) !== -1) return;
+  const payload = [];
+  TwitchX.getFavoriteEntries().forEach(function(e, idx) {
+    payload.push({ key: e.key, group: TwitchX.getFavoriteGroup(e.login, e.platform), order: idx });
+  });
+  if (TwitchX.api) TwitchX.api.reorder_favorites(JSON.stringify(payload));
+  TwitchX._applyFavoriteOrder(payload);
+  TwitchX.renderSidebar();
+};
+
+TwitchX.renameFavoriteGroup = function(oldName, newName) {
+  if (!oldName || !newName || TwitchX.SYSTEM_FAVORITE_GROUPS.indexOf(newName) !== -1) return;
+  const payload = [];
+  TwitchX.getFavoriteEntries().forEach(function(e) {
+    var group = TwitchX.getFavoriteGroup(e.login, e.platform);
+    if (group === oldName) group = newName;
+    payload.push({ key: e.key, group: group, order: e.order || 0 });
+  });
+  if (TwitchX.api) TwitchX.api.reorder_favorites(JSON.stringify(payload));
+  TwitchX._applyFavoriteOrder(payload);
+  TwitchX.renderSidebar();
+};
+
+TwitchX.deleteFavoriteGroup = function(name) {
+  if (!name || TwitchX.SYSTEM_FAVORITE_GROUPS.indexOf(name) !== -1) return;
+  const payload = [];
+  TwitchX.getFavoriteEntries().forEach(function(e) {
+    var group = TwitchX.getFavoriteGroup(e.login, e.platform);
+    if (group === name) group = null;
+    payload.push({ key: e.key, group: group, order: e.order || 0 });
+  });
+  if (TwitchX.api) TwitchX.api.reorder_favorites(JSON.stringify(payload));
+  TwitchX._applyFavoriteOrder(payload);
+  TwitchX.renderSidebar();
+};
+
+TwitchX.moveFavoriteToGroup = function(key, groupName) {
+  const meta = TwitchX.state.favoritesMeta[key];
+  if (!meta) return;
+  meta.group = groupName;
+  const payload = [];
+  TwitchX.getFavoriteEntries().forEach(function(e, idx) {
+    payload.push({ key: e.key, group: TwitchX.getFavoriteGroup(e.login, e.platform), order: idx });
+  });
+  if (TwitchX.api) TwitchX.api.reorder_favorites(JSON.stringify(payload));
+  TwitchX._applyFavoriteOrder(payload);
+  TwitchX.renderSidebar();
+};
+
 function renderSidebar() {
   var _sidebar = document.getElementById('sidebar');
   if (_sidebar && _sidebar.classList.contains('collapsed-sidebar')) {
@@ -645,132 +891,30 @@ function renderSidebar() {
   ) {
     return;
   }
-  const selectedExpanded = expandSidebarSectionForLogin(
+
+  expandSidebarSectionForLogin(
     TwitchX.state.selectedChannel,
     TwitchX.state.selectedChannelKey
   );
 
-  // Skip full rebuild if sections already exist and membership hasn't changed
-  const existingOnlineSection = list.querySelector('.sidebar-section.online');
-  const existingOfflineSection = list.querySelector('.sidebar-section.offline');
-
-  if (existingOnlineSection && existingOfflineSection && TwitchX.state.favorites.length > 0) {
-    const onlineBody = existingOnlineSection.querySelector('.section-body');
-    const offlineBody = existingOfflineSection.querySelector('.section-body');
-
-    const oldOnlineLogins = Array.from(onlineBody.querySelectorAll('.channel-item')).map(function(el) { return el.dataset.key; });
-    const oldOfflineLogins = Array.from(offlineBody.querySelectorAll('.channel-item')).map(function(el) { return el.dataset.key; });
-
-    const onlineChanged = oldOnlineLogins.length !== groups.online.length ||
-      groups.online.some(function(entry, i) { return oldOnlineLogins[i] !== entry.key; });
-    const offlineChanged = oldOfflineLogins.length !== groups.offline.length ||
-      groups.offline.some(function(entry, i) { return oldOfflineLogins[i] !== entry.key; });
-
-    const onlineCollapsed = !!TwitchX.state.sidebarSections.online;
-    const offlineCollapsed = !!TwitchX.state.sidebarSections.offline;
-    const oldOnlineCollapsed = existingOnlineSection.classList.contains('collapsed');
-    const oldOfflineCollapsed = existingOfflineSection.classList.contains('collapsed');
-
-    const collapsedChanged = onlineCollapsed !== oldOnlineCollapsed || offlineCollapsed !== oldOfflineCollapsed;
-
-    if (!onlineChanged && !offlineChanged && !collapsedChanged) {
-      // In-place update only
-      groups.online.forEach(function(entry) {
-        const item = onlineBody.querySelector('.channel-item[data-key="' + entry.key + '"]');
-        if (item) updateSidebarItem(item, entry, groups.streamMap);
-      });
-      groups.offline.forEach(function(entry) {
-        const item = offlineBody.querySelector('.channel-item[data-key="' + entry.key + '"]');
-        if (item) updateSidebarItem(item, entry, groups.streamMap);
-      });
-      // Update section meta text
-      existingOnlineSection.querySelector('.section-meta').textContent =
-        getSidebarSectionMeta('online', groups.online, groups.streamMap);
-      existingOfflineSection.querySelector('.section-meta').textContent =
-        getSidebarSectionMeta('offline', groups.offline, groups.streamMap);
-      existingOnlineSection.querySelector('.section-count').textContent = String(groups.online.length);
-      existingOfflineSection.querySelector('.section-count').textContent = String(groups.offline.length);
-
-      document.getElementById('favorites-count-badge').textContent = String(groups.online.length + groups.offline.length);
-
-      if (selectedExpanded) {
-        const selectedItem = list.querySelector('.channel-item.selected');
-        if (selectedItem) {
-          selectedItem.scrollIntoView({ block: 'nearest' });
-        }
-      }
-      // Defer layout to next frame to avoid forced reflow during video paint
-      requestAnimationFrame(function() {
-        applySidebarLayout(groups);
-      });
-      initSidebarScrollShadow();
-      return;
-    }
-
-    // Membership or collapsed state changed — do diff rebuild of sections
-    // Rebuild online section
-    if (onlineChanged || collapsedChanged) {
-      const newOnlineSection = createSidebarSection(
-        'online',
-        'Online',
-        getSidebarSectionMeta('online', groups.online, groups.streamMap),
-        groups.online,
-        groups.streamMap
-      );
-      list.replaceChild(newOnlineSection, existingOnlineSection);
-    } else {
-      groups.online.forEach(function(entry) {
-        const item = onlineBody.querySelector('.channel-item[data-key="' + entry.key + '"]');
-        if (item) updateSidebarItem(item, entry, groups.streamMap);
-      });
-      existingOnlineSection.querySelector('.section-meta').textContent =
-        getSidebarSectionMeta('online', groups.online, groups.streamMap);
-      existingOnlineSection.querySelector('.section-count').textContent = String(groups.online.length);
-    }
-
-    // Rebuild offline section
-    const currentOfflineSection = list.querySelector('.sidebar-section.offline');
-    if (offlineChanged || collapsedChanged) {
-      const newOfflineSection = createSidebarSection(
-        'offline',
-        'Offline',
-        getSidebarSectionMeta('offline', groups.offline, groups.streamMap),
-        groups.offline,
-        groups.streamMap
-      );
-      list.replaceChild(newOfflineSection, currentOfflineSection);
-    } else {
-      groups.offline.forEach(function(entry) {
-        const item = offlineBody.querySelector('.channel-item[data-key="' + entry.key + '"]');
-        if (item) updateSidebarItem(item, entry, groups.streamMap);
-      });
-      currentOfflineSection.querySelector('.section-meta').textContent =
-        getSidebarSectionMeta('offline', groups.offline, groups.streamMap);
-      currentOfflineSection.querySelector('.section-count').textContent = String(groups.offline.length);
-    }
-
-    document.getElementById('favorites-count-badge').textContent = String(groups.online.length + groups.offline.length);
-
-    if (selectedExpanded) {
-      const selectedItem = list.querySelector('.channel-item.selected');
-      if (selectedItem) {
-        selectedItem.scrollIntoView({ block: 'nearest' });
-      }
-    }
-    requestAnimationFrame(function() {
-      applySidebarLayout(groups);
-    });
-    initSidebarScrollShadow();
-    return;
-  }
-
-  // Full rebuild (first render or empty favorites)
   while (list.firstChild) list.removeChild(list.firstChild);
 
+  function updateFavoritesCountBadge(count) {
+    const badge = document.getElementById('favorites-count-badge');
+    if (!badge) return;
+    badge.textContent = String(count);
+    badge.setAttribute('aria-label', count + ' favorite' + (count === 1 ? '' : 's'));
+  }
+
   if (TwitchX.state.favorites.length === 0) {
-    document.getElementById('favorites-count-badge').textContent = '0';
+    updateFavoritesCountBadge(0);
+    updatePlatformStatusDots();
     return;
   }
+
+  const totalCount = groups.online.length + groups.offline.length +
+    Object.keys(groups.custom).reduce(function(sum, k) { return sum + groups.custom[k].length; }, 0);
+  updateFavoritesCountBadge(totalCount);
 
   list.appendChild(
     createSidebarSection(
@@ -782,6 +926,18 @@ function renderSidebar() {
     )
   );
 
+  Object.keys(groups.custom).sort().forEach(function(groupName) {
+    const entries = groups.custom[groupName];
+    const collapsed = !!TwitchX.state.sidebarSections['group:' + groupName];
+    const groupEl = document.createElement('div');
+    groupEl.className = 'sidebar-group';
+    groupEl.appendChild(createSidebarGroupHeader(groupName, entries.length, collapsed));
+    if (!collapsed) {
+      groupEl.appendChild(renderSidebarGroupBody(groupName, entries, groups.streamMap));
+    }
+    list.appendChild(groupEl);
+  });
+
   list.appendChild(
     createSidebarSection(
       'offline',
@@ -792,19 +948,28 @@ function renderSidebar() {
     )
   );
 
-  document.getElementById('favorites-count-badge').textContent = String(groups.online.length + groups.offline.length);
-
-  if (selectedExpanded) {
-    const selectedItem = list.querySelector('.channel-item.selected');
-    if (selectedItem) {
-      selectedItem.scrollIntoView({ block: 'nearest' });
-    }
-  }
-
   requestAnimationFrame(function() {
     applySidebarLayout(groups);
   });
   initSidebarScrollShadow();
+  updatePlatformStatusDots();
+}
+
+function updatePlatformStatusDots() {
+  var platforms = [
+    { key: 'twitch', user: TwitchX.state.currentUser },
+    { key: 'kick', user: TwitchX.state.kickUser },
+    { key: 'youtube', user: TwitchX.state.youtubeUser },
+  ];
+  document.querySelectorAll('.platform-status-dots').forEach(function(container) {
+    container.replaceChildren();
+    platforms.forEach(function(p) {
+      var dot = document.createElement('span');
+      dot.className = 'platform-status-dot ' + p.key + (p.user ? ' connected' : '');
+      dot.setAttribute('aria-label', p.key + (p.user ? ' connected' : ' not connected'));
+      container.appendChild(dot);
+    });
+  });
 }
 
 // Initialize sidebar sections from localStorage on load
@@ -849,7 +1014,8 @@ function _updateNotifBadges() {
   items.forEach(function(item) {
     var dot = item.querySelector('.notif-dot');
     if (!dot) return;
-    var key = item.dataset.key || item.dataset.login;
+    var key = item.dataset.key;
+    if (!key) return;
     if (badgeLogins.indexOf(key) !== -1) {
       dot.classList.add('visible');
     } else {
@@ -860,7 +1026,8 @@ function _updateNotifBadges() {
   railItems.forEach(function(item) {
     var dot = item.querySelector('.rail-notif-dot');
     if (!dot) return;
-    var key = item.dataset.key || item.dataset.login;
+    var key = item.dataset.key;
+    if (!key) return;
     dot.classList.toggle('visible', badgeLogins.indexOf(key) !== -1);
   });
 }
@@ -891,5 +1058,6 @@ TwitchX.renderRail = renderRail;
 TwitchX.renderSidebar = renderSidebar;
 TwitchX.updateSidebarScrollShadow = updateSidebarScrollShadow;
 TwitchX.initSidebarScrollShadow = initSidebarScrollShadow;
+TwitchX.updatePlatformStatusDots = updatePlatformStatusDots;
 TwitchX._updateNotifBadges = _updateNotifBadges;
 TwitchX._clearNotifBadges = _clearNotifBadges;

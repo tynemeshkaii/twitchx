@@ -62,17 +62,59 @@ body {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    transition-duration: 0.05s !important;
+    scroll-behavior: auto !important;
   }
   #chat-messages, #ms-chat-messages { scroll-behavior: auto; }
+  .view-transitioning {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
 }
 @media (prefers-contrast: more) {
   :root {
     --text-muted: var(--text-secondary);
     --bg-border: var(--border-strong);
+    --border-subtle: var(--border-default);
+    --border-card: var(--border-default);
+    --border-glass: var(--border-default);
   }
-  #settings-modal, #context-menu {
+  #settings-modal, #context-menu, #palette-modal, #onboarding-modal,
+  #chat-filter-panel, #chat-export-menu, #chat-userlist-panel, #chat-mod-panel,
+  #group-context-menu {
     border-width: 2px;
+    border-color: var(--border-strong);
+  }
+  .stream-card, .channel-item, .browse-category-card, .browse-stream-card,
+  .channel-media-card, .channel-media-item,
+  .btn, .bar-btn, .player-header-btn, .chat-header-btn, .emote-picker-btn,
+  .ms-slot, .ms-add-form input, .ms-add-form select,
+  #search-input, #filter-input, #sort-select,
+  .text-input, .setting-group input, .setting-group select, .mod-input {
+    border-width: 1px;
+    border-color: var(--border-default);
+  }
+  .stream-card:hover, .channel-item:hover, .browse-category-card:hover,
+  .browse-stream-card:hover, .channel-media-card:hover, .channel-media-item:hover {
+    border-color: var(--border-strong);
+  }
+  .stream-card.selected, .channel-item.selected,
+  .stream-card:focus-visible, .channel-item:focus-visible,
+  .browse-category-card:focus-visible, .browse-stream-card:focus-visible,
+  .btn:focus-visible, .bar-btn:focus-visible, .player-header-btn:focus-visible,
+  .chat-header-btn:focus-visible, .emote-picker-btn:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+  .live-dot, .notif-dot {
+    box-shadow: 0 0 0 1px var(--border-strong);
+  }
+  .chat-msg.mention {
+    border-left: 3px solid var(--accent);
+  }
+  #chat-messages, #ms-chat-messages {
+    border-top: 1px solid var(--border-default);
   }
 }
 
@@ -85,5 +127,5 @@ body {
 /* ── Scrollbar ──────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 999px; }
+::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: var(--radius-full); }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }

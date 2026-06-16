@@ -120,6 +120,7 @@ TwitchX.multiState = {
   chatSlot: -1,
   open: false,
   chatVisible: false,
+  activePreset: 'grid',
 };
 
 TwitchX.msChatAutoScroll = true;
@@ -160,63 +161,55 @@ TwitchX.findStreamByKey = function(key) {
 };
 
 TwitchX.findStreamForChannel = function(login, platform) {
-  if (platform) return TwitchX.findStreamByKey(TwitchX.channelKey(login, platform));
-  return TwitchX.state.streams.find(function(stream) { return stream.login === login; }) || null;
+  if (!login || !platform) return null;
+  return TwitchX.findStreamByKey(TwitchX.channelKey(login, platform));
 };
 
 TwitchX.getFavoriteMeta = function(login, platform) {
-  if (platform) {
-    var key = TwitchX.channelKey(login, platform);
-    return TwitchX.state.favoritesMeta[key] || null;
-  }
-  for (var key in TwitchX.state.favoritesMeta) {
-    if (TwitchX.state.favoritesMeta[key].login === login) {
-      return TwitchX.state.favoritesMeta[key];
-    }
-  }
-  return null;
+  if (!login || !platform) return null;
+  var key = TwitchX.channelKey(login, platform);
+  return TwitchX.state.favoritesMeta[key] || null;
 };
+
+TwitchX.getFavoriteGroup = function(login, platform) {
+  var meta = TwitchX.getFavoriteMeta(login, platform);
+  return meta && meta.group ? meta.group : null;
+};
+
+TwitchX.SYSTEM_FAVORITE_GROUPS = ['Online', 'Offline'];
 
 TwitchX.getFavoriteEntries = function() {
   var entries = [];
   var seen = Object.create(null);
-  var metaByLogin = Object.create(null);
 
+  // Authoritative source: favoritesMeta is keyed by platform:login.
   for (var key in TwitchX.state.favoritesMeta) {
     var meta = TwitchX.state.favoritesMeta[key] || {};
     var login = meta.login || key.split(':').slice(1).join(':');
     var platform = meta.platform || key.split(':')[0] || 'twitch';
-    if (!metaByLogin[login]) metaByLogin[login] = [];
-    metaByLogin[login].push({
-      login: login,
-      platform: platform,
-      key: TwitchX.channelKey(login, platform),
-      display_name: meta.display_name || login,
-    });
+    if (!seen[key]) {
+      seen[key] = true;
+      entries.push({
+        login: login,
+        platform: platform,
+        key: key,
+        display_name: meta.display_name || login,
+      });
+    }
   }
 
+  // Legacy fallback: raw logins not present in favoritesMeta default to Twitch.
   TwitchX.state.favorites.forEach(function(login) {
-    var matches = metaByLogin[login];
-    if (matches && matches.length) {
-      matches.forEach(function(entry) {
-        if (!seen[entry.key]) {
-          seen[entry.key] = true;
-          entries.push(entry);
-        }
+    if (!login || typeof login !== 'string') return;
+    var key = TwitchX.channelKey(login, 'twitch');
+    if (!seen[key]) {
+      seen[key] = true;
+      entries.push({
+        login: login,
+        platform: 'twitch',
+        key: key,
+        display_name: login,
       });
-      return;
-    }
-    var stream = TwitchX.findStreamForChannel(login);
-    var platform = (stream && stream.platform) || 'twitch';
-    var fallback = {
-      login: login,
-      platform: platform,
-      key: TwitchX.channelKey(login, platform),
-      display_name: login,
-    };
-    if (!seen[fallback.key]) {
-      seen[fallback.key] = true;
-      entries.push(fallback);
     }
   });
 
@@ -231,8 +224,9 @@ TwitchX.getChannelPlatform = function(login, key) {
     if (keyedMeta && keyedMeta.platform) return keyedMeta.platform;
     if (key.indexOf(':') !== -1) return key.split(':')[0];
   }
-  var stream = TwitchX.findStreamForChannel(login);
-  if (stream && stream.platform) return stream.platform;
-  var meta = TwitchX.getFavoriteMeta(login);
-  return (meta && meta.platform) || 'twitch';
+  if (login) {
+    var stream = TwitchX.state.streams.find(function(s) { return s.login === login; });
+    if (stream && stream.platform) return stream.platform;
+  }
+  return 'twitch';
 };

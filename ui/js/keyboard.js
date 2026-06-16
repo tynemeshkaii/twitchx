@@ -40,26 +40,14 @@ function renderHotkeysSettings() {
       : TwitchX.DEFAULT_SHORTCUTS[action];
     const isCapturing = TwitchX._rebindAction === action;
     const tr = document.createElement('tr');
-    tr.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
 
     const labelTd = document.createElement('td');
-    labelTd.style.cssText = 'padding:7px 0;font-size:12px;color:var(--text-secondary);';
     labelTd.textContent = TwitchX.SHORTCUT_LABELS[action];
 
     const keyTd = document.createElement('td');
-    keyTd.style.cssText = 'padding:7px 0;text-align:right;';
 
     const kbd = document.createElement('kbd');
     kbd.className = isCapturing ? 'hotkey-capturing' : 'hotkey-idle';
-    kbd.style.cssText = [
-      'display:inline-block',
-      'padding:2px 8px',
-      'border-radius:4px',
-      'font-size:11px',
-      'font-family:inherit',
-      'cursor:pointer',
-      'transition:all 0.1s',
-    ].join(';');
     kbd.replaceChildren();
     if (isCapturing) {
       kbd.textContent = 'Press key\u2026';
@@ -134,14 +122,14 @@ function handleKeydown(e) {
     if (document.getElementById('settings-overlay').classList.contains('visible')) {
       TwitchX.closeSettings(); return;
     }
-    if (document.getElementById('player-view').classList.contains('active')) {
+    if (document.getElementById('player-view').classList.contains('view-active')) {
       TwitchX.hidePlayerView();
       return;
     }
-    if (!document.getElementById('channel-view').classList.contains('hidden')) {
+    if (document.getElementById('channel-view').classList.contains('view-active')) {
       TwitchX.hideChannelView(); return;
     }
-    if (!document.getElementById('browse-view').classList.contains('hidden')) {
+    if (document.getElementById('browse-view').classList.contains('view-active')) {
       TwitchX.browseGoBack(); return;
     }
     if (TwitchX.multiState.open) { TwitchX.closeMultistreamView(); return; }
@@ -173,7 +161,7 @@ function handleKeydown(e) {
 
   if (inInput) return;
 
-  const inPlayer = document.getElementById('player-view').classList.contains('active');
+  const inPlayer = document.getElementById('player-view').classList.contains('view-active');
   const inMulti = TwitchX.multiState.open;
 
   // Single-key shortcuts — skip if any modifier is held

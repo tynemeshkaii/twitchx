@@ -1,0 +1,147 @@
+/* ── Forms & inputs ─────────────────────────────────────── */
+.form-label,
+.setting-group > label,
+.setting-label {
+  display: block;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-6);
+  letter-spacing: 0.01em;
+}
+
+.text-input,
+.setting-group input[type="text"],
+.setting-group input[type="password"],
+.setting-group input[type="number"],
+.setting-group select,
+.mod-input {
+  width: 100%;
+  height: 34px;
+  padding: 0 var(--space-10);
+  background: var(--bg-control);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--font-sm);
+  font-family: inherit;
+  outline: none;
+  transition: border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease, background var(--duration-fast) ease;
+}
+.text-input:hover,
+.setting-group input:hover,
+.setting-group select:hover,
+.mod-input:hover {
+  border-color: var(--border-default);
+}
+.text-input:focus,
+.setting-group input:focus,
+.setting-group select:focus,
+.mod-input:focus {
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 2px var(--focus-ring-offset);
+}
+.text-input::placeholder,
+.setting-group input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+/* Secret input with eye toggle */
+.secret-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+.secret-row input {
+  flex: 1;
+}
+.eye-btn {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--duration-fast) ease, background var(--duration-fast) ease, border-color var(--duration-fast) ease;
+}
+.eye-btn:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+.eye-btn:active {
+  transform: scale(var(--scale-press));
+}
+.eye-btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Checkbox / radio rows (settings checkbox-row lives in settings.css) */
+.filter-row,
+.mod-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-6) 0;
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+  cursor: pointer;
+}
+.checkbox-row input[type="checkbox"],
+.checkbox-row input[type="radio"],
+.filter-row input[type="checkbox"],
+.mod-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* Range slider base */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+input[type="range"]:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: none;
+  cursor: pointer;
+  transition: transform var(--duration-fast) ease;
+}
+input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.25); }
+input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: none;
+  cursor: pointer;
+}
+
+/* Setting hint */
+.setting-hint {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin-top: var(--space-4);
+}

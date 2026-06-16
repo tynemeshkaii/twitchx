@@ -45,6 +45,12 @@ function _rgbToHsl(r, g, b) {
   };
 }
 
+function _contrastColorForRgb(rgb) {
+  // YIQ perceived brightness; choose black or white for best contrast.
+  var yiq = ((rgb.r * 255) * 299 + (rgb.g * 255) * 587 + (rgb.b * 255) * 114) / 1000;
+  return yiq >= 128 ? '#0A0A0C' : '#FFFFFF';
+}
+
 function applyAccentColor(color) {
   var entry = ACCENT_PALETTE.find(function(p) { return p.value === color; }) || ACCENT_PALETTE[0];
   var rgb = _hexToRgb(entry.value);
@@ -54,6 +60,7 @@ function applyAccentColor(color) {
   root.style.setProperty('--accent-h', hsl.h);
   root.style.setProperty('--accent-s', hsl.s + '%');
   root.style.setProperty('--accent-l', hsl.l + '%');
+  root.style.setProperty('--text-on-accent', _contrastColorForRgb(rgb));
   localStorage.setItem('twitchx.accent', entry.value);
 }
 
@@ -316,7 +323,7 @@ function openSettings() {
     ACCENT_PALETTE.forEach(function(p) {
       var btn = document.createElement('button');
       btn.className = 'accent-swatch' + (p.value === currentAccent ? ' active' : '');
-      btn.style.background = p.value;
+      btn.style.setProperty('--swatch-color', p.value);
       btn.title = p.label;
       btn.dataset.color = p.value;
       btn.setAttribute('aria-label', 'Use ' + p.label + ' accent color');
@@ -402,7 +409,12 @@ function openSettings() {
   document.getElementById('stats-loading').classList.remove('hidden');
   document.getElementById('stats-content').classList.add('hidden');
   _setFeedback('');
-  document.getElementById('settings-overlay').classList.add('visible');
+  var overlay = document.getElementById('settings-overlay');
+  if (overlay) {
+    overlay.classList.add('visible');
+    overlay.setAttribute('aria-hidden', 'false');
+    overlay.removeAttribute('inert');
+  }
   TwitchX._settingsSnapshot = JSON.stringify(_readAllFormValues());
   var versionEl = document.getElementById('settings-version-footer');
   if (versionEl && TwitchX.api) {
@@ -440,7 +452,12 @@ function closeSettings() {
   if (_isSettingsDirty()) {
     if (!window.confirm('You have unsaved changes. Discard them?')) return;
   }
-  document.getElementById('settings-overlay').classList.remove('visible');
+  var overlay = document.getElementById('settings-overlay');
+  if (overlay) {
+    overlay.classList.remove('visible');
+    overlay.setAttribute('aria-hidden', 'true');
+    overlay.setAttribute('inert', '');
+  }
   TwitchX._settingsSnapshot = null;
   if (TwitchX._settingsReturnFocus && TwitchX._settingsReturnFocus.focus) {
     TwitchX._settingsReturnFocus.focus();
@@ -472,7 +489,7 @@ function saveSettings() {
     client_secret: document.getElementById('s-client-secret').value.trim(),
     streamlink_path: document.getElementById('s-streamlink').value.trim(),
     iina_path: document.getElementById('s-iina').value.trim(),
-    refresh_interval: parseInt(document.getElementById('s-interval').value, 10),
+    refresh_interval: Math.max(30, parseInt(document.getElementById('s-interval').value, 10) || 60),
     kick_client_id: document.getElementById('s-kick-client-id').value.trim(),
     kick_client_secret: document.getElementById('s-kick-client-secret').value.trim(),
     youtube_api_key: document.getElementById('yt-api-key').value.trim(),

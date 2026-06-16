@@ -5,7 +5,7 @@
   width: 100%;
   padding: var(--space-8) var(--space-12);
   background: var(--bg-elevated);
-  border: 1px solid var(--bg-border);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
   font-size: var(--font-sm);
@@ -113,6 +113,7 @@
   transition: opacity var(--duration-fast);
 }
 .ms-slot:hover .ms-overlay,
+.ms-slot:focus-within .ms-overlay,
 .ms-slot.audio-focus .ms-overlay { opacity: 1; }
 
 .ms-slot-info { display: flex; align-items: center; gap: 5px; min-width: 0; }
@@ -168,6 +169,15 @@
 }
 .ms-audio-btn:hover, .ms-chat-sw-btn:hover, .ms-fullscreen-btn:hover, .ms-pip-btn:hover, .ms-remove-btn:hover {
   background: rgba(0,0,0,0.75);
+}
+.ms-audio-btn:focus-visible,
+.ms-chat-sw-btn:focus-visible,
+.ms-fullscreen-btn:focus-visible,
+.ms-pip-btn:focus-visible,
+.ms-remove-btn:focus-visible {
+  outline: none;
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 2px var(--focus-ring-offset);
 }
 .ms-slot.audio-focus { outline: 2px solid var(--accent); outline-offset: -2px; }
 .ms-slot.audio-focus .ms-audio-btn,
@@ -261,7 +271,7 @@
   font-weight: 700;
   cursor: pointer;
 }
-#ms-chat-send-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+#ms-chat-send-btn:disabled { opacity: var(--disabled-opacity); cursor: not-allowed; }
 
 /* ── Drag to Multistream ────────────────────────────────── */
 .channel-item.dragging { opacity: 0.45; }

@@ -42,15 +42,17 @@ function addChannel() {
       } else if (inputLower.indexOf('twitch.tv/') !== -1) {
         choice = { login: val, platform: 'twitch' };
       } else {
-        const matches = TwitchX.state.searchResults.filter(function(result) {
-          if (result.login === val) return true;
-          if (result.platform !== 'youtube' && result.login.toLowerCase() === inputLower) return true;
-          return (result.display_name || '').toLowerCase() === inputLower;
+        const exactLoginMatches = TwitchX.state.searchResults.filter(function(result) {
+          return result.login && result.login.toLowerCase() === inputLower;
         });
-        if (matches.length === 1) {
-          choice = matches[0];
-        } else if (TwitchX.state.searchResults.length > 0) {
-          choice = TwitchX.state.searchResults[0];
+        if (exactLoginMatches.length === 1) {
+          choice = exactLoginMatches[0];
+        } else if (exactLoginMatches.length === 0 && TwitchX.state.searchResults.length > 0) {
+          // No exact match: fall back to the top search result only if its display name matches.
+          const displayMatch = TwitchX.state.searchResults.find(function(result) {
+            return (result.display_name || '').toLowerCase() === inputLower;
+          });
+          if (displayMatch) choice = displayMatch;
         }
       }
     }
@@ -149,8 +151,14 @@ function createChannelMediaCard(item, tab) {
   const card = document.createElement('div');
   card.className = 'channel-media-card' + (tab === 'clips' ? ' clip' : '');
 
-  const thumbWrap = document.createElement('div');
+  const thumbWrap = document.createElement('button');
   thumbWrap.className = 'channel-media-thumb-wrap';
+  thumbWrap.type = 'button';
+  thumbWrap.disabled = item.play_supported === false;
+  thumbWrap.setAttribute('aria-label', 'Play ' + (item.title || (tab === 'clips' ? 'untitled clip' : 'untitled VOD')));
+  if (thumbWrap.disabled) {
+    thumbWrap.title = item.play_disabled_reason || 'This media cannot be played in app.';
+  }
   thumbWrap.onclick = function() { playChannelMedia(item); };
 
   if (item.thumbnail_url) {
@@ -189,6 +197,7 @@ function createChannelMediaCard(item, tab) {
 
   const playBtn = document.createElement('button');
   playBtn.className = 'channel-media-btn';
+  playBtn.type = 'button';
   playBtn.textContent = 'Play';
   playBtn.disabled = item.play_supported === false;
   if (playBtn.disabled) {
@@ -198,6 +207,7 @@ function createChannelMediaCard(item, tab) {
 
   const openBtn = document.createElement('button');
   openBtn.className = 'channel-media-btn secondary';
+  openBtn.type = 'button';
   openBtn.textContent = 'Open';
   openBtn.onclick = function() { openChannelMedia(item); };
 
@@ -226,10 +236,14 @@ function renderChannelMediaTab(tab) {
   }
 
   if (!entry.supported || entry.error || !entry.items.length) {
-    els.empty.textContent = entry.message || (
-      tab === 'vods' ? 'No recent VODs found.' : 'No recent clips found.'
-    );
-    els.empty.classList.remove('hidden');
+    TwitchX.renderEmptyState(els.empty, {
+      illustration: tab === 'vods' ? 'empty-vods' : 'empty-clips',
+      title: tab === 'vods' ? 'No recent VODs' : 'No recent clips',
+      subtitle: entry.message || (
+        tab === 'vods' ? 'This channel has no recent VODs available.' : 'This channel has no recent clips available.'
+      ),
+      secondaryAction: { label: 'Open Channel', callback: openChannelInBrowser },
+    });
     return;
   }
 
@@ -256,20 +270,12 @@ function showChannelView(login, platform, source) {
   TwitchX.channelProfile = null;
   resetChannelMediaPanels();
 
-  if (TwitchX.channelViewSource === 'browse') {
-    document.getElementById('browse-view').classList.add('hidden');
-  } else {
-    document.getElementById('toolbar').classList.add('hidden');
-    document.getElementById('stream-grid').classList.add('hidden');
+  if (TwitchX.channelViewSource !== 'browse') {
+    TwitchX.setChromeVisible(false);
   }
-
-  document.getElementById('channel-view').style.opacity = '0';
-  document.getElementById('channel-view').classList.remove('hidden');
-  requestAnimationFrame(function() {
-    document.getElementById('channel-view').style.opacity = '';
-  });
+  TwitchX.switchView('channel-view', 'forward');
   document.getElementById('channel-loading').classList.remove('hidden');
-  document.getElementById('channel-profile-card').style.opacity = '0';
+  document.getElementById('channel-profile-card').classList.add('fade-transparent');
   document.getElementById('channel-header-title').textContent = login;
   document.getElementById('channel-display-name').textContent = '';
   document.getElementById('channel-login-text').textContent = '';
@@ -305,18 +311,11 @@ function showChannelView(login, platform, source) {
 }
 
 function hideChannelView() {
-  document.getElementById('channel-view').classList.add('hidden');
-  document.getElementById('channel-view').style.opacity = '';
   if (TwitchX.channelViewSource === 'browse') {
-    document.getElementById('browse-view').classList.remove('hidden');
+    TwitchX.switchView('browse-view', 'back');
   } else {
-    document.getElementById('toolbar').classList.remove('hidden');
-    var grid = document.getElementById('stream-grid');
-    grid.style.opacity = '0';
-    grid.classList.remove('hidden');
-    requestAnimationFrame(function() {
-      grid.style.opacity = '';
-    });
+    TwitchX.switchView('stream-grid', 'back');
+    TwitchX.setChromeVisible(true);
     TwitchX.renderGrid();
   }
 }

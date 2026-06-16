@@ -7,20 +7,22 @@
   --bg-overlay:   #E8E8EB;
   --bg-border:    #E5E5E8;
   --bg-panel:     rgba(255, 255, 255, 0.92);
+  --bg-glass:     rgba(255, 255, 255, 0.78);
+  --surface-glass: rgba(245, 245, 247, 0.72);
   --bg-control:   #F2F2F4;
   --bg-control-hover: #E8E8EB;
 
   /* ── Apple-style label hierarchy ─────────────────────── */
   --text-primary:   #1D1D1F;
-  --text-secondary: #6E6E73;
-  --text-muted:     #86868B;
-  --text-muted-elevated: #8E8E93;
+  --text-secondary: #5A5A5F;
+  --text-muted:     #5C5C60;
+  --text-muted-elevated: #6E6E73;
 
   /* ── Semantic status ────────────────────────────────── */
-  --live-green:  #30D158;
-  --live-red:    #FF453A;
-  --warn-yellow: hsl(36 100% 52%);
-  --error-red:   #FF453A;
+  --live-green:  #145B28;
+  --live-red:    #D32F2F;
+  --warn-yellow: #8A5200;
+  --error-red:   #D32F2F;
   --error-red-bright: #FF6961;
   --info-blue:   #1565C0;
 

@@ -98,6 +98,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "chat_anti_spam": True,
     "accent_color": "#FF9F0A",
     "theme": "dark",
+    "multistream_presets": ["grid", "focus-left", "rows", "columns"],
+    "multistream_active_preset": 0,
     "keyboard_shortcuts": {
         "refresh": "r",
         "watch": " ",
@@ -224,6 +226,9 @@ def _migrate_v1_to_v2(v1: dict[str, Any]) -> dict[str, Any]:
                 # Already an object, keep it
                 v2["favorites"].append(fav)
 
+    for idx, fav in enumerate(v2["favorites"]):
+        v2["favorites"][idx] = _ensure_favorite_group_order(fav, idx)
+
     return v2
 
 
@@ -296,7 +301,7 @@ def _migrate_favorites_v2(cfg: dict[str, Any]) -> bool:
     cleaned: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
 
-    for entry in pre:
+    for _idx, entry in enumerate(pre):
         if isinstance(entry, str):
             name = sanitize_twitch_login(entry)
             if not name:
@@ -307,7 +312,12 @@ def _migrate_favorites_v2(cfg: dict[str, Any]) -> bool:
                 changed = True
                 continue
             seen.add(key)
-            cleaned.append({"platform": "twitch", "login": name, "display_name": name})
+            cleaned.append(
+                _ensure_favorite_group_order(
+                    {"platform": "twitch", "login": name, "display_name": name},
+                    len(cleaned),
+                )
+            )
             changed = True
 
         elif isinstance(entry, dict):
@@ -340,12 +350,18 @@ def _migrate_favorites_v2(cfg: dict[str, Any]) -> bool:
                     if best_display != entry_display:
                         entry = {**entry, "display_name": best_display}
                         changed = True
-                cleaned.append(entry)
+                normalized = _ensure_favorite_group_order(entry, len(cleaned))
+                if normalized != entry:
+                    changed = True
+                cleaned.append(normalized)
             else:
                 if name != login:
                     entry = {**entry, "login": name}
                     changed = True
-                cleaned.append(entry)
+                normalized = _ensure_favorite_group_order(entry, len(cleaned))
+                if normalized != entry:
+                    changed = True
+                cleaned.append(normalized)
 
         else:
             changed = True
@@ -353,6 +369,27 @@ def _migrate_favorites_v2(cfg: dict[str, Any]) -> bool:
     if changed:
         cfg["favorites"] = cleaned
     return changed
+
+
+_SYSTEM_FAVORITE_GROUPS = {"Online", "Offline"}
+
+
+def _ensure_favorite_group_order(entry: dict[str, Any], idx: int) -> dict[str, Any]:
+    """Ensure a favorite entry has group/order fields for Phase 4 layout.
+
+    group is None for system-managed Online/Offline groups; otherwise a user group name.
+    """
+    updated = dict(entry)
+    if "group" not in updated:
+        updated["group"] = None
+        updated["order"] = idx
+    else:
+        group = updated.get("group")
+        if group in _SYSTEM_FAVORITE_GROUPS:
+            updated["group"] = None
+        if "order" not in updated:
+            updated["order"] = idx
+    return updated
 
 
 def load_config() -> dict[str, Any]:

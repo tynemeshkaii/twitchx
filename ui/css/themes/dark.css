@@ -8,6 +8,8 @@
   --bg-overlay:   #303034;
   --bg-border:    #2B2B2F;
   --bg-panel:     #202024;
+  --bg-glass:     rgba(26, 26, 29, 0.78);
+  --surface-glass: rgba(36, 36, 39, 0.72);
   --bg-control:   #27272B;
   --bg-control-hover: #323238;
 

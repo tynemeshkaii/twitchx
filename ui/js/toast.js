@@ -24,6 +24,8 @@ function showToast(message, type) {
 
   var el = document.createElement('div');
   el.className = 'toast toast--' + type;
+  el.setAttribute('role', type === 'error' ? 'alert' : 'status');
+  el.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
 
   var icon = document.createElement('span');
   icon.className = 'toast-icon';
@@ -34,6 +36,11 @@ function showToast(message, type) {
   text.className = 'toast-text';
   text.textContent = message;
   el.appendChild(text);
+
+  var progress = document.createElement('span');
+  progress.className = 'toast-progress';
+  progress.style.setProperty('--toast-progress-duration', TOAST_DURATION + 'ms');
+  el.appendChild(progress);
 
   el.addEventListener('click', function() {
     dismissToast(el);

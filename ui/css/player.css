@@ -1,67 +1,3 @@
-/* ── Player bar ─────────────────────────────────────────── */
-#player-bar {
-  height: 46px;
-  background: var(--glass-bar), var(--bg-player-bar);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border-top: 1px solid var(--border-glass);
-  display: flex; align-items: center; padding: 0 var(--space-12); gap: 2px;
-  flex-shrink: 0; position: relative;
-  container-type: inline-size;
-}
-
-.bar-group {
-  display: flex; align-items: center; gap: 5px; flex-shrink: 0;
-}
-.bar-group + .bar-group {
-  border-left: 1px solid var(--border-subtle);
-  padding-left: 10px; margin-left: 6px;
-}
-.bar-group--status {
-  flex: 1; min-width: 0; overflow: hidden;
-}
-.bar-group--status #status-text {
-  flex: 1; min-width: 0;
-}
-.bar-group--audio { gap: 2px; }
-
-#player-bar select {
-  height: 32px; padding: 0 var(--space-8);
-  background: var(--bg-control); border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md); color: var(--text-primary);
-  font-size: var(--font-sm); font-family: inherit; cursor: pointer;
-}
-
-/* ── Volume Slider ───────────────────────────────────── */
-#mute-btn { width: 32px; height: 32px; flex-shrink: 0; }
-#mute-btn.muted { color: var(--live-red); }
-#volume-slider {
-  width: 72px; height: 4px;
-  -webkit-appearance: none; appearance: none;
-  background: linear-gradient(to right,
-    var(--accent) 0%,
-    var(--accent) var(--volume-pct, 100%),
-    var(--border-default) var(--volume-pct, 100%),
-    var(--border-default) 100%);
-  border-radius: 2px;
-  outline: none; cursor: pointer; margin: 0;
-}
-#volume-slider::-webkit-slider-thumb {
-  -webkit-appearance: none; appearance: none;
-  width: 12px; height: 12px;
-  border-radius: 50%;
-  background: var(--accent);
-  border: none; cursor: pointer;
-  transition: transform var(--duration-fast) ease;
-}
-#volume-slider::-webkit-slider-thumb:hover { transform: scale(1.25); }
-#volume-slider::-moz-range-thumb {
-  width: 12px; height: 12px;
-  border-radius: 50%;
-  background: var(--accent);
-  border: none; cursor: pointer;
-}
-
 /* ── Seek Bar (VOD) ──────────────────────────────────── */
 #seek-bar-container {
   position: absolute; top: -20px; left: 0; right: 0;
@@ -79,6 +15,10 @@
     var(--border-default) 100%);
   outline: none; cursor: pointer; margin: 0; padding: 0;
   transition: height var(--duration-fast) ease;
+}
+#seek-bar:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 #seek-bar-container:hover #seek-bar {
   height: 6px;
@@ -118,11 +58,13 @@
 }
 #buffer-loaded {
   height: 100%; background: var(--buffer-loaded-bg);
-  width: 0%; transition: width var(--duration-slow) ease;
+  width: var(--buffer-loaded-width, 0%);
+  transition: width var(--duration-slow) ease;
 }
 #buffer-position {
   position: absolute; top: 0; height: 100%;
   width: 2px; background: var(--accent);
+  left: var(--buffer-position-left, 0%);
 }
 
 /* ── Chat panel ───────────────────────────────────────── */
@@ -157,33 +99,6 @@
 }
 #chat-resize-handle:hover { background: var(--accent-dim); }
 #chat-resize-handle:hover::before { background: var(--accent); }
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
-}
-#live-dot {
-  animation: pulse 1.8s ease-in-out infinite;
-  color: var(--live-red); font-size: var(--font-sm); display: none;
-}
-#live-dot.visible { display: inline; }
-
-#status-text {
-  font-size: var(--font-sm); color: var(--text-secondary);
-  flex: 1; min-width: 0; margin-left: 2px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-#total-viewers { font-size: var(--font-sm); color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
-#updated-time { font-size: var(--font-sm); color: var(--text-muted); white-space: nowrap; }
-#updated-time.stale { color: var(--error-red); }
-
-/* Responsive: hide metadata in narrow windows to preserve status text */
-@container (max-width: 759px) {
-  #total-viewers,
-  #updated-time {
-    display: none;
-  }
-}
 
 /* Phase 9: PiP button active state */
 #pip-player-btn.active {
@@ -362,6 +277,12 @@
 .player-header-btn:hover {
   background: var(--hover-bg-strong);
   color: var(--text-primary);
+}
+.player-header-btn.recording {
+  color: var(--live-red);
+}
+.player-header-btn.recording:hover {
+  background: var(--status-bg-red);
 }
 
 /* ── Chat header buttons ───────────────────────────────── */

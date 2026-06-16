@@ -46,8 +46,8 @@ def test_kick_chat_dedup_cap_does_not_grow_unbounded() -> None:
     cap = KickChatClient._DEDUP_MAX
 
     client = KickChatClient.__new__(KickChatClient)
-    client._seen_msg_ids: set[str] = set()
-    client._seen_msg_order: list[str] = []
+    client._seen_msg_ids = set()
+    client._seen_msg_order = []
 
     # Simulate adding cap + 50 unique messages using the same LRU logic
     for i in range(cap + 50):
@@ -68,8 +68,8 @@ def test_youtube_chat_dedup_cap_does_not_grow_unbounded() -> None:
     cap = _YT_DEDUP_MAX
 
     client = YouTubeChatClient.__new__(YouTubeChatClient)
-    client._seen_msg_ids: set[str] = set()
-    client._seen_msg_order: list[str] = []
+    client._seen_msg_ids = set()
+    client._seen_msg_order = []
 
     # Simulate adding cap + 50 unique messages using the same LRU logic
     for i in range(cap + 50):

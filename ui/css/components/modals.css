@@ -1,0 +1,90 @@
+/* ── Modal shell ────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  background: var(--overlay-bg);
+  backdrop-filter: var(--glass-thin);
+  -webkit-backdrop-filter: var(--glass-thin);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-20);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-fast) ease;
+}
+.modal-overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+.modal-overlay.visible .modal {
+  animation: modal-enter var(--duration-normal) var(--ease-spring) forwards;
+}
+
+.modal {
+  position: relative;
+  width: min(720px, calc(100vw - var(--space-40)));
+  max-height: calc(100vh - var(--space-40));
+  background: var(--bg-modal);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-modal);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  backdrop-filter: var(--glass-modal);
+  -webkit-backdrop-filter: var(--glass-modal);
+}
+
+.modal-close {
+  position: absolute;
+  top: var(--space-12);
+  right: var(--space-12);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  z-index: 1;
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
+}
+.modal-close:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.modal-header {
+  padding: var(--space-16) var(--space-20) var(--space-10);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.modal-title {
+  font-size: var(--font-lg);
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-16) var(--space-20);
+}
+
+.modal-footer {
+  padding: var(--space-12) var(--space-20);
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-8);
+  flex-shrink: 0;
+}
+

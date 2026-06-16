@@ -92,12 +92,10 @@ function _buildPaletteItem(icon, label, hint, action, options) {
   if (options.key) item.dataset.key = options.key;
   if (options.login) item.dataset.login = options.login;
   if (options.platform) item.dataset.platform = options.platform;
-  if (options.platform) {
-    item.setAttribute(
-      'aria-label',
-      label + ' on ' + TwitchX.platformLabel(options.platform) + (hint ? ', ' + hint : '')
-    );
-  }
+  var ariaLabel = label;
+  if (options.platform) ariaLabel += ' on ' + TwitchX.platformLabel(options.platform);
+  if (hint) ariaLabel += ', ' + hint;
+  item.setAttribute('aria-label', ariaLabel);
   TwitchX._paletteItemCounter += 1;
   item.id = 'palette-item-' + TwitchX._paletteItemCounter;
 

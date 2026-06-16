@@ -23,6 +23,8 @@
 <link rel="stylesheet" href="css/reset.css">
 <link rel="stylesheet" href="css/layout.css">
 <link rel="stylesheet" href="css/components/buttons.css">
+<link rel="stylesheet" href="css/components/forms.css">
+<link rel="stylesheet" href="css/components/modals.css">
 <link rel="stylesheet" href="css/components/sidebar.css">
 <link rel="stylesheet" href="css/components/search-toolbar.css">
 <link rel="stylesheet" href="css/components/stream-card.css">
@@ -40,6 +42,8 @@
 <link rel="stylesheet" href="css/components/skeleton.css">
 <link rel="stylesheet" href="css/components/micro-interactions.css">
 <link rel="stylesheet" href="css/components/toast.css">
+<link rel="stylesheet" href="css/components/onboarding.css">
+<link rel="stylesheet" href="css/animations.css">
 <link rel="stylesheet" href="css/views.css">
 <link rel="stylesheet" href="css/player.css">
 </head>
@@ -49,6 +53,10 @@
   <div id="main">
     <!-- Sidebar -->
     <aside id="sidebar">
+      <div id="sidebar-header">
+        <button id="sidebar-collapse-btn" class="sidebar-collapse-btn" title="Collapse sidebar" aria-label="Toggle sidebar collapse"><span data-icon="chevron-left" data-size="16"></span></button>
+      </div>
+
       <div id="profile-area">
         <button id="login-btn" class="login-btn">Login with Twitch</button>
         <div id="user-info" class="platform-user-info hidden">
@@ -60,6 +68,7 @@
               <a id="import-link" role="button" tabindex="0">Import follows</a>
             </div>
           </div>
+          <div class="platform-status-dots" aria-label="Connected platforms"></div>
         </div>
       </div>
       <div id="kick-profile-area">
@@ -71,14 +80,15 @@
               <a id="kick-logout-link" role="button" tabindex="0">Logout</a>
             </div>
           </div>
+          <div class="platform-status-dots" aria-label="Connected platforms"></div>
         </div>
       </div>
 
-      <div id="platform-tabs" role="tablist" aria-label="Platform filter">
-        <button class="platform-tab active" data-platform="all" role="tab" aria-selected="true">All</button>
-        <button class="platform-tab" data-platform="twitch" role="tab" aria-selected="false" tabindex="-1">Twitch</button>
-        <button class="platform-tab" data-platform="kick" role="tab" aria-selected="false" tabindex="-1">Kick</button>
-        <button class="platform-tab" data-platform="youtube" role="tab" aria-selected="false" tabindex="-1">YouTube</button>
+      <div id="platform-tabs" class="segmented" role="tablist" aria-label="Sidebar platform filter">
+        <button class="platform-tab btn active" data-platform="all" role="tab" aria-selected="true">All</button>
+        <button class="platform-tab btn" data-platform="twitch" role="tab" aria-selected="false" tabindex="-1">Twitch</button>
+        <button class="platform-tab btn" data-platform="kick" role="tab" aria-selected="false" tabindex="-1">Kick</button>
+        <button class="platform-tab btn" data-platform="youtube" role="tab" aria-selected="false" tabindex="-1">YouTube</button>
       </div>
 
       <div id="sidebar-stale-banner" class="sidebar-stale-banner hidden">
@@ -88,230 +98,246 @@
 
       <div id="favorites-header">
         <span class="favorites-label">Favorites</span>
-        <span id="favorites-count-badge">0</span>
-        <button id="sidebar-collapse-btn" class="sidebar-collapse-btn" title="Collapse sidebar" aria-label="Toggle sidebar collapse"><span data-icon="chevron-left" data-size="16"></span></button>
+        <span id="favorites-count-badge" aria-label="0 favorites">0</span>
       </div>
 
       <div id="channel-list"></div>
 
-      <div id="search-area">
-        <div id="search-dropdown" role="listbox" aria-label="Search results"></div>
-        <div id="search-row">
-          <input id="search-input" placeholder="Search or add channel..." autocomplete="off" aria-label="Search or add channel" aria-controls="search-dropdown" aria-expanded="false">
-          <button id="add-btn" title="Add channel" aria-label="Add channel"><span data-icon="plus" data-size="16"></span></button>
+      <div class="sidebar-footer">
+        <div id="search-area">
+          <div id="search-dropdown" role="listbox" aria-label="Search results"></div>
+          <div id="search-row">
+            <input id="search-input" placeholder="Search or add channel..." autocomplete="off" aria-label="Search or add channel" aria-controls="search-dropdown" aria-expanded="false" role="combobox" aria-haspopup="listbox" aria-autocomplete="list">
+            <button id="add-btn" title="Add channel" aria-label="Add channel"><span data-icon="plus" data-size="16"></span></button>
+          </div>
         </div>
-      </div>
-      <div id="browse-nav-wrapper">
-        <button id="browse-nav-btn">Browse</button>
+        <div id="browse-nav-wrapper">
+          <button id="browse-nav-btn" class="btn btn-secondary"><span data-icon="browse" data-size="16"></span> Browse</button>
+        </div>
       </div>
     </aside>
 
     <!-- Content -->
     <div id="content">
       <div id="toolbar">
-        <select id="sort-select" aria-label="Sort streams">
-          <option value="viewers">Most Viewers</option>
-          <option value="recent">Recently Started</option>
-          <option value="alpha">Alphabetical</option>
-        </select>
-        <input id="filter-input" placeholder="Filter by game..." aria-label="Filter streams by game">
-        <button id="grid-toggle-btn" class="bar-btn" title="Switch to list view" aria-label="Toggle grid/list view"><span data-icon="grid-toggle" data-size="16"></span></button>
-      </div>
-      <div id="stream-grid"></div>
-      <div id="empty-state">
-        <div class="empty-icon"></div>
-        <div class="empty-title"></div>
-        <div class="empty-subtitle"></div>
-      </div>
-      <div id="browse-view" class="hidden">
-        <div id="browse-header">
-          <button id="browse-back-btn" class="browse-back-btn hidden"><span data-icon="arrow-left" data-size="16"></span> Back</button>
-          <nav id="browse-breadcrumbs" aria-label="Browse breadcrumbs"></nav>
-          <div id="browse-platform-tabs" role="tablist" aria-label="Browse platform filter">
-            <button class="browse-platform-tab active" data-platform="all" role="tab" aria-selected="true">All</button>
-            <button class="browse-platform-tab" data-platform="twitch" role="tab" aria-selected="false" tabindex="-1">Twitch</button>
-            <button class="browse-platform-tab" data-platform="kick" role="tab" aria-selected="false" tabindex="-1">Kick</button>
-            <button class="browse-platform-tab" data-platform="youtube" role="tab" aria-selected="false" tabindex="-1">YouTube</button>
-          </div>
+        <div class="toolbar-group toolbar-group--left">
+          <select id="sort-select" aria-label="Sort streams">
+            <option value="viewers">Most Viewers</option>
+            <option value="recent">Recently Started</option>
+            <option value="alpha">Alphabetical</option>
+          </select>
+          <input id="filter-input" placeholder="Filter by game..." aria-label="Filter streams by game">
         </div>
-        <div id="browse-body">
-          <div id="browse-categories-grid" class="browse-grid"></div>
-          <div id="browse-streams-grid" class="browse-grid browse-streams-grid hidden"></div>
-          <div id="browse-loading" class="browse-loading hidden">Loading...</div>
-          <div id="browse-empty" class="browse-empty hidden">No categories found.</div>
+        <div class="toolbar-group toolbar-group--right">
+          <button id="grid-toggle-btn" class="bar-btn" title="Switch density" aria-label="Toggle grid density"><span data-icon="grid-toggle" data-size="16"></span></button>
+          <button id="toolbar-refresh-btn" class="bar-btn toolbar-refresh-btn" title="Refresh (R)" aria-label="Refresh streams"><span data-icon="refresh" data-size="16"></span></button>
         </div>
+      </div>
+      <div id="toolbar-platform-chips" class="segmented" role="tablist" aria-label="Toolbar platform filter">
+        <button class="platform-chip btn active" data-platform="all" role="tab" aria-selected="true">All</button>
+        <button class="platform-chip btn" data-platform="twitch" role="tab" aria-selected="false" tabindex="-1">Twitch</button>
+        <button class="platform-chip btn" data-platform="kick" role="tab" aria-selected="false" tabindex="-1">Kick</button>
+        <button class="platform-chip btn" data-platform="youtube" role="tab" aria-selected="false" tabindex="-1">YouTube</button>
       </div>
 
-      <!-- Channel profile view -->
-      <div id="channel-view" class="hidden">
-        <div id="channel-header">
-          <button id="channel-back-btn" class="browse-back-btn"><span data-icon="arrow-left" data-size="16"></span> Back</button>
-          <span id="channel-header-title"></span>
+      <div id="view-stack">
+        <div id="stream-grid" class="view view-active"></div>
+        <div id="empty-state" class="view hidden">
+          <div class="empty-icon"></div>
+          <div class="empty-title"></div>
+          <div class="empty-subtitle"></div>
         </div>
-        <div id="channel-body">
-          <div id="channel-loading" class="browse-loading hidden">Loading...</div>
-          <div id="channel-profile-card">
-            <img id="channel-avatar" class="channel-avatar hidden" src="" alt="">
-            <div id="channel-avatar-fallback" class="channel-avatar-fallback hidden" aria-hidden="true"></div>
-            <div id="channel-meta">
-              <div id="channel-display-name"></div>
-              <div id="channel-identity-row">
-                <span id="channel-login-text"></span>
-                <span id="channel-platform-badge" class="platform-badge hidden"></span>
+        <div id="browse-view" class="view hidden">
+          <div id="browse-header">
+            <button id="browse-back-btn" class="browse-back-btn hidden"><span data-icon="arrow-left" data-size="16"></span> Back</button>
+            <nav id="browse-breadcrumbs" aria-label="Browse breadcrumbs"></nav>
+            <div id="browse-platform-tabs" role="tablist" aria-label="Browse platform filter">
+              <button class="browse-platform-tab active" data-platform="all" role="tab" aria-selected="true">All</button>
+              <button class="browse-platform-tab" data-platform="twitch" role="tab" aria-selected="false" tabindex="-1">Twitch</button>
+              <button class="browse-platform-tab" data-platform="kick" role="tab" aria-selected="false" tabindex="-1">Kick</button>
+              <button class="browse-platform-tab" data-platform="youtube" role="tab" aria-selected="false" tabindex="-1">YouTube</button>
+            </div>
+          </div>
+          <div id="browse-body">
+            <div id="browse-categories-grid" class="browse-grid"></div>
+            <div id="browse-streams-grid" class="browse-grid browse-streams-grid hidden"></div>
+            <div id="browse-loading" class="browse-loading hidden">Loading...</div>
+            <div id="browse-empty" class="browse-empty hidden">No categories found.</div>
+          </div>
+        </div>
+
+        <!-- Channel profile view -->
+        <div id="channel-view" class="view hidden">
+          <div id="channel-header">
+            <button id="channel-back-btn" class="browse-back-btn"><span data-icon="arrow-left" data-size="16"></span> Back</button>
+            <span id="channel-header-title"></span>
+          </div>
+          <div id="channel-body">
+            <div id="channel-loading" class="browse-loading hidden">Loading...</div>
+            <div id="channel-profile-card">
+              <img id="channel-avatar" class="channel-avatar hidden" src="" alt="">
+              <div id="channel-avatar-fallback" class="channel-avatar-fallback hidden" aria-hidden="true"></div>
+              <div id="channel-meta">
+                <div id="channel-display-name"></div>
+                <div id="channel-identity-row">
+                  <span id="channel-login-text"></span>
+                  <span id="channel-platform-badge" class="platform-badge hidden"></span>
+                </div>
+                <div id="channel-live-badge" class="channel-live-badge hidden">LIVE</div>
+                <div id="channel-followers"></div>
+                <div id="channel-platform-note" class="channel-platform-note hidden"></div>
               </div>
-              <div id="channel-live-badge" class="channel-live-badge hidden">LIVE</div>
-              <div id="channel-followers"></div>
-              <div id="channel-platform-note" class="channel-platform-note hidden"></div>
-            </div>
-            <div id="channel-actions">
-              <button id="channel-follow-btn" class="channel-follow-btn">Follow</button>
-              <button id="channel-open-btn" class="channel-open-btn"><span data-icon="browser" data-size="16"></span> Browser</button>
-              <button id="channel-watch-btn" class="channel-watch-btn hidden"><span data-icon="play" data-size="16"></span> Watch Now</button>
-              <div id="channel-action-note" class="channel-action-note hidden"></div>
-            </div>
-          </div>
-          <div id="channel-bio"></div>
-          <div id="channel-tabs" role="tablist" aria-label="Channel media">
-            <button class="channel-tab active" data-tab="live" role="tab" aria-selected="true" aria-controls="channel-tab-live">Live Now</button>
-            <button class="channel-tab" data-tab="vods" role="tab" aria-selected="false" aria-controls="channel-tab-vods" tabindex="-1">VODs</button>
-            <button class="channel-tab" data-tab="clips" role="tab" aria-selected="false" aria-controls="channel-tab-clips" tabindex="-1">Clips</button>
-          </div>
-          <div id="channel-tab-live" class="channel-tab-panel" role="tabpanel">
-            <div id="channel-live-empty" class="channel-empty hidden">Channel is not live right now.</div>
-          </div>
-          <div id="channel-tab-vods" class="channel-tab-panel hidden" role="tabpanel">
-            <div id="channel-vods-loading" class="browse-loading hidden">Loading VODs...</div>
-            <div id="channel-vods-empty" class="channel-empty hidden"></div>
-            <div id="channel-vods-list" class="channel-media-list"></div>
-          </div>
-          <div id="channel-tab-clips" class="channel-tab-panel hidden" role="tabpanel">
-            <div id="channel-clips-loading" class="browse-loading hidden">Loading Clips...</div>
-            <div id="channel-clips-empty" class="channel-empty hidden"></div>
-            <div id="channel-clips-grid" class="channel-media-grid"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Multi-stream view -->
-      <div id="multistream-view" class="hidden">
-        <div id="multistream-header">
-          <span id="multistream-title"><span data-icon="grid-layout" data-size="16"></span> Multi-stream</span>
-          <button id="ms-add-slot-btn" title="Add stream" aria-label="Add stream"><span data-icon="plus" data-size="16"></span></button>
-          <button id="ms-sidebar-btn" title="Toggle Sidebar" aria-label="Toggle Sidebar"><span data-icon="sidebar" data-size="16"></span></button>
-          <button id="ms-toggle-chat-btn" title="Toggle Chat" aria-label="Toggle Multi Chat"><span data-icon="chat" data-size="16"></span></button>
-          <button id="ms-close-btn" title="Close Multistream" aria-label="Close Multistream"><span data-icon="close" data-size="16"></span></button>
-        </div>
-        <div id="ms-sidebar-backdrop"></div>
-        <div id="multistream-body">
-          <div id="multistream-grid"></div>
-          <div id="ms-chat-panel" class="hidden">
-            <div id="ms-chat-header">
-              <span id="ms-chat-title">Chat</span>
-              <span id="ms-chat-status-dot"></span>
-            </div>
-            <div id="ms-chat-messages"></div>
-            <div id="ms-chat-new-messages"><span data-icon="arrow-down" data-size="16"></span> New messages</div>
-            <div id="ms-chat-input-area">
-              <input id="ms-chat-input" type="text" placeholder="Send a message..." maxlength="500" disabled aria-label="Multi-stream chat message" />
-              <button id="ms-chat-send-btn" disabled>Send</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Player view (replaces grid when a stream is playing) -->
-      <div id="player-view">
-        <div id="player-header">
-          <span id="player-channel-name"></span>
-          <span id="player-stream-title"></span>
-          <span id="vod-time-display" class="hidden"></span>
-          <div id="player-header-actions">
-            <button id="stats-overlay-btn" class="player-header-btn hidden" title="Stream Stats" aria-label="Stream Stats"><span data-icon="chart" data-size="16"></span></button>
-            <button id="record-btn" class="player-header-btn hidden" title="Start/Stop Recording" aria-label="Record"><span data-icon="record" data-size="16"></span></button>
-            <button id="toggle-chat-btn" title="Toggle Chat (C)" aria-label="Toggle Chat"><span data-icon="chat" data-size="16"></span></button>
-            <button id="pip-player-btn" class="player-header-btn hidden" title="Picture-in-Picture (P)" aria-label="Picture in Picture"><span data-icon="pip" data-size="16"></span></button>
-            <button id="fullscreen-player-btn" title="Fullscreen (F)" aria-label="Fullscreen"><span data-icon="fullscreen" data-size="16"></span></button>
-            <button id="close-player-btn" title="Close Player (Esc)" aria-label="Close Player"><span data-icon="close" data-size="16"></span></button>
-          </div>
-        </div>
-        <div id="player-content">
-          <video id="stream-video" autoplay controls playsinline></video>
-          <div id="player-loader" class="hidden"><div class="player-spinner"></div></div>
-          <div id="player-buffering" class="player-buffering buffering-hide"><div class="player-spinner"></div></div>
-          <div id="buffer-bar"><div id="buffer-loaded"></div><div id="buffer-position"></div></div>
-          <div id="stats-overlay" class="hidden">
-            <div class="stats-row"><span class="stats-key">Latency</span><span class="stats-val" id="so-latency">--</span></div>
-            <div class="stats-row"><span class="stats-key">Buffer</span><span class="stats-val" id="so-buffer">--</span></div>
-            <div class="stats-row"><span class="stats-key">Dropped</span><span class="stats-val" id="so-dropped">--</span></div>
-            <div class="stats-row"><span class="stats-key">Resolution</span><span class="stats-val" id="so-resolution">--</span></div>
-          </div>
-          <div id="chat-resize-handle"></div>
-          <div id="chat-panel">
-            <div id="chat-header">
-              <span id="chat-title">Chat</span>
-              <span id="chat-status-dot"></span>
-              <span id="chat-status-text"></span>
-              <button id="chat-timestamp-btn" class="chat-header-btn" title="Toggle timestamps" aria-label="Toggle timestamps"><span data-icon="clock" data-size="14"></span></button>
-              <button id="chat-filter-btn" class="chat-header-btn" title="Chat Filters" aria-label="Chat filters" aria-expanded="false" aria-controls="chat-filter-panel"><span data-icon="filter" data-size="14"></span></button>
-              <button id="chat-export-btn" class="chat-header-btn" title="Export Chat Log" aria-label="Export chat log" aria-expanded="false" aria-controls="chat-export-menu"><span data-icon="download" data-size="14"></span></button>
-              <button id="chat-userlist-btn" class="chat-header-btn" title="Chat Users" aria-label="Chat users" aria-expanded="false" aria-controls="chat-userlist-panel"><span data-icon="users" data-size="14"></span> <span id="chat-userlist-count">0</span></button>
-              <button id="chat-mod-btn" class="chat-header-btn hidden" title="Chat Controls" aria-label="Chat moderation controls" aria-expanded="false" aria-controls="chat-mod-panel"><span data-icon="shield" data-size="14"></span> Mod</button>
-            </div>
-            <div id="chat-filter-panel" class="hidden chat-filter-panel">
-              <label class="filter-row">
-                <input type="checkbox" id="chat-filter-sub"> Sub-only
-              </label>
-              <label class="filter-row">
-                <input type="checkbox" id="chat-filter-mod"> Mod-only
-              </label>
-              <label class="filter-row">
-                <input type="checkbox" id="chat-filter-spam" checked> Hide spam/caps
-              </label>
-              <div class="mt-1">
-                <input id="chat-blocklist-input" type="text" placeholder="Add blocked word…" class="chat-filter-input" aria-label="Add blocked word">
+              <div id="channel-actions">
+                <button id="channel-follow-btn" class="channel-follow-btn">Follow</button>
+                <button id="channel-open-btn" class="channel-open-btn"><span data-icon="browser" data-size="16"></span> Browser</button>
+                <button id="channel-watch-btn" class="channel-watch-btn hidden"><span data-icon="play" data-size="16"></span> Watch Now</button>
+                <div id="channel-action-note" class="channel-action-note hidden"></div>
               </div>
             </div>
-            <div id="chat-userlist-panel" class="hidden chat-userlist-panel">
-              <input id="chat-userlist-search" type="text" placeholder="Search users…" class="userlist-search" aria-label="Search chat users">
-              <div id="chat-userlist-items" class="userlist-items"></div>
+            <div id="channel-bio"></div>
+            <div id="channel-tabs" role="tablist" aria-label="Channel media">
+              <button id="channel-tab-live-btn" class="channel-tab active" data-tab="live" role="tab" aria-selected="true" aria-controls="channel-tab-live">Live Now</button>
+              <button id="channel-tab-vods-btn" class="channel-tab" data-tab="vods" role="tab" aria-selected="false" aria-controls="channel-tab-vods" tabindex="-1">VODs</button>
+              <button id="channel-tab-clips-btn" class="channel-tab" data-tab="clips" role="tab" aria-selected="false" aria-controls="channel-tab-clips" tabindex="-1">Clips</button>
             </div>
-            <div id="chat-mod-panel" class="hidden chat-mod-panel">
-              <div class="mod-panel-hint">Broadcaster controls (Twitch only)</div>
-              <label class="mod-row">
-                <input type="checkbox" id="mod-emote-only"> Emote-only mode
-              </label>
-              <label class="mod-row">
-                <input type="checkbox" id="mod-slow"> Slow mode
-                <select id="mod-slow-wait" class="mod-select">
-                  <option value="10">10s</option>
-                  <option value="30" selected>30s</option>
-                  <option value="60">60s</option>
-                  <option value="120">2m</option>
-                </select>
-              </label>
+            <div id="channel-tab-live" class="channel-tab-panel" role="tabpanel" aria-labelledby="channel-tab-live-btn">
+              <div id="channel-live-empty" class="channel-empty hidden">Channel is not live right now.</div>
             </div>
-            <div id="chat-export-menu" class="hidden chat-export-menu">
-              <div class="ctx-item" id="chat-export-json" role="menuitem" tabindex="-1">Export as JSON</div>
-              <div class="ctx-item" id="chat-export-txt" role="menuitem" tabindex="-1">Export as TXT</div>
+            <div id="channel-tab-vods" class="channel-tab-panel hidden" role="tabpanel" aria-labelledby="channel-tab-vods-btn">
+              <div id="channel-vods-loading" class="browse-loading hidden">Loading VODs...</div>
+              <div id="channel-vods-empty" class="channel-empty hidden"></div>
+              <div id="channel-vods-list" class="channel-media-list"></div>
             </div>
-            <div id="chat-messages">
-              <div id="chat-shadow-top"></div>
+            <div id="channel-tab-clips" class="channel-tab-panel hidden" role="tabpanel" aria-labelledby="channel-tab-clips-btn">
+              <div id="channel-clips-loading" class="browse-loading hidden">Loading Clips...</div>
+              <div id="channel-clips-empty" class="channel-empty hidden"></div>
+              <div id="channel-clips-grid" class="channel-media-grid"></div>
             </div>
-            <div id="chat-new-messages"><span data-icon="arrow-down" data-size="16"></span> New messages</div>
-            <div id="chat-reply-bar">
-              <span>Replying to</span>
-              <span class="reply-nick" id="chat-reply-nick"></span>
-              <span class="reply-body" id="chat-reply-body"></span>
-              <button class="reply-close" id="chat-reply-close" aria-label="Cancel reply"><span data-icon="close" data-size="14"></span></button>
+          </div>
+        </div>
+
+        <!-- Multi-stream view -->
+        <div id="multistream-view" class="view hidden">
+          <div id="multistream-header">
+            <span id="multistream-title"><span data-icon="grid-layout" data-size="16"></span> Multi-stream</span>
+            <select id="ms-preset-select" aria-label="Multistream layout preset" title="Layout preset"></select>
+            <button id="ms-add-slot-btn" title="Add stream" aria-label="Add stream"><span data-icon="plus" data-size="16"></span></button>
+            <button id="ms-sidebar-btn" title="Toggle Sidebar" aria-label="Toggle Sidebar"><span data-icon="sidebar" data-size="16"></span></button>
+            <button id="ms-toggle-chat-btn" title="Toggle Chat" aria-label="Toggle Multi Chat"><span data-icon="chat" data-size="16"></span></button>
+            <button id="ms-close-btn" title="Close Multistream" aria-label="Close Multistream"><span data-icon="close" data-size="16"></span></button>
+          </div>
+          <div id="ms-sidebar-backdrop"></div>
+          <div id="multistream-body">
+            <div id="multistream-grid"></div>
+            <div id="ms-chat-panel" class="hidden">
+              <div id="ms-chat-header">
+                <span id="ms-chat-title">Chat</span>
+                <span id="ms-chat-status-dot"></span>
+              </div>
+              <div id="ms-chat-messages"></div>
+              <div id="ms-chat-new-messages"><span data-icon="arrow-down" data-size="16"></span> New messages</div>
+              <div id="ms-chat-input-area">
+                <input id="ms-chat-input" type="text" placeholder="Send a message..." maxlength="500" disabled aria-label="Multi-stream chat message" />
+                <button id="ms-chat-send-btn" disabled>Send</button>
+              </div>
             </div>
-            <div id="emote-picker" class="hidden emote-picker">
-              <input id="emote-search" type="text" placeholder="Search emotes…" class="emote-search" aria-label="Search emotes">
-              <div id="emote-grid" class="emote-grid"></div>
+          </div>
+        </div>
+
+        <!-- Player view (replaces grid when a stream is playing) -->
+        <div id="player-view" class="view hidden">
+          <div id="player-header">
+            <span id="player-channel-name"></span>
+            <span id="player-stream-title"></span>
+            <span id="vod-time-display" class="hidden"></span>
+            <div id="player-header-actions">
+              <button id="stats-overlay-btn" class="player-header-btn hidden" title="Stream Stats" aria-label="Stream Stats"><span data-icon="chart" data-size="16"></span></button>
+              <button id="record-btn" class="player-header-btn hidden" title="Start Recording" aria-label="Start Recording"><span data-icon="record" data-size="16"></span></button>
+              <button id="toggle-chat-btn" class="player-header-btn" title="Toggle Chat (C)" aria-label="Toggle Chat"><span data-icon="chat" data-size="16"></span></button>
+              <button id="pip-player-btn" class="player-header-btn hidden" title="Picture-in-Picture (P)" aria-label="Picture in Picture"><span data-icon="pip" data-size="16"></span></button>
+              <button id="fullscreen-player-btn" class="player-header-btn" title="Fullscreen (F)" aria-label="Fullscreen"><span data-icon="fullscreen" data-size="16"></span></button>
+              <button id="close-player-btn" class="player-header-btn" title="Close Player (Esc)" aria-label="Close Player"><span data-icon="close" data-size="16"></span></button>
             </div>
-            <div id="chat-input-area">
-              <button id="emote-picker-btn" class="emote-picker-btn" title="Emotes" aria-label="Open emote picker" aria-expanded="false" aria-controls="emote-picker"><span data-icon="smile" data-size="16"></span></button>
-              <input id="chat-input" type="text" placeholder="Send a message..." maxlength="500" disabled aria-label="Chat message" />
-              <button id="chat-send-btn" disabled>Send</button>
+          </div>
+          <div id="player-content">
+            <video id="stream-video" autoplay controls playsinline></video>
+            <div id="player-loader" class="hidden"><div class="player-spinner"></div></div>
+            <div id="player-buffering" class="player-buffering buffering-hide"><div class="player-spinner"></div></div>
+            <div id="buffer-bar"><div id="buffer-loaded"></div><div id="buffer-position"></div></div>
+            <div id="stats-overlay" class="hidden">
+              <div class="stats-row"><span class="stats-key">Latency</span><span class="stats-val" id="so-latency">--</span></div>
+              <div class="stats-row"><span class="stats-key">Buffer</span><span class="stats-val" id="so-buffer">--</span></div>
+              <div class="stats-row"><span class="stats-key">Dropped</span><span class="stats-val" id="so-dropped">--</span></div>
+              <div class="stats-row"><span class="stats-key">Resolution</span><span class="stats-val" id="so-resolution">--</span></div>
+            </div>
+            <div id="chat-resize-handle"></div>
+            <div id="chat-panel">
+              <div id="chat-header">
+                <span id="chat-title">Chat</span>
+                <span id="chat-status-dot"></span>
+                <span id="chat-status-text"></span>
+                <button id="chat-timestamp-btn" class="chat-header-btn" title="Toggle timestamps" aria-label="Toggle timestamps"><span data-icon="clock" data-size="14"></span></button>
+                <button id="chat-filter-btn" class="chat-header-btn" title="Chat Filters" aria-label="Chat filters" aria-expanded="false" aria-controls="chat-filter-panel"><span data-icon="filter" data-size="14"></span></button>
+                <button id="chat-export-btn" class="chat-header-btn" title="Export Chat Log" aria-label="Export chat log" aria-expanded="false" aria-controls="chat-export-menu"><span data-icon="download" data-size="14"></span></button>
+                <button id="chat-userlist-btn" class="chat-header-btn" title="Chat Users" aria-label="Chat users" aria-expanded="false" aria-controls="chat-userlist-panel"><span data-icon="users" data-size="14"></span> <span id="chat-userlist-count">0</span></button>
+                <button id="chat-mod-btn" class="chat-header-btn hidden" title="Chat Controls" aria-label="Chat moderation controls" aria-expanded="false" aria-controls="chat-mod-panel"><span data-icon="shield" data-size="14"></span> Mod</button>
+              </div>
+              <div id="chat-filter-panel" class="hidden chat-filter-panel">
+                <label class="filter-row">
+                  <input type="checkbox" id="chat-filter-sub"> Sub-only
+                </label>
+                <label class="filter-row">
+                  <input type="checkbox" id="chat-filter-mod"> Mod-only
+                </label>
+                <label class="filter-row">
+                  <input type="checkbox" id="chat-filter-spam" checked> Hide spam/caps
+                </label>
+                <div class="mt-1">
+                  <input id="chat-blocklist-input" type="text" placeholder="Add blocked word…" class="chat-filter-input" aria-label="Add blocked word">
+                </div>
+              </div>
+              <div id="chat-userlist-panel" class="hidden chat-userlist-panel">
+                <input id="chat-userlist-search" type="text" placeholder="Search users…" class="userlist-search" aria-label="Search chat users">
+                <div id="chat-userlist-items" class="userlist-items"></div>
+              </div>
+              <div id="chat-mod-panel" class="hidden chat-mod-panel">
+                <div class="mod-panel-hint">Broadcaster controls (Twitch only)</div>
+                <label class="mod-row">
+                  <input type="checkbox" id="mod-emote-only"> Emote-only mode
+                </label>
+                <label class="mod-row">
+                  <input type="checkbox" id="mod-slow"> Slow mode
+                  <select id="mod-slow-wait" class="mod-select">
+                    <option value="10">10s</option>
+                    <option value="30" selected>30s</option>
+                    <option value="60">60s</option>
+                    <option value="120">2m</option>
+                  </select>
+                </label>
+              </div>
+              <div id="chat-export-menu" class="hidden chat-export-menu" role="menu" tabindex="-1">
+                <div class="ctx-item" id="chat-export-json" role="menuitem" tabindex="-1">Export as JSON</div>
+                <div class="ctx-item" id="chat-export-txt" role="menuitem" tabindex="-1">Export as TXT</div>
+              </div>
+              <div id="chat-messages">
+                <div id="chat-shadow-top"></div>
+              </div>
+              <div id="chat-new-messages"><span data-icon="arrow-down" data-size="16"></span> New messages</div>
+              <div id="chat-reply-bar">
+                <span>Replying to</span>
+                <span class="reply-nick" id="chat-reply-nick"></span>
+                <span class="reply-body" id="chat-reply-body"></span>
+                <button class="reply-close" id="chat-reply-close" aria-label="Cancel reply"><span data-icon="close" data-size="14"></span></button>
+              </div>
+              <div id="emote-picker" class="hidden emote-picker">
+                <input id="emote-search" type="text" placeholder="Search emotes…" class="emote-search" aria-label="Search emotes">
+                <div id="emote-grid" class="emote-grid"></div>
+              </div>
+              <div id="chat-input-area">
+                <button id="emote-picker-btn" class="emote-picker-btn" title="Emotes" aria-label="Open emote picker" aria-expanded="false" aria-controls="emote-picker"><span data-icon="smile" data-size="16"></span></button>
+                <input id="chat-input" type="text" placeholder="Send a message..." maxlength="500" disabled aria-label="Chat message" />
+                <button id="chat-send-btn" disabled>Send</button>
+              </div>
             </div>
           </div>
         </div>
@@ -326,7 +352,7 @@
       <input type="range" id="seek-bar" min="0" max="1000" value="0" step="1" aria-label="VOD seek">
       <span id="seek-tooltip" class="hidden"></span>
     </div>
-    <div class="bar-group bar-group--playback">
+    <div class="bar-group bar-group--left">
       <select id="quality-select" aria-label="Stream quality">
         <option value="best">Best</option>
         <option value="1080p60">1080p60</option>
@@ -335,24 +361,24 @@
         <option value="360p">360p</option>
         <option value="audio_only">Audio only</option>
       </select>
-      <button id="watch-btn"><span data-icon="play" data-size="16"></span> Watch</button>
+      <button id="watch-btn"><span data-icon="play" data-size="16"></span> <span class="btn-label">Watch</span></button>
       <button id="stop-player-btn" class="hidden" title="Stop playback" aria-label="Stop"><span data-icon="stop" data-size="16"></span></button>
       <button id="watch-external-btn" title="Open in External Player" aria-label="Open in External Player"><span data-icon="external-link" data-size="16"></span></button>
+      <div class="bar-group bar-group--audio hidden" id="volume-group">
+        <button class="bar-btn" id="mute-btn" title="Mute/Unmute (M)" aria-label="Mute/Unmute"><span data-icon="volume" data-size="16"></span></button>
+        <input type="range" id="volume-slider" min="0" max="100" value="100" step="1" aria-label="Volume">
+      </div>
     </div>
-    <div class="bar-group bar-group--audio hidden" id="volume-group">
-      <button class="bar-btn" id="mute-btn" title="Mute/Unmute (M)" aria-label="Mute/Unmute"><span data-icon="volume" data-size="16"></span></button>
-      <input type="range" id="volume-slider" min="0" max="100" value="100" step="1" aria-label="Volume">
-    </div>
-    <div class="bar-group bar-group--status">
+    <div class="bar-group bar-group--center">
       <span id="live-dot"><span data-icon="live-dot" data-size="12"></span></span>
       <span id="record-dot" class="hidden record-dot"><span data-icon="record" data-size="10"></span></span>
       <span id="status-text"></span>
-      <span id="total-viewers"></span>
-      <span id="updated-time"></span>
+      <span id="total-viewers" class="btn-label"></span>
+      <span id="updated-time" class="btn-label"></span>
     </div>
-    <div class="bar-group bar-group--view">
+    <div class="bar-group bar-group--right">
       <button class="bar-btn" id="browser-btn" title="Open in browser" aria-label="Open in Browser"><span data-icon="browser" data-size="16"></span></button>
-      <button class="bar-btn" id="refresh-btn" title="Refresh (R)" aria-label="Refresh"><span data-icon="refresh" data-size="16"></span></button>
+      <button class="bar-btn" id="refresh-btn" title="Refresh (R)" aria-label="Refresh streams"><span data-icon="refresh" data-size="16"></span></button>
       <button class="bar-btn" id="mini-mode-btn" title="Mini mode" aria-label="Toggle mini mode"><span data-icon="minimize" data-size="16"></span></button>
       <button class="bar-btn" id="settings-btn" title="Settings (&#8984;,)" aria-label="Settings"><span data-icon="settings" data-size="16"></span></button>
     </div>
@@ -371,7 +397,15 @@
   <div class="ctx-separator"></div>
   <div class="ctx-item" data-action="favorite" role="menuitem" tabindex="-1"><span data-icon="star" data-size="14"></span> Add to Favorites</div>
   <div class="ctx-item" data-action="pin" role="menuitem" tabindex="-1"><span data-icon="pin" data-size="14"></span> Pin to top</div>
+  <div class="ctx-item" data-action="create-group" role="menuitem" tabindex="-1"><span data-icon="folder-plus" data-size="14"></span> Create group</div>
+  <div class="ctx-item" data-action="move-to-group" role="menuitem" tabindex="-1"><span data-icon="folder-move" data-size="14"></span> Move to group</div>
   <div class="ctx-item" data-action="remove" role="menuitem" tabindex="-1"><span data-icon="close" data-size="14"></span> Remove</div>
+</div>
+
+<!-- Group context menu -->
+<div id="group-context-menu" role="menu" tabindex="-1" aria-label="Group actions">
+  <div class="ctx-item" data-action="rename-group" role="menuitem" tabindex="-1"><span data-icon="edit" data-size="14"></span> Rename group</div>
+  <div class="ctx-item" data-action="delete-group" role="menuitem" tabindex="-1"><span data-icon="trash" data-size="14"></span> Delete group</div>
 </div>
 
 <!-- Command Palette -->
@@ -393,21 +427,21 @@
 </div>
 
 <!-- Settings overlay -->
-<div id="settings-overlay" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+<div id="settings-overlay" role="dialog" aria-modal="true" aria-labelledby="settings-title" aria-hidden="true" inert>
   <div id="settings-modal">
     <button id="close-settings" aria-label="Close settings"><span data-icon="close" data-size="12"></span></button>
-    <h2 id="settings-title"><span data-icon="settings" data-size="16" style="vertical-align:-2px;margin-right:6px;"></span>TwitchX Settings</h2>
+    <h2 id="settings-title"><span data-icon="settings" data-size="16" class="settings-title-icon"></span>TwitchX Settings</h2>
 
     <div class="settings-tabs" role="tablist" aria-label="Settings sections">
-      <button class="settings-tab active" data-tab="accounts" role="tab" aria-selected="true" aria-controls="settings-panel-accounts">Accounts</button>
-      <button class="settings-tab" data-tab="player" role="tab" aria-selected="false" aria-controls="settings-panel-player" tabindex="-1">Player</button>
-      <button class="settings-tab" data-tab="chat" role="tab" aria-selected="false" aria-controls="settings-panel-chat" tabindex="-1">Chat</button>
-      <button class="settings-tab" data-tab="appearance" role="tab" aria-selected="false" aria-controls="settings-panel-appearance" tabindex="-1">Appearance</button>
-      <button class="settings-tab" data-tab="advanced" role="tab" aria-selected="false" aria-controls="settings-panel-advanced" tabindex="-1">Advanced</button>
+      <button id="settings-tab-accounts" class="settings-tab active" data-tab="accounts" role="tab" aria-selected="true" aria-controls="settings-panel-accounts">Accounts</button>
+      <button id="settings-tab-player" class="settings-tab" data-tab="player" role="tab" aria-selected="false" aria-controls="settings-panel-player" tabindex="-1">Player</button>
+      <button id="settings-tab-chat" class="settings-tab" data-tab="chat" role="tab" aria-selected="false" aria-controls="settings-panel-chat" tabindex="-1">Chat</button>
+      <button id="settings-tab-appearance" class="settings-tab" data-tab="appearance" role="tab" aria-selected="false" aria-controls="settings-panel-appearance" tabindex="-1">Appearance</button>
+      <button id="settings-tab-advanced" class="settings-tab" data-tab="advanced" role="tab" aria-selected="false" aria-controls="settings-panel-advanced" tabindex="-1">Advanced</button>
     </div>
 
     <!-- Accounts panel: Twitch + Kick + YouTube -->
-    <div class="settings-panel active" id="settings-panel-accounts" role="tabpanel">
+    <div class="settings-panel active" id="settings-panel-accounts" role="tabpanel" aria-labelledby="settings-tab-accounts">
 
       <!-- Twitch -->
       <div class="platform-section">
@@ -514,7 +548,7 @@
           <a id="yt-logout-btn" class="logout-link" role="button" tabindex="0">Logout</a>
         </div>
         <div class="platform-actions">
-          <button id="yt-test-btn" class="test-conn-btn" style="margin-left: auto;">Test connection</button>
+          <button id="yt-test-btn" class="test-conn-btn ml-auto">Test connection</button>
         </div>
         <div id="yt-test-result" class="hidden test-result"></div>
       </div>
@@ -522,7 +556,7 @@
     </div>
 
     <!-- Player panel -->
-    <div class="settings-panel" id="settings-panel-player" role="tabpanel">
+    <div class="settings-panel" id="settings-panel-player" role="tabpanel" aria-labelledby="settings-tab-player">
       <div class="setting-group">
         <label for="s-external-player">External Player</label>
         <select id="s-external-player">
@@ -556,7 +590,7 @@
     </div>
 
     <!-- Chat panel -->
-    <div class="settings-panel" id="settings-panel-chat" role="tabpanel">
+    <div class="settings-panel" id="settings-panel-chat" role="tabpanel" aria-labelledby="settings-tab-chat">
       <div class="setting-group">
         <div class="setting-label">Picture-in-Picture</div>
         <label class="checkbox-row">
@@ -566,7 +600,7 @@
     </div>
 
     <!-- Appearance panel -->
-    <div class="settings-panel" id="settings-panel-appearance" role="tabpanel">
+    <div class="settings-panel" id="settings-panel-appearance" role="tabpanel" aria-labelledby="settings-tab-appearance">
       <div class="setting-group">
         <div class="setting-label" id="theme-label">Theme</div>
         <div class="theme-options" role="radiogroup" aria-labelledby="theme-label">
@@ -591,7 +625,7 @@
     </div>
 
     <!-- Advanced panel: intervals + hotkeys + statistics -->
-    <div class="settings-panel" id="settings-panel-advanced" role="tabpanel">
+    <div class="settings-panel" id="settings-panel-advanced" role="tabpanel" aria-labelledby="settings-tab-advanced">
       <div class="setting-group">
         <label for="s-interval">Refresh Interval</label>
         <select id="s-interval">
@@ -670,6 +704,7 @@
 <!-- JS modules (в порядке зависимостей) -->
 <script src="js/state.js"></script>
 <script src="js/utils.js"></script>
+<script src="js/view-transitions.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/api-bridge.js"></script>
 <script src="js/render.js"></script>

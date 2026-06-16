@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, ClassVar
 
 
 @dataclass
@@ -82,6 +82,7 @@ class UserInfo:
 class PlatformClient(ABC):
     """Abstract interface for a streaming platform client."""
 
+    PLATFORM_ID: ClassVar[str]
     platform_id: str
     platform_name: str
 

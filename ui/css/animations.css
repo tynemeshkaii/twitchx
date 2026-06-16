@@ -1,0 +1,153 @@
+/* ── TwitchX Motion System ──────────────────────────────── */
+
+/* View transitions */
+@keyframes view-exit {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+@keyframes view-enter-from-bottom {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes view-enter-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(24px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes view-enter-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-24px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+/* Card entrance */
+@keyframes card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Toast */
+@keyframes toast-enter {
+  from {
+    opacity: 0;
+    transform: translateX(100%) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes toast-exit {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%) scale(0.96);
+  }
+}
+
+@keyframes toast-progress {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+/* Live dot pulse */
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(1.15); }
+}
+
+/* Skeleton shimmer */
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+/* Modal scale in */
+@keyframes modal-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Onboarding spotlight pulse */
+@keyframes spotlight-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-muted); }
+  50% { box-shadow: 0 0 0 8px transparent; }
+}
+
+/* App mesh gradient drift */
+@keyframes mesh-drift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* Utility animation classes */
+.anim-view-exit {
+  animation: view-exit var(--view-exit-duration) var(--view-exit-ease) forwards;
+}
+
+.anim-view-enter-bottom {
+  animation: view-enter-from-bottom var(--view-enter-duration) var(--view-enter-ease) forwards;
+}
+
+.anim-view-enter-right {
+  animation: view-enter-from-right var(--view-enter-duration) var(--view-enter-ease) forwards;
+}
+
+.anim-view-enter-left {
+  animation: view-enter-from-left var(--view-enter-duration) var(--view-enter-ease) forwards;
+}
+
+.anim-modal-enter {
+  animation: modal-enter var(--duration-normal) var(--ease-spring) forwards;
+}
+
+.anim-toast-enter {
+  animation: toast-enter var(--duration-normal) var(--ease-spring) forwards;
+}
+
+.anim-toast-exit {
+  animation: toast-exit var(--duration-fast) var(--ease-default) forwards;
+}
+
+/* Reduced motion overrides are handled in reset.css */

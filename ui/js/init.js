@@ -77,14 +77,28 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   })();
 
-  // Restore saved grid mode
+  // Restore saved grid density mode
   (function() {
+    var validModes = ['grid', 'comfortable', 'compact', 'list'];
     var saved = localStorage.getItem('twitchx.grid_mode') || 'grid';
+    if (validModes.indexOf(saved) === -1) saved = 'grid';
     TwitchX.state.gridMode = saved;
     var btn = document.getElementById('grid-toggle-btn');
     if (btn) {
-      btn.title = saved === 'list' ? 'Switch to grid view' : 'Switch to list view';
-      TwitchX.setIconOnly(btn, saved === 'list' ? 'list-toggle' : 'grid-toggle', 16);
+      var iconMap = {
+        grid: 'grid-toggle',
+        comfortable: 'grid-toggle',
+        compact: 'compact-toggle',
+        list: 'list-toggle'
+      };
+      var titleMap = {
+        grid: 'Switch to comfortable view',
+        comfortable: 'Switch to compact view',
+        compact: 'Switch to list view',
+        list: 'Switch to grid view'
+      };
+      btn.title = titleMap[saved];
+      TwitchX.setIconOnly(btn, iconMap[saved], 16);
     }
   })();
 
@@ -143,18 +157,46 @@ TwitchX._bindSidebarEvents = function() {
     TwitchX.renderSidebar();
   });
 
-  // Platform tab switching
+  function setPlatformFilter(platform) {
+    TwitchX.state.activePlatformFilter = platform;
+    TwitchX.renderGrid();
+    TwitchX.renderSidebar();
+    // Sync sidebar tabs and toolbar chips
+    document.querySelectorAll('.platform-tab').forEach(function(tab) {
+      var active = tab.dataset.platform === platform;
+      tab.classList.toggle('active', active);
+      tab.setAttribute('aria-selected', String(active));
+      tab.tabIndex = active ? 0 : -1;
+    });
+    document.querySelectorAll('.platform-chip').forEach(function(chip) {
+      var active = chip.dataset.platform === platform;
+      chip.classList.toggle('active', active);
+      chip.setAttribute('aria-selected', String(active));
+      chip.tabIndex = active ? 0 : -1;
+    });
+  }
+
+  // Platform tab switching (sidebar)
   document.querySelectorAll('.platform-tab').forEach(function(btn) {
     btn.addEventListener('click', function() {
-      TwitchX.setActiveTab(Array.from(document.querySelectorAll('.platform-tab')), btn);
-      TwitchX.state.activePlatformFilter = btn.dataset.platform;
-      TwitchX.renderGrid();
-      TwitchX.renderSidebar();
+      setPlatformFilter(btn.dataset.platform);
     });
     btn.addEventListener('keydown', function(e) {
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
       e.preventDefault();
       TwitchX.focusAdjacentTab(Array.from(document.querySelectorAll('.platform-tab')), btn, e.key === 'ArrowRight' ? 1 : -1);
+    });
+  });
+
+  // Platform chip switching (toolbar)
+  document.querySelectorAll('.platform-chip').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      setPlatformFilter(btn.dataset.platform);
+    });
+    btn.addEventListener('keydown', function(e) {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      TwitchX.focusAdjacentTab(Array.from(document.querySelectorAll('.platform-chip')), btn, e.key === 'ArrowRight' ? 1 : -1);
     });
   });
 
@@ -193,12 +235,29 @@ TwitchX._bindToolbarEvents = function() {
   });
   const browseNavBtn = document.getElementById('browse-nav-btn');
   if (browseNavBtn) browseNavBtn.addEventListener('click', TwitchX.showBrowseView);
+  const toolbarRefreshBtn = document.getElementById('toolbar-refresh-btn');
+  if (toolbarRefreshBtn) toolbarRefreshBtn.addEventListener('click', TwitchX.doRefresh);
   var gridToggleBtn = document.getElementById('grid-toggle-btn');
+  var DENSITY_MODES = ['grid', 'comfortable', 'compact', 'list'];
+  var DENSITY_ICONS = {
+    grid: 'grid-toggle',
+    comfortable: 'grid-toggle',
+    compact: 'compact-toggle',
+    list: 'list-toggle'
+  };
+  var DENSITY_TITLES = {
+    grid: 'Switch to comfortable view',
+    comfortable: 'Switch to compact view',
+    compact: 'Switch to list view',
+    list: 'Switch to grid view'
+  };
   if (gridToggleBtn) gridToggleBtn.addEventListener('click', function() {
-    TwitchX.state.gridMode = TwitchX.state.gridMode === 'grid' ? 'list' : 'grid';
-    localStorage.setItem('twitchx.grid_mode', TwitchX.state.gridMode);
-    gridToggleBtn.title = TwitchX.state.gridMode === 'list' ? 'Switch to grid view' : 'Switch to list view';
-    TwitchX.setIconOnly(gridToggleBtn, TwitchX.state.gridMode === 'list' ? 'list-toggle' : 'grid-toggle', 16);
+    var idx = DENSITY_MODES.indexOf(TwitchX.state.gridMode);
+    var next = DENSITY_MODES[(idx + 1) % DENSITY_MODES.length];
+    TwitchX.state.gridMode = next;
+    localStorage.setItem('twitchx.grid_mode', next);
+    gridToggleBtn.title = DENSITY_TITLES[next];
+    TwitchX.setIconOnly(gridToggleBtn, DENSITY_ICONS[next], 16);
     TwitchX.renderGrid();
   });
 };
@@ -519,7 +578,7 @@ TwitchX._bindChatEvents = function() {
       const rect = container.getBoundingClientRect();
       let newWidth = rect.right - e.clientX;
       newWidth = Math.max(250, Math.min(500, newWidth));
-      panel.style.width = newWidth + 'px';
+      panel.style.setProperty('--chat-width', newWidth + 'px');
     });
 
     document.addEventListener('mouseup', function() {
@@ -527,7 +586,8 @@ TwitchX._bindChatEvents = function() {
       dragging = false;
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
-      const w = parseInt(panel.style.width) || 340;
+      const computed = parseInt(getComputedStyle(panel).width, 10);
+      const w = isNaN(computed) ? 340 : computed;
       if (TwitchX.api) TwitchX.api.save_chat_width(w);
     });
   })();
@@ -633,8 +693,8 @@ TwitchX._bindSettingsEvents = function() {
     if (!cid || !cs) {
       const fb = document.getElementById('yt-test-result');
       fb.classList.remove('hidden');
-      fb.style.color = 'var(--error-red)';
       fb.textContent = 'OAuth Client ID and Secret are required to log in — enter them above first.';
+      TwitchX.setFeedbackClass(fb, 'error');
       return;
     }
     if (TwitchX.api) TwitchX.api.youtube_login(cid, cs);
@@ -655,7 +715,7 @@ TwitchX._bindSettingsEvents = function() {
     const tr = document.getElementById('yt-test-result');
     tr.classList.remove('hidden');
     tr.textContent = 'Testing...';
-    tr.style.color = 'var(--text-muted)';
+    TwitchX.setFeedbackClass(tr, 'muted');
     document.getElementById('yt-test-btn').disabled = true;
     TwitchX.api.youtube_test_connection();
   });
@@ -716,6 +776,28 @@ TwitchX._bindContextMenuEvents = function() {
     }
     else if (action === 'favorite') { if (TwitchX.api) TwitchX.api.add_channel(TwitchX.ctxChannel, ctxPlat); }
     else if (action === 'remove') { if (TwitchX.api) TwitchX.api.remove_channel(TwitchX.ctxChannel, ctxPlat); }
+    else if (action === 'create-group') {
+      const name = window.prompt('Name your new group:');
+      if (name && TwitchX.createFavoriteGroup) {
+        TwitchX.createFavoriteGroup(name.trim());
+        if (TwitchX.moveFavoriteToGroup) TwitchX.moveFavoriteToGroup(TwitchX.ctxChannelKey, name.trim());
+      }
+    }
+    else if (action === 'move-to-group') {
+      const existing = [];
+      TwitchX.getFavoriteEntries().forEach(function(e) {
+        const g = TwitchX.getFavoriteGroup(e.login, e.platform);
+        if (g && existing.indexOf(g) === -1) existing.push(g);
+      });
+      const name = window.prompt(
+        existing.length
+          ? 'Group name (existing: ' + existing.join(', ') + ')'
+          : 'Group name'
+      );
+      if (name && TwitchX.moveFavoriteToGroup) {
+        TwitchX.moveFavoriteToGroup(TwitchX.ctxChannelKey, name.trim());
+      }
+    }
     else if (action === 'pin') {
       var pinItem = contextMenu.querySelector('[data-action="pin"]');
       var pinPlat = pinItem ? (pinItem.dataset.pinPlatform || 'twitch') : 'twitch';
@@ -769,6 +851,27 @@ TwitchX._bindContextMenuEvents = function() {
     if (menu && menu.classList.contains('menu-visible') && !menu.contains(e.target)) {
       TwitchX.closeContextMenu();
     }
+    const groupMenu = document.getElementById('group-context-menu');
+    if (groupMenu && groupMenu.classList.contains('menu-visible') && !groupMenu.contains(e.target)) {
+      TwitchX.closeGroupContextMenu();
+    }
+  });
+
+  const groupContextMenu = document.getElementById('group-context-menu');
+  if (groupContextMenu) groupContextMenu.addEventListener('click', function(e) {
+    const target = e.target.closest('[data-action]');
+    const action = target ? target.dataset.action : null;
+    const groupName = TwitchX._ctxGroupName;
+    if (!action || !groupName) return;
+    if (action === 'rename-group') {
+      const newName = window.prompt('Rename group:', groupName);
+      if (newName && TwitchX.renameFavoriteGroup) TwitchX.renameFavoriteGroup(groupName, newName.trim());
+    } else if (action === 'delete-group') {
+      if (window.confirm('Delete group "' + groupName + '"? Channels will return to Online/Offline.')) {
+        if (TwitchX.deleteFavoriteGroup) TwitchX.deleteFavoriteGroup(groupName);
+      }
+    }
+    TwitchX.closeGroupContextMenu();
   });
 };
 
@@ -778,10 +881,19 @@ TwitchX._bindKeyboardEvents = function() {
 
 TwitchX.toggleMiniMode = function() {
   var isMini = document.getElementById('app').classList.toggle('mini');
+  var content = document.getElementById('content');
+  if (content) {
+    if (isMini) {
+      content.setAttribute('inert', '');
+    } else {
+      content.removeAttribute('inert');
+    }
+  }
   localStorage.setItem('twitchx.mini', isMini ? '1' : '0');
   var btn = document.getElementById('mini-mode-btn');
   if (btn) {
     btn.title = isMini ? 'Exit mini mode' : 'Mini mode';
+    btn.setAttribute('aria-label', isMini ? 'Exit mini mode' : 'Mini mode');
     TwitchX.setIconOnly(btn, isMini ? 'mini-exit' : 'minimize', 16);
   }
 };
@@ -790,9 +902,12 @@ TwitchX.applyMiniMode = function() {
   var saved = localStorage.getItem('twitchx.mini') === '1';
   if (saved) {
     document.getElementById('app').classList.add('mini');
+    var content = document.getElementById('content');
+    if (content) content.setAttribute('inert', '');
     var btn = document.getElementById('mini-mode-btn');
     if (btn) {
       btn.title = 'Exit mini mode';
+      btn.setAttribute('aria-label', 'Exit mini mode');
       TwitchX.setIconOnly(btn, 'mini-exit', 16);
     }
   }
@@ -966,6 +1081,20 @@ TwitchX._initMultistreamSlots = function() {
   for (let i = 0; i < 4; i++) {
     grid.appendChild(TwitchX._createMultiSlot(i));
   }
+  const select = document.getElementById('ms-preset-select');
+  if (select) {
+    select.replaceChildren();
+    ['grid', 'focus-left', 'rows', 'columns'].forEach(function(p) {
+      const opt = document.createElement('option');
+      opt.value = p;
+      opt.textContent = { grid: 'Grid', 'focus-left': 'Focus', rows: 'Rows', columns: 'Columns' }[p];
+      select.appendChild(opt);
+    });
+    select.addEventListener('change', function() {
+      if (TwitchX.setMultistreamPreset) TwitchX.setMultistreamPreset(select.value);
+    });
+  }
+  if (TwitchX._loadMultistreamPresets) TwitchX._loadMultistreamPresets();
   if (TwitchX._updateMultiGridLayout) TwitchX._updateMultiGridLayout();
 };
 
