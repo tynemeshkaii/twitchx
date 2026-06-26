@@ -347,17 +347,10 @@ select {
   text-align: center;
 }
 .hotkey-capturing {
-  background: var(--accent) !important;
-  color: var(--text-on-accent) !important;
-  border: 1px solid var(--accent) !important;
-  cursor: pointer !important;
-  animation: pulse 1.2s ease-in-out infinite !important;
+  animation: pulse 1.2s ease-in-out infinite;
 }
 .hotkey-idle {
-  background: var(--bg-elevated) !important;
-  color: var(--text-primary) !important;
-  border: 1px solid var(--border-default) !important;
-  cursor: pointer !important;
+  cursor: pointer;
 }
 .reset-btn {
   min-height: 32px;

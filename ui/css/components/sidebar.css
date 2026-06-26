@@ -9,10 +9,6 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   letter-spacing: -0.01em;
 }
-.platform-user-name .platform-label {
-  font-size: var(--font-xs); font-weight: 500; color: var(--text-muted);
-  margin-left: 4px;
-}
 .platform-user-actions { display: flex; gap: var(--space-8); margin-top: 1px; }
 .platform-user-actions a {
   font-size: var(--font-sm); color: var(--text-muted); cursor: pointer;
@@ -73,6 +69,7 @@
               border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
 }
 .platform-tab:hover { color: var(--text-secondary); background: var(--hover-bg); }
+.platform-tab:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .platform-tab.active {
   color: var(--text-primary);
   font-weight: 600;
@@ -127,6 +124,13 @@
 .sidebar-collapse-btn:hover {
   background: var(--hover-bg);
   color: var(--text-primary);
+}
+.sidebar-collapse-btn:active {
+  background: var(--pressed-bg);
+}
+.sidebar-collapse-btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 /* ── Sidebar collapsed mode rail-specific overrides ─────── */
@@ -308,7 +312,7 @@
   display: none;
   min-width: 16px; height: 16px;
   padding: 0 4px; border-radius: var(--radius-full);
-  background: var(--live-red); color: white;
+  background: var(--live-red); color: var(--text-inverse);
   font-size: var(--font-2xs); font-weight: 700; line-height: 16px;
   text-align: center; margin-left: auto;
 }

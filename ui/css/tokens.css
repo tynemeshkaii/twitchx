@@ -6,10 +6,8 @@
   --accent-l: 52%;
 
   --accent:       hsl(var(--accent-h) var(--accent-s) var(--accent-l));
-  --accent-hover: hsl(var(--accent-h) var(--accent-s) calc(var(--accent-l) - 5%));
   --accent-dim:   hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.10);
   --accent-muted: hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.25);
-  --accent-text:  var(--accent);
 
   /* ── Focus system (accent-derived) ───────────────────── */
   --focus-ring:       hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.40);
@@ -121,11 +119,6 @@
     linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, transparent 120px);
   --glass-content:
     radial-gradient(circle at 36% -18%, var(--accent-dim), transparent 34%);
-
-  /* ── Elevation & modal surfaces ───────────────────────── */
-  --elevation-1: 0 1px 4px rgba(0, 0, 0, 0.08);
-  --elevation-2: 0 4px 16px rgba(0, 0, 0, 0.12);
-  --elevation-3: 0 12px 40px rgba(0, 0, 0, 0.18);
 
   /* ── Subtle app noise texture (data-uri, 2% opacity) ───── */
   --app-noise:

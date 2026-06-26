@@ -506,14 +506,9 @@ function saveSettings() {
   TwitchX.state.pipEnabled = pipEnabled;
   const pipBtn = document.getElementById('pip-player-btn');
   if (pipBtn) pipBtn.classList.toggle('hidden', !pipEnabled);
+  _setFeedback('Saving...', '');
   if (TwitchX.api) TwitchX.api.save_settings(JSON.stringify(data));
   TwitchX._settingsSnapshot = JSON.stringify(_readAllFormValues());
-  var fb = document.getElementById('settings-feedback');
-  if (fb) {
-    TwitchX.setIconText(fb, 'check', 14, 'Settings saved');
-    fb.className = 'success';
-  }
-  setTimeout(function() { if (fb && fb.className === 'success') _setFeedback(''); }, 3000);
 }
 
 TwitchX.ACCENT_PALETTE = ACCENT_PALETTE;

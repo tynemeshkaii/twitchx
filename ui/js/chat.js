@@ -132,7 +132,7 @@ function renderChatEmotes(parent, text, emotes) {
       parent.appendChild(document.createTextNode(text.slice(lastIdx, emote.start)));
     }
     var img = document.createElement('img');
-    var emoteCode = emote.code;
+    let emoteCode = emote.code;
     img.className = 'emote';
     img.src = emote.url;
     img.alt = emoteCode;

@@ -269,6 +269,8 @@ function showChannelView(login, platform, source) {
   TwitchX.channelViewSource = source || 'grid';
   TwitchX.channelProfile = null;
   resetChannelMediaPanels();
+  var channelBody = document.getElementById('channel-body');
+  if (channelBody) channelBody.scrollTop = 0;
 
   if (TwitchX.channelViewSource !== 'browse') {
     TwitchX.setChromeVisible(false);
@@ -308,6 +310,16 @@ function showChannelView(login, platform, source) {
   });
 
   if (TwitchX.api) TwitchX.api.get_channel_profile(login, platform);
+
+  if (TwitchX._channelProfileTimer) clearTimeout(TwitchX._channelProfileTimer);
+  TwitchX._channelProfileTimer = setTimeout(function() {
+    var loading = document.getElementById('channel-loading');
+    if (loading && !loading.classList.contains('hidden')) {
+      loading.classList.add('hidden');
+      document.getElementById('channel-profile-card').classList.remove('fade-transparent');
+      TwitchX.showToast('Failed to load channel profile', 'error');
+    }
+  }, 15000);
 }
 
 function hideChannelView() {

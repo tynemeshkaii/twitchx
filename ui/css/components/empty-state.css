@@ -1,13 +1,13 @@
 
 #empty-state {
   display: none; flex-direction: column; align-items: center;
-  justify-content: center; flex: 1; padding: 40px;
-  text-align: center;
+  justify-content: center; flex: 1; padding: var(--space-40);
+  text-align: center; overflow-y: auto;
   background: transparent;
-  opacity: 1;
+  opacity: 0;
   transition: opacity var(--duration-view) var(--ease-view);
 }
-#empty-state.visible { display: flex; }
+#empty-state.visible { display: flex; opacity: 1; }
 #empty-state.hidden { display: none !important; }
 #empty-state .empty-icon,
 .empty-illustration {
@@ -72,41 +72,6 @@
 .empty-action.secondary:hover {
   border-color: var(--border-strong);
   color: var(--text-primary);
-}
-
-.onboarding-card {
-  background: var(--bg-elevated); border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md); padding: var(--space-12) var(--space-16);
-  text-align: left; width: 280px; margin-top: var(--space-12);
-}
-.onboarding-card .step-num {
-  font-size: var(--font-xs); font-weight: 700; color: var(--accent);
-  margin-bottom: 3px; letter-spacing: 0.04em; text-transform: uppercase;
-}
-.onboarding-card .step-text {
-  font-size: var(--font-sm); color: var(--text-secondary); line-height: 1.4;
-}
-.onboarding-btn {
-  margin-top: 14px; padding: 9px 22px;
-  background: var(--btn-primary-bg);
-  color: var(--text-on-accent); border: none;
-  border-radius: var(--radius-md); font-size: var(--font-md); font-weight: 700;
-  cursor: pointer; font-family: inherit; letter-spacing: var(--tracking-snug);
-  box-shadow: var(--shadow-glow-accent);
-  transition: opacity var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
-}
-.onboarding-btn:hover { opacity: 0.9; box-shadow: var(--shadow-glow-accent); }
-
-/* ── Onboarding / first-run empty state ──────────────── */
-.onboarding-desc {
-  font-size: var(--font-md); color: var(--text-muted);
-  max-width: 280px; line-height: 1.5; margin: 6px auto;
-  text-align: center;
-}
-.onboarding-login-btns {
-  display: flex; flex-direction: column;
-  align-items: center; gap: 8px;
-  margin-top: 14px; width: 100%; max-width: 220px;
 }
 
 .browse-empty {

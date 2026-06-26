@@ -60,12 +60,12 @@
       <div id="profile-area">
         <button id="login-btn" class="login-btn">Login with Twitch</button>
         <div id="user-info" class="platform-user-info hidden">
-          <img id="user-avatar" class="platform-user-avatar" src="" alt="">
+          <img id="user-avatar" class="platform-user-avatar" src="" alt="User avatar">
           <div class="platform-user-details">
             <div id="user-display-name" class="platform-user-name"></div>
             <div class="platform-user-actions">
-              <a id="logout-link" role="button" tabindex="0">Logout</a>
-              <a id="import-link" role="button" tabindex="0">Import follows</a>
+              <button id="logout-link" class="logout-link" type="button">Logout</button>
+              <button id="import-link" class="logout-link" type="button">Import follows</button>
             </div>
           </div>
           <div class="platform-status-dots" aria-label="Connected platforms"></div>
@@ -77,7 +77,7 @@
           <div class="platform-user-details">
             <div id="kick-user-name" class="platform-user-name"></div>
             <div class="platform-user-actions">
-              <a id="kick-logout-link" role="button" tabindex="0">Logout</a>
+              <button id="kick-logout-link" class="logout-link" type="button">Logout</button>
             </div>
           </div>
           <div class="platform-status-dots" aria-label="Connected platforms"></div>
@@ -118,7 +118,7 @@
     </aside>
 
     <!-- Content -->
-    <div id="content">
+    <main id="content">
       <div id="toolbar">
         <div class="toolbar-group toolbar-group--left">
           <select id="sort-select" aria-label="Sort streams">
@@ -260,10 +260,10 @@
             </div>
           </div>
           <div id="player-content">
-            <video id="stream-video" autoplay controls playsinline></video>
-            <div id="player-loader" class="hidden"><div class="player-spinner"></div></div>
+            <video id="stream-video" autoplay controls playsinline aria-label="Live stream video"></video>
+            <div id="player-loader" class="hidden" role="status" aria-live="polite"><div class="player-spinner"></div></div>
             <div id="player-buffering" class="player-buffering buffering-hide"><div class="player-spinner"></div></div>
-            <div id="buffer-bar"><div id="buffer-loaded"></div><div id="buffer-position"></div></div>
+            <div id="buffer-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"><div id="buffer-loaded"></div><div id="buffer-position"></div></div>
             <div id="stats-overlay" class="hidden">
               <div class="stats-row"><span class="stats-key">Latency</span><span class="stats-val" id="so-latency">--</span></div>
               <div class="stats-row"><span class="stats-key">Buffer</span><span class="stats-val" id="so-buffer">--</span></div>
@@ -342,7 +342,7 @@
           </div>
         </div>
       </div>
-    </div>
+    </main>
   </div>
 
   <!-- Player bar -->
@@ -372,7 +372,7 @@
     <div class="bar-group bar-group--center">
       <span id="live-dot"><span data-icon="live-dot" data-size="12"></span></span>
       <span id="record-dot" class="hidden record-dot"><span data-icon="record" data-size="10"></span></span>
-      <span id="status-text"></span>
+      <span id="status-text" aria-live="polite"></span>
       <span id="total-viewers" class="btn-label"></span>
       <span id="updated-time" class="btn-label"></span>
     </div>
@@ -390,11 +390,11 @@
   <div class="ctx-item" data-action="watch" role="menuitem" tabindex="-1"><span data-icon="play" data-size="14"></span> Watch in App</div>
   <div class="ctx-item" data-action="multistream" role="menuitem" tabindex="-1"><span data-icon="grid-layout" data-size="14"></span> Add to Multi-stream</div>
   <div class="ctx-item" data-action="watch-external" role="menuitem" tabindex="-1"><span data-icon="external-link" data-size="14"></span> Open in External Player</div>
-  <div class="ctx-separator"></div>
-  <div class="ctx-item" data-action="browser" role="menuitem" tabindex="-1"><span data-icon="browser" data-size="14"></span> Open in Browser</div>
-  <div class="ctx-item" data-action="profile" role="menuitem" tabindex="-1"><span data-icon="user" data-size="14"></span> View Channel</div>
-  <div class="ctx-item" data-action="copy" role="menuitem" tabindex="-1"><span data-icon="copy" data-size="14"></span> Copy URL</div>
-  <div class="ctx-separator"></div>
+<div class="ctx-separator" role="separator"></div>
+  <div class="ctx-item" data-action="watch" role="menuitem" tabindex="-1"><span data-icon="play" data-size="14"></span> Watch in App</div>
+  <div class="ctx-item" data-action="multistream" role="menuitem" tabindex="-1"><span data-icon="grid-layout" data-size="14"></span> Add to Multi-stream</div>
+  <div class="ctx-item" data-action="watch-external" role="menuitem" tabindex="-1"><span data-icon="external-link" data-size="14"></span> Open in External Player</div>
+  <div class="ctx-separator" role="separator"></div>
   <div class="ctx-item" data-action="favorite" role="menuitem" tabindex="-1"><span data-icon="star" data-size="14"></span> Add to Favorites</div>
   <div class="ctx-item" data-action="pin" role="menuitem" tabindex="-1"><span data-icon="pin" data-size="14"></span> Pin to top</div>
   <div class="ctx-item" data-action="create-group" role="menuitem" tabindex="-1"><span data-icon="folder-plus" data-size="14"></span> Create group</div>
@@ -417,7 +417,7 @@
 </div>
 
 <!-- Sidebar tooltip -->
-<div id="sidebar-tooltip" class="hidden">
+<div id="sidebar-tooltip" class="hidden" role="tooltip">
   <img id="tooltip-thumb" alt="" class="tooltip-thumb">
   <div class="tooltip-info">
     <span id="tooltip-title" class="tooltip-title"></span>
@@ -545,7 +545,7 @@
           <div id="yt-display-name" class="setting-user-display mb-1"></div>
           <div id="yt-quota-display" class="setting-quota-display"></div>
           <button id="yt-import-btn" class="import-btn">Import Subscriptions</button>
-          <a id="yt-logout-btn" class="logout-link" role="button" tabindex="0">Logout</a>
+          <button id="yt-logout-btn" class="logout-link" type="button">Logout</button>
         </div>
         <div class="platform-actions">
           <button id="yt-test-btn" class="test-conn-btn ml-auto">Test connection</button>
@@ -699,7 +699,7 @@
 </div>
 
 <!-- Toast container -->
-<div id="toast-container"></div>
+<div id="toast-container" aria-live="polite" aria-atomic="true"></div>
 
 <!-- JS modules (в порядке зависимостей) -->
 <script src="js/state.js"></script>

@@ -145,12 +145,11 @@ function renderGrid() {
       if (card) grid.appendChild(card);
     });
   } else {
-    // Full rebuild using safe DOM methods
-    while (grid.firstChild) grid.removeChild(grid.firstChild);
+    const frag = document.createDocumentFragment();
     streams.forEach(function(s) {
-      const card = createStreamCard(s);
-      grid.appendChild(card);
+      frag.appendChild(createStreamCard(s));
     });
+    grid.replaceChildren(frag);
     // Request missing thumbnails
     streams.forEach(function(s) {
       const streamKey = TwitchX.channelKey(s.login, s.platform || 'twitch');
@@ -186,6 +185,10 @@ function createStreamCard(s) {
   img.alt = '';
   img.loading = 'lazy';
   img.decoding = 'async';
+  img.onerror = function() {
+    img.classList.add('hidden');
+    shimmer.classList.add('hidden');
+  };
   thumb.appendChild(img);
 
   const shimmer = document.createElement('div');

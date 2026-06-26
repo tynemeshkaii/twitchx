@@ -92,7 +92,7 @@
 .stream-card:hover .thumb-img { transform: scale(1.04); }
 .thumb-img.loaded { display: block; }
 
-@keyframes shimmer {
+@keyframes shimmer-card {
   0% { background-position: -400px 0; }
   100% { background-position: 400px 0; }
 }
@@ -103,7 +103,7 @@
     var(--bg-overlay) 50%,
     var(--bg-elevated) 75%);
   background-size: 400px 100%;
-  animation: shimmer 1.4s ease-in-out infinite;
+  animation: shimmer-card 1.4s ease-in-out infinite;
 }
 .thumb-img.loaded + .thumb-shimmer { display: none; }
 

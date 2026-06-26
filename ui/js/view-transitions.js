@@ -81,6 +81,17 @@ TwitchX.setChromeVisible = function(visible) {
 };
 
 TwitchX.switchView = function(targetId, direction) {
+  var tooltip = document.getElementById('sidebar-tooltip');
+  if (tooltip) { tooltip.classList.remove('visible'); tooltip.classList.add('hidden'); }
+  var dd = document.getElementById('search-dropdown');
+  if (dd) dd.classList.remove('visible');
+  var filterPanel = document.getElementById('chat-filter-panel');
+  if (filterPanel) filterPanel.classList.add('hidden');
+  var ctxMenu = document.getElementById('context-menu');
+  if (ctxMenu) ctxMenu.classList.remove('menu-visible');
+  var grpMenu = document.getElementById('group-context-menu');
+  if (grpMenu) grpMenu.classList.remove('menu-visible');
+
   const target = _getViewElement(targetId);
   if (!target) return;
 

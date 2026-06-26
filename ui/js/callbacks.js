@@ -134,6 +134,8 @@ window.onSearchResults = function(results) {
     const row = document.createElement('div');
     row.className = 'search-result';
     row.dataset.login = r.login;
+    row.dataset.key = TwitchX.channelKey(r.login, r.platform || 'twitch');
+    row.dataset.platform = r.platform || 'twitch';
     row.tabIndex = 0;
     row.setAttribute('role', 'option');
     row.setAttribute('aria-label', 'Add ' + (r.display_name || r.login) + ' on ' + TwitchX.platformLabel(r.platform || 'twitch'));
@@ -147,7 +149,7 @@ window.onSearchResults = function(results) {
     if (r.platform) {
       const badge = document.createElement('span');
       badge.className = 'platform-badge ' + r.platform;
-      badge.textContent = r.platform === 'kick' ? 'Kick' : r.platform === 'youtube' ? 'YouTube' : 'Twitch';
+      badge.textContent = r.platform === 'kick' ? 'K' : r.platform === 'youtube' ? 'YT' : 'T';
       name.appendChild(document.createTextNode(' '));
       name.appendChild(badge);
     }
@@ -339,7 +341,16 @@ window.onMultiSlotReady = function(data) {
     errEl.textContent = data.error;
     errEl.classList.remove('hidden');
     if (TwitchX._setMultiSlotState) TwitchX._setMultiSlotState(idx, 'error', 'Error');
+    if (TwitchX.multiState.slots[idx] && TwitchX.multiState.slots[idx]._loadTimer) {
+      clearTimeout(TwitchX.multiState.slots[idx]._loadTimer);
+      TwitchX.multiState.slots[idx]._loadTimer = null;
+    }
     return;
+  }
+
+  if (TwitchX.multiState.slots[idx] && TwitchX.multiState.slots[idx]._loadTimer) {
+    clearTimeout(TwitchX.multiState.slots[idx]._loadTimer);
+    TwitchX.multiState.slots[idx]._loadTimer = null;
   }
 
   const video = active.querySelector('.ms-video');
@@ -530,7 +541,12 @@ window.onMultiSlotReady = function(data) {
     container.appendChild(fragment);
 
     while (container.children.length > maxMsgs) {
+      var oldHeight = container.scrollHeight;
       container.removeChild(container.firstChild);
+      var newHeight = container.scrollHeight;
+      if (!TwitchX._getChatAutoScroll()) {
+        container.scrollTop -= (oldHeight - newHeight);
+      }
     }
 
     if (TwitchX._getChatAutoScroll()) {
@@ -723,7 +739,14 @@ window.onTestResult = function(data) {
 };
 
 window.onSettingsSaved = function() {
-  TwitchX.closeSettings();
+  var fb = document.getElementById('settings-feedback');
+  if (fb) {
+    TwitchX.setIconText(fb, 'check', 14, 'Settings saved');
+    fb.className = 'success';
+  }
+  setTimeout(function() {
+    TwitchX.closeSettings();
+  }, 600);
 };
 
 window.onKickLoginComplete = function(data) {
@@ -1127,6 +1150,10 @@ window.onBrowseTopStreams = function(payload) {
 };
 
 window.onChannelProfile = function(profile) {
+  if (TwitchX._channelProfileTimer) {
+    clearTimeout(TwitchX._channelProfileTimer);
+    TwitchX._channelProfileTimer = null;
+  }
   document.getElementById('channel-loading').classList.add('hidden');
 
   if (!profile) {

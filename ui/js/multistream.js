@@ -127,7 +127,16 @@ function openFirstEmptyMultiSlot(preferredIdx) {
 function closeMultistreamView() {
   TwitchX.stopMultiHealthMonitor();
   for (let i = 0; i < 4; i++) {
-    if (TwitchX.multiState.slots[i]) _clearMultiSlot(i);
+    if (TwitchX.multiState.slots[i]) {
+      if (TwitchX.multiState.slots[i]._loadTimer) {
+        clearTimeout(TwitchX.multiState.slots[i]._loadTimer);
+      }
+      var slotEl = _getMultiSlotEl(i);
+      var video = slotEl ? slotEl.querySelector('.ms-video') : null;
+      if (video) { video.pause(); video.removeAttribute('src'); video.load(); }
+      var activeEl = slotEl ? slotEl.querySelector('.ms-slot-active') : null;
+      if (activeEl) activeEl.classList.add('hidden');
+    }
   }
   if (TwitchX.api) TwitchX.api.stop_multi();
   TwitchX.multiState.slots = [null, null, null, null];
@@ -201,6 +210,8 @@ function addMultiSlot(idx, channel, platform, quality) {
   const slotEl = _getMultiSlotEl(idx);
   if (!slotEl) return;
   slotEl.dataset.platform = platform || 'twitch';
+  slotEl.dataset.login = channel;
+  slotEl.dataset.key = TwitchX.channelKey(channel, platform || 'twitch');
   slotEl.classList.remove('ms-add-form-open');
   slotEl.querySelector('.ms-slot-empty').classList.add('hidden');
   slotEl.querySelector('.ms-add-form').classList.add('hidden');
@@ -216,6 +227,17 @@ function addMultiSlot(idx, channel, platform, quality) {
   if (msVideo) msVideo.muted = true;
   _setMultiSlotState(idx, 'loading', 'Loading');
   if (TwitchX.api) TwitchX.api.add_multi_slot(idx, channel, platform, q);
+
+  TwitchX.multiState.slots[idx]._loadTimer = setTimeout(function() {
+    var slotEl = _getMultiSlotEl(idx);
+    if (slotEl && slotEl.classList.contains('ms-state-loading')) {
+      var loading = slotEl.querySelector('.ms-loading');
+      if (loading) loading.classList.add('hidden');
+      var errEl = slotEl.querySelector('.ms-error-msg');
+      if (errEl) { errEl.textContent = 'Stream timed out'; errEl.classList.remove('hidden'); }
+      _setMultiSlotState(idx, 'error', 'Timeout');
+    }
+  }, 30000);
 }
 
 function _swapMultiSlots(sourceIdx, targetIdx) {

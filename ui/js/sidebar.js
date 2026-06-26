@@ -292,6 +292,9 @@ function createSidebarItem(entry, streamMap) {
     avatar.src = TwitchX.state.avatars[key];
   }
   avatar.alt = '';
+  avatar.onerror = function() {
+    avatar.classList.add('is-empty');
+  };
   item.appendChild(avatar);
 
   const copy = document.createElement('div');
@@ -554,6 +557,9 @@ function createRailAvatar(entry, isLive, streamMap) {
   if (TwitchX.state.avatars[key]) {
     img.src = TwitchX.state.avatars[key];
   }
+  img.onerror = function() {
+    img.classList.add('is-empty');
+  };
   item.appendChild(img);
 
   if (isLive) {
@@ -731,13 +737,17 @@ function _bindSidebarDropZone(container) {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     const target = e.target.closest('.channel-item');
-    container.querySelectorAll('.channel-item').forEach(function(el) { el.classList.remove('drag-over'); });
-    if (target) target.classList.add('drag-over');
+    if (target && !target.classList.contains('drag-over')) {
+      container.querySelectorAll('.channel-item').forEach(function(el) { el.classList.remove('drag-over'); });
+      target.classList.add('drag-over');
+    }
   });
 
   container.addEventListener('dragleave', function(e) {
     const target = e.target.closest('.channel-item');
-    if (target) target.classList.remove('drag-over');
+    if (target && !target.contains(e.relatedTarget)) {
+      target.classList.remove('drag-over');
+    }
   });
 
   container.addEventListener('drop', function(e) {
@@ -897,7 +907,7 @@ function renderSidebar() {
     TwitchX.state.selectedChannelKey
   );
 
-  while (list.firstChild) list.removeChild(list.firstChild);
+  const sidebarFrag = document.createDocumentFragment();
 
   function updateFavoritesCountBadge(count) {
     const badge = document.getElementById('favorites-count-badge');
@@ -916,7 +926,7 @@ function renderSidebar() {
     Object.keys(groups.custom).reduce(function(sum, k) { return sum + groups.custom[k].length; }, 0);
   updateFavoritesCountBadge(totalCount);
 
-  list.appendChild(
+  sidebarFrag.appendChild(
     createSidebarSection(
       'online',
       'Online',
@@ -935,10 +945,10 @@ function renderSidebar() {
     if (!collapsed) {
       groupEl.appendChild(renderSidebarGroupBody(groupName, entries, groups.streamMap));
     }
-    list.appendChild(groupEl);
+    sidebarFrag.appendChild(groupEl);
   });
 
-  list.appendChild(
+  sidebarFrag.appendChild(
     createSidebarSection(
       'offline',
       'Offline',
@@ -947,6 +957,8 @@ function renderSidebar() {
       groups.streamMap
     )
   );
+
+  list.replaceChildren(sidebarFrag);
 
   requestAnimationFrame(function() {
     applySidebarLayout(groups);

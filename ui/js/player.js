@@ -327,10 +327,12 @@ function toggleVideoFullscreen() {
   const video = getPlayerVideo();
   if (!video) return;
 
-  // If currently in PiP, exit PiP first, then recurse to enter fullscreen
   if (isVideoPiP(video)) {
     togglePiP(video);
-    setTimeout(toggleVideoFullscreen, 50);
+    setTimeout(function() {
+      if (isVideoPiP(video)) return;
+      toggleVideoFullscreen();
+    }, 150);
     return;
   }
 
@@ -1073,8 +1075,10 @@ function _startFullscreenAutoHide() {
   function _showControls() {
     var bar = document.getElementById('player-bar');
     var header = document.getElementById('player-header');
+    var stats = document.getElementById('stats-overlay');
     if (bar) bar.classList.remove('fs-hidden');
     if (header) header.classList.remove('fs-hidden');
+    if (stats && TwitchX._statsOverlayActive) stats.classList.remove('hidden');
   }
 
   function _hideControls() {
@@ -1083,8 +1087,10 @@ function _startFullscreenAutoHide() {
     if (!video || !isVideoFullscreen(video)) return;
     var bar = document.getElementById('player-bar');
     var header = document.getElementById('player-header');
+    var stats = document.getElementById('stats-overlay');
     if (bar) bar.classList.add('fs-hidden');
     if (header) header.classList.add('fs-hidden');
+    if (stats) stats.classList.add('hidden');
   }
 
   var content = document.getElementById('player-content');
