@@ -1,0 +1,282 @@
+/* ── Player view ────────────────────────────────────────── */
+/* Owner of the player surface: view shell, video element, seek bar, buffering,
+   stats overlay and the player header. Split out of the old views.css and
+   player.css, which both loaded last and shadowed the component files. */
+/* ── Player view ───────────────────────────────────────── */
+#player-view {
+  display: none; flex-direction: column;
+  flex: 1; overflow: hidden;
+  background: var(--bg-video);
+  contain: layout style paint;
+  opacity: 1;
+  transition: opacity var(--duration-view) var(--ease-view);
+}
+#player-view.view-active { display: flex; }
+#player-content {
+  display: flex; flex: 1; overflow: hidden;
+  contain: layout style paint;
+  position: relative;
+}
+#stream-video {
+  flex: 1; min-width: 0; background: var(--bg-video);
+  outline: none;
+  transition: opacity 0.15s ease;
+}
+#stream-video.video-shadow,
+#stream-video.video-fading {
+  transition: opacity 0.15s ease;
+}
+#stream-video.video-shadow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+}
+#stream-video.video-fading {
+  opacity: 0;
+}
+
+/* Seek bar, buffering, stats overlay and header (moved from player.css) */
+/* ── Seek Bar (VOD) ──────────────────────────────────── */
+#seek-bar-container {
+  position: absolute; top: -20px; left: 0; right: 0;
+  height: 20px; z-index: var(--z-sticky);
+  flex-shrink: 0; cursor: pointer;
+  display: flex; align-items: flex-end;
+}
+#seek-bar {
+  width: 100%; height: 4px;
+  -webkit-appearance: none; appearance: none;
+  background: linear-gradient(to right,
+    var(--accent) 0%,
+    var(--accent) var(--seek-pct, 0%),
+    var(--border-default) var(--seek-pct, 0%),
+    var(--border-default) 100%);
+  outline: none; cursor: pointer; margin: 0; padding: 0;
+  transition: height var(--duration-fast) ease;
+}
+#seek-bar:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+#seek-bar-container:hover #seek-bar {
+  height: 6px;
+}
+#seek-bar::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 0; height: 0; border-radius: 50%;
+  background: var(--accent); border: none;
+  transition: width var(--duration-fast), height var(--duration-fast);
+}
+#seek-bar-container:hover #seek-bar::-webkit-slider-thumb {
+  width: 14px; height: 14px;
+}
+#seek-bar::-moz-range-thumb {
+  width: 0; height: 0; border-radius: 50%;
+  background: var(--accent); border: none;
+}
+#seek-bar-container:hover #seek-bar::-moz-range-thumb {
+  width: 14px; height: 14px;
+}
+#seek-tooltip {
+  position: absolute; bottom: calc(100% + 4px); left: 0;
+  transform: translateX(-50%);
+  background: var(--bg-tooltip-dark); color: var(--text-on-overlay);
+  font-size: var(--font-xs); font-family: ui-monospace, monospace;
+  padding: 3px 7px; border-radius: var(--radius-sm);
+  white-space: nowrap; pointer-events: none;
+  z-index: calc(var(--z-sticky) + 1);
+  border: 1px solid var(--border-subtle);
+}
+
+/* ── Buffer visualization bar ─────────────────────────── */
+#buffer-bar {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  height: 3px; background: var(--bg-control);
+  z-index: var(--z-sticky); pointer-events: none;
+}
+#buffer-loaded {
+  height: 100%; background: var(--buffer-loaded-bg);
+  width: var(--buffer-loaded-width, 0%);
+  transition: width var(--duration-slow) ease;
+}
+#buffer-position {
+  position: absolute; top: 0; height: 100%;
+  width: 2px; background: var(--accent);
+  left: var(--buffer-position-left, 0%);
+}
+
+/* Phase 9: PiP button active state */
+#pip-player-btn.active {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
+}
+
+/* -- Player loading spinner -- */
+#player-loader {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: var(--z-sticky);
+}
+#player-loader.hidden { display: none; }
+.player-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--border-subtle);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* -- Buffering overlay (mid-playback) -- */
+.player-buffering {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-sticky);
+  transition: opacity var(--duration-fast) ease;
+  pointer-events: none;
+}
+.player-buffering.buffering-hide {
+  opacity: 0;
+  pointer-events: none;
+}
+.player-buffering .player-spinner {
+  width: 28px;
+  height: 28px;
+}
+
+/* -- Stats overlay -- */
+#stats-overlay {
+  position: absolute;
+  top: var(--space-8);
+  right: var(--space-8);
+  background: var(--bg-modal);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  padding: var(--space-8) var(--space-12);
+  font-size: var(--font-sm);
+  font-family: ui-monospace, monospace;
+  color: var(--text-secondary);
+  pointer-events: none;
+  z-index: var(--z-dropdown);
+  min-width: 160px;
+}
+
+.stats-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  line-height: 1.8;
+}
+
+.stats-key {
+  color: var(--text-muted);
+}
+
+.stats-val {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+#stats-overlay-btn {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
+}
+
+#stats-overlay-btn:hover {
+  background: var(--hover-bg-strong);
+  color: var(--text-primary);
+}
+
+#stats-overlay-btn.active {
+  color: var(--accent);
+}
+@keyframes loader-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
+/* ── Player header ──────────────────────────────────────── */
+#player-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: var(--space-8) var(--space-14);
+  background: var(--glass-bar);
+  border-bottom: 1px solid var(--border-glass);
+  flex-shrink: 0;
+}
+#player-channel-name {
+  font-size: var(--font-md);
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  flex-shrink: 0;
+}
+#player-stream-title {
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#player-header-actions {
+  display: flex;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+/* ── Player header buttons ──────────────────────────────── */
+.player-header-btn {
+  width: 32px; height: 32px;
+  padding: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: inherit;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
+}
+.player-header-btn:hover {
+  background: var(--hover-bg-strong);
+  color: var(--text-primary);
+}
+.player-header-btn.recording {
+  color: var(--live-red);
+}
+.player-header-btn.recording:hover {
+  background: var(--status-bg-red);
+}
+
+/* ── Fullscreen auto-hide ─────────────────────────────── */
+#player-bar.fs-hidden {
+  transform: translateY(100%); opacity: 0; pointer-events: none;
+  transition: transform var(--duration-normal) var(--ease-default),
+              opacity var(--duration-normal) var(--ease-default);
+}
+#player-header.fs-hidden {
+  transform: translateY(-100%); opacity: 0; pointer-events: none;
+  transition: transform var(--duration-normal) var(--ease-default),
+              opacity var(--duration-normal) var(--ease-default);
+}

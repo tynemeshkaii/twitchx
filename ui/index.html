@@ -43,9 +43,8 @@
 <link rel="stylesheet" href="css/components/micro-interactions.css">
 <link rel="stylesheet" href="css/components/toast.css">
 <link rel="stylesheet" href="css/components/onboarding.css">
+<link rel="stylesheet" href="css/components/player-view.css">
 <link rel="stylesheet" href="css/animations.css">
-<link rel="stylesheet" href="css/views.css">
-<link rel="stylesheet" href="css/player.css">
 </head>
 <body>
 <a href="#content" class="skip-link">Skip to main content</a>
@@ -60,7 +59,7 @@
       <div id="profile-area">
         <button id="login-btn" class="login-btn">Login with Twitch</button>
         <div id="user-info" class="platform-user-info hidden">
-          <img id="user-avatar" class="platform-user-avatar" src="" alt="User avatar">
+          <img id="user-avatar" class="platform-user-avatar is-empty" alt="User avatar">
           <div class="platform-user-details">
             <div id="user-display-name" class="platform-user-name"></div>
             <div class="platform-user-actions">
@@ -175,7 +174,7 @@
           <div id="channel-body">
             <div id="channel-loading" class="browse-loading hidden">Loading...</div>
             <div id="channel-profile-card">
-              <img id="channel-avatar" class="channel-avatar hidden" src="" alt="">
+              <img id="channel-avatar" class="channel-avatar hidden" alt="">
               <div id="channel-avatar-fallback" class="channel-avatar-fallback hidden" aria-hidden="true"></div>
               <div id="channel-meta">
                 <div id="channel-display-name"></div>
@@ -390,10 +389,6 @@
   <div class="ctx-item" data-action="watch" role="menuitem" tabindex="-1"><span data-icon="play" data-size="14"></span> Watch in App</div>
   <div class="ctx-item" data-action="multistream" role="menuitem" tabindex="-1"><span data-icon="grid-layout" data-size="14"></span> Add to Multi-stream</div>
   <div class="ctx-item" data-action="watch-external" role="menuitem" tabindex="-1"><span data-icon="external-link" data-size="14"></span> Open in External Player</div>
-<div class="ctx-separator" role="separator"></div>
-  <div class="ctx-item" data-action="watch" role="menuitem" tabindex="-1"><span data-icon="play" data-size="14"></span> Watch in App</div>
-  <div class="ctx-item" data-action="multistream" role="menuitem" tabindex="-1"><span data-icon="grid-layout" data-size="14"></span> Add to Multi-stream</div>
-  <div class="ctx-item" data-action="watch-external" role="menuitem" tabindex="-1"><span data-icon="external-link" data-size="14"></span> Open in External Player</div>
   <div class="ctx-separator" role="separator"></div>
   <div class="ctx-item" data-action="favorite" role="menuitem" tabindex="-1"><span data-icon="star" data-size="14"></span> Add to Favorites</div>
   <div class="ctx-item" data-action="pin" role="menuitem" tabindex="-1"><span data-icon="pin" data-size="14"></span> Pin to top</div>
@@ -507,10 +502,10 @@
         </div>
       </div>
 
-      <div class="platform-divider"></div>
+      <div class="platform-divider" id="yt-settings-divider"></div>
 
       <!-- YouTube -->
-      <div class="platform-section">
+      <div class="platform-section" id="yt-settings-section">
         <div class="platform-section-header">
           <span class="platform-section-name">YouTube</span>
           <span id="yt-cred-status" class="cred-badge cred-missing">API key required</span>

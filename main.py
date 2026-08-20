@@ -11,6 +11,24 @@ from app import TwitchXApp
 
 _LOG_DIR = Path.home() / ".config" / "twitchx"
 
+# Homebrew / common CLI install dirs. macOS apps launched from Finder inherit a
+# minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin) that omits these, so bundled
+# subprocess lookups (streamlink, mpv, iina-cli) via shutil.which() fail even
+# when the tools are installed. Prepend them so the packaged .app finds them.
+_CLI_PATH_DIRS = [
+    "/opt/homebrew/bin",
+    "/opt/homebrew/sbin",
+    "/usr/local/bin",
+    "/usr/local/sbin",
+]
+
+
+def _augment_path() -> None:
+    existing = os.environ.get("PATH", "").split(os.pathsep)
+    missing = [d for d in _CLI_PATH_DIRS if d not in existing]
+    if missing:
+        os.environ["PATH"] = os.pathsep.join(missing + existing)
+
 
 def _configure_logging() -> None:
     _LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -82,6 +100,7 @@ def _configure_crash_logging() -> None:
     threading.excepthook = _thread_excepthook
 
 
+_augment_path()
 _configure_logging()
 _configure_crash_logging()
 

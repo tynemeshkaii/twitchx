@@ -14,6 +14,8 @@ hidden_imports = (
 
 datas = [
     ("ui/index.html", "ui"),
+    ("ui/css", "ui/css"),
+    ("ui/js", "ui/js"),
 ]
 
 a = Analysis(

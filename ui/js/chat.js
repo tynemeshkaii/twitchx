@@ -230,8 +230,11 @@ TwitchX.chatSpamMap = {};
 TwitchX.chatBlockList = [];
 
 function loadChatFiltersFromConfig() {
-  var cfg = TwitchX.api ? TwitchX.api.get_full_config_for_settings() : null;
-  if (!cfg) return;
+  var cfg = TwitchX.state.configLoaded ? TwitchX.state.fullConfig : null;
+  if (!cfg) {
+    TwitchX.requestConfig();
+    return;
+  }
   TwitchX.chatFilters.subOnly = !!cfg.chat_filter_sub_only;
   TwitchX.chatFilters.modOnly = !!cfg.chat_filter_mod_only;
   TwitchX.chatFilters.antiSpam = cfg.chat_anti_spam !== false;
@@ -295,32 +298,26 @@ function exportChatLog(format) {
   }
   var channel = (TwitchX.state.watchingChannel || 'chat').replace(/[/\\:*?"<>|]/g, '_');
   var filename = 'twitchx-chat-' + channel + '-' + new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-  var content, mime;
+  var content;
   if (format === 'json') {
     content = JSON.stringify(TwitchX.chatLog, null, 2);
-    mime = 'application/json';
     filename += '.json';
   } else {
     content = TwitchX.chatLog.map(function(m) {
       var badge = m.badges.length ? '[' + m.badges.join(',') + '] ' : '';
       return '[' + m.ts + '] ' + badge + m.author + ': ' + m.text;
     }).join('\n');
-    mime = 'text/plain';
     filename += '.txt';
   }
-  var blob = new Blob([content], { type: mime });
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.classList.add('hidden');
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(function() {
-    URL.revokeObjectURL(url);
-    document.body.removeChild(a);
-  }, 500);
-  TwitchX.setStatus('Chat log saved: ' + filename, 'info');
+  // WKWebView ignores <a download> unless ALLOW_DOWNLOADS is on, so the blob
+  // route silently wrote nothing while the status claimed success. Python
+  // writes the file and answers via window.onChatLogSaved.
+  if (!TwitchX.api || !TwitchX.api.save_chat_log) {
+    TwitchX.setStatus('Chat export is unavailable', 'error');
+    return;
+  }
+  TwitchX.setStatus('Saving chat log…', 'info');
+  TwitchX.api.save_chat_log(filename, content);
 }
 
 TwitchX.exportChatLog = exportChatLog;

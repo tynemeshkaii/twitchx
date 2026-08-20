@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 from pathlib import Path
 
 import webview
@@ -26,6 +27,9 @@ class TwitchXApp:
         from PyObjCTools import AppHelper
 
         AppHelper.callAfter(self._enable_video_fullscreen)
+        # JS never reads config synchronously (the bridge returns Promises) —
+        # push the snapshot as soon as the document is ready.
+        self._api.push_config()
         interval = get_settings(self._config).get("refresh_interval", 60)
         self._api.start_polling(interval)
 
@@ -99,7 +103,10 @@ class TwitchXApp:
         return html
 
     def mainloop(self) -> None:
-        html_path = Path(__file__).parent / "ui" / "index.html"
+        # Under a PyInstaller frozen bundle, bundled data lives in sys._MEIPASS,
+        # not next to this source file. Fall back to the source dir for `make run`.
+        base = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))
+        html_path = base / "ui" / "index.html"
         html_content = html_path.read_text(encoding="utf-8")
         html_content = self._inline_resources(html_content, html_path.parent)
 

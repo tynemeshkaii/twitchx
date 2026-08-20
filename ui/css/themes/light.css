@@ -1,3 +1,4 @@
+/* css-layer: theme-tokens */
 /* ── TwitchX Light Theme ────────────────────────────────── */
 [data-theme="light"] {
   /* ── Depth system (macOS light mode aligned) ─────────── */
@@ -41,18 +42,19 @@
 
   /* ── Toast notification tokens ──────────────────────── */
   --toast-duration: 4s;
-  --toast-bg-success: rgba(48, 209, 88, 0.10);
-  --toast-bg-error:   rgba(255, 69, 58, 0.10);
-  --toast-bg-info:    rgba(0, 0, 0, 0.05);
-  --toast-bg-warn:    hsl(36 100% 52% / 0.10);
+  --toast-surface: rgba(255, 255, 255, 0.95);
+  --toast-bg-success: rgba(48, 209, 88, 0.16);
+  --toast-bg-error:   rgba(255, 69, 58, 0.16);
+  --toast-bg-info:    rgba(0, 0, 0, 0.07);
+  --toast-bg-warn:    hsl(36 100% 52% / 0.16);
   --toast-border-success: rgba(48, 209, 88, 0.30);
   --toast-border-error:   rgba(255, 69, 58, 0.30);
   --toast-border-info:    rgba(0, 0, 0, 0.10);
   --toast-border-warn:    hsl(36 100% 52% / 0.30);
-  --toast-text-success: #248A3D;
-  --toast-text-error:   #D32F2F;
+  --toast-text-success: #1E7232;
+  --toast-text-error:   #B72727;
   --toast-text-info:    var(--text-secondary);
-  --toast-text-warn:    #C77700;
+  --toast-text-warn:    #8F5500;
 
   /* ── Scroll shadow tokens ───────────────────────────── */
   --scroll-shadow-size:  16px;
@@ -61,6 +63,9 @@
   /* ── Text on accent / inverse ───────────────────────── */
   --text-on-accent: #0A0A0C;
   --text-inverse:   #FFFFFF;
+  /* Text on surfaces that stay dark in BOTH themes (video overlays,
+     uptime badge, seek tooltip) — never use --text-* there. */
+  --text-on-overlay: rgba(255, 255, 255, 0.88);
 
   /* ── Interaction backgrounds ─────────────────────────── */
   --hover-bg:        rgba(0, 0, 0, 0.04);

@@ -199,12 +199,18 @@ function renderWatchStats(stats) {
 
 function loadWatchStatistics() {
   if (!TwitchX.api) return;
+  var loading = document.getElementById('stats-loading');
+  if (loading) {
+    loading.textContent = 'Loading statistics...';
+    loading.classList.remove('hidden');
+  }
+  document.getElementById('stats-content').classList.add('hidden');
+  // Results arrive asynchronously via window.onWatchStatistics
   try {
-    var stats = JSON.parse(TwitchX.api.get_watch_statistics('all'));
-    renderWatchStats(stats);
+    TwitchX.api.request_watch_statistics('all');
   } catch (e) {
-    console.warn('Failed to load watch statistics:', e);
-    document.getElementById('stats-loading').textContent = 'Failed to load statistics';
+    console.warn('Failed to request watch statistics:', e);
+    if (loading) loading.textContent = 'Failed to load statistics';
   }
   // Show compact toggle
   var toggleBtn = document.getElementById('stats-compact-toggle');
@@ -271,10 +277,37 @@ function _setFeedback(msg, type) {
   fb.className = type || '';
 }
 
+// The interval dropdown only lists a few presets. A config value outside that
+// list used to leave the select empty, and saving then reset it to 60.
+function _setIntervalValue(interval) {
+  var select = document.getElementById('s-interval');
+  if (!select) return;
+  var previous = select.querySelector('option[data-custom]');
+  if (previous) previous.remove();
+  var known = Array.prototype.some.call(select.options, function(opt) {
+    return opt.value === interval;
+  });
+  if (!known) {
+    var opt = document.createElement('option');
+    opt.value = interval;
+    opt.textContent = interval + 's';
+    opt.dataset.custom = 'true';
+    select.appendChild(opt);
+  }
+  select.value = interval;
+}
+
 function openSettings() {
   if (!TwitchX.api) return;
+  // The config snapshot is pushed from Python; without it the form would open
+  // with defaults and a Save would overwrite the real config.
+  if (!TwitchX.state.configLoaded) {
+    TwitchX._settingsPendingOpen = true;
+    TwitchX.requestConfig();
+    return;
+  }
   TwitchX._settingsReturnFocus = document.activeElement;
-  const config = TwitchX.api.get_full_config_for_settings();
+  const config = TwitchX.state.fullConfig || {};
   document.getElementById('s-client-id').value = config.client_id || '';
   document.getElementById('s-client-secret').value = config.client_secret || '';
   document.getElementById('s-streamlink').value = config.streamlink_path || 'streamlink';
@@ -283,7 +316,7 @@ function openSettings() {
   var extPlayer = config.external_player || 'iina';
   document.getElementById('s-external-player').value = extPlayer;
   document.getElementById('s-mpv-group').classList.toggle('hidden', extPlayer !== 'mpv');
-  document.getElementById('s-interval').value = String(config.refresh_interval || 60);
+  _setIntervalValue(String(config.refresh_interval || 60));
   document.getElementById('s-kick-client-id').value = config.kick_client_id || '';
   document.getElementById('s-kick-client-secret').value = config.kick_client_secret || '';
   if (config.kick_display_name) {
@@ -417,12 +450,8 @@ function openSettings() {
   }
   TwitchX._settingsSnapshot = JSON.stringify(_readAllFormValues());
   var versionEl = document.getElementById('settings-version-footer');
-  if (versionEl && TwitchX.api) {
-    try {
-      versionEl.textContent = 'v' + TwitchX.api.get_version();
-    } catch (e) {
-      versionEl.textContent = '';
-    }
+  if (versionEl) {
+    versionEl.textContent = TwitchX.state.version ? 'v' + TwitchX.state.version : '';
   }
   var closeBtn = document.getElementById('close-settings');
   if (closeBtn) closeBtn.focus();
@@ -432,7 +461,10 @@ function openSettingsToTab(tab) {
   // Map legacy tab names to new tab structure
   var tabAliases = { general: 'player', twitch: 'accounts', kick: 'accounts', youtube: 'accounts', hotkeys: 'advanced', statistics: 'advanced' };
   tab = tabAliases[tab] || tab;
+  TwitchX._settingsPendingTab = tab;
   openSettings();
+  if (!TwitchX.state.configLoaded) return;
+  TwitchX._settingsPendingTab = null;
   const tabBtn = document.querySelector('.settings-tab[data-tab="' + tab + '"]');
   document.querySelectorAll('.settings-tab').forEach(function(b) {
     var active = b === tabBtn;
@@ -510,6 +542,19 @@ function saveSettings() {
   if (TwitchX.api) TwitchX.api.save_settings(JSON.stringify(data));
   TwitchX._settingsSnapshot = JSON.stringify(_readAllFormValues());
 }
+
+// Resume an open that was blocked waiting for the config push.
+TwitchX.onConfigApplied = function() {
+  if (!TwitchX._settingsPendingOpen) return;
+  TwitchX._settingsPendingOpen = false;
+  var tab = TwitchX._settingsPendingTab;
+  TwitchX._settingsPendingTab = null;
+  if (tab) {
+    openSettingsToTab(tab);
+  } else {
+    openSettings();
+  }
+};
 
 TwitchX.ACCENT_PALETTE = ACCENT_PALETTE;
 TwitchX.applyAccentColor = applyAccentColor;

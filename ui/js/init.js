@@ -37,6 +37,7 @@ document.addEventListener('keydown', function(e) {
 
 document.addEventListener('DOMContentLoaded', function() {
   if (TwitchX.mountIcons) TwitchX.mountIcons();
+  if (TwitchX.applyYoutubeGating) TwitchX.applyYoutubeGating();
   TwitchX.loadPinnedStreams();
   TwitchX._bindSidebarEvents();
   TwitchX._bindToolbarEvents();
@@ -345,12 +346,10 @@ TwitchX._bindChannelEvents = function() {
   const backBtn = document.getElementById('channel-back-btn');
   if (backBtn) backBtn.addEventListener('click', TwitchX.hideChannelView);
   document.querySelectorAll('.channel-tab').forEach(function(btn) {
+    // switchChannelTab also records state.channelTabs.active, which is what
+    // keeps the active tab after a profile refresh.
     btn.addEventListener('click', function() {
-      TwitchX.setActiveTab(Array.from(document.querySelectorAll('.channel-tab')), btn);
-      document.querySelectorAll('.channel-tab-panel').forEach(function(p) {
-        p.classList.toggle('hidden', p.id !== 'channel-tab-' + btn.dataset.tab);
-      });
-      TwitchX.ensureChannelTabLoaded(btn.dataset.tab);
+      TwitchX.switchChannelTab(btn, btn.dataset.tab);
     });
     btn.addEventListener('keydown', function(e) {
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
@@ -688,6 +687,7 @@ TwitchX._bindSettingsEvents = function() {
   // YouTube login/logout/import
   const ytLoginBtn = document.getElementById('yt-login-btn');
   if (ytLoginBtn) ytLoginBtn.addEventListener('click', function() {
+    if (!TwitchX.state.youtubeEnabled) return;
     const cid = document.getElementById('yt-client-id').value.trim();
     const cs = document.getElementById('yt-client-secret').value.trim();
     if (!cid || !cs) {
@@ -967,21 +967,13 @@ TwitchX._bindMultistreamEvents = function() {
       if (channel) {
         TwitchX.addMultiSlot(slot, channel, platform);
       } else {
-        slotEl.classList.remove('ms-add-form-open');
-        slotEl.querySelector('.ms-add-form').classList.add('hidden');
-        slotEl.querySelector('.ms-slot-empty').classList.remove('hidden');
-        if (TwitchX._setMultiSlotState) TwitchX._setMultiSlotState(slot, 'empty', 'Empty');
+        TwitchX.closeMultiAddForm(slot);
       }
       return;
     }
     const cancelBtn = e.target.closest('.ms-cancel-btn');
     if (cancelBtn) {
-      const slot = parseInt(cancelBtn.dataset.slot, 10);
-      const slotEl = document.querySelector('.ms-slot[data-slot-idx="' + slot + '"]');
-      slotEl.classList.remove('ms-add-form-open');
-      slotEl.querySelector('.ms-add-form').classList.add('hidden');
-      slotEl.querySelector('.ms-slot-empty').classList.remove('hidden');
-      if (TwitchX._setMultiSlotState) TwitchX._setMultiSlotState(slot, 'empty', 'Empty');
+      TwitchX.closeMultiAddForm(parseInt(cancelBtn.dataset.slot, 10), { restoreFocus: true });
       return;
     }
     const audioBtn = e.target.closest('.ms-audio-btn');
@@ -1015,13 +1007,9 @@ TwitchX._bindMultistreamEvents = function() {
     const form = e.target.closest('.ms-add-form');
     if (e.key === 'Escape' && form) {
       e.preventDefault();
+      e.stopPropagation();
       const slotEl = form.closest('.ms-slot');
-      slotEl.classList.remove('ms-add-form-open');
-      form.classList.add('hidden');
-      slotEl.querySelector('.ms-slot-empty').classList.remove('hidden');
-      if (TwitchX._setMultiSlotState) TwitchX._setMultiSlotState(parseInt(slotEl.dataset.slotIdx, 10), 'empty', 'Empty');
-      var addBtn = slotEl.querySelector('.ms-add-btn');
-      if (addBtn) addBtn.focus();
+      TwitchX.closeMultiAddForm(parseInt(slotEl.dataset.slotIdx, 10), { restoreFocus: true });
       return;
     }
     if (e.key !== 'Enter' || !input) return;
@@ -1032,10 +1020,7 @@ TwitchX._bindMultistreamEvents = function() {
     if (channel) {
       TwitchX.addMultiSlot(idx, channel, platform);
     } else {
-      slotEl.classList.remove('ms-add-form-open');
-      slotEl.querySelector('.ms-add-form').classList.add('hidden');
-      slotEl.querySelector('.ms-slot-empty').classList.remove('hidden');
-      if (TwitchX._setMultiSlotState) TwitchX._setMultiSlotState(idx, 'empty', 'Empty');
+      TwitchX.closeMultiAddForm(idx);
     }
   });
 

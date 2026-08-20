@@ -8,7 +8,6 @@
   transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease,
               box-shadow var(--duration-fast) ease;
 }
-.login-btn:active { transform: scale(0.98); }
 .login-btn:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;

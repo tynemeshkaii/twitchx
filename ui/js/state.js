@@ -51,6 +51,9 @@ TwitchX.state = {
   streamType: 'live',
   prevViewers: {},
   config: {},
+  fullConfig: {},
+  configLoaded: false,
+  version: '',
   sortKey: 'viewers',
   filterText: '',
   avatars: {},
@@ -62,6 +65,7 @@ TwitchX.state = {
   kickUser: null,
   kickScopes: '',
   youtubeUser: null,
+  youtubeEnabled: false,
   playerState: 'idle',
   playerChannel: null,
   playerTitle: '',
@@ -199,8 +203,15 @@ TwitchX.getFavoriteEntries = function() {
   }
 
   // Legacy fallback: raw logins not present in favoritesMeta default to Twitch.
+  // Python sends `favorites` as a flat, platform-agnostic list, so a login that
+  // meta already covers on ANY platform (kick:foo, youtube:UCxxx) must not spawn
+  // a phantom twitch:foo entry — match by login, not by key.
+  var coveredLogins = Object.create(null);
+  entries.forEach(function(entry) { coveredLogins[entry.login] = true; });
+
   TwitchX.state.favorites.forEach(function(login) {
     if (!login || typeof login !== 'string') return;
+    if (coveredLogins[login]) return;
     var key = TwitchX.channelKey(login, 'twitch');
     if (!seen[key]) {
       seen[key] = true;

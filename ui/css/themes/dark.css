@@ -1,3 +1,4 @@
+/* css-layer: theme-tokens */
 /* ── TwitchX Dark Theme ─────────────────────────────────── */
 :root,
 [data-theme="dark"] {
@@ -42,16 +43,19 @@
 
   /* ── Toast notification tokens ──────────────────────── */
   --toast-duration: 4s;
-  --toast-bg-success: rgba(48, 209, 88, 0.14);
-  --toast-bg-error:   rgba(255, 69, 58, 0.14);
-  --toast-bg-info:    rgba(255, 255, 255, 0.07);
-  --toast-bg-warn:    hsl(36 100% 52% / 0.14);
+  --toast-surface: rgba(20, 20, 24, 0.94);
+  --toast-bg-success: rgba(48, 209, 88, 0.20);
+  --toast-bg-error:   rgba(255, 69, 58, 0.20);
+  --toast-bg-info:    rgba(255, 255, 255, 0.10);
+  --toast-bg-warn:    hsl(36 100% 52% / 0.20);
   --toast-border-success: rgba(48, 209, 88, 0.35);
   --toast-border-error:   rgba(255, 69, 58, 0.35);
   --toast-border-info:    rgba(255, 255, 255, 0.12);
   --toast-border-warn:    hsl(36 100% 52% / 0.35);
   --toast-text-success: var(--live-green);
-  --toast-text-error:   var(--error-red);
+  /* Lighter than the raw error-red token, which sat at 3.7:1 on the tinted
+     toast surface. */
+  --toast-text-error:   #FF7068;
   --toast-text-info:    var(--text-secondary);
   --toast-text-warn:    var(--warn-yellow);
 
@@ -62,6 +66,9 @@
   /* ── Text on accent / inverse ───────────────────────── */
   --text-on-accent: #0A0A0C;
   --text-inverse:   #FFFFFF;
+  /* Text on surfaces that stay dark in BOTH themes (video overlays,
+     uptime badge, seek tooltip) — never use --text-* there. */
+  --text-on-overlay: rgba(255, 255, 255, 0.88);
 
   /* ── Interaction backgrounds ─────────────────────────── */
   --hover-bg:        rgba(255, 255, 255, 0.055);

@@ -62,7 +62,7 @@ make check   # lint + test
 | `core/recorder.py` | Запись стрима через streamlink |
 | `ui/api/` | Python↔JS bridge (7 компонентов, см. ниже) |
 | `ui/index.html` | Shell, pywebview 6.x требует inline ресурсов |
-| `ui/css/` | `tokens`, `reset`, `layout`, `components`, `views`, `player` |
+| `ui/css/` | `tokens`, `themes/`, `reset`, `layout` (только каркас), `components/` (по одному владельцу на селектор) |
 | `ui/js/` | 18 модулей (IIFE + `TwitchX` namespace) |
 | `tests/` | pytest, `conftest.py` с фикстурами |
 
@@ -127,7 +127,8 @@ ChatClient (ABC)      ←  BaseChatClient      ←  TwitchChatClient/KickChatCli
 
 ### Новый UI компонент
 1. HTML в `ui/index.html`
-2. Стили через CSS custom properties из `tokens.css`
+2. Стили через CSS custom properties из `tokens.css`, в **своём** файле `ui/css/components/<name>.css`
+   (один владелец на селектор — проверяется `uv run python tools/css_ownership.py`)
 3. JS в подходящем модуле или новом (если большой)
 4. Python-метод в `TwitchXApi` если нужны данные
 

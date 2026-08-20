@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 import sqlite3
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -18,9 +20,24 @@ class WatchStatsDB:
         self._lock = threading.Lock()
         self._init_db()
 
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
+        """Yield a connection that commits on success and always closes.
+
+        sqlite3.Connection's own context manager handles the transaction
+        (commit/rollback) but does NOT close the connection — closing must be
+        done explicitly or the underlying file descriptor leaks.
+        """
+        conn = sqlite3.connect(self._db_path)
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
+
     def _init_db(self) -> None:
         try:
-            with self._lock, sqlite3.connect(self._db_path) as conn:
+            with self._lock, self._connect() as conn:
                 conn.executescript("""
                     CREATE TABLE IF NOT EXISTS watch_sessions (
                         id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,14 +82,13 @@ class WatchStatsDB:
     ) -> int | None:
         now = datetime.now(UTC).isoformat()
         try:
-            with self._lock, sqlite3.connect(self._db_path) as conn:
+            with self._lock, self._connect() as conn:
                 cur = conn.execute(
                     """INSERT INTO watch_sessions
                        (channel, platform, display_name, title, started_at, stream_type)
                        VALUES (?, ?, ?, ?, ?, ?)""",
                     (channel, platform, display_name, title, now, stream_type),
                 )
-                conn.commit()
                 last_id = cur.lastrowid
                 if last_id is None:
                     raise RuntimeError("Failed to insert watch session")
@@ -83,54 +99,49 @@ class WatchStatsDB:
 
     def end_session(self, session_id: int) -> None:
         try:
-            with self._lock:
-                conn = sqlite3.connect(self._db_path)
-                try:
-                    cur = conn.execute(
-                        "SELECT started_at, channel, platform FROM watch_sessions WHERE id = ?",
-                        (session_id,),
-                    )
-                    row = cur.fetchone()
-                    if row is None:
-                        logger.warning("end_session: session %s not found", session_id)
-                        return
+            with self._lock, self._connect() as conn:
+                cur = conn.execute(
+                    "SELECT started_at, channel, platform FROM watch_sessions WHERE id = ?",
+                    (session_id,),
+                )
+                row = cur.fetchone()
+                if row is None:
+                    logger.warning("end_session: session %s not found", session_id)
+                    return
 
-                    started_at_iso, channel, platform = row
-                    started = datetime.fromisoformat(started_at_iso)
-                    ended = datetime.now(UTC)
-                    duration = max(0, int((ended - started).total_seconds()))
+                started_at_iso, channel, platform = row
+                started = datetime.fromisoformat(started_at_iso)
+                ended = datetime.now(UTC)
+                duration = max(0, int((ended - started).total_seconds()))
 
-                    conn.execute(
-                        """UPDATE watch_sessions
-                           SET ended_at = ?, duration_sec = ?
-                           WHERE id = ?""",
-                        (ended.isoformat(), duration, session_id),
-                    )
+                conn.execute(
+                    """UPDATE watch_sessions
+                       SET ended_at = ?, duration_sec = ?
+                       WHERE id = ?""",
+                    (ended.isoformat(), duration, session_id),
+                )
 
-                    date_key = started.strftime("%Y-%m-%d")
-                    conn.execute(
-                        """INSERT INTO daily_summary (date, platform, total_sec, streams_count, unique_channels)
-                           VALUES (?, ?, ?, ?, 1)
-                           ON CONFLICT(date, platform) DO UPDATE SET
-                               total_sec = total_sec + ?,
-                               streams_count = streams_count + 1,
-                               unique_channels = (
-                                   SELECT COUNT(DISTINCT channel)
-                                   FROM watch_sessions
-                                   WHERE date(started_at) = ? AND platform = ?
-                               )""",
-                        (date_key, platform, duration, 1, duration, date_key, platform),
-                    )
-                    conn.commit()
-                finally:
-                    conn.close()
+                date_key = started.strftime("%Y-%m-%d")
+                conn.execute(
+                    """INSERT INTO daily_summary (date, platform, total_sec, streams_count, unique_channels)
+                       VALUES (?, ?, ?, ?, 1)
+                       ON CONFLICT(date, platform) DO UPDATE SET
+                           total_sec = total_sec + ?,
+                           streams_count = streams_count + 1,
+                           unique_channels = (
+                               SELECT COUNT(DISTINCT channel)
+                               FROM watch_sessions
+                               WHERE date(started_at) = ? AND platform = ?
+                           )""",
+                    (date_key, platform, duration, 1, duration, date_key, platform),
+                )
         except sqlite3.Error as e:
             logger.error("end_session failed for session %s: %s", session_id, e)
 
     def get_today_stats(self) -> dict[str, Any]:
         today = datetime.now(UTC).strftime("%Y-%m-%d")
         try:
-            with sqlite3.connect(self._db_path) as conn:
+            with self._connect() as conn:
                 conn.row_factory = sqlite3.Row
                 row = conn.execute(
                     """SELECT
@@ -168,7 +179,7 @@ class WatchStatsDB:
     def get_weekly_stats(self) -> list[dict[str, Any]]:
         today = datetime.now(UTC).strftime("%Y-%m-%d")
         try:
-            with sqlite3.connect(self._db_path) as conn:
+            with self._connect() as conn:
                 conn.row_factory = sqlite3.Row
                 cur = conn.execute(
                     """SELECT date, platform, total_sec, streams_count, unique_channels
@@ -184,7 +195,7 @@ class WatchStatsDB:
 
     def get_total_stats(self) -> dict[str, Any]:
         try:
-            with sqlite3.connect(self._db_path) as conn:
+            with self._connect() as conn:
                 conn.row_factory = sqlite3.Row
                 row = conn.execute(
                     """SELECT
@@ -222,7 +233,7 @@ class WatchStatsDB:
 
     def get_top_channels(self, limit: int = 10) -> list[dict[str, Any]]:
         try:
-            with sqlite3.connect(self._db_path) as conn:
+            with self._connect() as conn:
                 conn.row_factory = sqlite3.Row
                 cur = conn.execute(
                     """SELECT channel, platform, display_name,
@@ -242,7 +253,7 @@ class WatchStatsDB:
 
     def get_recent_sessions(self, limit: int = 20) -> list[dict[str, Any]]:
         try:
-            with sqlite3.connect(self._db_path) as conn:
+            with self._connect() as conn:
                 conn.row_factory = sqlite3.Row
                 cur = conn.execute(
                     """SELECT id, channel, platform, display_name, title,
@@ -259,7 +270,7 @@ class WatchStatsDB:
 
     def get_active_session(self) -> dict[str, Any] | None:
         try:
-            with sqlite3.connect(self._db_path) as conn:
+            with self._connect() as conn:
                 conn.row_factory = sqlite3.Row
                 row = conn.execute(
                     """SELECT id, channel, platform, display_name, title,
@@ -276,7 +287,7 @@ class WatchStatsDB:
 
     def cleanup_old_sessions(self, days: int = WATCH_STATS_SESSION_CLEANUP_DAYS) -> int:
         try:
-            with self._lock, sqlite3.connect(self._db_path) as conn:
+            with self._lock, self._connect() as conn:
                 now = datetime.now(UTC).strftime("%Y-%m-%d")
                 cur = conn.execute(
                     """DELETE FROM watch_sessions
@@ -290,7 +301,6 @@ class WatchStatsDB:
                        WHERE date < date(?, ?)""",
                     (now, f"-{days} days"),
                 )
-                conn.commit()
                 return deleted
         except sqlite3.Error as e:
             logger.error("cleanup_old_sessions failed: %s", e)

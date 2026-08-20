@@ -33,7 +33,9 @@ body {
 /* Skip to main content — visible on focus, hidden otherwise */
 .skip-link {
   position: absolute;
-  top: var(--space-8); left: var(--space-8);
+  /* Parked fully off-screen: a transform offset left a sliver visible under
+     the original top: 8px on every screen. */
+  top: -100px; left: var(--space-8);
   z-index: var(--z-modal);
   padding: var(--space-8) var(--space-16);
   background: var(--accent);
@@ -41,12 +43,13 @@ body {
   border-radius: var(--radius-sm);
   font-size: var(--font-md); font-weight: 600;
   text-decoration: none;
-  transform: translateY(-120%);
-  transition: transform var(--duration-fast) ease;
+  transition: top var(--duration-fast) ease;
 }
-.skip-link:focus { transform: translateY(0); }
+.skip-link:focus { top: var(--space-8); }
 
-/* Allow text selection where user intent is clear */
+/* css-layer: text-selection — a deliberate cross-cutting allowlist. The
+   selectors here are owned by their component files; this layer only opts
+   them into user-select. */
 #chat-messages, #ms-chat-messages,
 #settings-modal input, #settings-modal select, #settings-modal textarea,
 #search-input, #search-dropdown,

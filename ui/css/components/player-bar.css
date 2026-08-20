@@ -97,9 +97,6 @@
   background: var(--hover-bg-strong);
   color: var(--text-primary);
 }
-.bar-btn:active {
-  transform: scale(var(--scale-press));
-}
 .bar-btn:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
@@ -132,9 +129,6 @@
   background: var(--btn-primary-bg-hover);
   box-shadow: var(--shadow-glow-accent);
 }
-#watch-btn.active:active {
-  transform: scale(var(--scale-press));
-}
 
 #stop-player-btn {
   width: 32px;
@@ -158,9 +152,6 @@
   color: var(--live-red);
   opacity: 1;
 }
-#stop-player-btn:active {
-  transform: scale(var(--scale-press));
-}
 
 #watch-external-btn {
   width: 32px;
@@ -181,9 +172,6 @@
 #watch-external-btn:hover {
   background: var(--hover-bg-strong);
   color: var(--text-secondary);
-}
-#watch-external-btn:active {
-  transform: scale(var(--scale-press));
 }
 #watch-external-btn:disabled {
   opacity: 0.45;
@@ -210,6 +198,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  animation: pulse 1.2s ease-in-out infinite;
 }
 #record-dot.hidden { display: none; }
 
@@ -314,4 +303,56 @@
   .bar-group--center {
     display: none;
   }
+}
+
+/* Recording + loader indicators (moved from player.css) */
+/* -- Recording button -- */
+#record-btn {
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
+}
+#record-btn:hover {
+  background: var(--hover-bg-strong);
+  color: var(--error-red);
+}
+#record-btn.recording {
+  color: var(--error-red);
+}
+/* ── Stream loader bar (indeterminate progress in player bar) ── */
+#stream-loader {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: var(--z-sticky);
+  overflow: hidden;
+  background: transparent;
+}
+#stream-loader.hidden { display: none; }
+#stream-loader-bar {
+  height: 100%;
+  width: 30%;
+  background: var(--accent);
+  animation: loader-slide 1.5s ease-in-out infinite;
+}
+/* -- VOD time display -- */
+#vod-time-display {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  font-family: ui-monospace, monospace;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+/* ── Record dot ────────────────────────────────────────── */
+.record-dot {
+  color: var(--error-red);
+  display: inline-flex;
+  align-items: center;
+  margin-left: 2px;
 }

@@ -14,6 +14,13 @@
 
 ---
 
+> ⚠️ **Closed beta — do not redistribute the `.app`.**
+> The packaged build bundles shared Twitch and Kick app credentials. Hand it only to trusted testers.
+> If a bundled credential is revoked, log in still works: open **Settings → Accounts** and paste your own Twitch / Kick app credentials (Client ID + Secret) to override the bundled ones.
+> **YouTube is disabled in this beta** (pending production API credentials).
+
+---
+
 ## Features
 
 ### Multi-Platform Support
@@ -113,8 +120,8 @@ make run
 1. Open **Settings** (gear icon or `Cmd + ,`)
 2. Connect your accounts:
    - **Twitch** — OAuth login (auto-imports your follows)
-   - **YouTube** — enter YouTube Data API key
    - **Kick** — optional, works without auth for browsing
+   - **YouTube** — disabled in the closed beta
 3. Your followed channels will appear in the sidebar
 
 ---

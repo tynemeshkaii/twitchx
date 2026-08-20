@@ -75,6 +75,22 @@ function renderHotkeysSettings() {
   });
 }
 
+// Enter/Space belong to whatever control has focus. Grabbing them globally
+// broke Tab navigation: Enter on Browse/Settings/any button ran doWatch()
+// instead of activating the button.
+const ACTIVATION_TARGET_SELECTOR =
+  'button, a[href], summary, [role="button"], [role="menuitem"], [role="tab"], [role="option"], [contenteditable="true"]';
+// Channel targets are the exception: their own handler selects the channel and
+// the global watch shortcut then completes the same intent as a double-click.
+const CHANNEL_TARGET_SELECTOR = '.stream-card, .channel-item, .rail-avatar';
+
+function focusOwnsActivationKeys() {
+  const el = document.activeElement;
+  if (!el || el === document.body || typeof el.closest !== 'function') return false;
+  if (el.closest(CHANNEL_TARGET_SELECTOR)) return false;
+  return !!el.closest(ACTIVATION_TARGET_SELECTOR);
+}
+
 function handleKeydown(e) {
   // Phase 9: when a shortcut is being rebound, swallow all keys in capture phase
   if (TwitchX._rebindAction) return;
@@ -167,6 +183,8 @@ function handleKeydown(e) {
   // Single-key shortcuts — skip if any modifier is held
   if (e.metaKey || e.ctrlKey || e.altKey) return;
 
+  if ((e.key === 'Enter' || e.key === ' ') && focusOwnsActivationKeys()) return;
+
   if (e.key === sc.refresh) { e.preventDefault(); TwitchX.doRefresh(); return; }
   if (e.key === sc.watch || e.key === 'Enter') { e.preventDefault(); TwitchX.doWatch(); return; }
 
@@ -209,3 +227,4 @@ TwitchX.formatKeyName = formatKeyName;
 TwitchX.startRebind = startRebind;
 TwitchX.renderHotkeysSettings = renderHotkeysSettings;
 TwitchX.handleKeydown = handleKeydown;
+TwitchX.focusOwnsActivationKeys = focusOwnsActivationKeys;

@@ -79,6 +79,7 @@ class AuthComponent(BaseApiComponent):
                     }
                 )
                 self._eval_js(f"window.onLoginComplete({result})")
+                self._api.push_config()
                 if avatar_url:
                     self._api._images.get_avatar(user["login"].lower())
                 self._api._data.refresh()
@@ -108,6 +109,7 @@ class AuthComponent(BaseApiComponent):
         self._config = update_config(_clear)
         self._api._current_user = None
         self._eval_js("window.onLogout()")
+        self._api.push_config()
 
     # ── Kick ────────────────────────────────────────────────────
 
@@ -177,6 +179,7 @@ class AuthComponent(BaseApiComponent):
                     }
                 )
                 self._eval_js(f"window.onKickLoginComplete({result})")
+                self._api.push_config()
                 self._api._data.refresh()
             except Exception as e:
                 logger.warning("Kick login failed: %s", e)
@@ -204,6 +207,7 @@ class AuthComponent(BaseApiComponent):
 
         self._config = update_config(_clear)
         self._eval_js("window.onKickLogout()")
+        self._api.push_config()
 
     # ── YouTube ─────────────────────────────────────────────────
 
@@ -270,6 +274,7 @@ class AuthComponent(BaseApiComponent):
                     }
                 )
                 self._eval_js(f"window.onYouTubeLoginComplete({result})")
+                self._api.push_config()
                 self._api._data.refresh()
                 self._api._favorites.youtube_import_follows(silent=True)
             except Exception as e:
@@ -295,6 +300,7 @@ class AuthComponent(BaseApiComponent):
 
         self._config = update_config(_clear)
         self._eval_js("window.onYouTubeLogout()")
+        self._api.push_config()
 
     # ── Connection tests ────────────────────────────────────────
 

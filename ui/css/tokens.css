@@ -1,3 +1,4 @@
+/* css-layer: theme-tokens — :root is shared with themes/*.css by design. */
 :root {
   /* ── Accent system (HSL) ──────────────────────────────── */
   /* Base HSL values are overridden by settings.js when the user picks an accent color. */

@@ -33,17 +33,24 @@ window.onStreamsUpdate = function(data) {
   }
   TwitchX.state.streams = newStreams;
 
-  // Detect offline→online transitions for notification badges
-  if (!TwitchX._prevLiveSet) TwitchX._prevLiveSet = new Set();
+  // Notification badges: accumulate offline→online transitions until the user
+  // acknowledges them (click on a channel, or on the badge itself). The first
+  // update only seeds the baseline — everything live at startup is not "new".
   var newLive = new Set(Array.from(TwitchX.state.liveSet));
-  var badgeLogins = [];
-  newLive.forEach(function(login) {
-    if (!TwitchX._prevLiveSet.has(login)) {
-      badgeLogins.push(login);
-    }
-  });
+  if (!TwitchX._prevLiveSet) {
+    TwitchX._notifBadgeLogins = [];
+  } else {
+    var pending = (TwitchX._notifBadgeLogins || []).filter(function(key) {
+      return newLive.has(key);
+    });
+    newLive.forEach(function(key) {
+      if (!TwitchX._prevLiveSet.has(key) && pending.indexOf(key) === -1) {
+        pending.push(key);
+      }
+    });
+    TwitchX._notifBadgeLogins = pending;
+  }
   TwitchX._prevLiveSet = newLive;
-  TwitchX._notifBadgeLogins = badgeLogins;
 
   TwitchX.renderGrid();
   TwitchX.renderSidebar();
@@ -738,6 +745,35 @@ window.onTestResult = function(data) {
   document.getElementById('test-btn').disabled = false;
 };
 
+window.onConfigLoaded = function(config) {
+  TwitchX.applyConfigSnapshot(config);
+};
+
+window.onWatchStatistics = function(payload) {
+  var loading = document.getElementById('stats-loading');
+  if (payload && payload.ok) {
+    TwitchX.renderWatchStats(payload.stats);
+    return;
+  }
+  if (loading) {
+    loading.classList.remove('hidden');
+    loading.textContent = 'Failed to load statistics';
+  }
+  var content = document.getElementById('stats-content');
+  if (content) content.classList.add('hidden');
+};
+
+window.onChatLogSaved = function(result) {
+  if (result && result.ok) {
+    TwitchX.setStatus('Chat log saved: ' + result.name, 'success');
+    TwitchX.showToast('Chat log saved to ' + result.path, 'success');
+    return;
+  }
+  var reason = (result && result.error) || 'unknown error';
+  TwitchX.setStatus('Chat export failed', 'error');
+  TwitchX.showToast('Chat export failed: ' + reason, 'error');
+};
+
 window.onSettingsSaved = function() {
   var fb = document.getElementById('settings-feedback');
   if (fb) {
@@ -890,7 +926,7 @@ window.onAvatar = function(data) {
   // Update user profile avatar (Twitch-only)
   const userAvatar = document.getElementById('user-avatar');
   if (userAvatar && data.platform === 'twitch' && userAvatar.dataset.key === key) {
-    userAvatar.src = data.data;
+    setAvatarSrc(userAvatar);
   }
 };
 
@@ -900,6 +936,8 @@ window.onThumbnail = function(data) {
   TwitchX.state.thumbnails[streamKey] = data.data;
   const img = document.querySelector('.stream-card[data-key="' + streamKey + '"] .thumb-img');
   if (img) {
+    // A previous load error may have hidden the image — restore it before retrying.
+    img.classList.remove('hidden');
     img.src = data.data;
     img.classList.add('loaded');
   }
@@ -1229,7 +1267,7 @@ window.onChannelProfile = function(profile) {
     subtitle: liveEmptySubtitle,
     secondaryAction: { label: 'Open Channel', callback: TwitchX.openChannelInBrowser },
   });
-  liveEmpty.classList.toggle('hidden', !!profile.is_live && profile.watch_supported);
+  TwitchX.renderChannelLivePanel(profile);
 
   const followBtn = document.getElementById('channel-follow-btn');
   followBtn.textContent = profile.is_favorited ? 'Following' : 'Follow';

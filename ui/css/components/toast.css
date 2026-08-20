@@ -2,7 +2,9 @@
 /* ── Toast notifications ────────────────────────────────── */
 #toast-container {
   position: fixed;
-  top: 0;
+  /* Below the 46px toolbar: at top: 0 the stack sat on the density/refresh
+     buttons and swallowed clicks for the whole toast duration. */
+  top: 46px;
   right: 0;
   z-index: var(--z-toast);
   display: flex;
@@ -15,6 +17,9 @@
 
 .toast {
   pointer-events: auto;
+  /* Opaque base under the colour tint: toasts float over thumbnails and video,
+     where a 10% tint alone left the label barely readable. */
+  background: var(--toast-surface);
   display: flex;
   align-items: center;
   gap: var(--space-8);
@@ -45,25 +50,33 @@
 }
 
 .toast--success {
-  background: var(--toast-bg-success);
+  background:
+    linear-gradient(var(--toast-bg-success), var(--toast-bg-success)),
+    var(--toast-surface);
   border: 1px solid var(--toast-border-success);
 }
 .toast--success .toast-icon { color: var(--toast-text-success); }
 
 .toast--error {
-  background: var(--toast-bg-error);
+  background:
+    linear-gradient(var(--toast-bg-error), var(--toast-bg-error)),
+    var(--toast-surface);
   border: 1px solid var(--toast-border-error);
 }
 .toast--error .toast-icon { color: var(--toast-text-error); }
 
 .toast--info {
-  background: var(--toast-bg-info);
+  background:
+    linear-gradient(var(--toast-bg-info), var(--toast-bg-info)),
+    var(--toast-surface);
   border: 1px solid var(--toast-border-info);
 }
 .toast--info .toast-icon { color: var(--toast-text-info); }
 
 .toast--warn {
-  background: var(--toast-bg-warn);
+  background:
+    linear-gradient(var(--toast-bg-warn), var(--toast-bg-warn)),
+    var(--toast-surface);
   border: 1px solid var(--toast-border-warn);
 }
 .toast--warn .toast-icon { color: var(--toast-text-warn); }

@@ -38,9 +38,6 @@
   color: var(--accent);
   background: var(--accent-dim);
 }
-#add-btn:active {
-  transform: scale(var(--scale-press));
-}
 
 #search-dropdown {
   position: absolute;
@@ -167,10 +164,18 @@
 }
 
 /* ── Platform chips ─────────────────────────────────────── */
+/* Owner of the chips row: layout.css used to style the bar chrome here too. */
 #toolbar-platform-chips {
   display: flex;
   gap: var(--space-6);
+  padding: var(--space-6) var(--space-14);
+  border-bottom: 1px solid var(--border-glass);
+  background: var(--glass-bar);
+  backdrop-filter: var(--glass-thick);
+  -webkit-backdrop-filter: var(--glass-thick);
+  flex-shrink: 0;
 }
+#toolbar-platform-chips.hidden { display: none; }
 
 .platform-chip.btn {
   min-height: 28px;
@@ -204,3 +209,12 @@
   color: var(--text-muted);
   text-align: right;
 }
+
+/* Sidebar search area (moved from layout.css) */
+/* ── Search area ────────────────────────────────────────── */
+#search-area {
+  padding: var(--space-6) var(--space-10);
+  border-top: 1px solid var(--border-subtle);
+  position: relative;
+}
+#search-row { display: flex; gap: var(--space-4); }

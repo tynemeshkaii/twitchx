@@ -23,7 +23,8 @@
   opacity: 0.6;
 }
 
-/* Draggable chrome regions (macOS title bar integration) */
+/* css-layer: drag-regions — macOS title-bar integration. Cross-cutting by
+   nature: it only assigns -webkit-app-region, never component styling. */
 .draggable,
 #toolbar,
 #sidebar-header,
@@ -31,6 +32,7 @@
 #player-header {
   -webkit-app-region: drag;
 }
+/* css-layer: drag-regions */
 .draggable button,
 .draggable input,
 .draggable select,
@@ -49,117 +51,6 @@
   min-width: 0;
   overflow: hidden;
 }
-
-/* ── Sidebar ────────────────────────────────────────────── */
-#sidebar {
-  width: 244px;
-  flex-shrink: 0;
-  background:
-    var(--glass-sidebar),
-    var(--bg-glass, var(--bg-surface));
-  border-right: 1px solid var(--border-subtle);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  transition: width var(--duration-slow) var(--ease-out-expo);
-  backdrop-filter: var(--glass-thick);
-  -webkit-backdrop-filter: var(--glass-thick);
-}
-
-#sidebar.collapsed-sidebar {
-  width: 52px;
-}
-#sidebar.collapsed-sidebar #profile-area,
-#sidebar.collapsed-sidebar #kick-profile-area,
-#sidebar.collapsed-sidebar #platform-tabs,
-#sidebar.collapsed-sidebar #favorites-header,
-#sidebar.collapsed-sidebar .sidebar-footer,
-#sidebar.collapsed-sidebar .section-label,
-#sidebar.collapsed-sidebar .section-meta,
-#sidebar.collapsed-sidebar .channel-name,
-#sidebar.collapsed-sidebar .channel-info,
-#sidebar.collapsed-sidebar .drag-handle {
-  display: none !important;
-}
-#sidebar.collapsed-sidebar #channel-list {
-  padding: var(--space-6) var(--space-6);
-  align-items: center;
-}
-#sidebar.collapsed-sidebar .channel-item {
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  justify-content: center;
-  border-radius: var(--radius-md);
-}
-#sidebar.collapsed-sidebar .channel-avatar {
-  margin: 0;
-}
-#sidebar.collapsed-sidebar .accent-bar {
-  left: 0;
-}
-
-#sidebar-header {
-  height: 46px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding: 0 var(--space-8);
-  border-bottom: 1px solid var(--border-subtle);
-  flex-shrink: 0;
-}
-
-#profile-area {
-  padding: var(--space-10);
-  border-bottom: 1px solid var(--border-subtle);
-  min-height: 48px;
-}
-
-#kick-profile-area {
-  padding: var(--space-6) var(--space-10);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-#platform-tabs {
-  display: flex;
-  gap: var(--space-2);
-  padding: var(--space-8) var(--space-10);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-#favorites-header {
-  padding: var(--space-10) var(--space-10) var(--space-6);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-8);
-  flex-shrink: 0;
-}
-
-#channel-list {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  padding: 0 var(--space-8) var(--space-8);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-}
-
-.sidebar-section {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
-}
-
-/* ── Search area ────────────────────────────────────────── */
-#search-area {
-  padding: var(--space-6) var(--space-10);
-  border-top: 1px solid var(--border-subtle);
-  position: relative;
-}
-#search-row { display: flex; gap: var(--space-4); }
 
 /* ── Content area ───────────────────────────────────────── */
 #content {
@@ -191,6 +82,14 @@
 #view-stack > .view.view-active {
   display: flex;
 }
+/* #stream-grid is a .view but lays out as a grid of cards, not a flex
+   column — the generic .view.view-active rule above would otherwise win
+   on specificity and stack cards full-width. */
+#view-stack > #stream-grid.view-active {
+  display: grid;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
 #view-stack > .view.view-enter-prep {
   opacity: 0 !important;
 }
@@ -220,18 +119,6 @@
 }
 .toolbar-group--left { flex: 1; min-width: 0; }
 .toolbar-group--right { flex-shrink: 0; }
-
-#toolbar-platform-chips {
-  padding: var(--space-6) var(--space-14);
-  border-bottom: 1px solid var(--border-glass);
-  background: var(--glass-bar);
-  backdrop-filter: var(--glass-thick);
-  -webkit-backdrop-filter: var(--glass-thick);
-  flex-shrink: 0;
-}
-#toolbar-platform-chips.hidden { display: none; }
-
-#browse-nav-wrapper { padding: 0 var(--space-8) var(--space-6); }
 
 /* ── Mini Mode ──────────────────────────────────────────── */
 #app.mini #content {

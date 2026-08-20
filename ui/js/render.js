@@ -41,6 +41,23 @@ function getStreamCardLabel(s) {
     TwitchX.formatViewers(s.viewers) + ' viewers';
 }
 
+// Pin state changes without a full rebuild, so the diff branch has to keep the
+// badge in sync — otherwise the card reorders but the icon lags a poll behind.
+function _syncPinBadge(card, s) {
+  const thumb = card.querySelector('.card-thumb') || card;
+  const existing = card.querySelector('.pin-badge');
+  const pinned = TwitchX.isPinned(s.platform || 'twitch', s.login);
+  if (pinned && !existing) {
+    const pinBadge = document.createElement('span');
+    pinBadge.className = 'pin-badge';
+    TwitchX.setIconOnly(pinBadge, 'pin', 12);
+    pinBadge.title = 'Pinned';
+    thumb.appendChild(pinBadge);
+  } else if (!pinned && existing) {
+    existing.remove();
+  }
+}
+
 function renderGrid() {
   // Skip rendering when player view is active — grid is hidden
   if (document.getElementById('player-view').classList.contains('view-active')) return;
@@ -65,13 +82,16 @@ function renderGrid() {
   var anyLoggedIn = TwitchX.state.currentUser || TwitchX.state.kickUser || TwitchX.state.youtubeUser;
   if (TwitchX.state.favorites.length === 0 && !anyLoggedIn) {
     grid.classList.add('hidden');
-    TwitchX.renderEmptyState(empty, {
+    var welcomeOpts = {
       illustration: 'empty-favorites',
       title: 'Welcome to TwitchX',
       subtitle: 'Log in to see followed channels, or add channels manually from search.',
       primaryAction: { label: 'Login with Twitch', callback: function() { if (TwitchX.api) TwitchX.api.login(); } },
-      secondaryAction: { label: 'Connect YouTube', callback: function() { if (TwitchX.api) TwitchX.api.youtube_login(); } },
-    });
+    };
+    if (TwitchX.state.youtubeEnabled) {
+      welcomeOpts.secondaryAction = { label: 'Connect YouTube', callback: function() { if (TwitchX.api) TwitchX.api.youtube_login(); } };
+    }
+    TwitchX.renderEmptyState(empty, welcomeOpts);
 
     return;
   }
@@ -99,8 +119,7 @@ function renderGrid() {
     return;
   }
 
-  empty.classList.remove('view-active');
-  empty.classList.add('hidden');
+  TwitchX.hideEmptyState(empty);
   grid.classList.add('view-active');
   grid.classList.remove('hidden');
 
@@ -138,6 +157,7 @@ function renderGrid() {
       card.classList.toggle('selected', TwitchX.state.selectedChannelKey === streamKey);
       card.setAttribute('aria-pressed', String(TwitchX.state.selectedChannelKey === streamKey));
       card.setAttribute('aria-label', getStreamCardLabel(s));
+      _syncPinBadge(card, s);
     });
     // Reorder cards to match sort
     streams.forEach(function(s) {
@@ -181,7 +201,9 @@ function createStreamCard(s) {
 
   const img = document.createElement('img');
   img.className = 'thumb-img' + (TwitchX.state.thumbnails[streamKey] ? ' loaded' : '');
-  img.src = TwitchX.state.thumbnails[streamKey] || '';
+  // No src until the thumbnail arrives — an empty src fires onerror in WebKit,
+  // which would permanently hide both the image and the shimmer placeholder.
+  if (TwitchX.state.thumbnails[streamKey]) img.src = TwitchX.state.thumbnails[streamKey];
   img.alt = '';
   img.loading = 'lazy';
   img.decoding = 'async';
@@ -241,8 +263,11 @@ function createStreamCard(s) {
   avatar.alt = '';
   avatar.loading = 'lazy';
   avatar.decoding = 'async';
-  avatar.src = TwitchX.state.avatars[streamKey] || '';
-  avatar.classList.toggle('is-empty', !avatar.src);
+  // Same rule as the thumbnail above: never assign an empty src — WebKit
+  // treats it as a failed load and paints its broken-image glyph.
+  var avatarUrl = TwitchX.state.avatars[streamKey];
+  if (avatarUrl) avatar.src = avatarUrl;
+  avatar.classList.toggle('is-empty', !avatarUrl);
   titleRow.appendChild(avatar);
 
   const channelName = document.createElement('span');
@@ -312,11 +337,9 @@ TwitchX.renderGrid = renderGrid;
 function showSkeletonGrid() {
   var grid = document.getElementById('stream-grid');
   var empty = document.getElementById('empty-state');
-  empty.classList.remove('visible');
+  TwitchX.hideEmptyState(empty);
   grid.classList.add('view-active');
   grid.classList.remove('hidden');
-  empty.classList.remove('view-active');
-  empty.classList.add('hidden');
   grid.replaceChildren();
   for (var i = 0; i < 8; i++) {
     var card = document.createElement('div');
@@ -359,7 +382,7 @@ function renderEmptyState(target, opts) {
   var config = opts || {};
   target.replaceChildren();
   target.classList.remove('hidden');
-  target.classList.add('empty-state', 'view-active');
+  target.classList.add('empty-state', 'view-active', 'visible');
 
   var art = document.createElement('div');
   art.className = 'empty-illustration ' + (config.illustration || 'empty-generic');
@@ -392,4 +415,11 @@ function renderEmptyState(target, opts) {
   if (actions.children.length) target.appendChild(actions);
 }
 
+function hideEmptyState(target) {
+  if (!target) return;
+  target.classList.remove('view-active', 'visible');
+  target.classList.add('hidden');
+}
+
 TwitchX.renderEmptyState = renderEmptyState;
+TwitchX.hideEmptyState = hideEmptyState;

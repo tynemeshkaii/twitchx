@@ -124,6 +124,24 @@ function openFirstEmptyMultiSlot(preferredIdx) {
   slotEl.querySelector('.ms-add-input').focus();
 }
 
+// Single exit path for the add-form (cancel button, Esc, empty confirm).
+function closeMultiAddForm(idx, opts) {
+  const slotEl = _getMultiSlotEl(idx);
+  if (!slotEl) return;
+  slotEl.classList.remove('ms-add-form-open');
+  const form = slotEl.querySelector('.ms-add-form');
+  if (form) form.classList.add('hidden');
+  const input = slotEl.querySelector('.ms-add-input');
+  if (input) input.value = '';
+  const emptyEl = slotEl.querySelector('.ms-slot-empty');
+  if (emptyEl) emptyEl.classList.remove('hidden');
+  _setMultiSlotState(idx, 'empty', 'Empty');
+  if (opts && opts.restoreFocus) {
+    const addBtn = slotEl.querySelector('.ms-add-btn');
+    if (addBtn) addBtn.focus();
+  }
+}
+
 function closeMultistreamView() {
   TwitchX.stopMultiHealthMonitor();
   for (let i = 0; i < 4; i++) {
@@ -204,7 +222,7 @@ function _clearMultiSlot(idx) {
 }
 
 function addMultiSlot(idx, channel, platform, quality) {
-  const cfg = TwitchX.api ? TwitchX.api.get_full_config_for_settings() : {};
+  const cfg = TwitchX.state.fullConfig || {};
   const q = quality || (cfg && cfg.quality) || 'best';
   TwitchX.multiState.slots[idx] = { channel: channel, platform: platform, quality: q, title: '', state: 'loading' };
   const slotEl = _getMultiSlotEl(idx);
@@ -477,15 +495,19 @@ function _createMultiSlot(idx) {
   optKick.value = 'kick';
   optKick.textContent = 'Kick';
   select.appendChild(optKick);
-  const optYoutube = document.createElement('option');
-  optYoutube.value = 'youtube';
-  optYoutube.textContent = 'YouTube live';
-  select.appendChild(optYoutube);
+  if (TwitchX.state.youtubeEnabled) {
+    const optYoutube = document.createElement('option');
+    optYoutube.value = 'youtube';
+    optYoutube.textContent = 'YouTube live';
+    select.appendChild(optYoutube);
+  }
   form.appendChild(select);
-  const note = document.createElement('div');
-  note.className = 'ms-platform-note';
-  note.textContent = 'YouTube works when the live stream is already loaded in TwitchX.';
-  form.appendChild(note);
+  if (TwitchX.state.youtubeEnabled) {
+    const note = document.createElement('div');
+    note.className = 'ms-platform-note';
+    note.textContent = 'YouTube works when the live stream is already loaded in TwitchX.';
+    form.appendChild(note);
+  }
   const btns = document.createElement('div');
   btns.className = 'ms-form-btns';
   const confirm = document.createElement('button');
@@ -716,6 +738,7 @@ TwitchX.removeMultiSlot = removeMultiSlot;
 TwitchX.setAudioFocus = setAudioFocus;
 TwitchX.switchMultiChat = switchMultiChat;
 TwitchX.openFirstEmptyMultiSlot = openFirstEmptyMultiSlot;
+TwitchX.closeMultiAddForm = closeMultiAddForm;
 TwitchX._setMultiSlotState = _setMultiSlotState;
 TwitchX._updateMultiGridLayout = _updateMultiGridLayout;
 TwitchX._applyMultistreamPreset = _applyMultistreamPreset;

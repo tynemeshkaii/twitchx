@@ -1,19 +1,23 @@
 /* ── Forms & inputs ─────────────────────────────────────── */
+/* Owner of every form label, including the settings modal (settings.css used
+   to carry a second copy that won on load order — these are its values). */
 .form-label,
-.setting-group > label,
+.setting-group label,
 .setting-label {
   display: block;
   font-size: var(--font-sm);
   font-weight: 600;
   color: var(--text-secondary);
-  margin-bottom: var(--space-6);
-  letter-spacing: 0.01em;
+  margin-bottom: var(--space-4);
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .text-input,
 .setting-group input[type="text"],
 .setting-group input[type="password"],
 .setting-group input[type="number"],
+.setting-group input[type="search"],
 .setting-group select,
 .mod-input {
   width: 100%;
@@ -75,25 +79,26 @@
   color: var(--text-primary);
   border-color: var(--border-default);
 }
-.eye-btn:active {
-  transform: scale(var(--scale-press));
-}
 .eye-btn:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
-/* Checkbox / radio rows (settings checkbox-row lives in settings.css) */
+/* Checkbox / radio rows (settings checkbox-row lives in settings.css).
+   Merged with the second definition player.css used to carry — the gaps and
+   the bottom margin below come from there. */
 .filter-row,
 .mod-row {
   display: flex;
   align-items: center;
-  gap: var(--space-8);
   padding: var(--space-6) 0;
+  margin-bottom: 4px;
   color: var(--text-secondary);
   font-size: var(--font-sm);
   cursor: pointer;
 }
+.filter-row { gap: 4px; }
+.mod-row { gap: 6px; }
 .checkbox-row input[type="checkbox"],
 .checkbox-row input[type="radio"],
 .filter-row input[type="checkbox"],

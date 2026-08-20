@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -191,7 +192,7 @@ class TestWatchStatsDB:
     def test_cleanup_preserves_recent_daily_summary(
         self, stats_db: WatchStatsDB
     ) -> None:
-        with sqlite3.connect(stats_db._db_path) as conn:
+        with closing(sqlite3.connect(stats_db._db_path)) as conn, conn:
             conn.execute(
                 """INSERT INTO daily_summary
                    (date, platform, total_sec, streams_count, unique_channels)

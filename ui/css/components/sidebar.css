@@ -3,6 +3,11 @@
   width: 32px; height: 32px; border-radius: 50%;
   background: var(--bg-elevated); object-fit: cover; flex-shrink: 0;
 }
+/* Shown before the avatar arrives: plain disc, no broken-image glyph. */
+.platform-user-avatar.is-empty {
+  background: linear-gradient(135deg, var(--bg-control), var(--bg-elevated));
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+}
 .platform-user-details { flex: 1; min-width: 0; }
 .platform-user-name {
   font-size: var(--font-sm); font-weight: 600; color: var(--text-primary);
@@ -40,6 +45,7 @@
 
 /* ── Platform filter tabs (pill segmented control) ────── */
 #platform-tabs {
+  display: flex;
   background: var(--bg-control);
   border-radius: var(--radius-md);
   padding: var(--space-2);
@@ -308,6 +314,7 @@
   display: none;
 }
 .channel-item .notif-dot.visible { display: block; }
+/* Clickable: dismisses all pending new-live notifications. */
 #favorites-header .notif-badge {
   display: none;
   min-width: 16px; height: 16px;
@@ -315,7 +322,9 @@
   background: var(--live-red); color: var(--text-inverse);
   font-size: var(--font-2xs); font-weight: 700; line-height: 16px;
   text-align: center; margin-left: auto;
+  border: none; font-family: inherit; cursor: pointer;
 }
+#favorites-header .notif-badge:hover { filter: brightness(1.12); }
 #favorites-header .notif-badge.visible { display: inline-block; }
 
 /* ── Chat timestamps ──────────────────────────────────── */
@@ -666,7 +675,106 @@
   flex-direction: column;
   gap: var(--space-6);
 }
+/* Base moved here from multistream.css, which had no business owning it. */
 #browse-nav-btn {
+  min-height: 32px;
+  display: block;
   width: 100%;
+  padding: var(--space-8) var(--space-12);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
+  letter-spacing: 0.01em;
   justify-content: center;
 }
+
+/* Sidebar shell (moved from layout.css — layout owns the app frame only) */
+/* ── Sidebar ────────────────────────────────────────────── */
+#sidebar {
+  width: 244px;
+  flex-shrink: 0;
+  background:
+    var(--glass-sidebar),
+    var(--bg-glass, var(--bg-surface));
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: width var(--duration-slow) var(--ease-out-expo);
+  backdrop-filter: var(--glass-thick);
+  -webkit-backdrop-filter: var(--glass-thick);
+}
+#sidebar.collapsed-sidebar {
+  width: 52px;
+}
+#sidebar.collapsed-sidebar #profile-area,
+#sidebar.collapsed-sidebar #kick-profile-area,
+#sidebar.collapsed-sidebar #favorites-header,
+#sidebar.collapsed-sidebar .sidebar-footer,
+#sidebar.collapsed-sidebar .section-label,
+#sidebar.collapsed-sidebar .section-meta,
+#sidebar.collapsed-sidebar .channel-name,
+#sidebar.collapsed-sidebar .channel-info,
+#sidebar.collapsed-sidebar .drag-handle {
+  display: none !important;
+}
+#sidebar.collapsed-sidebar #channel-list {
+  padding: var(--space-6) var(--space-6);
+  align-items: center;
+}
+#sidebar.collapsed-sidebar .channel-item {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  justify-content: center;
+  border-radius: var(--radius-md);
+}
+#sidebar.collapsed-sidebar .channel-avatar {
+  margin: 0;
+}
+#sidebar.collapsed-sidebar .accent-bar {
+  left: 0;
+}
+#sidebar-header {
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 var(--space-8);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+#profile-area {
+  padding: var(--space-10);
+  border-bottom: 1px solid var(--border-subtle);
+  min-height: 48px;
+}
+#kick-profile-area {
+  padding: var(--space-6) var(--space-10);
+  border-bottom: 1px solid var(--border-subtle);
+}
+#favorites-header {
+  padding: var(--space-10) var(--space-10) var(--space-6);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  flex-shrink: 0;
+}
+#channel-list {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 var(--space-8) var(--space-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+#browse-nav-wrapper { padding: 0 var(--space-8) var(--space-6); }

@@ -1,4 +1,3 @@
-
 #empty-state {
   display: none; flex-direction: column; align-items: center;
   justify-content: center; flex: 1; padding: var(--space-40);
@@ -7,6 +6,10 @@
   opacity: 0;
   transition: opacity var(--duration-view) var(--ease-view);
 }
+/* #empty-state is part of #view-stack, so the view system (switchView) drives
+   it with .view-active — the older .visible flag is kept as an alias so both
+   entry points reveal it instead of leaving it at opacity: 0. */
+#empty-state.view-active,
 #empty-state.visible { display: flex; opacity: 1; }
 #empty-state.hidden { display: none !important; }
 #empty-state .empty-icon,
@@ -72,30 +75,4 @@
 .empty-action.secondary:hover {
   border-color: var(--border-strong);
   color: var(--text-primary);
-}
-
-.browse-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-.browse-empty.hidden { display: none; }
-.browse-empty .empty-illustration {
-  width: 64px;
-  height: 64px;
-  border-radius: 20px;
-  margin-bottom: var(--space-12);
-}
-.browse-empty .empty-title {
-  color: var(--text-primary);
-  font-size: var(--font-md);
-  font-weight: 750;
-  margin-bottom: var(--space-4);
-}
-.browse-empty .empty-subtitle {
-  max-width: 360px;
-  color: var(--text-muted);
-  font-size: var(--font-sm);
-  line-height: 1.5;
 }

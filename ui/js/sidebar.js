@@ -189,11 +189,22 @@ function _matchWatching(login, key) {
   return TwitchX.state.watchingChannel === login;
 }
 
+function hideSidebarTooltip() {
+  var tooltip = document.getElementById('sidebar-tooltip');
+  if (!tooltip) return;
+  tooltip.classList.remove('visible');
+  tooltip.classList.add('hidden');
+}
+
 function _setupSidebarTooltip(item, entry, streamMap) {
   let tooltipTimer = null;
   function showTooltip(e) {
     var tooltip = document.getElementById('sidebar-tooltip');
     if (!tooltip) return;
+    // A poll can replace the row while the 180ms hover timer is pending. The
+    // detached node reports a zero rect, which used to park the tooltip in the
+    // top-left corner with no mouseleave left to dismiss it.
+    if (!item.isConnected) return;
     var stream = streamMap[entry.key];
     var thumb = document.getElementById('tooltip-thumb');
     var title = document.getElementById('tooltip-title');
@@ -228,10 +239,6 @@ function _setupSidebarTooltip(item, entry, streamMap) {
     tooltip.classList.remove('hidden');
     tooltip.classList.add('visible');
   }
-  function hideTooltip() {
-    var tooltip = document.getElementById('sidebar-tooltip');
-    if (tooltip) { tooltip.classList.remove('visible'); tooltip.classList.add('hidden'); }
-  }
   item.addEventListener('mouseenter', function(e) {
     tooltipTimer = setTimeout(function() {
       tooltipTimer = null;
@@ -244,7 +251,7 @@ function _setupSidebarTooltip(item, entry, streamMap) {
   });
   item.addEventListener('mouseleave', function() {
     if (tooltipTimer) { clearTimeout(tooltipTimer); tooltipTimer = null; }
-    hideTooltip();
+    hideSidebarTooltip();
   });
 }
 
@@ -593,6 +600,7 @@ function createRailAvatar(entry, isLive, streamMap) {
 }
 
 function renderRail(groups) {
+  hideSidebarTooltip();
   var list = document.getElementById('channel-list');
   var liveLogins = groups.online;
   var offlineLogins = groups.offline;
@@ -886,6 +894,9 @@ TwitchX.moveFavoriteToGroup = function(key, groupName) {
 };
 
 function renderSidebar() {
+  // The hovered row is about to be replaced, and a destroyed element never
+  // fires mouseleave — the tooltip would hang over the UI until the next hover.
+  hideSidebarTooltip();
   var _sidebar = document.getElementById('sidebar');
   if (_sidebar && _sidebar.classList.contains('collapsed-sidebar')) {
     renderRail(getSidebarGroups());
@@ -902,11 +913,8 @@ function renderSidebar() {
     return;
   }
 
-  expandSidebarSectionForLogin(
-    TwitchX.state.selectedChannel,
-    TwitchX.state.selectedChannelKey
-  );
-
+  // NOTE: no expandSidebarSectionForLogin() here — selectChannel() owns that.
+  // Calling it per render re-opened the selected channel's section on every poll.
   const sidebarFrag = document.createDocumentFragment();
 
   function updateFavoritesCountBadge(count) {
@@ -916,7 +924,8 @@ function renderSidebar() {
     badge.setAttribute('aria-label', count + ' favorite' + (count === 1 ? '' : 's'));
   }
 
-  if (TwitchX.state.favorites.length === 0) {
+  if (TwitchX.getFavoriteEntries().length === 0) {
+    list.replaceChildren();
     updateFavoritesCountBadge(0);
     updatePlatformStatusDots();
     return;
@@ -971,8 +980,10 @@ function updatePlatformStatusDots() {
   var platforms = [
     { key: 'twitch', user: TwitchX.state.currentUser },
     { key: 'kick', user: TwitchX.state.kickUser },
-    { key: 'youtube', user: TwitchX.state.youtubeUser },
   ];
+  if (TwitchX.state.youtubeEnabled) {
+    platforms.push({ key: 'youtube', user: TwitchX.state.youtubeUser });
+  }
   document.querySelectorAll('.platform-status-dots').forEach(function(container) {
     container.replaceChildren();
     platforms.forEach(function(p) {
@@ -1009,14 +1020,24 @@ function initSidebarScrollShadow() {
 
 function _updateNotifBadges() {
   var badgeLogins = TwitchX._notifBadgeLogins || [];
-  var notifBadge = document.getElementById('favorites-header').querySelector('.notif-badge');
+  var header = document.getElementById('favorites-header');
+  if (!header) return;
+  var notifBadge = header.querySelector('.notif-badge');
   if (!notifBadge) {
-    notifBadge = document.createElement('span');
+    notifBadge = document.createElement('button');
+    notifBadge.type = 'button';
     notifBadge.className = 'notif-badge';
-    document.getElementById('favorites-header').appendChild(notifBadge);
+    notifBadge.addEventListener('click', function(e) {
+      e.stopPropagation();
+      _clearNotifBadges();
+    });
+    header.appendChild(notifBadge);
   }
   if (badgeLogins.length > 0) {
     notifBadge.textContent = String(badgeLogins.length);
+    notifBadge.title = 'Dismiss ' + badgeLogins.length + ' new live notification' +
+      (badgeLogins.length === 1 ? '' : 's');
+    notifBadge.setAttribute('aria-label', notifBadge.title);
     notifBadge.classList.add('visible');
   } else {
     notifBadge.classList.remove('visible');
@@ -1049,6 +1070,17 @@ function _clearNotifBadges() {
   _updateNotifBadges();
 }
 
+// Drop the badge for one channel — it has been looked at.
+function acknowledgeNotifBadge(key) {
+  if (!key) return;
+  var pending = TwitchX._notifBadgeLogins || [];
+  var idx = pending.indexOf(key);
+  if (idx === -1) return;
+  pending.splice(idx, 1);
+  TwitchX._notifBadgeLogins = pending;
+  _updateNotifBadges();
+}
+
 // Update notif badges after sidebar render
 var _origRenderSidebar = renderSidebar;
 renderSidebar = function() {
@@ -1073,3 +1105,5 @@ TwitchX.initSidebarScrollShadow = initSidebarScrollShadow;
 TwitchX.updatePlatformStatusDots = updatePlatformStatusDots;
 TwitchX._updateNotifBadges = _updateNotifBadges;
 TwitchX._clearNotifBadges = _clearNotifBadges;
+TwitchX.acknowledgeNotifBadge = acknowledgeNotifBadge;
+TwitchX.hideSidebarTooltip = hideSidebarTooltip;

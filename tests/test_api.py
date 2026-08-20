@@ -1780,3 +1780,300 @@ def test_on_data_fetched_skips_normalize_when_loop_is_none(
 
     api._kick.normalize_stream_item.assert_not_called()
     api._youtube.normalize_stream_item.assert_not_called()
+
+
+def _multi_resolve_ok(
+    ch: str, q: str, sl: str = "streamlink", platform_client: Any = None, extra_args: Any = None
+) -> tuple[str, str]:
+    return "https://hls.example.com/s.m3u8", ""
+
+
+def _payload(code: str) -> dict[str, Any]:
+    return json.loads(code.split("(", 1)[1].rstrip(")"))
+
+
+class TestWatchDirect:
+    """Browse path — watch_direct(channel, platform, quality)."""
+
+    def test_success_twitch_emits_stream_ready(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        api = TwitchXApi()
+        emitted: list[str] = []
+        captured: dict[str, str] = {}
+
+        def fake_resolve(
+            ch: str, q: str, sl: str = "streamlink", platform_client: Any = None, extra_args: Any = None
+        ) -> tuple[str, str]:
+            captured["channel"] = ch
+            captured["platform"] = platform_client.PLATFORM_ID if platform_client else ""
+            return "https://example.com/direct.m3u8", ""
+
+        monkeypatch.setattr("ui.api.streams.resolve_hls_url", fake_resolve)
+        monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+        monkeypatch.setattr(api._streams, "_start_launch_timer", lambda: None)
+        monkeypatch.setattr(api._streams, "_cancel_launch_timer", lambda: None)
+        monkeypatch.setattr(api, "start_chat", lambda channel, platform: None)
+
+        api.watch_direct("pokimane", "twitch", "best")
+
+        assert captured["platform"] == "twitch"
+        assert api._watching_channel == "pokimane"
+        assert any("onStreamReady" in c for c in emitted)
+        assert any("onLaunchResult" in c and "true" in c for c in emitted)
+
+    def test_unsupported_platform_emits_error(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        api = TwitchXApi()
+        emitted: list[str] = []
+        monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+
+        api.watch_direct("UCabc", "youtube", "best")
+
+        assert len(emitted) == 1
+        assert "not supported" in emitted[0]
+        assert api._watching_channel is None
+
+    def test_empty_channel_is_noop(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        api = TwitchXApi()
+        emitted: list[str] = []
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+
+        api.watch_direct("", "twitch", "best")
+
+        assert emitted == []
+
+    def test_already_watching_emits_info(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        api = TwitchXApi()
+        api._watching_channel = "Pokimane"
+        emitted: list[str] = []
+        monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+
+        api.watch_direct("pokimane", "twitch", "best")
+
+        assert any("Already watching" in c for c in emitted)
+        assert not any("onStreamReady" in c for c in emitted)
+
+    def test_resolve_failure_emits_launch_error(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        api = TwitchXApi()
+        emitted: list[str] = []
+        monkeypatch.setattr(
+            "ui.api.streams.resolve_hls_url",
+            lambda ch, q, sl, platform_client=None, extra_args=None: (None, "boom"),
+        )
+        monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+        monkeypatch.setattr(api._streams, "_start_launch_timer", lambda: None)
+        monkeypatch.setattr(api._streams, "_cancel_launch_timer", lambda: None)
+
+        api.watch_direct("ninja", "twitch", "best")
+
+        assert any("onLaunchResult" in c and "false" in c for c in emitted)
+        assert not any("onStreamReady" in c for c in emitted)
+
+
+class TestWatchMediaErrors:
+    def test_empty_url_is_noop(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        api = TwitchXApi()
+        emitted: list[str] = []
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+
+        api.watch_media("", "best")
+
+        assert emitted == []
+
+    def test_resolve_failure_emits_error(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        api = TwitchXApi()
+        emitted: list[str] = []
+        monkeypatch.setattr(
+            "ui.api.streams.resolve_hls_url",
+            lambda ch, q, sl, platform_client=None, extra_args=None: (None, "no vod"),
+        )
+        monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+        monkeypatch.setattr(api._streams, "_start_launch_timer", lambda: None)
+        monkeypatch.setattr(api._streams, "_cancel_launch_timer", lambda: None)
+
+        api.watch_media("https://twitch.tv/videos/999", "best", channel="xqc")
+
+        assert any("onLaunchResult" in c and "false" in c for c in emitted)
+        assert not any("onStreamReady" in c for c in emitted)
+
+
+class TestAddMultiSlotGuards:
+    def test_unsupported_platform_emits_error(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        api = TwitchXApi()
+        emitted: list[str] = []
+        monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+
+        api.add_multi_slot(0, "foo", "rumble", "best")
+
+        assert len(emitted) == 1
+        payload = _payload(emitted[0])
+        assert "not supported in multistream" in payload["error"]
+
+    def test_youtube_slot_without_loaded_stream_errors(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        api = TwitchXApi()
+        emitted: list[str] = []
+        monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+
+        api.add_multi_slot(0, "UCnotloaded", "youtube", "best")
+
+        payload = _payload(emitted[0])
+        assert "only for live channels" in payload["error"]
+
+
+class TestRecording:
+    def test_start_recording_without_channel_errors(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        api = TwitchXApi()
+        api._watching_channel = None
+        emitted: list[str] = []
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+
+        api.start_recording()
+
+        assert any("Not watching any channel" in c for c in emitted)
+
+    def test_start_recording_success_emits_state(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        api = TwitchXApi()
+        api._watching_channel = "xqc"
+        emitted: list[str] = []
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+        rec = MagicMock()
+        rec.start.return_value = None
+        rec.state_dict.return_value = {"active": True, "filename": "xqc.ts", "elapsed": 0}
+        api._recorder = rec
+
+        api.start_recording()
+
+        rec.start.assert_called_once()
+        assert any("onRecordingState" in c for c in emitted)
+        assert any("xqc.ts" in c for c in emitted)
+
+    def test_start_recording_error_emits_error(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        api = TwitchXApi()
+        api._watching_channel = "xqc"
+        emitted: list[str] = []
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+        rec = MagicMock()
+        rec.start.return_value = "streamlink not found"
+        api._recorder = rec
+
+        api.start_recording()
+
+        assert any("streamlink not found" in c for c in emitted)
+
+    def test_stop_recording_emits_inactive_state(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        api = TwitchXApi()
+        emitted: list[str] = []
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+        api._recorder = MagicMock()
+
+        api.stop_recording()
+
+        assert any("onRecordingState" in c and "false" in c for c in emitted)
+
+
+class TestMultistreamPresets:
+    def test_get_presets_returns_defaults(self, temp_config_dir: Path) -> None:
+        api = TwitchXApi()
+        result = api.get_multistream_presets()
+        assert isinstance(result["presets"], list)
+        assert result["active"] == 0
+
+    def test_set_preset_valid_index_persists_and_emits(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        api = TwitchXApi()
+        emitted: list[str] = []
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+
+        api.set_multistream_preset(1)
+
+        assert any("onMultistreamPresetChanged" in c for c in emitted)
+        assert api.get_multistream_presets()["active"] == 1
+
+    def test_set_preset_invalid_index_is_noop(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        api = TwitchXApi()
+        emitted: list[str] = []
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+
+        api.set_multistream_preset(99)
+
+        assert emitted == []
+
+    def test_set_preset_non_int_is_noop(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        api = TwitchXApi()
+        emitted: list[str] = []
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+
+        api.set_multistream_preset("nope")  # type: ignore[arg-type]
+
+        assert emitted == []
+
+
+class TestStopAndNotify:
+    def test_stop_player_clears_state(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        api = TwitchXApi()
+        api._watching_channel = "xqc"
+        emitted: list[str] = []
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+
+        api.stop_player()
+
+        assert api._watching_channel is None
+        assert any("onPlayerStop" in c for c in emitted)
+
+    def test_notify_player_hidden_clears_state_without_callback(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        api = TwitchXApi()
+        api._watching_channel = "xqc"
+        emitted: list[str] = []
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+
+        api.notify_player_hidden()
+
+        assert api._watching_channel is None
+        assert not any("onPlayerStop" in c for c in emitted)
+
+    def test_stop_multi_ends_session(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        api = TwitchXApi()
+        monkeypatch.setattr(api, "_eval_js", lambda code: None)
+        api.stop_multi()  # should not raise

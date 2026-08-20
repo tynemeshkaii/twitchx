@@ -10,6 +10,7 @@ function selectChannel(login, platform) {
   if (TwitchX.expandSidebarSectionForLogin(login, key)) {
     TwitchX.renderSidebar();
   }
+  TwitchX.acknowledgeNotifBadge(key);
   document.querySelectorAll('.stream-card').forEach(function(c) {
     c.classList.toggle('selected', c.dataset.key === key);
   });
@@ -35,7 +36,7 @@ function addChannel() {
     const inputLower = val.toLowerCase();
     let choice = null;
     if (platform === 'all') {
-      if (inputLower.indexOf('youtube.com/') !== -1 || val.charAt(0) === '@') {
+      if ((inputLower.indexOf('youtube.com/') !== -1 || val.charAt(0) === '@') && TwitchX.state.youtubeEnabled) {
         choice = { login: val, platform: 'youtube' };
       } else if (inputLower.indexOf('kick.com/') !== -1) {
         choice = { login: val, platform: 'kick' };
@@ -99,7 +100,7 @@ function resetChannelMediaPanels() {
     );
     if (loading) loading.classList.add('hidden');
     if (empty) {
-      empty.classList.add('hidden');
+      TwitchX.hideEmptyState(empty);
       empty.textContent = '';
     }
     if (container) container.replaceChildren();
@@ -222,6 +223,97 @@ function createChannelMediaCard(item, tab) {
   return card;
 }
 
+// P2-18: a live channel showed an empty panel — the empty state was hidden and
+// nothing replaced it. Render a real card for the live stream instead.
+function renderChannelLivePanel(profile) {
+  const panel = document.getElementById('channel-tab-live');
+  const empty = document.getElementById('channel-live-empty');
+  if (!panel) return;
+
+  const existing = document.getElementById('channel-live-card');
+  if (existing) existing.remove();
+
+  if (!profile || !profile.is_live || !profile.watch_supported) return;
+  TwitchX.hideEmptyState(empty);
+
+  const platform = profile.platform || 'twitch';
+  const stream = TwitchX.findStreamForChannel(profile.login, platform);
+  const key = TwitchX.channelKey(profile.login, platform);
+  const label = profile.display_name || profile.login;
+
+  const card = document.createElement('div');
+  card.id = 'channel-live-card';
+  card.className = 'channel-media-card';
+
+  const thumbWrap = document.createElement('button');
+  thumbWrap.className = 'channel-media-thumb-wrap';
+  thumbWrap.type = 'button';
+  thumbWrap.setAttribute('aria-label', 'Watch ' + label + ' now');
+  thumbWrap.addEventListener('click', watchChannelStream);
+
+  const thumbUrl = TwitchX.state.thumbnails[key] || (stream && stream.thumbnail_url);
+  if (thumbUrl) {
+    const thumb = document.createElement('img');
+    thumb.className = 'channel-media-thumb';
+    thumb.alt = '';
+    thumb.loading = 'lazy';
+    thumb.decoding = 'async';
+    thumb.onerror = function() {
+      thumb.remove();
+      thumbWrap.appendChild(TwitchX.createImageFallback(label, 'channel-media-thumb-fallback'));
+    };
+    thumb.src = thumbUrl;
+    thumbWrap.appendChild(thumb);
+  } else {
+    thumbWrap.appendChild(TwitchX.createImageFallback(label, 'channel-media-thumb-fallback'));
+  }
+
+  const body = document.createElement('div');
+  body.className = 'channel-media-body';
+
+  const title = document.createElement('div');
+  title.className = 'channel-media-title';
+  title.textContent = (stream && stream.title) || label + ' is live';
+  body.appendChild(title);
+
+  const platformRow = document.createElement('div');
+  platformRow.className = 'channel-media-platform-row';
+  platformRow.appendChild(TwitchX.createPlatformBadge(platform));
+  body.appendChild(platformRow);
+
+  const meta = document.createElement('div');
+  meta.className = 'channel-media-meta';
+  const parts = [];
+  if (stream && stream.game) parts.push(stream.game);
+  if (stream && typeof stream.viewers === 'number') {
+    parts.push(TwitchX.formatViewers(stream.viewers) + ' viewers');
+  }
+  if (stream && stream.started_at) parts.push(TwitchX.formatUptime(stream.started_at));
+  meta.textContent = parts.length ? parts.join(' \u00b7 ') : 'Live now';
+  body.appendChild(meta);
+
+  const actions = document.createElement('div');
+  actions.className = 'channel-media-actions';
+  const watchBtn = document.createElement('button');
+  watchBtn.className = 'channel-media-btn';
+  watchBtn.type = 'button';
+  watchBtn.textContent = 'Watch Now';
+  watchBtn.addEventListener('click', watchChannelStream);
+  actions.appendChild(watchBtn);
+
+  const openBtn = document.createElement('button');
+  openBtn.className = 'channel-media-btn secondary';
+  openBtn.type = 'button';
+  openBtn.textContent = 'Open';
+  openBtn.addEventListener('click', openChannelInBrowser);
+  actions.appendChild(openBtn);
+  body.appendChild(actions);
+
+  card.appendChild(thumbWrap);
+  card.appendChild(body);
+  panel.appendChild(card);
+}
+
 function renderChannelMediaTab(tab) {
   const entry = TwitchX.state.channelTabs[tab];
   const els = getChannelMediaElements(tab);
@@ -231,7 +323,7 @@ function renderChannelMediaTab(tab) {
   els.container.replaceChildren();
 
   if (entry.status !== 'ready') {
-    els.empty.classList.add('hidden');
+    TwitchX.hideEmptyState(els.empty);
     return;
   }
 
@@ -247,7 +339,7 @@ function renderChannelMediaTab(tab) {
     return;
   }
 
-  els.empty.classList.add('hidden');
+  TwitchX.hideEmptyState(els.empty);
   entry.items.forEach(function(item) {
     els.container.appendChild(createChannelMediaCard(item, tab));
   });
@@ -298,7 +390,9 @@ function showChannelView(login, platform, source) {
   document.getElementById('channel-follow-btn').textContent = 'Follow';
   document.getElementById('channel-follow-btn').classList.remove('following');
   document.getElementById('channel-open-btn').title = 'Open channel in browser';
-  document.getElementById('channel-live-empty').classList.add('hidden');
+  TwitchX.hideEmptyState(document.getElementById('channel-live-empty'));
+  var staleLiveCard = document.getElementById('channel-live-card');
+  if (staleLiveCard) staleLiveCard.remove();
   document.querySelectorAll('.channel-tab').forEach(function(t) {
     var active = t.dataset.tab === 'live';
     t.classList.toggle('active', active);
@@ -385,6 +479,7 @@ TwitchX.playChannelMedia = playChannelMedia;
 TwitchX.openChannelMedia = openChannelMedia;
 TwitchX.openChannelInBrowser = openChannelInBrowser;
 TwitchX.createChannelMediaCard = createChannelMediaCard;
+TwitchX.renderChannelLivePanel = renderChannelLivePanel;
 TwitchX.renderChannelMediaTab = renderChannelMediaTab;
 TwitchX.ensureChannelTabLoaded = ensureChannelTabLoaded;
 TwitchX.showChannelView = showChannelView;

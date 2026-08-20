@@ -50,6 +50,11 @@ button:not(:disabled):active,
 .chat-header-btn:hover {
   color: var(--text-primary);
 }
+/* Moved from player.css, where a second copy re-set the colour to
+   --text-secondary and cancelled the brighten entirely. */
+.chat-header-btn:hover {
+  background: var(--hover-bg-strong);
+}
 #emote-picker-btn:hover {
   color: var(--text-primary);
 }

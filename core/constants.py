@@ -18,6 +18,13 @@ CONFIG_FILE_NAME = "config.json"
 AVATAR_CACHE_TTL_SECONDS = 7 * 24 * 3600  # 7 days
 BROWSE_CACHE_TTL_SECONDS = 10 * 60  # 10 minutes
 
+# Feature flags
+# YouTube is disabled for the closed beta — bundled YouTube creds are
+# placeholders. Backend code stays intact; flip to True + fill real creds
+# in core/credentials.py to re-enable. See ui.api state bootstrap for the
+# JS-side mirror (TwitchX.state.youtubeEnabled).
+YOUTUBE_ENABLED = False
+
 # OAuth
 OAUTH_PORT = 3457
 OAUTH_TIMEOUT_SECONDS = 120

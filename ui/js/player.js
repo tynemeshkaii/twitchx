@@ -69,7 +69,7 @@ function showPlayerView() {
     if (toggleBtn) toggleBtn.classList.add('hidden');
   } else {
     if (toggleBtn) toggleBtn.classList.remove('hidden');
-    const cfg = TwitchX.api ? TwitchX.api.get_full_config_for_settings() : null;
+    const cfg = TwitchX.state.configLoaded ? TwitchX.state.fullConfig : null;
     if (cfg && cfg.chat_width) chatPanel.style.setProperty('--chat-width', cfg.chat_width + 'px');
     if (cfg && cfg.chat_visible === false) {
       chatPanel.classList.add('hidden');
@@ -117,6 +117,7 @@ function showPlayerView() {
   if (statsBtn) statsBtn.classList.remove('hidden');
 
   TwitchX.stopVodTimeDisplay();
+  TwitchX.stopVodSeekBar();
   TwitchX.stopVideoHealthMonitor();
   TwitchX.stopFpsMonitor();
   TwitchX.stopFrozenMonitor();
@@ -153,6 +154,9 @@ function hidePlayerView(skipViewTransition) {
   TwitchX.stopFrozenMonitor();
   TwitchX.stopProactiveReset();
   TwitchX.stopVodTimeDisplay();
+  // Without this the 250ms interval kept ticking and the seek bar stayed on
+  // screen over the grid and over the next live stream.
+  TwitchX.stopVodSeekBar();
   TwitchX.hideStatsOverlay();
   TwitchX.thirdPartyEmotes = {};
   var pLoader = document.getElementById('player-loader');

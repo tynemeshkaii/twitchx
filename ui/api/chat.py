@@ -9,11 +9,12 @@ from typing import Any
 
 import httpx
 
+from core import storage as _storage
 from core.chat import ChatMessage, ChatSendResult, ChatStatus
 from core.chats.kick_chat import KickChatClient
 from core.chats.twitch_chat import TwitchChatClient
 from core.chats.youtube_chat import YouTubeChatClient
-from core.storage import CONFIG_DIR, get_platform_config, update_config
+from core.storage import get_platform_config, update_config
 from core.third_party_emotes import fetch_channel_emotes
 
 from ._base import BaseApiComponent
@@ -107,7 +108,7 @@ class ChatComponent(BaseApiComponent):
                             )
                         finally:
                             emote_loop.close()
-                    cache_dir = str(CONFIG_DIR / "emotes")
+                    cache_dir = str(_storage.CONFIG_DIR / "emotes")
                     emote_map = fetch_channel_emotes(channel, twitch_user_id, cache_dir)
                     if emote_map and not self._shutdown.is_set():
                         payload = json.dumps({"channel": channel, "emotes": emote_map})

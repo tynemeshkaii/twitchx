@@ -80,6 +80,7 @@ function setBrowseEmpty(message, detail, kind) {
 function clearBrowseEmpty() {
   var emptyEl = document.getElementById('browse-empty');
   if (!emptyEl) return;
+  // className reset already drops .empty-state/.view-active/.visible
   emptyEl.className = 'browse-empty hidden';
   emptyEl.textContent = '';
 }

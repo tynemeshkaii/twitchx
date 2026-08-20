@@ -12,16 +12,16 @@ from typing import Any
 
 import httpx
 
+from core import storage as _storage
 from core.chats.kick_chat import KickChatClient
 from core.chats.twitch_chat import TwitchChatClient
 from core.chats.youtube_chat import YouTubeChatClient
-from core.constants import WATCH_STATS_DB_NAME
+from core.constants import WATCH_STATS_DB_NAME, YOUTUBE_ENABLED
 from core.platforms.kick import KickClient
 from core.platforms.twitch import TwitchClient
 from core.platforms.youtube import YouTubeClient
 from core.recorder import Recorder
 from core.storage import (
-    CONFIG_DIR,
     DEFAULT_SETTINGS,
     build_favorites_meta,
     get_favorite_logins,
@@ -48,7 +48,8 @@ def _read_project_version() -> str:
         with open(toml_path, "rb") as f:
             data = _tomllib.load(f)
         return data["project"]["version"]
-    except Exception:
+    except (OSError, KeyError, _tomllib.TOMLDecodeError) as e:
+        logger.warning("Could not read project version from pyproject.toml: %s", e)
         return "0.0.0"
 
 
@@ -123,7 +124,10 @@ class TwitchXApi:
             TwitchChatClient | KickChatClient | YouTubeChatClient | None
         ) = None
         self._chat_thread: threading.Thread | None = None
-        self._watch_stats = WatchStatsDB(str(CONFIG_DIR / WATCH_STATS_DB_NAME))
+        # Resolve through the module, not the import-time constant: the test
+        # fixtures (and a relocated config dir) rebind core.storage.CONFIG_DIR,
+        # and binding early made every TwitchXApi() open the real stats DB.
+        self._watch_stats = WatchStatsDB(str(_storage.CONFIG_DIR / WATCH_STATS_DB_NAME))
         self._recorder = Recorder()
         self._active_watch_session: int | None = None
         self._active_watch_lock = threading.Lock()
@@ -346,8 +350,52 @@ class TwitchXApi:
     def get_watch_statistics(self, period: str = "today") -> str:
         return json.dumps(self._watch_stats.get_stats_for_period(period))
 
+    def request_watch_statistics(self, period: str = "all") -> None:
+        """Push watch statistics to JS.
+
+        The JS bridge always returns a Promise, so JS cannot read a return
+        value synchronously — results are delivered via window.onWatchStatistics.
+        """
+
+        def _work() -> None:
+            try:
+                stats = self._watch_stats.get_stats_for_period(period)
+                payload = {"ok": True, "period": period, "stats": stats}
+            except Exception as e:
+                logger.warning("Failed to collect watch statistics: %s", e)
+                payload = {"ok": False, "period": period, "error": str(e)}
+            self._eval_js(f"window.onWatchStatistics({json.dumps(payload)})")
+
+        self._run_in_thread(_work)
+
     def get_watch_history(self, limit: int = 20) -> str:
         return json.dumps(self._watch_stats.get_recent_sessions(limit))
+
+    # ─── Config push (Python → JS) ─────────────────────────────
+
+    def _config_snapshot(self) -> dict[str, Any]:
+        """Everything JS needs about the config, in one payload."""
+        snapshot = self.get_config()
+        snapshot["settings"] = self.get_full_config_for_settings()
+        snapshot["version"] = self.get_version()
+        return snapshot
+
+    def push_config(self) -> None:
+        """Deliver a fresh config snapshot to JS via window.onConfigLoaded.
+
+        Never raises — callers push from inside login/save flows, where a
+        serialization hiccup must not be reported as a failed operation.
+        """
+        try:
+            payload = json.dumps(self._config_snapshot())
+        except (TypeError, ValueError) as e:
+            logger.warning("Could not serialize config snapshot: %s", e)
+            return
+        self._eval_js(f"window.onConfigLoaded({payload})")
+
+    def request_config(self) -> None:
+        """JS-callable: ask for a config push (nothing is returned to JS)."""
+        self.push_config()
 
     # ─── Config methods (stay in orchestrator) ─────────────────
 
@@ -397,6 +445,7 @@ class TwitchXApi:
                 ),
             }
         masked["youtube_quota_remaining"] = self._youtube.quota_remaining()
+        masked["youtube_enabled"] = YOUTUBE_ENABLED
         _st = get_settings(self._config)
         masked["pip_enabled"] = _st.get("pip_enabled", False)
         masked["keyboard_shortcuts"] = _st.get("keyboard_shortcuts", {})
@@ -528,7 +577,54 @@ class TwitchXApi:
 
         interval = get_settings(self._config).get("refresh_interval", 60)
         self.start_polling(interval)
+        self.push_config()
         self._eval_js("window.onSettingsSaved()")
+
+    # ─── File export ─────────────────────────────────────────
+
+    def save_chat_log(self, filename: str, content: str) -> None:
+        """Write an exported chat log to ~/Downloads.
+
+        WKWebView ignores `<a download>` unless ALLOW_DOWNLOADS is enabled, so
+        the blob download in JS silently did nothing. Python owns the write and
+        reports the real outcome through window.onChatLogSaved.
+        """
+
+        def _work() -> None:
+            try:
+                path = self._write_export(filename, content)
+                payload = {"ok": True, "path": str(path), "name": path.name}
+            except Exception as e:
+                logger.warning("Chat log export failed: %s", e)
+                payload = {"ok": False, "error": str(e)[:160]}
+            self._eval_js(f"window.onChatLogSaved({json.dumps(payload)})")
+
+        self._run_in_thread(_work)
+
+    @staticmethod
+    def _write_export(filename: str, content: str) -> _Path:
+        """Sanitize the name, pick a target directory, avoid overwriting."""
+        name = _Path(str(filename)).name.strip() or "twitchx-chat.txt"
+        name = "".join(c for c in name if c.isprintable() and c not in '\\/:*?"<>|')
+        if not name.lower().endswith((".txt", ".json")):
+            name += ".txt"
+
+        target_dir = _Path.home() / "Downloads"
+        if not target_dir.is_dir():
+            # Read the module attribute, not the import-time copy: tests (and a
+            # relocated config dir) rebind core.storage.CONFIG_DIR at runtime.
+            target_dir = _storage.CONFIG_DIR
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        path = target_dir / name
+        stem, suffix = path.stem, path.suffix
+        counter = 1
+        while path.exists():
+            path = target_dir / f"{stem}-{counter}{suffix}"
+            counter += 1
+
+        path.write_text(str(content), encoding="utf-8")
+        return path
 
     # ─── Browser / URL ───────────────────────────────────────
 
