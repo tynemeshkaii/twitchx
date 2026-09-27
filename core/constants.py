@@ -34,6 +34,22 @@ AVATAR_SIZE = (56, 56)
 THUMBNAIL_SIZE = (440, 248)
 JPEG_QUALITY = 85
 
+# Stream codecs
+# streamlink asks Twitch for h264 only by default, and Twitch exposes its highest
+# renditions (1440p60 via Enhanced Broadcasting) only to clients that also accept
+# HEVC or AV1. The codec set is baked into the signed usher URL, so it has to be
+# chosen at resolve time.
+#
+# h265 is safe to request everywhere: AVFoundation decodes HEVC in HLS with
+# hardware support on every Apple Silicon Mac and every Intel Mac with a T2 or
+# Skylake-or-newer iGPU. AV1 is not — hardware decode starts at M3, and software
+# decoding 1440p60 AV1 would burn the CPU — so "auto" only adds it once the
+# WebView reports that it decodes AV1 both smoothly and power-efficiently.
+CODEC_MODE_AUTO = "auto"
+CODEC_MODES = ("auto", "h264", "h264,h265", "h264,h265,av1")
+CODEC_BASELINE = "h264,h265"
+CODEC_H264_ONLY = "h264"
+
 # Chat
 CHAT_WIDTH_MIN = 250
 CHAT_WIDTH_MAX = 500

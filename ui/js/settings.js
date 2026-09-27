@@ -258,6 +258,7 @@ function _readAllFormValues() {
     youtube_client_secret: document.getElementById('yt-client-secret').value.trim(),
     recording_path: document.getElementById('s-recording-path').value.trim(),
     low_latency_mode: document.getElementById('s-low-latency').checked,
+    stream_codecs: document.getElementById('s-stream-codecs').value,
     pip_enabled: document.getElementById('s-pip-enabled').checked,
     accent_color: activeSwatch ? activeSwatch.dataset.color : '#FF9F0A',
     keyboard_shortcuts: JSON.stringify(TwitchX.state.shortcuts || {}),
@@ -345,6 +346,7 @@ function openSettings() {
   }
   document.getElementById('s-pip-enabled').checked = !!config.pip_enabled;
   document.getElementById('s-low-latency').checked = !!config.low_latency_mode;
+  document.getElementById('s-stream-codecs').value = config.stream_codecs || 'auto';
   var currentTheme = config.theme || 'dark';
   document.querySelectorAll('input[name="theme"]').forEach(function(radio) {
     radio.checked = radio.value === currentTheme;
@@ -532,6 +534,7 @@ function saveSettings() {
     keyboard_shortcuts: Object.assign({}, TwitchX.state.shortcuts),
     pip_enabled: pipEnabled,
     low_latency_mode: document.getElementById('s-low-latency').checked,
+    stream_codecs: document.getElementById('s-stream-codecs').value,
     recording_path: document.getElementById('s-recording-path').value.trim(),
     accent_color: accentColor,
   };

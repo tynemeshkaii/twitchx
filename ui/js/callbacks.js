@@ -285,6 +285,11 @@ window.onStreamReady = function(data) {
   // HLS / native video path (Twitch, Kick, YouTube via streamlink)
   // Cancel any in-flight gentle reset so the new src lands on the correct element.
   if (TwitchX.cancelGentleReset) TwitchX.cancelGentleReset();
+  // A fresh stream starts from a clean recovery slate — otherwise the backoff of
+  // the previous channel carries over into the new one.
+  if (TwitchX.cancelStreamRecovery) TwitchX.cancelStreamRecovery();
+  if (TwitchX.hidePlayerError) TwitchX.hidePlayerError();
+  TwitchX._lastResetAt = 0;
   const video = TwitchX.getPlayerVideo();
   if (!video) return;
   video.src = data.url;
@@ -303,6 +308,14 @@ window.onStreamReady = function(data) {
   }
 
   TwitchX.showPlayerView();
+};
+
+window.onStreamUrlRefreshed = function(data) {
+  TwitchX._onStreamUrlRefreshed(data);
+};
+
+window.onMultiSlotUrlRefreshed = function(data) {
+  TwitchX._onMultiSlotUrlRefreshed(data);
 };
 
 window.onPlayerStop = function() {

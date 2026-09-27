@@ -259,15 +259,27 @@
             </div>
           </div>
           <div id="player-content">
-            <video id="stream-video" autoplay controls playsinline aria-label="Live stream video"></video>
-            <div id="player-loader" class="hidden" role="status" aria-live="polite"><div class="player-spinner"></div></div>
-            <div id="player-buffering" class="player-buffering buffering-hide"><div class="player-spinner"></div></div>
-            <div id="buffer-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"><div id="buffer-loaded"></div><div id="buffer-position"></div></div>
-            <div id="stats-overlay" class="hidden">
-              <div class="stats-row"><span class="stats-key">Latency</span><span class="stats-val" id="so-latency">--</span></div>
-              <div class="stats-row"><span class="stats-key">Buffer</span><span class="stats-val" id="so-buffer">--</span></div>
-              <div class="stats-row"><span class="stats-key">Dropped</span><span class="stats-val" id="so-dropped">--</span></div>
-              <div class="stats-row"><span class="stats-key">Resolution</span><span class="stats-val" id="so-resolution">--</span></div>
+            <!-- Video and its overlays live in their own stage so that loader,
+                 buffering, error and stats are positioned against the picture
+                 rather than against the whole row, which also contains chat. -->
+            <div id="player-stage">
+              <video id="stream-video" autoplay controls playsinline aria-label="Live stream video"></video>
+              <div id="player-loader" class="hidden" role="status" aria-live="polite"><div class="player-spinner"></div></div>
+              <div id="player-buffering" class="player-buffering buffering-hide"><div class="player-spinner"></div></div>
+              <div id="player-error" class="player-error hidden" role="alert">
+                <div class="player-error-box">
+                  <span class="player-error-title" id="player-error-msg">Playback stopped</span>
+                  <span class="player-error-hint" id="player-error-hint"></span>
+                  <button type="button" id="player-retry-btn" class="player-error-btn">Reconnect</button>
+                </div>
+              </div>
+              <div id="buffer-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"><div id="buffer-loaded"></div><div id="buffer-position"></div></div>
+              <div id="stats-overlay" class="hidden">
+                <div class="stats-row"><span class="stats-key">Latency</span><span class="stats-val" id="so-latency">--</span></div>
+                <div class="stats-row"><span class="stats-key">Buffer</span><span class="stats-val" id="so-buffer">--</span></div>
+                <div class="stats-row"><span class="stats-key">Dropped</span><span class="stats-val" id="so-dropped">--</span></div>
+                <div class="stats-row"><span class="stats-key">Resolution</span><span class="stats-val" id="so-resolution">--</span></div>
+              </div>
             </div>
             <div id="chat-resize-handle"></div>
             <div id="chat-panel">
@@ -354,6 +366,7 @@
     <div class="bar-group bar-group--left">
       <select id="quality-select" aria-label="Stream quality">
         <option value="best">Best</option>
+        <option value="1440p60">1440p60</option>
         <option value="1080p60">1080p60</option>
         <option value="720p60">720p60</option>
         <option value="480p">480p</option>
@@ -574,6 +587,16 @@
       <div class="setting-group">
         <label for="s-recording-path">Recording Directory</label>
         <input id="s-recording-path" type="text" autocomplete="off">
+      </div>
+      <div class="setting-group">
+        <label for="s-stream-codecs">Twitch Video Codecs</label>
+        <select id="s-stream-codecs">
+          <option value="auto">Automatic (recommended)</option>
+          <option value="h264,h265">H.264 + HEVC</option>
+          <option value="h264,h265,av1">H.264 + HEVC + AV1</option>
+          <option value="h264">H.264 only</option>
+        </select>
+        <p class="setting-hint" id="s-stream-codecs-hint">Twitch offers 1440p60 and other high renditions only to clients that accept HEVC or AV1. Automatic requests HEVC always, and AV1 only when this Mac decodes it in hardware.</p>
       </div>
       <div class="setting-group">
         <div class="setting-label">Twitch Low-Latency Mode</div>

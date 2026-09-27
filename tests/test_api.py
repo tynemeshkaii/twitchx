@@ -328,6 +328,7 @@ def test_watch_uses_kick_platform_for_kick_stream(
         streamlink_path: str = "streamlink",
         platform_client=None,
         extra_args=None,
+        **kw,
     ) -> tuple[str | None, str]:
         captured["channel"] = channel
         captured["quality"] = quality
@@ -410,7 +411,7 @@ def test_watch_starts_new_session_after_ending_previous(
     monkeypatch.setattr(api, "start_chat", lambda channel, platform: None)
     monkeypatch.setattr(
         "ui.api.streams.resolve_hls_url",
-        lambda channel, quality, streamlink_path, platform_client=None, extra_args=None: (
+        lambda channel, quality, streamlink_path, platform_client=None, extra_args=None, **kw: (
             f"https://example.com/{channel}.m3u8",
             "",
         ),
@@ -440,6 +441,7 @@ def test_watch_ignores_late_resolver_after_launch_invalidated(
         streamlink_path: str = "streamlink",
         platform_client=None,
         extra_args=None,
+        **kw,
     ) -> tuple[str, str]:
         api._launch_id += 1
         return "https://example.com/late.m3u8", ""
@@ -469,6 +471,7 @@ def test_watch_media_resolves_original_media_url(
         streamlink_path: str = "streamlink",
         platform_client=None,
         extra_args=None,
+        **kw,
     ) -> tuple[str, str]:
         captured["channel"] = channel
         return "https://example.com/vod.m3u8", ""
@@ -1135,7 +1138,7 @@ class TestAddMultiSlot:
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
         monkeypatch.setattr(
             "ui.api.streams.resolve_hls_url",
-            lambda ch, q, sl, platform_client=None, extra_args=None: (
+            lambda ch, q, sl, platform_client=None, extra_args=None, **kw: (
                 "https://hls.example.com/s.m3u8",
                 "",
             ),
@@ -1161,7 +1164,7 @@ class TestAddMultiSlot:
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
         monkeypatch.setattr(
             "ui.api.streams.resolve_hls_url",
-            lambda ch, q, sl, platform_client=None, extra_args=None: (
+            lambda ch, q, sl, platform_client=None, extra_args=None, **kw: (
                 None,
                 "streamlink not found",
             ),
@@ -1211,7 +1214,7 @@ class TestAddMultiSlot:
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
         monkeypatch.setattr(
             "ui.api.streams.resolve_hls_url",
-            lambda ch, q, sl, platform_client=None, extra_args=None: (
+            lambda ch, q, sl, platform_client=None, extra_args=None, **kw: (
                 "https://hls.example.com/s.m3u8",
                 "",
             ),
@@ -1232,7 +1235,7 @@ class TestAddMultiSlot:
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
 
         def fake_resolve(
-            ch: str, q: str, sl: str, platform_client=None, extra_args=None
+            ch: str, q: str, sl: str, platform_client=None, extra_args=None, **kw
         ) -> tuple[str, str]:
             captured["platform"] = (
                 platform_client.PLATFORM_ID if platform_client else ""
@@ -1265,7 +1268,7 @@ class TestAddMultiSlot:
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
 
         def fake_resolve(
-            ch: str, q: str, sl: str, platform_client=None, extra_args=None
+            ch: str, q: str, sl: str, platform_client=None, extra_args=None, **kw
         ) -> tuple[str, str]:
             captured["channel"] = ch
             return "https://hls.example.com/yt.m3u8", ""
@@ -1803,7 +1806,7 @@ class TestWatchDirect:
         captured: dict[str, str] = {}
 
         def fake_resolve(
-            ch: str, q: str, sl: str = "streamlink", platform_client: Any = None, extra_args: Any = None
+            ch: str, q: str, sl: str = "streamlink", platform_client: Any = None, extra_args: Any = None, **kw
         ) -> tuple[str, str]:
             captured["channel"] = ch
             captured["platform"] = platform_client.PLATFORM_ID if platform_client else ""
@@ -1869,7 +1872,7 @@ class TestWatchDirect:
         emitted: list[str] = []
         monkeypatch.setattr(
             "ui.api.streams.resolve_hls_url",
-            lambda ch, q, sl, platform_client=None, extra_args=None: (None, "boom"),
+            lambda ch, q, sl, platform_client=None, extra_args=None, **kw: (None, "boom"),
         )
         monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
@@ -1901,7 +1904,7 @@ class TestWatchMediaErrors:
         emitted: list[str] = []
         monkeypatch.setattr(
             "ui.api.streams.resolve_hls_url",
-            lambda ch, q, sl, platform_client=None, extra_args=None: (None, "no vod"),
+            lambda ch, q, sl, platform_client=None, extra_args=None, **kw: (None, "no vod"),
         )
         monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))

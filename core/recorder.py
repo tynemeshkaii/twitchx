@@ -42,6 +42,7 @@ class Recorder:
         output_dir: str,
         streamlink_path: str = "streamlink",
         quality: str = "best",
+        extra_args: list[str] | None = None,
     ) -> str | None:
         """Start recording. Returns an error string on failure, None on success."""
         resolved_sl = shutil.which(streamlink_path)
@@ -62,9 +63,15 @@ class Recorder:
         filename = f"twitchx_{safe_channel}_{timestamp}.ts"
         filepath = str(Path(output_dir) / filename)
 
+        cmd = [resolved_sl, stream_url, quality, "--output", filepath]
+        if extra_args:
+            # Same codec set as playback, so a recording of an Enhanced
+            # Broadcasting channel is not silently capped at 1080p60.
+            cmd.extend(extra_args)
+
         try:
             proc = subprocess.Popen(
-                [resolved_sl, stream_url, quality, "--output", filepath],
+                cmd,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )

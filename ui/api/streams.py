@@ -5,16 +5,23 @@ import logging
 import threading
 from typing import Any
 
-from core.constants import DEFAULT_IINA_PATH, DEFAULT_MPV_PATH
+from core.codecs import twitch_codec_args
+from core.constants import CODEC_MODE_AUTO, DEFAULT_IINA_PATH, DEFAULT_MPV_PATH
 from core.launcher import launch_stream, launch_stream_mpv
 from core.storage import get_settings, load_config, update_config
-from core.stream_resolver import resolve_hls_url
+from core.stream_resolver import (
+    ADAPTIVE_PLATFORMS,
+    invalidate_resolve_cache,
+    resolve_hls_url,
+)
 
 from ._base import BaseApiComponent
 
 logger = logging.getLogger(__name__)
 
-_MAX_LAUNCH_SECONDS = 35
+# streamlink itself gives up after 15s, so a longer ceiling here only delays the
+# error the user sees when the resolver thread hangs somewhere else.
+_MAX_LAUNCH_SECONDS = 20
 
 
 class StreamsComponent(BaseApiComponent):
@@ -25,6 +32,67 @@ class StreamsComponent(BaseApiComponent):
         if platform == "twitch" and settings.get("low_latency_mode", False):
             return ["--twitch-low-latency"]
         return []
+
+    def _codec_args(self, platform: str, settings: dict) -> list[str]:
+        """Return --twitch-supported-codecs for Twitch, nothing elsewhere."""
+        if platform != "twitch":
+            return []
+        return twitch_codec_args(
+            settings.get("stream_codecs", CODEC_MODE_AUTO),
+            self._api._av1_capable,
+        )
+
+    def _streamlink_args(
+        self, platform: str, settings: dict, low_latency: bool = True
+    ) -> list[str]:
+        """Build the streamlink flags for one resolve.
+
+        The codec set decides whether Twitch offers its Enhanced Broadcasting
+        renditions (1440p60 and above) at all, so it belongs to every resolve —
+        including the external-player and multistream paths.
+
+        low_latency is opt-out for recording: a reduced live edge trades buffer
+        for delay, which is the wrong trade when the goal is a complete file.
+        """
+        args = self._low_latency_args(platform, settings) if low_latency else []
+        return args + self._codec_args(platform, settings)
+
+    def _invalidate_resolve_for(self, channel: str, platform: str) -> None:
+        """Drop cached resolutions for one channel only.
+
+        Clearing the whole cache would also evict the other multistream slots,
+        which are refreshed independently.
+        """
+        if channel.startswith("http://") or channel.startswith("https://"):
+            invalidate_resolve_cache(channel)
+            return
+        client = self._get_platform(platform)
+        if client is not None:
+            invalidate_resolve_cache(client.build_stream_url(channel))
+
+    def _resolve_for_player(
+        self,
+        target: str,
+        quality: str,
+        platform: str,
+        settings: dict,
+        use_cache: bool = True,
+    ) -> tuple[str | None, str]:
+        """Resolve an HLS URL for the in-app AVPlayer.
+
+        AVPlayer performs its own adaptive bitrate switching, so for quality="best"
+        it is handed the master playlist and picks the rendition itself instead of
+        being locked to whatever bitrate streamlink chose at resolve time.
+        """
+        return resolve_hls_url(
+            target,
+            quality,
+            settings.get("streamlink_path", "streamlink"),
+            platform_client=self._get_platform(platform),
+            extra_args=self._streamlink_args(platform, settings),
+            adaptive=platform in ADAPTIVE_PLATFORMS,
+            use_cache=use_cache,
+        )
 
     # ── Watch session tracking ──────────────────────────────────
 
@@ -54,6 +122,19 @@ class StreamsComponent(BaseApiComponent):
             )
             if session_id is not None:
                 self._api._active_watch_session = session_id
+
+    def _cancel_pending_launch(self) -> None:
+        """Abandon an in-flight launch so a newer one can take over.
+
+        Bumping _launch_id makes the older resolver thread fail _is_launch_current
+        and drop its result instead of racing the new stream onto the player.
+        """
+        if self._api._launch_channel is None:
+            return
+        logger.debug("Superseding pending launch for %s", self._api._launch_channel)
+        self._cancel_launch_timer()
+        self._api._launch_channel = None
+        self._api._launch_id += 1
 
     def _begin_launch(self, channel: str) -> int:
         self._api._launch_channel = channel
@@ -85,9 +166,6 @@ class StreamsComponent(BaseApiComponent):
             )
             return
 
-        if self._api._launch_channel is not None:
-            return
-
         stream = self._api._data._find_live_stream(channel, platform or None)
         platform = (
             self._api._data._stream_platform(stream) if stream else platform or "twitch"
@@ -114,6 +192,12 @@ class StreamsComponent(BaseApiComponent):
                 f"window.onLaunchResult({{success: false, message: {safe_ch} + ' is offline', channel: {safe_ch}}})"
             )
             return
+
+        # Past every validation, so this click is definitely going to launch:
+        # only now may it supersede a launch that is still in flight. Cancelling
+        # earlier threw away a good launch when the new pick turned out to be
+        # offline or already playing.
+        self._cancel_pending_launch()
 
         def _save_quality(cfg: dict) -> None:
             cfg.get("settings", {})["quality"] = quality
@@ -145,12 +229,8 @@ class StreamsComponent(BaseApiComponent):
                     "Resolving YouTube stream for %s (quality=%s)", channel, quality
                 )
                 settings = get_settings(self._config)
-                hls_url, err = resolve_hls_url(
-                    video_id,
-                    quality,
-                    settings.get("streamlink_path", "streamlink"),
-                    platform_client=self._youtube,
-                    extra_args=self._low_latency_args(platform, settings),
+                hls_url, err = self._resolve_for_player(
+                    video_id, quality, "youtube", settings
                 )
                 if not self._finish_launch(launch_id):
                     logger.debug("Launch aborted for %s (launch_id mismatch)", channel)
@@ -213,13 +293,8 @@ class StreamsComponent(BaseApiComponent):
                 "Resolving stream for %s on %s (quality=%s)", channel, platform, quality
             )
             settings = get_settings(self._config)
-            platform_client = self._get_platform(platform)
-            hls_url, err = resolve_hls_url(
-                channel,
-                quality,
-                settings.get("streamlink_path", "streamlink"),
-                platform_client=platform_client,
-                extra_args=self._low_latency_args(platform, settings),
+            hls_url, err = self._resolve_for_player(
+                channel, quality, platform, settings
             )
             if not self._finish_launch(launch_id):
                 logger.debug("Launch aborted for %s (launch_id mismatch)", channel)
@@ -297,9 +372,6 @@ class StreamsComponent(BaseApiComponent):
             )
             return
 
-        if self._api._launch_channel is not None:
-            return
-
         def _save_quality(cfg: dict[str, Any]) -> None:
             cfg.get("settings", {})["quality"] = quality
 
@@ -319,17 +391,14 @@ class StreamsComponent(BaseApiComponent):
         self._eval_js(
             f"window.onStatusUpdate({{text: 'Loading ' + {safe_ch} + '...', type: 'warn'}})"
         )
+        # See watch_platform: supersede only once this launch is certain.
+        self._cancel_pending_launch()
         launch_id = self._begin_launch(channel)
 
         def do_resolve() -> None:
             settings = get_settings(self._config)
-            platform_client = self._get_platform(platform)
-            hls_url, err = resolve_hls_url(
-                channel,
-                quality,
-                settings.get("streamlink_path", "streamlink"),
-                platform_client=platform_client,
-                extra_args=self._low_latency_args(platform, settings),
+            hls_url, err = self._resolve_for_player(
+                channel, quality, platform, settings
             )
             if not self._finish_launch(launch_id):
                 return
@@ -368,6 +437,108 @@ class StreamsComponent(BaseApiComponent):
             self._eval_js(f"window.onLaunchResult({r})")
 
         self._run_in_thread(do_resolve)
+
+    def save_quality(self, quality: str) -> None:
+        """Persist the quality a live switch landed on.
+
+        Launching a stream stores the picked quality, but switching quality on a
+        running stream went through refresh_stream_url, which does not. Without
+        this the next launch reverts, and a recording is made at a quality nobody
+        is watching.
+        """
+        if not quality:
+            return
+
+        def _save(cfg: dict[str, Any]) -> None:
+            cfg.setdefault("settings", {})["quality"] = quality
+
+        self._config = update_config(_save)
+
+    # ── URL refresh (player recovery) ───────────────────────────
+
+    def refresh_stream_url(
+        self, channel: str, platform: str, quality: str, request_id: int = 0
+    ) -> None:
+        """Re-resolve a live stream URL for a player that lost its stream.
+
+        Signed HLS URLs expire, so replaying the URL the player was started with
+        cannot recover a session that has been running for hours, or one that was
+        interrupted by sleep or a network change. The cache is bypassed for the
+        same reason.
+
+        request_id is echoed back untouched so the player can drop a reply that
+        arrived after it had already given up on (or no longer needed) the request.
+        """
+        if not channel:
+            return
+        platform = platform or "twitch"
+        if platform == "youtube":
+            # YouTube playback is keyed by video_id, which the player does not carry.
+            payload = json.dumps(
+                {
+                    "ok": False,
+                    "request_id": request_id,
+                    "channel": channel,
+                    "platform": platform,
+                    "error": "Reconnect is not supported for YouTube",
+                }
+            )
+            self._eval_js(f"window.onStreamUrlRefreshed({payload})")
+            return
+
+        def do_refresh() -> None:
+            # The cached entry is what went stale in the first place.
+            self._invalidate_resolve_for(channel, platform)
+            settings = get_settings(load_config())
+            hls_url, err = self._resolve_for_player(
+                channel, quality, platform, settings, use_cache=False
+            )
+            payload = {
+                "ok": bool(hls_url),
+                "request_id": request_id,
+                "url": hls_url or "",
+                "channel": channel,
+                "platform": platform,
+                "quality": quality,
+                "error": "" if hls_url else (err or "Could not resolve stream URL"),
+            }
+            self._eval_js(f"window.onStreamUrlRefreshed({json.dumps(payload)})")
+
+        self._run_in_thread(do_refresh)
+
+    def refresh_multi_slot_url(
+        self,
+        slot_idx: int,
+        channel: str,
+        platform: str,
+        quality: str,
+        request_id: int = 0,
+    ) -> None:
+        """Re-resolve the URL for one multistream slot. See refresh_stream_url."""
+        if not 0 <= slot_idx <= 3 or not channel:
+            return
+        platform = platform or "twitch"
+
+        def do_refresh() -> None:
+            self._invalidate_resolve_for(channel, platform)
+            settings = get_settings(load_config())
+            hls_url, err = self._resolve_for_player(
+                channel, quality, platform, settings, use_cache=False
+            )
+            payload = {
+                "slot_idx": slot_idx,
+                "ok": bool(hls_url),
+                "request_id": request_id,
+                "url": hls_url or "",
+                # Echoed so a slot that changed channel mid-flight can tell that
+                # this URL belongs to whoever used to occupy it.
+                "channel": channel,
+                "platform": platform,
+                "error": "" if hls_url else (err or "Could not resolve stream URL"),
+            }
+            self._eval_js(f"window.onMultiSlotUrlRefreshed({json.dumps(payload)})")
+
+        self._run_in_thread(do_refresh)
 
     def watch_external(self, channel: str, quality: str) -> None:
         self.watch_external_platform(channel, "", quality)
@@ -418,7 +589,7 @@ class StreamsComponent(BaseApiComponent):
                 else channel
             )
             platform_client = self._get_platform(platform)
-            extra = self._low_latency_args(platform, settings)
+            extra = self._streamlink_args(platform, settings)
             external = settings.get("external_player", "iina")
 
             if external == "mpv":
@@ -477,12 +648,15 @@ class StreamsComponent(BaseApiComponent):
         def do_resolve() -> None:
             settings = get_settings(self._config)
             platform_client = self._get_platform(platform)
+            # VODs and clips stay on a single rendition: the master-playlist path is
+            # tuned for live edge behaviour, while seeking and duration reporting
+            # here depend on the concrete media playlist.
             hls_url, err = resolve_hls_url(
                 url,
                 quality,
                 settings.get("streamlink_path", "streamlink"),
                 platform_client=platform_client,
-                extra_args=self._low_latency_args(platform, settings),
+                extra_args=self._streamlink_args(platform, settings),
             )
             if not self._finish_launch(launch_id):
                 return
@@ -578,13 +752,8 @@ class StreamsComponent(BaseApiComponent):
             cfg = load_config()
             settings = get_settings(cfg)
             resolve_channel = youtube_video_id if youtube_video_id else channel
-            platform_client = self._get_platform(platform)
-            hls_url, err = resolve_hls_url(
-                resolve_channel,
-                quality,
-                settings.get("streamlink_path", "streamlink"),
-                platform_client=platform_client,
-                extra_args=self._low_latency_args(platform, settings),
+            hls_url, err = self._resolve_for_player(
+                resolve_channel, quality, platform, settings
             )
             payload: dict[str, Any] = {
                 "slot_idx": slot_idx,
@@ -633,8 +802,16 @@ class StreamsComponent(BaseApiComponent):
             platform_client.build_stream_url(channel) if platform_client else channel
         )
 
+        # The recorder pulls its own copy of the stream, so recording at source
+        # while watching doubles the downstream bandwidth. Recording at the
+        # quality being watched keeps that second pull proportional.
         err = self._api._recorder.start(
-            stream_url, channel, output_dir, streamlink_path
+            stream_url,
+            channel,
+            output_dir,
+            streamlink_path,
+            quality=settings.get("quality", "best"),
+            extra_args=self._streamlink_args(platform, settings, low_latency=False),
         )
         if err:
             safe_err = json.dumps(err)

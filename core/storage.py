@@ -14,6 +14,7 @@ from typing import Any
 from core.constants import (
     AVATAR_CACHE_TTL_SECONDS,
     BROWSE_CACHE_TTL_SECONDS,
+    CODEC_MODE_AUTO,
     CONFIG_DIR_NAME,
     CONFIG_FILE_NAME,
     DEFAULT_IINA_PATH,
@@ -92,6 +93,9 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "active_platform_filter": "all",
     "pip_enabled": False,
     "low_latency_mode": False,
+    # Which codecs to advertise to Twitch. "auto" resolves to h264+h265, plus AV1
+    # when the player reports hardware-class AV1 decoding. See core/constants.py.
+    "stream_codecs": CODEC_MODE_AUTO,
     "chat_filter_sub_only": False,
     "chat_filter_mod_only": False,
     "chat_block_list": [],

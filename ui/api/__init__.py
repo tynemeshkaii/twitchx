@@ -16,7 +16,12 @@ from core import storage as _storage
 from core.chats.kick_chat import KickChatClient
 from core.chats.twitch_chat import TwitchChatClient
 from core.chats.youtube_chat import YouTubeChatClient
-from core.constants import WATCH_STATS_DB_NAME, YOUTUBE_ENABLED
+from core.constants import (
+    CODEC_MODE_AUTO,
+    CODEC_MODES,
+    WATCH_STATS_DB_NAME,
+    YOUTUBE_ENABLED,
+)
 from core.platforms.kick import KickClient
 from core.platforms.twitch import TwitchClient
 from core.platforms.youtube import YouTubeClient
@@ -30,6 +35,7 @@ from core.storage import (
     load_config,
     update_config,
 )
+from core.stream_resolver import invalidate_resolve_cache
 from core.watch_stats import WatchStatsDB
 
 from .auth import AuthComponent
@@ -104,6 +110,10 @@ class TwitchXApi:
         self._launch_elapsed = 0
         self._launch_channel: str | None = None
         self._launch_id = 0
+        # What the player reported about its own AV1 decoding: True for
+        # hardware-class (smooth and power-efficient), False otherwise, None
+        # until the probe in the WebView answers. Only "auto" codec mode uses it.
+        self._av1_capable: bool | None = None
         self._last_successful_fetch: float = 0
         self._last_youtube_fetch: float = 0
         self._last_youtube_streams: list[dict[str, Any]] = []
@@ -283,6 +293,45 @@ class TwitchXApi:
         with_chat: bool = False,
     ) -> None:
         self._streams.watch_media(url, quality, platform, channel, title, with_chat)
+
+    def set_codec_support(self, support: dict[str, Any] | None = None) -> None:
+        """Record what the player can actually decode.
+
+        Called once from the WebView at start-up. The answer decides whether the
+        "auto" codec mode adds AV1 to the codec set Twitch is asked for.
+        """
+        if not isinstance(support, dict):
+            return
+        av1 = support.get("av1")
+        self._av1_capable = bool(av1) if av1 is not None else None
+        logger.info(
+            "Player codec support reported: av1_hardware=%s hevc=%s",
+            self._av1_capable,
+            support.get("hevc"),
+        )
+        # Codec choice is part of the signed resolve, so anything cached under
+        # the previous assumption is now wrong.
+        invalidate_resolve_cache()
+
+    def save_quality(self, quality: str) -> None:
+        self._streams.save_quality(quality)
+
+    def refresh_stream_url(
+        self, channel: str, platform: str, quality: str, request_id: int = 0
+    ) -> None:
+        self._streams.refresh_stream_url(channel, platform, quality, request_id)
+
+    def refresh_multi_slot_url(
+        self,
+        slot_idx: int,
+        channel: str,
+        platform: str,
+        quality: str,
+        request_id: int = 0,
+    ) -> None:
+        self._streams.refresh_multi_slot_url(
+            slot_idx, channel, platform, quality, request_id
+        )
 
     def stop_player(self) -> None:
         self._streams.stop_player()
@@ -482,6 +531,7 @@ class TwitchXApi:
             "youtube_quota_remaining": self._youtube.quota_remaining(),
             "pip_enabled": settings.get("pip_enabled", False),
             "low_latency_mode": settings.get("low_latency_mode", False),
+            "stream_codecs": settings.get("stream_codecs", CODEC_MODE_AUTO),
             "chat_filter_sub_only": settings.get("chat_filter_sub_only", False),
             "chat_filter_mod_only": settings.get("chat_filter_mod_only", False),
             "chat_block_list": settings.get("chat_block_list", []),
@@ -546,6 +596,12 @@ class TwitchXApi:
                 st["pip_enabled"] = bool(parsed["pip_enabled"])
             if "low_latency_mode" in parsed:
                 st["low_latency_mode"] = bool(parsed["low_latency_mode"])
+            if "stream_codecs" in parsed and parsed["stream_codecs"] in CODEC_MODES:
+                if parsed["stream_codecs"] != st.get("stream_codecs"):
+                    # The codec set is part of the signed resolve URL, so cached
+                    # resolutions made under the old set no longer apply.
+                    invalidate_resolve_cache()
+                st["stream_codecs"] = parsed["stream_codecs"]
             if "chat_filter_sub_only" in parsed:
                 st["chat_filter_sub_only"] = bool(parsed["chat_filter_sub_only"])
             if "chat_filter_mod_only" in parsed:

@@ -163,6 +163,9 @@ window.addEventListener('pywebviewready', function() {
   TwitchX.api = window.pywebview.api;
   if (!TwitchX.api) return;
   requestConfig();
+  // Tell Python what this player can decode before any stream is resolved —
+  // the codec set is part of the signed resolve URL and cannot be changed after.
+  if (TwitchX.probeCodecSupport) TwitchX.probeCodecSupport();
   // Safety net: the `loaded` push can race a slow first paint.
   setTimeout(function() {
     if (!TwitchX.state.configLoaded) requestConfig();

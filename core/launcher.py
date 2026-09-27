@@ -12,7 +12,7 @@ from core.stream_resolver import resolve_hls_url
 if TYPE_CHECKING:
     from core.platform import PlatformClient
 
-QUALITIES = ["best", "1080p60", "720p60", "480p", "360p", "audio_only"]
+QUALITIES = ["best", "1440p60", "1080p60", "720p60", "480p", "360p", "audio_only"]
 
 
 @dataclass

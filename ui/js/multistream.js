@@ -18,6 +18,7 @@ function openMultistreamView() {
   TwitchX.setChromeVisible(false);
   TwitchX.switchView('multistream-view', 'forward');
   TwitchX.startMultiHealthMonitor();
+  _bindMultiGridPlaybackEvents();
 }
 
 function _getMultiSlotEl(idx) {
@@ -149,6 +150,7 @@ function closeMultistreamView() {
       if (TwitchX.multiState.slots[i]._loadTimer) {
         clearTimeout(TwitchX.multiState.slots[i]._loadTimer);
       }
+      _cancelMultiSlotRecovery(TwitchX.multiState.slots[i]);
       var slotEl = _getMultiSlotEl(i);
       var video = slotEl ? slotEl.querySelector('.ms-video') : null;
       if (video) { video.pause(); video.removeAttribute('src'); video.load(); }
@@ -188,6 +190,9 @@ function _bindSlotPiPEvents(video, pipBtn) {
 }
 
 function _clearMultiSlot(idx) {
+  // Stop any scheduled or in-flight recovery before the slot stops existing,
+  // so its reply cannot land on whatever occupies this index next.
+  _cancelMultiSlotRecovery(TwitchX.multiState.slots[idx]);
   const slotEl = _getMultiSlotEl(idx);
   if (!slotEl) return;
   const video = slotEl.querySelector('.ms-video');
@@ -224,6 +229,7 @@ function _clearMultiSlot(idx) {
 function addMultiSlot(idx, channel, platform, quality) {
   const cfg = TwitchX.state.fullConfig || {};
   const q = quality || (cfg && cfg.quality) || 'best';
+  _cancelMultiSlotRecovery(TwitchX.multiState.slots[idx]);
   TwitchX.multiState.slots[idx] = { channel: channel, platform: platform, quality: q, title: '', state: 'loading' };
   const slotEl = _getMultiSlotEl(idx);
   if (!slotEl) return;
@@ -635,7 +641,11 @@ function checkMultiHealth() {
     if (lastTime !== undefined && Math.abs(nowTime - parseFloat(lastTime)) < 0.5 && video.readyState >= 2) {
       const frozenCount = parseInt(slotEl.dataset._frozenCount || '0', 10) + 1;
       if (frozenCount >= 2) {
-        _reloadMultiSlot(i, 'frozen');
+        // Reset the counters here too: _recoverMultiSlot may only schedule the
+        // work, and leaving them stale made the next tick re-trigger at once.
+        delete slotEl.dataset._frozenCount;
+        delete slotEl.dataset._lastTime;
+        _recoverMultiSlot(i, 'frozen');
         continue;
       }
       slotEl.dataset._frozenCount = String(frozenCount);
@@ -652,6 +662,7 @@ function checkMultiHealth() {
         _reloadMultiSlot(i, 'buffer-overflow');
         continue;
       }
+
     }
 
     // Live-edge drift
@@ -659,14 +670,14 @@ function checkMultiHealth() {
       const liveEdge = video.seekable.end(video.seekable.length - 1);
       const drift = liveEdge - video.currentTime;
       if (drift > 120) {
-        video.currentTime = liveEdge - 2;
+        video.currentTime = Math.max(video.currentTime, liveEdge - 6);
         console.log('[VideoHealth] multistream slot', i, 'caught up to live edge');
       }
     }
   }
 }
 
-function _reloadMultiSlot(idx, reason) {
+function _reloadMultiSlot(idx, reason, newSrc) {
   const slotEl = document.querySelector('.ms-slot[data-slot-idx="' + idx + '"]');
   if (!slotEl) return;
   const video = slotEl.querySelector('.ms-video');
@@ -675,7 +686,7 @@ function _reloadMultiSlot(idx, reason) {
   // Do not destroy the DOM element while in PiP or fullscreen — that kills the session
   function _softResetSlot(label) {
     console.log('[VideoHealth] multistream slot', idx, reason, 'soft reset (' + label + ') at', new Date().toISOString());
-    const oldSrc = video.src;
+    const oldSrc = newSrc || video.src;
     const wasMuted = video.muted;
     video.pause();
     video.removeAttribute('src');
@@ -701,7 +712,7 @@ function _reloadMultiSlot(idx, reason) {
 
   console.log('[VideoHealth] multistream slot', idx, reason, 'reset at', new Date().toISOString());
 
-  const oldSrc = video.src;
+  const oldSrc = newSrc || video.src;
   const wasMuted = video.muted;
 
   video.pause();
@@ -714,6 +725,7 @@ function _reloadMultiSlot(idx, reason) {
   fresh.autoplay = true;
   fresh.muted = wasMuted;
   fresh.playsInline = true;
+  fresh.preload = 'auto';
 
   const active = slotEl.querySelector('.ms-slot-active');
   active.insertBefore(fresh, active.querySelector('.ms-loading'));
@@ -729,6 +741,152 @@ function _reloadMultiSlot(idx, reason) {
   delete slotEl.dataset._lastTime;
   delete slotEl.dataset._frozenCount;
 }
+
+/* ── Multistream URL refresh ────────────────────────────── */
+// Slots hit the same expiring-URL problem as the main player: replaying the URL
+// a slot was started with cannot recover a session that has run for hours.
+
+// A slot that keeps failing must stop asking: every attempt spawns a streamlink
+// process, so an offline channel used to turn error -> refresh -> reload -> error
+// into an unbounded loop.
+const MS_MAX_RECOVERY_ATTEMPTS = 5;
+const MS_RECOVERY_BACKOFF_MS = [1000, 2000, 4000, 8000, 15000];
+const MS_REFRESH_REPLY_TIMEOUT_MS = 30000;
+let _msRequestSeq = 0;
+
+function _bindMultiGridPlaybackEvents() {
+  const grid = document.getElementById('multistream-grid');
+  if (!grid || grid._playbackEventsBound) return;
+  grid._playbackEventsBound = true;
+
+  const slotIndexOf = function(video) {
+    if (!video || video.tagName !== 'VIDEO') return -1;
+    const slotEl = video.closest ? video.closest('.ms-slot') : null;
+    if (!slotEl) return -1;
+    const idx = parseInt(slotEl.dataset.slotIdx, 10);
+    if (!Number.isInteger(idx) || !TwitchX.multiState.slots[idx]) return -1;
+    return idx;
+  };
+
+  // Media events do not bubble, so this only works in the capture phase.
+  grid.addEventListener('error', function(e) {
+    if (!e.target || !e.target.src) return;
+    const idx = slotIndexOf(e.target);
+    if (idx < 0) return;
+    console.warn('[Multistream] slot', idx, 'media error',
+      e.target.error && e.target.error.code);
+    _recoverMultiSlot(idx, 'media-error');
+  }, true);
+
+  // Playback is alive again — clear the backoff so an unrelated failure later
+  // starts from a short delay rather than an exhausted budget.
+  grid.addEventListener('playing', function(e) {
+    const idx = slotIndexOf(e.target);
+    if (idx < 0) return;
+    const slot = TwitchX.multiState.slots[idx];
+    if (slot) slot._recoverAttempts = 0;
+  }, true);
+}
+
+function _cancelMultiSlotRecovery(slot) {
+  if (!slot) return;
+  if (slot._refreshTimer) { clearTimeout(slot._refreshTimer); slot._refreshTimer = null; }
+  if (slot._refreshWatchdog) { clearTimeout(slot._refreshWatchdog); slot._refreshWatchdog = null; }
+  slot._refreshPending = false;
+  slot._recoverAttempts = 0;
+  slot._requestId = 0;
+}
+
+function _recoverMultiSlot(idx, reason) {
+  const slot = TwitchX.multiState.slots[idx];
+  if (!slot) return;
+  if (slot._refreshPending || slot._refreshTimer) return;
+
+  const attempts = slot._recoverAttempts || 0;
+  if (attempts >= MS_MAX_RECOVERY_ATTEMPTS) {
+    console.warn('[Multistream] slot', idx, 'giving up after', attempts, 'attempts');
+    const slotEl = _getMultiSlotEl(idx);
+    if (slotEl) {
+      const errEl = slotEl.querySelector('.ms-error-msg');
+      if (errEl) {
+        errEl.textContent = 'Stream lost — remove and re-add the channel';
+        errEl.classList.remove('hidden');
+      }
+    }
+    _setMultiSlotState(idx, 'error', 'Error');
+    return;
+  }
+
+  slot._recoverAttempts = attempts + 1;
+  const delay = MS_RECOVERY_BACKOFF_MS[
+    Math.min(attempts, MS_RECOVERY_BACKOFF_MS.length - 1)
+  ];
+  slot._refreshTimer = setTimeout(function() {
+    slot._refreshTimer = null;
+    if (TwitchX.multiState.slots[idx] !== slot) return;
+    if (!_refreshMultiSlotUrl(idx, reason)) _reloadMultiSlot(idx, reason);
+  }, delay);
+}
+
+function _refreshMultiSlotUrl(idx, reason) {
+  const slot = TwitchX.multiState.slots[idx];
+  if (!slot || !slot.channel) return false;
+  if (slot.platform === 'youtube') return false;
+  if (!TwitchX.api || !TwitchX.api.refresh_multi_slot_url) return false;
+  if (slot._refreshPending) return true;
+
+  _msRequestSeq += 1;
+  slot._requestId = _msRequestSeq;
+  slot._refreshPending = true;
+  console.log('[VideoHealth] multistream slot', idx, reason, 'requesting fresh URL');
+  try {
+    TwitchX.api.refresh_multi_slot_url(
+      idx, slot.channel, slot.platform || 'twitch', slot.quality || 'best',
+      slot._requestId
+    );
+  } catch (e) {
+    slot._refreshPending = false;
+    console.warn('[Multistream] slot', idx, 'URL refresh call failed', e);
+    return false;
+  }
+  // Without this a reply that never arrives would leave _refreshPending set and
+  // the slot unable to recover for the rest of the session.
+  if (slot._refreshWatchdog) clearTimeout(slot._refreshWatchdog);
+  slot._refreshWatchdog = setTimeout(function() {
+    slot._refreshWatchdog = null;
+    if (!slot._refreshPending) return;
+    console.warn('[Multistream] slot', idx, 'URL refresh reply timed out');
+    slot._refreshPending = false;
+  }, MS_REFRESH_REPLY_TIMEOUT_MS);
+  return true;
+}
+
+function _onMultiSlotUrlRefreshed(data) {
+  if (!data) return;
+  const idx = data.slot_idx;
+  const slot = TwitchX.multiState.slots[idx];
+  if (!slot) return;
+  // The slot may have been cleared, swapped or re-pointed at another channel
+  // while this was in flight; that URL is not ours to apply.
+  if (data.request_id !== slot._requestId) return;
+  if (data.channel && data.channel !== slot.channel) return;
+
+  if (slot._refreshWatchdog) { clearTimeout(slot._refreshWatchdog); slot._refreshWatchdog = null; }
+  slot._refreshPending = false;
+  if (!data.ok || !data.url) {
+    // Do not replay the URL that just failed — schedule another attempt under
+    // the retry budget instead.
+    _recoverMultiSlot(idx, 'url-refresh-failed');
+    return;
+  }
+  _reloadMultiSlot(idx, 'url-refresh', data.url);
+}
+
+TwitchX._refreshMultiSlotUrl = _refreshMultiSlotUrl;
+TwitchX._recoverMultiSlot = _recoverMultiSlot;
+TwitchX._cancelMultiSlotRecovery = _cancelMultiSlotRecovery;
+TwitchX._bindMultiGridPlaybackEvents = _bindMultiGridPlaybackEvents;
+TwitchX._onMultiSlotUrlRefreshed = _onMultiSlotUrlRefreshed;
 
 TwitchX.openMultistreamView = openMultistreamView;
 TwitchX.closeMultistreamView = closeMultistreamView;

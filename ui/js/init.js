@@ -53,6 +53,7 @@ document.addEventListener('DOMContentLoaded', function() {
   TwitchX._bindPaletteEvents();
   TwitchX._initMultistreamSlots();
   TwitchX._watchFullscreenChanges();
+  TwitchX._watchNetworkChanges();
 
   // Apply saved theme and accent color immediately from localStorage cache
   (function() {
@@ -319,6 +320,16 @@ TwitchX._bindPlayerEvents = function() {
     seekBar.addEventListener('change', TwitchX._handleSeekBarChange);
     seekBar.addEventListener('mouseleave', TwitchX._handleSeekBarLeave);
   }
+
+  // Quality changes apply to the running stream instead of waiting for a relaunch
+  var qualitySelect = document.getElementById('quality-select');
+  if (qualitySelect) {
+    qualitySelect.addEventListener('change', TwitchX._handleQualitySelectChange);
+  }
+
+  // Playback recovery
+  var retryBtn = document.getElementById('player-retry-btn');
+  if (retryBtn) retryBtn.addEventListener('click', TwitchX._handlePlayerRetryClick);
 };
 
 TwitchX._bindBrowseEvents = function() {

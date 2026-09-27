@@ -5,8 +5,50 @@ const TwitchX = window.TwitchX;
 
 TwitchX._playerVideo = null;
 
+/* Every automatic reset interrupts playback for a moment, so the health, frozen
+   and FPS monitors share one cooldown instead of each firing independently and
+   stacking recoveries on top of one another. */
+const RESET_COOLDOWN_MS = 30000;
+
+/* Backoff for re-resolving a dead stream. The last entry repeats until
+   RECOVERY_MAX_ATTEMPTS is reached, after which the user gets a Reconnect button. */
+const RECOVERY_BACKOFF_MS = [1000, 2000, 4000, 8000, 15000];
+const RECOVERY_MAX_ATTEMPTS = 5;
+
+/* How long playback may sit in `waiting` before it counts as a dead stream
+   rather than ordinary rebuffering. */
+const STALL_RECOVERY_MS = 20000;
+
+TwitchX._lastResetAt = 0;
+// requestId rises on every refresh request and on every cancellation, so a reply
+// that arrives after the player recovered on its own — or after the user moved
+// to another channel — can be recognised as stale and dropped.
+TwitchX._recovery = {
+  attempts: 0,
+  timer: null,
+  active: false,
+  pending: false,
+  requestId: 0,
+};
+
 function getPlayerVideo() {
   return TwitchX._playerVideo || document.getElementById('stream-video');
+}
+
+function _isLivePlayback() {
+  return TwitchX.state.streamType !== 'vod';
+}
+
+function _createVideoElement(id) {
+  const v = document.createElement('video');
+  v.id = id || 'stream-video';
+  v.autoplay = true;
+  v.controls = true;
+  v.playsInline = true;
+  // AVPlayer keeps a fuller buffer with an explicit hint, which shortens the
+  // rebuffering window after a source swap.
+  v.preload = 'auto';
+  return v;
 }
 
 function isVideoFullscreen(video) {
@@ -81,6 +123,7 @@ function showPlayerView() {
   }
   updateChatInput();
 
+  hidePlayerError();
   const video = getPlayerVideo();
   if (video) {
     if (!video._pipEventsBound) _bindPiPEvents(video);
@@ -90,26 +133,20 @@ function showPlayerView() {
     };
     video.addEventListener('playing', hideLoader, { once: true });
     video.addEventListener('error', hideLoader, { once: true });
-    setTimeout(hideLoader, 15000);
+    // If nothing ever plays, replace the spinner with something actionable
+    // instead of leaving the user in front of an empty frame.
+    if (TwitchX._playerLoaderTimer) clearTimeout(TwitchX._playerLoaderTimer);
+    TwitchX._playerLoaderTimer = setTimeout(function() {
+      TwitchX._playerLoaderTimer = null;
+      hideLoader();
+      const v = getPlayerVideo();
+      if (!v || v.readyState >= 3) return;
+      if (TwitchX._recovery.active) return;
+      beginStreamRecovery('never-started');
+    }, 15000);
   }
 
-  // Mid-playback buffering indicator via event delegation
-  var pContent = document.getElementById('player-content');
-  if (pContent && !pContent._bufferingBound) {
-    pContent._bufferingBound = true;
-    pContent.addEventListener('waiting', function(e) {
-      if (e.target.tagName === 'VIDEO') {
-        var buf = document.getElementById('player-buffering');
-        if (buf) buf.classList.remove('buffering-hide');
-      }
-    });
-    pContent.addEventListener('playing', function(e) {
-      if (e.target.tagName === 'VIDEO') {
-        var buf = document.getElementById('player-buffering');
-        if (buf) buf.classList.add('buffering-hide');
-      }
-    });
-  }
+  _bindPlayerContentEvents();
 
   var recordBtn = document.getElementById('record-btn');
   if (recordBtn) recordBtn.classList.remove('hidden');
@@ -158,6 +195,13 @@ function hidePlayerView(skipViewTransition) {
   // screen over the grid and over the next live stream.
   TwitchX.stopVodSeekBar();
   TwitchX.hideStatsOverlay();
+  cancelStreamRecovery();
+  hidePlayerError();
+  if (TwitchX._playerLoaderTimer) {
+    clearTimeout(TwitchX._playerLoaderTimer);
+    TwitchX._playerLoaderTimer = null;
+  }
+  TwitchX._lastResetAt = 0;
   TwitchX.thirdPartyEmotes = {};
   var pLoader = document.getElementById('player-loader');
   if (pLoader) pLoader.classList.add('hidden');
@@ -189,13 +233,9 @@ function hidePlayerView(skipViewTransition) {
     video.remove();
   }
 
-  const fresh = document.createElement('video');
-  fresh.id = 'stream-video';
-  fresh.autoplay = true;
-  fresh.controls = true;
-  fresh.playsInline = true;
-  const playerContent = document.getElementById('player-content');
-  if (playerContent) playerContent.insertBefore(fresh, playerContent.firstChild);
+  const fresh = _createVideoElement('stream-video');
+  const stage = document.getElementById('player-stage');
+  if (stage) stage.insertBefore(fresh, stage.firstChild);
   _bindPiPEvents(fresh);
   TwitchX._playerVideo = null;
 
@@ -405,12 +445,337 @@ function updateChatInput() {
   }
 }
 
+/* ── Playback event delegation ──────────────────────────── */
+// Media events (waiting, playing, error, stalled, emptied) do NOT bubble, so a
+// listener on #player-content only sees them in the capture phase. Delegating
+// here rather than binding per element means the swapped-in video created by a
+// gentle reset is covered without rebinding anything.
+
+function _isShadowVideo(el) {
+  return !!el && el.classList && el.classList.contains('video-shadow');
+}
+
+function _bindPlayerContentEvents() {
+  var pContent = document.getElementById('player-content');
+  if (!pContent || pContent._playbackEventsBound) return;
+  pContent._playbackEventsBound = true;
+
+  var onWaiting = function(e) {
+    if (e.target.tagName !== 'VIDEO' || _isShadowVideo(e.target)) return;
+    var buf = document.getElementById('player-buffering');
+    if (buf) buf.classList.remove('buffering-hide');
+    if (!_isLivePlayback()) return;
+    if (TwitchX._stallTimer) clearTimeout(TwitchX._stallTimer);
+    TwitchX._stallTimer = setTimeout(function() {
+      TwitchX._stallTimer = null;
+      const v = getPlayerVideo();
+      if (!v || v.paused || v.readyState >= 3) return;
+      beginStreamRecovery('stalled');
+    }, STALL_RECOVERY_MS);
+  };
+
+  var onPlaying = function(e) {
+    if (e.target.tagName !== 'VIDEO' || _isShadowVideo(e.target)) return;
+    var buf = document.getElementById('player-buffering');
+    if (buf) buf.classList.add('buffering-hide');
+    if (TwitchX._stallTimer) { clearTimeout(TwitchX._stallTimer); TwitchX._stallTimer = null; }
+    // Playback is alive again — drop any recovery backoff so a later, unrelated
+    // failure starts from a short delay rather than a long one.
+    cancelStreamRecovery();
+  };
+
+  var onError = function(e) {
+    if (e.target.tagName !== 'VIDEO' || _isShadowVideo(e.target)) return;
+    var err = e.target.error;
+    console.warn('[Player] media error', err && err.code, err && err.message);
+    if (!_isLivePlayback()) {
+      showPlayerError('Playback failed', err && err.message ? err.message : '');
+      return;
+    }
+    beginStreamRecovery('media-error');
+  };
+
+  var onEmptied = function(e) {
+    if (e.target.tagName !== 'VIDEO' || _isShadowVideo(e.target)) return;
+    // Emptied fires as part of a deliberate reset too; only treat it as a
+    // failure when no recovery or reset is already running.
+    if (TwitchX._gentleResetInProgress || TwitchX._softResetInProgress) return;
+    if (!_isLivePlayback() || !e.target.src) return;
+    beginStreamRecovery('emptied');
+  };
+
+  pContent.addEventListener('waiting', onWaiting, true);
+  pContent.addEventListener('playing', onPlaying, true);
+  pContent.addEventListener('error', onError, true);
+  pContent.addEventListener('emptied', onEmptied, true);
+}
+
+/* ── Playback error overlay ─────────────────────────────── */
+
+function showPlayerError(message, hint) {
+  var box = document.getElementById('player-error');
+  var msg = document.getElementById('player-error-msg');
+  var hintEl = document.getElementById('player-error-hint');
+  var btn = document.getElementById('player-retry-btn');
+  if (msg) msg.textContent = message || 'Playback stopped';
+  if (hintEl) hintEl.textContent = hint || '';
+  if (btn) btn.disabled = false;
+  if (box) box.classList.remove('hidden');
+  var loader = document.getElementById('player-loader');
+  if (loader) loader.classList.add('hidden');
+  var buf = document.getElementById('player-buffering');
+  if (buf) buf.classList.add('buffering-hide');
+}
+
+function hidePlayerError() {
+  var box = document.getElementById('player-error');
+  if (box) box.classList.add('hidden');
+}
+
+function _handlePlayerRetryClick() {
+  // Clear any stuck in-flight state first: the whole point of the button is to
+  // break out of a recovery that is no longer going anywhere.
+  cancelStreamRecovery();
+  hidePlayerError();
+  if (!beginStreamRecovery('manual-retry')) {
+    showPlayerError(
+      'Cannot reconnect',
+      'Reopen the channel from the list to start again.'
+    );
+  }
+}
+
+/* ── Stream recovery (re-resolve a dead URL) ────────────── */
+// Signed HLS URLs expire, and replaying the URL the player started with cannot
+// recover from an expiry, a sleep/wake cycle or a network change. Recovery asks
+// Python for a fresh URL and swaps it in through the existing crossfade.
+
+const REFRESH_REPLY_TIMEOUT_MS = 30000;
+
+function _armRefreshWatchdog() {
+  if (TwitchX._refreshWatchdog) clearTimeout(TwitchX._refreshWatchdog);
+  TwitchX._refreshWatchdog = setTimeout(function() {
+    TwitchX._refreshWatchdog = null;
+    if (!TwitchX._recovery.pending) return;
+    // No reply came back — release the flag so a later failure can retry
+    // instead of being blocked by a request that will never complete.
+    console.warn('[Player] URL refresh reply timed out');
+    TwitchX._recovery.pending = false;
+    TwitchX._qualitySwitchPending = false;
+    if (TwitchX.state.watchingChannel && _isPlaybackDead()) {
+      beginStreamRecovery('refresh-timeout');
+    }
+  }, REFRESH_REPLY_TIMEOUT_MS);
+}
+
+function _disarmRefreshWatchdog() {
+  if (TwitchX._refreshWatchdog) {
+    clearTimeout(TwitchX._refreshWatchdog);
+    TwitchX._refreshWatchdog = null;
+  }
+}
+
+function cancelStreamRecovery() {
+  _disarmRefreshWatchdog();
+  if (TwitchX._recovery.timer) {
+    clearTimeout(TwitchX._recovery.timer);
+    TwitchX._recovery.timer = null;
+  }
+  TwitchX._recovery.attempts = 0;
+  TwitchX._recovery.active = false;
+  TwitchX._recovery.pending = false;
+  // Invalidate whatever is still in flight — its reply must not swap the source
+  // of a stream that is playing again.
+  TwitchX._recovery.requestId += 1;
+  TwitchX._qualitySwitchPending = false;
+  if (TwitchX._stallTimer) { clearTimeout(TwitchX._stallTimer); TwitchX._stallTimer = null; }
+}
+
+function beginStreamRecovery(reason) {
+  if (!_isLivePlayback()) return false;
+  const channel = TwitchX.state.watchingChannel;
+  const platform = TwitchX.state.playerPlatform || 'twitch';
+  if (!channel || !TwitchX.api || !TwitchX.api.refresh_stream_url) return false;
+  if (platform === 'youtube') {
+    showPlayerError('Stream interrupted', 'Reopen the channel to continue.');
+    return false;
+  }
+  // A request is already in flight or scheduled — let it finish.
+  if (TwitchX._recovery.pending || TwitchX._recovery.timer) return true;
+
+  if (TwitchX._recovery.attempts >= RECOVERY_MAX_ATTEMPTS) {
+    TwitchX._recovery.active = false;
+    showPlayerError(
+      'Lost connection to the stream',
+      'The channel may have gone offline.'
+    );
+    return false;
+  }
+
+  const delay = RECOVERY_BACKOFF_MS[
+    Math.min(TwitchX._recovery.attempts, RECOVERY_BACKOFF_MS.length - 1)
+  ];
+  TwitchX._recovery.active = true;
+  TwitchX._recovery.attempts += 1;
+  console.log('[Player] recovery', reason, 'attempt', TwitchX._recovery.attempts,
+    'in', delay + 'ms');
+  TwitchX.setStatus('Reconnecting to ' + channel + '...', 'warn');
+
+  TwitchX._recovery.timer = setTimeout(function() {
+    TwitchX._recovery.timer = null;
+    if (!TwitchX.state.watchingChannel) return;
+    TwitchX._recovery.pending = true;
+    TwitchX._recovery.requestId += 1;
+    const requestId = TwitchX._recovery.requestId;
+    _armRefreshWatchdog();
+    const quality = _currentQuality();
+    try {
+      TwitchX.api.refresh_stream_url(channel, platform, quality, requestId);
+    } catch (e) {
+      TwitchX._recovery.pending = false;
+      _disarmRefreshWatchdog();
+      console.warn('[Player] refresh_stream_url failed', e);
+      beginStreamRecovery('refresh-call-failed');
+    }
+  }, delay);
+  return true;
+}
+
+function _currentQuality() {
+  var sel = document.getElementById('quality-select');
+  return (sel && sel.value) || 'best';
+}
+
+function _onStreamUrlRefreshed(data) {
+  if (!data) return;
+  // Stale reply: the player recovered on its own, the user switched channel, or
+  // the request was superseded. Applying it now would interrupt a healthy stream.
+  if (data.request_id !== TwitchX._recovery.requestId) {
+    console.log('[Player] ignoring stale URL refresh', data.request_id);
+    return;
+  }
+  if (data.channel && data.channel !== TwitchX.state.watchingChannel) {
+    console.log('[Player] ignoring URL refresh for a channel we left');
+    return;
+  }
+  _disarmRefreshWatchdog();
+  TwitchX._recovery.pending = false;
+  const wasQualitySwitch = !!TwitchX._qualitySwitchPending;
+  TwitchX._qualitySwitchPending = false;
+  if (!TwitchX.state.watchingChannel) return;
+  if (!data.ok || !data.url) {
+    if (wasQualitySwitch) {
+      // The picture that is playing is still fine — report and leave it alone.
+      TwitchX.setStatus((data && data.error) || 'Could not switch quality', 'error');
+      return;
+    }
+    beginStreamRecovery('refresh-failed');
+    return;
+  }
+  if (wasQualitySwitch) {
+    hidePlayerError();
+    TwitchX.setStatus('', 'info');
+    // Persist it, or the next launch would silently go back to the old quality
+    // and a recording would be made at a quality nobody is watching.
+    if (TwitchX.api && TwitchX.api.save_quality && data.quality) {
+      try { TwitchX.api.save_quality(data.quality); } catch (e) {}
+    }
+    applyNewStreamSource(data.url, 'quality-switch');
+    return;
+  }
+  // A refreshed URL is a deliberate swap, not a health-driven one, so it is not
+  // subject to the shared reset cooldown.
+  hidePlayerError();
+  TwitchX.setStatus('', 'info');
+  applyNewStreamSource(data.url, 'recovery');
+}
+
+/* Swap the playing source without tearing down the player view. */
+function applyNewStreamSource(url, reason) {
+  const video = getPlayerVideo();
+  if (!video) return;
+  if (!video.src) {
+    video.src = url;
+    video.play().catch(function(e) {
+      console.warn('[Player] play() after source swap rejected:', e && e.message || e);
+    });
+    return;
+  }
+  gentleResetVideo(reason, url);
+}
+
+/* ── Network and wake recovery ──────────────────────────── */
+// Sleep/wake and Wi-Fi changes leave AVPlayer holding a connection that will
+// never produce another segment, and no media event necessarily fires.
+
+function _isPlaybackDead() {
+  const video = getPlayerVideo();
+  if (!video || !video.src) return false;
+  // A paused live player is not automatically healthy: AVPlayer pauses itself
+  // when sleep or a dropped connection ends the stream. A pause the user asked
+  // for leaves the buffer intact, so readyState tells the two apart without
+  // having to guess at intent.
+  if (video.paused) return video.readyState < 3;
+  if (video.readyState < 3) return true;
+  if (video.seekable && video.seekable.length > 0) {
+    const drift = video.seekable.end(video.seekable.length - 1) - video.currentTime;
+    if (drift > 120) return true;
+  }
+  return false;
+}
+
+function _checkPlaybackAfterWake(reason) {
+  if (!TwitchX.state.watchingChannel || !_isLivePlayback()) return;
+  // Give the connection a moment to recover on its own before intervening.
+  setTimeout(function() {
+    if (!TwitchX.state.watchingChannel) return;
+    if (_isPlaybackDead()) beginStreamRecovery(reason);
+  }, 2000);
+}
+
+function _watchNetworkChanges() {
+  if (TwitchX._networkWatchBound) return;
+  TwitchX._networkWatchBound = true;
+  window.addEventListener('online', function() {
+    _checkPlaybackAfterWake('network-online');
+  });
+  window.addEventListener('offline', function() {
+    if (TwitchX.state.watchingChannel && _isLivePlayback()) {
+      TwitchX.setStatus('Network offline — waiting to reconnect', 'warn');
+    }
+  });
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) _checkPlaybackAfterWake('window-visible');
+  });
+  window.addEventListener('pageshow', function() {
+    _checkPlaybackAfterWake('page-show');
+  });
+}
+
+/* ── Reset cooldown ─────────────────────────────────────── */
+
+function requestVideoReset(reason) {
+  const now = Date.now();
+  if (now - (TwitchX._lastResetAt || 0) < RESET_COOLDOWN_MS) {
+    console.log('[VideoHealth]', reason, 'suppressed by reset cooldown');
+    return false;
+  }
+  const video = getPlayerVideo();
+  // Nothing to reset — do not spend the cooldown on a no-op.
+  if (!video || !video.src) return false;
+  TwitchX._lastResetAt = now;
+  gentleResetVideo(reason);
+  return true;
+}
+
 /* ── Video Health Monitor ───────────────────────────────── */
 
 function startVideoHealthMonitor() {
   stopVideoHealthMonitor();
   TwitchX._droppedFramesBaseline = 0;
-  TwitchX._healthMonitorTimer = setInterval(checkVideoHealth, 60000);
+  // 20s rather than a minute: decoder degradation is otherwise detected up to a
+  // full minute after it starts, which the viewer sees as sustained stutter.
+  TwitchX._healthMonitorTimer = setInterval(checkVideoHealth, 20000);
 }
 
 function stopVideoHealthMonitor() {
@@ -432,8 +797,9 @@ function checkVideoHealth() {
     const dropped = q.droppedVideoFrames - (TwitchX._droppedFramesBaseline || 0);
     if (total > 300 && dropped / total > 0.05) {
       TwitchX._droppedFramesBaseline = q.droppedVideoFrames;
-      gentleResetVideo('dropped-frames');
-      TwitchX.setStatus('Auto-recovered playback smoothness', 'info');
+      if (requestVideoReset('dropped-frames')) {
+        TwitchX.setStatus('Auto-recovered playback smoothness', 'info');
+      }
       return;
     }
   }
@@ -445,7 +811,12 @@ function checkVideoHealth() {
     const liveEdge = video.seekable.end(video.seekable.length - 1);
     const drift = liveEdge - video.currentTime;
     if (drift > 30) {
-      video.currentTime = liveEdge - 2;
+      // Landing 2s from the edge leaves under a segment of buffer on standard
+      // 2s-segment HLS, which immediately rebuffers. Keep ~3 segments of margin
+      // unless the user opted into low latency and accepted that trade-off.
+      const cfg = TwitchX.state.fullConfig || {};
+      const margin = cfg.low_latency_mode ? 2 : 6;
+      video.currentTime = Math.max(video.currentTime, liveEdge - margin);
       TwitchX.setStatus('Caught up to live edge', 'info');
       return;
     }
@@ -458,8 +829,9 @@ function checkVideoHealth() {
     const bufferedEnd = video.buffered.end(video.buffered.length - 1);
     const bufferedDrift = bufferedEnd - video.currentTime;
     if (bufferedDrift > 60) {
-      gentleResetVideo('buffer-overflow');
-      TwitchX.setStatus('Stream buffer cleared for smooth playback', 'info');
+      if (requestVideoReset('buffer-overflow')) {
+        TwitchX.setStatus('Stream buffer cleared for smooth playback', 'info');
+      }
       return;
     }
   }
@@ -471,8 +843,9 @@ function checkVideoHealth() {
     const totalStart = video.buffered.start(0);
     const totalEnd = video.buffered.end(video.buffered.length - 1);
     if (totalEnd - totalStart > 120) {
-      gentleResetVideo('buffer-total-overflow');
-      TwitchX.setStatus('Stream buffer cleared for smooth playback', 'info');
+      if (requestVideoReset('buffer-total-overflow')) {
+        TwitchX.setStatus('Stream buffer cleared for smooth playback', 'info');
+      }
       return;
     }
   }
@@ -503,9 +876,16 @@ function checkFrozenVideo() {
   const now = video.currentTime;
   if (TwitchX._frozenLastTime !== undefined && now === TwitchX._frozenLastTime) {
     TwitchX._frozenStreak = (TwitchX._frozenStreak || 0) + 1;
-    if (TwitchX._frozenStreak >= 1) { // 10 seconds frozen
-      gentleResetVideo('frozen');
-      TwitchX.setStatus('Auto-recovered playback smoothness', 'info');
+    // Two consecutive ticks (~20s). A single tick also fires during ad breaks
+    // and long GOP stalls, where a visible crossfade is worse than waiting.
+    if (TwitchX._frozenStreak >= 2) {
+      if (requestVideoReset('frozen')) {
+        TwitchX.setStatus('Auto-recovered playback smoothness', 'info');
+      } else {
+        // Cooldown blocked the reset and the picture is still frozen — the URL
+        // itself is the likely culprit, so ask for a fresh one.
+        beginStreamRecovery('frozen-persistent');
+      }
       TwitchX._frozenStreak = 0;
       TwitchX._frozenLastTime = undefined;
       return;
@@ -518,7 +898,7 @@ function checkFrozenVideo() {
 
 /* ── Soft Video Reset (same DOM element, fullscreen-safe) ─ */
 
-function softResetVideo(reason) {
+function softResetVideo(reason, newSrc) {
   if (TwitchX._softResetInProgress) return;
   // Clear any recovery status set by gentleResetVideo before it fell through to us
   setStatus('', 'info');
@@ -527,7 +907,7 @@ function softResetVideo(reason) {
   TwitchX._softResetInProgress = true;
   console.log('[VideoHealth]', reason, 'soft reset at', new Date().toISOString(),
     'src=', video.src.split('?')[0], 'currentTime=', video.currentTime);
-  const savedSrc = video.src;
+  const savedSrc = newSrc || video.src;
   const savedMuted = video.muted;
   const savedVolume = video.volume;
   video.pause();
@@ -567,22 +947,23 @@ function cancelGentleReset() {
   }
   TwitchX._gentleResetDoSwap = null;
   TwitchX._gentleResetInProgress = false;
-  // Restore _playerVideo to the original element (now in DOM again without the shadow)
+  // Restore _playerVideo to the original element (the shadow used its own id and
+  // has just been removed, so this cannot pick the wrong one)
   const orig = document.getElementById('stream-video');
   if (orig) TwitchX._playerVideo = orig;
 }
 
-function gentleResetVideo(reason) {
+function gentleResetVideo(reason, newSrc) {
   const oldVideo = getPlayerVideo();
   if (!oldVideo || !oldVideo.src) return;
 
   // Do not destroy the DOM element while in PiP or fullscreen — that kills the session
   if (isVideoPiP(oldVideo)) {
-    softResetVideo(reason);
+    softResetVideo(reason, newSrc);
     return;
   }
   if (isVideoFullscreen(oldVideo)) {
-    softResetVideo(reason);
+    softResetVideo(reason, newSrc);
     return;
   }
 
@@ -601,15 +982,13 @@ function gentleResetVideo(reason) {
     'src=', oldVideo.src.split('?')[0], 'currentTime=', oldVideo.currentTime);
 
   const container = oldVideo.parentNode;
-  const savedSrc = oldVideo.src;
+  const savedSrc = newSrc || oldVideo.src;
   const savedMuted = oldVideo.muted;
   const savedVolume = oldVideo.volume;
 
-  const newVideo = document.createElement('video');
-  newVideo.autoplay = true;
-  newVideo.controls = true;
-  newVideo.playsInline = true;
-  newVideo.id = 'stream-video';
+  // The shadow carries its own id until the swap. Two elements sharing
+  // #stream-video made getPlayerVideo() depend on DOM order during the overlap.
+  const newVideo = _createVideoElement('stream-video-next');
   newVideo.className = 'video-shadow';
 
   newVideo.src = savedSrc;
@@ -641,6 +1020,7 @@ function gentleResetVideo(reason) {
       oldVideo.remove();
 
       newVideo.classList.remove('video-shadow');
+      newVideo.id = 'stream-video';
       newVideo.muted = savedMuted;
 
       TwitchX._playerVideo = newVideo;
@@ -653,6 +1033,17 @@ function gentleResetVideo(reason) {
   TwitchX._gentleResetDoSwap = doSwap;
   newVideo.addEventListener('playing', doSwap, { once: true });
   newVideo.addEventListener('loadeddata', doSwap, { once: true });
+  newVideo.addEventListener('error', function() {
+    if (swapped) return;
+    // Keep the old element playing rather than crossfading to a broken one.
+    console.warn('[VideoHealth]', reason, 'replacement video failed to load');
+    cancelGentleReset();
+    setStatus('', 'info');
+    if (newSrc) {
+      // The refreshed URL is the one that failed — go back for another.
+      beginStreamRecovery('refreshed-url-failed');
+    }
+  }, { once: true });
 
   TwitchX._gentleResetNewVideo = newVideo;
   TwitchX._gentleResetInProgress = true;
@@ -695,7 +1086,7 @@ function startProactiveReset() {
   function tick() {
     const video = getPlayerVideo();
     if (_hasPlaybackDegradation(video)) {
-      gentleResetVideo('proactive');
+      requestVideoReset('proactive');
     }
     TwitchX._proactiveTimer = setTimeout(tick, 15 * 60 * 1000);
   }
@@ -716,7 +1107,6 @@ function startFpsMonitor() {
   TwitchX._fpsLastTimestamp = 0;
   TwitchX._fpsRafId = 0;
   TwitchX._fpsConsecutiveBad = 0;
-  TwitchX._fpsLastResetTime = 0;
 
   function tick(timestamp) {
     if (!TwitchX._fpsRafId) return;
@@ -747,11 +1137,10 @@ function startFpsMonitor() {
         TwitchX._fpsConsecutiveBad += 1;
         // Require 15 consecutive bad frames (~3s at 5fps) and rate-limit resets
         // to once per 60s so we don't loop on a genuinely slow machine.
-        const now = Date.now();
-        if (TwitchX._fpsConsecutiveBad >= 15 && (now - TwitchX._fpsLastResetTime) > 60000) {
-          TwitchX._fpsLastResetTime = now;
-          gentleResetVideo('fps-drop');
-          TwitchX.setStatus('Auto-recovered playback smoothness', 'info');
+        if (TwitchX._fpsConsecutiveBad >= 15) {
+          if (requestVideoReset('fps-drop')) {
+            TwitchX.setStatus('Auto-recovered playback smoothness', 'info');
+          }
           TwitchX._fpsConsecutiveBad = 0;
         }
       } else {
@@ -771,7 +1160,6 @@ function stopFpsMonitor() {
   }
   TwitchX._fpsLastTimestamp = 0;
   TwitchX._fpsConsecutiveBad = 0;
-  TwitchX._fpsLastResetTime = 0;
 }
 
 TwitchX.showPlayerView = showPlayerView;
@@ -801,6 +1189,140 @@ TwitchX.isVideoFullscreen = isVideoFullscreen;
 TwitchX.isVideoPiP = isVideoPiP;
 TwitchX._bindPiPEvents = _bindPiPEvents;
 TwitchX.softResetVideo = softResetVideo;
+TwitchX.requestVideoReset = requestVideoReset;
+TwitchX.beginStreamRecovery = beginStreamRecovery;
+TwitchX.cancelStreamRecovery = cancelStreamRecovery;
+TwitchX.applyNewStreamSource = applyNewStreamSource;
+TwitchX.showPlayerError = showPlayerError;
+TwitchX.hidePlayerError = hidePlayerError;
+TwitchX._onStreamUrlRefreshed = _onStreamUrlRefreshed;
+TwitchX._handlePlayerRetryClick = _handlePlayerRetryClick;
+TwitchX._watchNetworkChanges = _watchNetworkChanges;
+TwitchX._currentQuality = _currentQuality;
+TwitchX._bindPlayerContentEvents = _bindPlayerContentEvents;
+
+/* ── Codec capability probe ─────────────────────────────── */
+// Twitch only offers its Enhanced Broadcasting renditions (1440p60 and up) to
+// clients that accept HEVC or AV1, and that choice is baked into the signed
+// resolve URL. HEVC is safe to ask for on any modern Mac; AV1 is not, because
+// hardware decode starts at M3 and software-decoding 1440p60 AV1 is ruinous.
+// mediaCapabilities.decodingInfo answers exactly that question: powerEfficient
+// is the hardware-decode signal, smooth is the sustained-framerate one.
+
+function _decodeProbe(codecs, width, height, bitrate) {
+  return {
+    // Playback goes through a plain <video src> element, so "file" is the mode
+    // that matches. media-source is the fallback for WebKit builds that only
+    // answer for MSE.
+    type: 'file',
+    video: {
+      contentType: 'video/mp4; codecs="' + codecs + '"',
+      width: width,
+      height: height,
+      bitrate: bitrate,
+      framerate: 60,
+    },
+  };
+}
+
+const AV1_PROBE = _decodeProbe('av01.0.09M.08', 2560, 1440, 12000000);
+const HEVC_PROBE = _decodeProbe('hvc1.1.6.L153.B0', 2560, 1440, 10000000);
+
+function _decodingInfo(mc, config) {
+  return mc.decodingInfo(config)
+    .then(function(r) {
+      if (r && r.supported) return r;
+      // Some WebKit builds only answer for MediaSource.
+      return mc.decodingInfo(Object.assign({}, config, { type: 'media-source' }))
+        .catch(function() { return r; });
+    })
+    .catch(function() {
+      return mc.decodingInfo(Object.assign({}, config, { type: 'media-source' }))
+        .catch(function() { return null; });
+    });
+}
+
+function probeCodecSupport() {
+  if (!TwitchX.api || !TwitchX.api.set_codec_support) return;
+
+  const report = function(av1, hevc) {
+    try {
+      TwitchX.api.set_codec_support({ av1: av1, hevc: hevc });
+    } catch (e) {
+      console.warn('[Codecs] reporting support failed', e);
+    }
+  };
+
+  const mc = navigator.mediaCapabilities;
+  if (!mc || typeof mc.decodingInfo !== 'function') {
+    // canPlayType cannot distinguish hardware from software decoding, and in
+    // this WebView it answers "probably" for AV1 that decodingInfo rejects
+    // outright. Without decodingInfo, AV1 stays off and only HEVC is claimed.
+    console.log('[Codecs] mediaCapabilities unavailable, assuming HEVC only');
+    report(false, true);
+    return;
+  }
+
+  Promise.all([
+    _decodingInfo(mc, AV1_PROBE),
+    _decodingInfo(mc, HEVC_PROBE),
+  ]).then(function(results) {
+    const av1 = results[0];
+    const hevc = results[1];
+    // All three flags are required: a decoder that is supported but neither
+    // smooth nor power-efficient is a software decoder, which is what asking
+    // Twitch for AV1 must avoid.
+    const av1Hardware = !!(av1 && av1.supported && av1.smooth && av1.powerEfficient);
+    const hevcOk = !!(hevc && hevc.supported);
+    console.log('[Codecs] av1 hardware:', av1Hardware, 'hevc:', hevcOk);
+    report(av1Hardware, hevcOk);
+  }).catch(function(e) {
+    console.warn('[Codecs] probe failed', e);
+    report(false, true);
+  });
+}
+
+TwitchX.probeCodecSupport = probeCodecSupport;
+
+/* ── Live quality switching ─────────────────────────────── */
+// Changing quality used to take effect only on the next launch. Re-resolving and
+// crossfading reuses the reset machinery, so the switch costs one short fade
+// instead of a full stop/start of the player and the chat.
+
+function changeQualityLive(quality) {
+  const channel = TwitchX.state.watchingChannel;
+  const platform = TwitchX.state.playerPlatform || 'twitch';
+  if (!channel || !_isLivePlayback()) return false;
+  if (platform === 'youtube') return false;
+  if (!TwitchX.api || !TwitchX.api.refresh_stream_url) return false;
+  if (TwitchX._recovery.pending) return false;
+
+  TwitchX._qualitySwitchPending = true;
+  TwitchX._recovery.pending = true;
+  TwitchX._recovery.requestId += 1;
+  const requestId = TwitchX._recovery.requestId;
+  _armRefreshWatchdog();
+  TwitchX.setStatus('Switching to ' + quality + '...', 'warn');
+  try {
+    TwitchX.api.refresh_stream_url(channel, platform, quality, requestId);
+  } catch (e) {
+    TwitchX._qualitySwitchPending = false;
+    TwitchX._recovery.pending = false;
+    _disarmRefreshWatchdog();
+    console.warn('[Player] quality switch failed', e);
+    return false;
+  }
+  return true;
+}
+
+function _handleQualitySelectChange() {
+  const playerView = document.getElementById('player-view');
+  if (!playerView || !playerView.classList.contains('view-active')) return;
+  changeQualityLive(_currentQuality());
+}
+
+TwitchX.changeQualityLive = changeQualityLive;
+TwitchX._handleQualitySelectChange = _handleQualitySelectChange;
 
 /* ── Recording ──────────────────────────────────────── */
 
