@@ -34,7 +34,10 @@
   opacity: 0;
   transition: transform var(--duration-view) var(--ease-spring),
               opacity var(--duration-view) var(--ease-view);
-  overflow: hidden;
+  /* Scrolls when the content is taller than the window so .settings-btns can
+     stick to the bottom (temporary: Save goes away in redesign phase 3). */
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 #settings-overlay.visible #settings-modal {
   transform: scale(1);
@@ -106,9 +109,13 @@ select {
 
 .settings-btns {
   display: flex; gap: var(--space-8); justify-content: flex-end;
-  margin: var(--space-16) -2px 0;
+  /* Content column only: a sticky (positioned) footer would paint over the
+     absolutely positioned .settings-tabs otherwise. */
+  margin: var(--space-16) -2px 0 var(--settings-content-offset);
   padding-top: var(--space-14);
   border-top: 1px solid var(--border-subtle);
+  position: sticky; bottom: 0;
+  background: var(--bg-modal);
 }
 .settings-btns button {
   min-height: 32px; padding: 0 18px; border-radius: var(--radius-md);
