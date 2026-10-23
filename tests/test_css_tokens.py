@@ -55,6 +55,10 @@ BACKDROP_ALLOWED = {
     "#palette-modal",
     ".toast",
     "#sidebar-tooltip",
+    "#account-popover",
+    ".section-menu",
+    ".player-menu",
+    ".chat-export-menu",
     # chips and controls over video / thumbnails
     ".uptime-badge",
     ".watching-badge",

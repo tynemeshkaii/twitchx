@@ -170,7 +170,7 @@ function _buildPaletteItem(icon, label, hint, action, options) {
   if (options.live) {
     var liveEl = document.createElement('span');
     liveEl.className = 'palette-item-live';
-    liveEl.textContent = 'LIVE';
+    liveEl.textContent = 'Live';
     labelWrap.appendChild(liveEl);
   }
 

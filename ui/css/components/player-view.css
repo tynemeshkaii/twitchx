@@ -389,12 +389,14 @@
   position: absolute;
   right: 0;
   bottom: calc(100% + var(--space-8));
-  min-width: 180px;
-  padding: var(--space-4) 0;
-  background: var(--bg-elevated);
+  min-width: 200px;
+  padding: var(--space-4);
+  background: var(--surface-floating);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-floating);
+  backdrop-filter: var(--blur-floating);
+  -webkit-backdrop-filter: var(--blur-floating);
   color: var(--text-primary);
 }
 .player-menu.hidden { display: none; }

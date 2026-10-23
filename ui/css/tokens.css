@@ -124,6 +124,9 @@
   --glass-thin:   blur(12px) saturate(160%);
   --glass-thick:  blur(32px) saturate(180%);
   --glass-modal:  blur(40px) saturate(200%);
+  /* Layers that float over content (menus, popovers, palette, toasts,
+     tooltips): --surface-floating + this blur + --shadow-floating. */
+  --blur-floating: blur(24px) saturate(160%);
 
 
 

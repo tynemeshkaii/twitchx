@@ -96,16 +96,15 @@ function renderGrid() {
   var anyLoggedIn = TwitchX.state.currentUser || TwitchX.state.kickUser || TwitchX.state.youtubeUser;
   if (TwitchX.state.favorites.length === 0 && !anyLoggedIn) {
     grid.classList.add('hidden');
-    var welcomeOpts = {
+    // No brand colours here: one neutral Connect opens the account popover,
+    // where each platform has its own sign-in.
+    TwitchX.renderEmptyState(empty, {
       illustration: 'empty-favorites',
       title: 'Welcome to TwitchX',
-      subtitle: 'Log in to see followed channels, or add channels with \u2318K.',
-      primaryAction: { label: 'Login with Twitch', callback: function() { if (TwitchX.api) TwitchX.api.login(); } },
-    };
-    if (TwitchX.state.youtubeEnabled) {
-      welcomeOpts.secondaryAction = { label: 'Connect YouTube', callback: function() { if (TwitchX.api) TwitchX.api.youtube_login(); } };
-    }
-    TwitchX.renderEmptyState(empty, welcomeOpts);
+      subtitle: 'Connect Twitch, Kick or YouTube to see the channels you follow, or add channels with \u2318K.',
+      primaryAction: { label: 'Connect account', callback: function() { if (TwitchX.openAccountPopover) TwitchX.openAccountPopover(); } },
+      secondaryAction: { label: 'Browse live channels', callback: function() { TwitchX.navigateTo('browse'); } },
+    });
 
     return;
   }
@@ -462,7 +461,8 @@ function renderEmptyState(target, opts) {
 
   var art = document.createElement('div');
   art.className = 'empty-illustration ' + (config.illustration || 'empty-generic');
-  TwitchX.setIconOnly(art, EMPTY_STATE_ICONS[config.illustration] || 'info', 36);
+  art.setAttribute('aria-hidden', 'true');
+  TwitchX.setIconOnly(art, EMPTY_STATE_ICONS[config.illustration] || 'info', 40);
   target.appendChild(art);
 
   var title = document.createElement('div');
@@ -483,7 +483,8 @@ function renderEmptyState(target, opts) {
     if (!action || !action.label || !action.callback) return;
     var btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = idx === 0 ? 'empty-action primary' : 'empty-action secondary';
+    // At most two: the first is primary, the second secondary.
+    btn.className = 'btn ' + (idx === 0 ? 'btn-primary' : 'btn-secondary');
     btn.textContent = action.label;
     btn.addEventListener('click', action.callback);
     actions.appendChild(btn);

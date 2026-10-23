@@ -62,7 +62,6 @@
   inset: 0;
   z-index: var(--z-palette);
   background: var(--overlay-bg);
-  backdrop-filter: blur(6px);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -73,11 +72,13 @@
 #palette-modal {
   width: 560px;
   max-width: calc(100vw - 32px);
-  background: var(--bg-modal);
-  border: 1px solid var(--border-glass);
-  border-radius: var(--radius-lg);
+  background: var(--surface-floating);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-floating);
+  backdrop-filter: var(--blur-floating);
+  -webkit-backdrop-filter: var(--blur-floating);
   overflow: hidden;
-  box-shadow: var(--shadow-lg);
 }
 
 #palette-input {
@@ -92,26 +93,20 @@
   font-family: inherit;
   outline: none;
 }
-#palette-input:focus {
-  border-bottom-color: var(--focus-ring);
-  box-shadow: inset 0 -2px 0 var(--focus-ring);
-}
+#palette-input:focus { border-bottom-color: var(--border-default); }
 #palette-input::placeholder { color: var(--text-muted); }
 
 #palette-results {
   max-height: 340px;
   overflow-y: auto;
-  padding-bottom: var(--space-4);
+  padding: 0 var(--space-4) var(--space-4);
 }
 
 .palette-section-header {
-  padding: var(--space-8) var(--space-20) var(--space-4);
+  padding: var(--space-12) var(--space-20) var(--space-4);
   font-size: var(--font-xs);
   font-weight: var(--weight-semibold);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
   color: var(--text-muted);
-  background: var(--bg-base);
 }
 
 .palette-item {
@@ -119,19 +114,21 @@
   display: flex;
   align-items: center;
   gap: var(--space-12);
-  padding: var(--space-8) var(--space-20);
+  padding: var(--space-4) var(--space-16);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   color: var(--text-primary);
   font-size: var(--font-md);
   transition: background var(--duration-fast) ease;
 }
-.palette-item:hover,
-.palette-item.palette-active { background: var(--bg-elevated); }
+.palette-item:hover { background: var(--hover-bg); }
+.palette-item.palette-active { background: var(--hover-bg-strong); }
 
 .palette-item-icon {
-  font-size: var(--font-lg);
   width: 22px;
-  text-align: center;
+  display: inline-flex;
+  justify-content: center;
+  color: var(--icon-muted);
   flex-shrink: 0;
 }
 .palette-item-label {

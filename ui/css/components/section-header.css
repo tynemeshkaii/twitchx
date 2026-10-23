@@ -87,10 +87,12 @@
   right: 0;
   min-width: 200px;
   padding: var(--space-4);
-  background: var(--bg-elevated);
+  background: var(--surface-floating);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-floating);
+  backdrop-filter: var(--blur-floating);
+  -webkit-backdrop-filter: var(--blur-floating);
   z-index: var(--z-dropdown);
 }
 .section-menu.hidden { display: none; }

@@ -131,9 +131,7 @@ input[type="range"]::-webkit-slider-thumb {
   background: var(--accent);
   border: none;
   cursor: pointer;
-  transition: transform var(--duration-fast) ease;
 }
-input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.25); }
 input[type="range"]::-moz-range-thumb {
   width: 12px;
   height: 12px;
