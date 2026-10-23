@@ -1,6 +1,6 @@
 
 #stream-grid {
-  flex: 1; overflow-y: auto; overflow-x: hidden; padding: 16px;
+  flex: 1; overflow-y: auto; overflow-x: hidden; padding: var(--space-16);
   min-width: 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(228px, 100%), 1fr));
@@ -120,7 +120,7 @@
   position: absolute; top: 8px; left: 8px; z-index: 3;
   background: var(--live); color: var(--text-inverse);
   font-size: var(--font-xs); font-weight: var(--weight-semibold);
-  padding: 2px 6px 2px 14px; border-radius: var(--radius-sm);
+  padding: var(--space-4) var(--space-8) var(--space-4) var(--space-16); border-radius: var(--radius-sm);
   text-transform: uppercase; letter-spacing: var(--tracking-wide);
   box-shadow: 0 6px 14px rgba(0,0,0,0.28), 0 0 10px color-mix(in srgb, var(--live) 36%, transparent);
   backdrop-filter: blur(8px);
@@ -147,13 +147,13 @@
   /* The chip stays dark in both themes, so its text and border must be fixed
      light values — a --text-* token drops to ~2.4:1 in the light theme. */
   background: rgba(0,0,0,0.74); color: var(--text-on-overlay);
-  font-size: var(--font-xs); padding: 2px 6px; border-radius: var(--radius-sm);
+  font-size: var(--font-xs); padding: var(--space-4) var(--space-8); border-radius: var(--radius-sm);
   border: 1px solid rgba(255, 255, 255, 0.16);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
 .platform-badge {
-  height: 20px; padding: 0 7px;
+  height: 20px; padding: 0 var(--space-8);
   border-radius: var(--radius-full);
   display: flex; align-items: center; justify-content: center;
   font-size: var(--font-xs); font-weight: var(--weight-semibold);
@@ -182,11 +182,11 @@
 }
 
 .card-body,
-.card-info { padding: var(--space-12) var(--space-12) var(--space-14); }
+.card-info { padding: var(--space-12); }
 .card-title-row,
 .card-meta {
-  display: flex; align-items: center; gap: 6px;
-  margin-bottom: var(--space-6);
+  display: flex; align-items: center; gap: var(--space-8);
+  margin-bottom: var(--space-4);
   min-width: 0;
 }
 .card-avatar {
@@ -220,10 +220,10 @@
 .card-title {
   font-size: var(--font-sm); color: var(--text-secondary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  margin-top: var(--space-2);
+  margin-top: var(--space-4);
 }
 .card-game {
   font-size: var(--font-sm); font-weight: var(--weight-semibold); color: var(--text-muted);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  margin-top: var(--space-2);
+  margin-top: var(--space-4);
 }

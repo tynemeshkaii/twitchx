@@ -42,7 +42,7 @@
 #channel-identity-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-8);
   min-width: 0;
   flex-wrap: wrap;
 }
@@ -60,15 +60,15 @@
 .channel-live-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-4);
   background: var(--status-bg-red);
   color: var(--live);
   font-size: var(--font-xs);
   font-weight: var(--weight-semibold);
-  padding: 2px 7px;
+  padding: var(--space-4) var(--space-8);
   border-radius: var(--radius-sm);
   letter-spacing: 0.06em;
-  margin-top: 3px;
+  margin-top: var(--space-4);
   width: fit-content;
   border: 1px solid var(--status-border-red);
 }
@@ -77,12 +77,12 @@
 #channel-followers {
   font-size: var(--font-sm);
   color: var(--text-secondary);
-  margin-top: var(--space-2);
+  margin-top: var(--space-4);
 }
 
 .channel-follow-btn {
   min-height: 32px;
-  padding: var(--space-6) var(--space-14);
+  padding: var(--space-4) var(--space-16);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-accent-strong);
   background: var(--accent-dim);
@@ -107,7 +107,7 @@
 
 .channel-open-btn {
   min-height: 32px;
-  padding: var(--space-6) var(--space-12);
+  padding: var(--space-4) var(--space-12);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
   background: transparent;
@@ -119,7 +119,7 @@
   font-family: inherit;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-4);
 }
 .channel-open-btn:hover {
   border-color: var(--border-strong);
@@ -128,7 +128,7 @@
 
 .channel-watch-btn {
   min-height: 32px;
-  padding: var(--space-6) var(--space-14);
+  padding: var(--space-4) var(--space-16);
   border-radius: var(--radius-md);
   border: none;
   background: var(--btn-primary-bg);
@@ -155,7 +155,7 @@
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
-  padding: var(--space-12) var(--space-14);
+  padding: var(--space-12) var(--space-16);
   background: var(--bg-elevated);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-subtle);
@@ -163,7 +163,7 @@
 
 .channel-tab {
   min-height: 32px;
-  padding: 4px 12px;
+  padding: var(--space-4) var(--space-12);
   border-radius: var(--radius-full);
   border: none;
   background: transparent;
@@ -190,7 +190,7 @@
   align-items: center;
   color: var(--text-muted);
   font-size: var(--font-sm);
-  padding: 32px 0;
+  padding: var(--space-32) 0;
   text-align: center;
   letter-spacing: 0.01em;
 }
@@ -198,7 +198,7 @@
 .channel-media-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-12);
 }
 
 .channel-media-grid {
@@ -271,7 +271,7 @@
 .channel-media-platform-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-8);
 }
 
 .channel-media-body {
@@ -308,7 +308,7 @@
 
 .channel-media-btn {
   min-height: 32px;
-  padding: var(--space-6) var(--space-10);
+  padding: var(--space-4) var(--space-12);
   border-radius: var(--radius-sm);
   border: none;
   background: var(--btn-primary-bg);
@@ -352,8 +352,8 @@
 #channel-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: var(--space-8) var(--space-14);
+  gap: var(--space-12);
+  padding: var(--space-8) var(--space-16);
   border-bottom: 1px solid var(--border-glass);
   background: var(--glass-bar);
   font-size: var(--font-md);
@@ -373,8 +373,8 @@
   position: relative;
   display: flex;
   align-items: flex-start;
-  gap: 14px;
-  padding: 76px var(--space-16) var(--space-16);
+  gap: var(--space-16);
+  padding: calc(var(--space-40) * 2) var(--space-16) var(--space-16);
   background: var(--surface-card), var(--bg-elevated);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-card);
@@ -399,7 +399,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: var(--space-4);
   position: relative;
   z-index: 1;
 }
@@ -408,7 +408,7 @@
   flex-direction: row;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-8);
   flex-shrink: 0;
   max-width: 320px;
   position: relative;
@@ -416,11 +416,11 @@
 }
 #channel-tabs {
   display: flex;
-  gap: 4px;
+  gap: var(--space-4);
   border: 1px solid var(--border-subtle);
   background: var(--bg-control);
   border-radius: var(--radius-full);
-  padding: 4px;
+  padding: var(--space-4);
   width: fit-content;
 }
 .channel-tab-panel { display: flex; flex-direction: column; gap: var(--space-8); }

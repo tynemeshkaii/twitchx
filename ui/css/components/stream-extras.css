@@ -2,8 +2,8 @@
 /* ── Grid / List Toggle ─────────────────────────────────── */
 #stream-grid.list-mode {
   grid-template-columns: 1fr;
-  gap: 4px;
-  padding: 8px 12px;
+  gap: var(--space-4);
+  padding: var(--space-8) var(--space-12);
 }
 #stream-grid.list-mode .stream-card {
   flex-direction: row;
@@ -28,8 +28,8 @@
   flex-direction: row;
   align-items: center;
   flex: 1;
-  padding: 0 12px;
-  gap: 10px;
+  padding: 0 var(--space-12);
+  gap: var(--space-12);
   min-width: 0;
   overflow: hidden;
 }
@@ -43,7 +43,7 @@
   height: 20px;
 }
 #stream-grid.list-mode .card-channel { font-size: var(--font-md); font-weight: var(--weight-semibold); white-space: nowrap; }
-#stream-grid.list-mode .card-viewers { margin-left: 8px; }
+#stream-grid.list-mode .card-viewers { margin-left: var(--space-8); }
 #stream-grid.list-mode .card-title {
   flex: 1;
   font-size: var(--font-sm);
@@ -56,16 +56,16 @@
 #stream-grid.list-mode .platform-badge,
 #stream-grid.list-mode .live-badge,
 #stream-grid.list-mode .uptime-badge { display: none; }
-#stream-grid.list-mode .watching-badge { font-size: var(--font-xs); padding: 1px 4px; }
+#stream-grid.list-mode .watching-badge { font-size: var(--font-xs); padding: 1px var(--space-4); }
 
 /* ── Comfortable / Compact density modes ──────────────── */
 #stream-grid.compact-mode {
   grid-template-columns: repeat(auto-fill, minmax(min(180px, 100%), 1fr));
-  gap: 10px;
-  padding: 10px 12px;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-12);
 }
 #stream-grid.compact-mode .card-info {
-  padding: var(--space-8) var(--space-8) var(--space-10);
+  padding: var(--space-8);
   gap: var(--space-4);
 }
 #stream-grid.compact-mode .card-title-row { margin-bottom: var(--space-4); }
@@ -75,11 +75,11 @@
 #stream-grid.compact-mode .card-game { font-size: var(--font-xs); }
 #stream-grid.compact-mode .live-badge,
 #stream-grid.compact-mode .platform-badge,
-#stream-grid.compact-mode .uptime-badge { font-size: var(--font-xs); padding: 1px 4px; }
+#stream-grid.compact-mode .uptime-badge { font-size: var(--font-xs); padding: 1px var(--space-4); }
 #stream-grid.comfortable-mode {
   grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
-  gap: var(--space-14);
-  padding: var(--space-14);
+  gap: var(--space-12);
+  padding: var(--space-12);
 }
 
 /* ── Pin Badge ──────────────────────────────────────────── */
@@ -103,7 +103,7 @@
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding-top: 80px;
+  padding-top: calc(var(--space-40) * 2);
 }
 #palette-overlay.hidden { display: none; }
 
@@ -112,7 +112,7 @@
   max-width: calc(100vw - 32px);
   background: var(--bg-modal);
   border: 1px solid var(--border-glass);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   overflow: hidden;
   box-shadow: var(--shadow-lg);
 }
@@ -138,11 +138,11 @@
 #palette-results {
   max-height: 340px;
   overflow-y: auto;
-  padding-bottom: 4px;
+  padding-bottom: var(--space-4);
 }
 
 .palette-section-header {
-  padding: 8px 20px 4px;
+  padding: var(--space-8) var(--space-20) var(--space-4);
   font-size: var(--font-xs);
   font-weight: var(--weight-semibold);
   text-transform: uppercase;
@@ -156,7 +156,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-12);
-  padding: 10px 20px;
+  padding: var(--space-8) var(--space-20);
   cursor: pointer;
   color: var(--text-primary);
   font-size: var(--font-md);
@@ -194,7 +194,7 @@
   flex-shrink: 0;
 }
 .palette-state {
-  padding: 24px 20px 28px;
+  padding: var(--space-24) var(--space-20);
   color: var(--text-secondary);
   text-align: center;
 }
@@ -204,7 +204,7 @@
   color: var(--text-primary);
 }
 .palette-state-detail {
-  margin-top: 5px;
+  margin-top: var(--space-4);
   font-size: var(--font-sm);
   color: var(--text-muted);
 }

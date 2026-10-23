@@ -6,8 +6,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: var(--space-14) var(--space-20);
+  gap: var(--space-8);
+  padding: var(--space-12) var(--space-20);
   border: 2px dashed var(--border-strong);
   border-radius: var(--radius-md);
   background: transparent;
@@ -38,7 +38,7 @@
 }
 .ms-add-form input, .ms-add-form select {
   width: 100%;
-  padding: 6px 8px;
+  padding: var(--space-4) var(--space-8);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-default);
   background: var(--bg-base);
@@ -57,11 +57,11 @@
   line-height: 1.35;
   text-align: center;
 }
-.ms-form-btns { display: flex; gap: 6px; width: 100%; }
+.ms-form-btns { display: flex; gap: var(--space-8); width: 100%; }
 .ms-confirm-btn {
   min-height: 32px;
   flex: 1;
-  padding: 5px 0;
+  padding: var(--space-4) 0;
   border-radius: var(--radius-sm);
   border: none;
   background: var(--btn-primary-bg);
@@ -72,7 +72,7 @@
 }
 .ms-cancel-btn {
   min-height: 32px;
-  padding: 5px 10px;
+  padding: var(--space-4) var(--space-12);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-default);
   background: transparent;
@@ -87,7 +87,7 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding: 6px 8px;
+  padding: var(--space-4) var(--space-8);
   background: linear-gradient(180deg, rgba(0,0,0,0.75) 0%, transparent 100%);
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
@@ -98,14 +98,14 @@
 .ms-slot:focus-within .ms-overlay,
 .ms-slot.audio-focus .ms-overlay { opacity: 1; }
 
-.ms-slot-info { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.ms-slot-info { display: flex; align-items: center; gap: var(--space-4); min-width: 0; }
 .ms-slot-status,
 .ms-audio-state,
 .ms-platform-badge {
   font-size: var(--font-xs);
   font-weight: var(--weight-semibold);
-  padding: 1px 4px;
-  border-radius: 3px;
+  padding: 1px var(--space-4);
+  border-radius: var(--radius-sm);
   background: var(--accent);
   color: var(--text-on-accent);
   white-space: nowrap;
@@ -137,13 +137,13 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 4px;
+  gap: var(--space-4);
   max-width: 184px;
 }
 .ms-audio-btn, .ms-chat-sw-btn, .ms-fullscreen-btn, .ms-pip-btn, .ms-remove-btn {
   width: 32px;
   height: 32px;
-  padding: 3px 5px;
+  padding: var(--space-4);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-strong);
   /* Fixed dark pill over video — 0.50 left the glyph at ~4:1 on bright frames. */
@@ -175,7 +175,7 @@
 @media (max-width: 760px) {
   .ms-overlay {
     align-items: flex-start;
-    gap: 8px;
+    gap: var(--space-8);
   }
 
   .ms-slot-info {
@@ -195,7 +195,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-8);
-  padding: 8px 12px;
+  padding: var(--space-8) var(--space-12);
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
@@ -211,10 +211,10 @@
 #ms-chat-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 6px 8px;
+  padding: var(--space-4) var(--space-8);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-4);
 }
 #ms-chat-new-messages {
   display: none;
@@ -228,14 +228,14 @@
 #ms-chat-new-messages.visible { display: block; }
 #ms-chat-input-area {
   display: flex;
-  gap: 6px;
+  gap: var(--space-8);
   padding: var(--space-8);
   border-top: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
 #ms-chat-input {
   flex: 1;
-  padding: 5px 8px;
+  padding: var(--space-4) var(--space-8);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-default);
   background: var(--bg-elevated);
@@ -247,7 +247,7 @@
 #ms-chat-input:disabled { opacity: 0.45; cursor: not-allowed; }
 #ms-chat-send-btn {
   min-height: 32px;
-  padding: 5px 10px;
+  padding: var(--space-4) var(--space-12);
   border-radius: var(--radius-sm);
   border: none;
   background: var(--accent);
@@ -280,8 +280,8 @@
 #multistream-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: var(--space-8) var(--space-14);
+  gap: var(--space-12);
+  padding: var(--space-8) var(--space-16);
   background: var(--glass-bar);
   border-bottom: 1px solid var(--border-glass);
   flex-shrink: 0;
@@ -303,7 +303,7 @@
   color: var(--text-primary);
   font-family: inherit;
   font-size: var(--font-sm);
-  padding: 4px 22px 4px 8px;
+  padding: var(--space-4) var(--space-24) var(--space-4) var(--space-8);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='currentColor' d='M0 1l5 4 5-4z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 6px center;
@@ -362,7 +362,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   grid-template-rows: 1fr 1fr;
-  gap: 4px;
+  gap: var(--space-4);
   flex: 1;
   min-width: 0;
   min-height: 0;
@@ -440,9 +440,9 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--space-8);
   height: 100%;
-  padding: 16px;
+  padding: var(--space-16);
   text-align: center;
 }
 .ms-slot-active { display: block; position: relative; height: 100%; }

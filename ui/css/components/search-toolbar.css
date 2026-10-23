@@ -2,7 +2,7 @@
 #search-input {
   flex: 1;
   height: 32px;
-  padding: 0 var(--space-10);
+  padding: 0 var(--space-12);
   background: var(--bg-control);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -65,7 +65,7 @@
 .search-result {
   display: flex;
   align-items: center;
-  padding: 7px 10px;
+  padding: var(--space-8) var(--space-12);
   cursor: pointer;
   border-radius: var(--radius-sm);
   transition: background var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
@@ -134,7 +134,7 @@
 #toolbar select,
 #toolbar input {
   height: 28px;
-  padding: 0 9px;
+  padding: 0 var(--space-8);
   background: var(--bg-control);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -167,8 +167,8 @@
 /* Owner of the chips row: layout.css used to style the bar chrome here too. */
 #toolbar-platform-chips {
   display: flex;
-  gap: var(--space-6);
-  padding: var(--space-6) var(--space-14);
+  gap: var(--space-8);
+  padding: var(--space-4) var(--space-16);
   border-bottom: 1px solid var(--border-glass);
   background: var(--glass-bar);
   backdrop-filter: var(--glass-thick);
@@ -179,7 +179,7 @@
 
 .platform-chip.btn {
   min-height: 28px;
-  padding: 0 14px;
+  padding: 0 var(--space-16);
   font-size: var(--font-xs);
   font-weight: var(--weight-semibold);
   border-radius: var(--radius-full);
@@ -203,7 +203,7 @@
 .channel-item .status-badge {
   flex-shrink: 0;
   min-width: 40px;
-  padding: 3px 0 3px 6px;
+  padding: var(--space-4) 0 var(--space-4) var(--space-8);
   font-size: var(--font-xs);
   font-weight: var(--weight-semibold);
   color: var(--text-muted);
@@ -213,7 +213,7 @@
 /* Sidebar search area (moved from layout.css) */
 /* ── Search area ────────────────────────────────────────── */
 #search-area {
-  padding: var(--space-6) var(--space-10);
+  padding: var(--space-4) var(--space-12);
   border-top: 1px solid var(--border-subtle);
   position: relative;
 }

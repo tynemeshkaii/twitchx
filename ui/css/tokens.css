@@ -34,23 +34,18 @@
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
-  --radius-xl: 20px;
   --radius-full: 9999px;
 
-  /* ── Spacing scale ────────────────────────────────────── */
-  --space-1:  1px;
-  --space-2:  2px;
+  /* ── Spacing scale: 4px grid ───────────────────────── */
   --space-4:  4px;
-  --space-6:  6px;
   --space-8:  8px;
-  --space-10: 10px;
   --space-12: 12px;
-  --space-14: 14px;
   --space-16: 16px;
   --space-20: 20px;
   --space-24: 24px;
   --space-32: 32px;
   --space-40: 40px;
+  --space-48: 48px;
 
   /* ── Typography scale: 6 sizes ──────────────────────── */
   --font-xs:  11px;  /* badges, section labels */

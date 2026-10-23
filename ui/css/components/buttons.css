@@ -33,8 +33,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-6);
-  padding: 0 var(--space-14);
+  gap: var(--space-8);
+  padding: 0 var(--space-16);
   border-radius: var(--radius-md);
   border: 1px solid transparent;
   font-family: inherit;
@@ -110,8 +110,8 @@
 }
 .segmented {
   display: inline-flex;
-  gap: 3px;
-  padding: 3px;
+  gap: 2px;
+  padding: 2px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
   background: var(--bg-control);
@@ -120,7 +120,8 @@
 .segmented .btn,
 .segmented button {
   min-height: 28px;
-  border-radius: var(--radius-sm);
+  /* inner radius = container radius - padding */
+  border-radius: calc(var(--radius-md) - 2px);
   box-shadow: none;
   position: relative;
   z-index: 1;

@@ -22,7 +22,7 @@
 .mod-input {
   width: 100%;
   height: 34px;
-  padding: 0 var(--space-10);
+  padding: 0 var(--space-12);
   background: var(--bg-control);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -55,7 +55,7 @@
 .secret-row {
   display: flex;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--space-8);
 }
 .secret-row input {
   flex: 1;
@@ -91,14 +91,14 @@
 .mod-row {
   display: flex;
   align-items: center;
-  padding: var(--space-6) 0;
-  margin-bottom: 4px;
+  padding: var(--space-4) 0;
+  margin-bottom: var(--space-4);
   color: var(--text-secondary);
   font-size: var(--font-sm);
   cursor: pointer;
 }
-.filter-row { gap: 4px; }
-.mod-row { gap: 6px; }
+.filter-row { gap: var(--space-4); }
+.mod-row { gap: var(--space-8); }
 .checkbox-row input[type="checkbox"],
 .checkbox-row input[type="radio"],
 .filter-row input[type="checkbox"],

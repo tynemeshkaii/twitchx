@@ -3,7 +3,7 @@
   position: fixed; z-index: var(--z-overlay);
   background: var(--bg-modal);
   border: 1px solid var(--border-glass);
-  border-radius: var(--radius-md); padding: 5px 0;
+  border-radius: var(--radius-md); padding: var(--space-4) 0;
   box-shadow: var(--shadow-lg);
   min-width: 160px;
   backdrop-filter: blur(24px) saturate(145%); -webkit-backdrop-filter: blur(24px) saturate(145%);
@@ -30,13 +30,13 @@
 }
 .ctx-separator {
   height: 1px; background: var(--border-subtle);
-  margin: 4px 8px;
+  margin: var(--space-4) var(--space-8);
 }
 .ctx-item {
   min-height: 32px;
-  padding: 6px 14px; font-size: var(--font-sm); color: var(--text-primary);
+  padding: var(--space-4) var(--space-16); font-size: var(--font-sm); color: var(--text-primary);
   cursor: pointer; transition: background var(--duration-fast) ease;
-  border-radius: var(--radius-sm); margin: 0 4px;
+  border-radius: var(--radius-sm); margin: 0 var(--space-4);
   display: flex; align-items: center; gap: var(--space-8);
 }
 .ctx-item:hover { background: var(--hover-bg); }
@@ -48,7 +48,7 @@
   position: fixed; z-index: var(--z-overlay);
   background: var(--bg-modal);
   border: 1px solid var(--border-glass);
-  border-radius: var(--radius-md); padding: 5px 0;
+  border-radius: var(--radius-md); padding: var(--space-4) 0;
   box-shadow: var(--shadow-lg);
   min-width: 160px;
   backdrop-filter: blur(24px) saturate(145%); -webkit-backdrop-filter: blur(24px) saturate(145%);

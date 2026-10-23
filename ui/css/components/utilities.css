@@ -8,7 +8,7 @@
 .ml-auto { margin-left: auto; }
 
 /* Inline-style replacements */
-.settings-title-icon { vertical-align: -2px; margin-right: 6px; }
+.settings-title-icon { vertical-align: -2px; margin-right: var(--space-8); }
 
 /* Feedback / status text colors */
 .feedback-success { color: var(--live-green); }

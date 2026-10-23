@@ -97,7 +97,7 @@
   transform: translateX(-50%);
   background: var(--bg-tooltip-dark); color: var(--text-on-overlay);
   font-size: var(--font-xs); font-family: ui-monospace, monospace;
-  padding: 3px 7px; border-radius: var(--radius-sm);
+  padding: var(--space-4) var(--space-8); border-radius: var(--radius-sm);
   white-space: nowrap; pointer-events: none;
   z-index: calc(var(--z-sticky) + 1);
   border: 1px solid var(--border-subtle);
@@ -239,7 +239,7 @@
 .stats-row {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--space-16);
   line-height: 1.8;
 }
 
@@ -279,8 +279,8 @@
 #player-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: var(--space-8) var(--space-14);
+  gap: var(--space-12);
+  padding: var(--space-8) var(--space-16);
   background: var(--glass-bar);
   border-bottom: 1px solid var(--border-glass);
   flex-shrink: 0;
@@ -303,7 +303,7 @@
 }
 #player-header-actions {
   display: flex;
-  gap: 5px;
+  gap: var(--space-4);
   flex-shrink: 0;
 }
 

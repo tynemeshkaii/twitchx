@@ -28,7 +28,7 @@
   max-height: calc(100vh - var(--space-40));
   background: var(--bg-modal);
   border: 1px solid var(--border-glass);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-modal);
   display: flex;
   flex-direction: column;
@@ -60,7 +60,7 @@
 }
 
 .modal-header {
-  padding: var(--space-16) var(--space-20) var(--space-10);
+  padding: var(--space-16) var(--space-20) var(--space-8);
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }

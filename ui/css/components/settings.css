@@ -25,11 +25,11 @@
   backdrop-filter: blur(40px);
   -webkit-backdrop-filter: blur(40px);
   border: 1px solid var(--border-glass);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-modal);
   width: 720px; max-width: min(94vw, 720px);
   max-height: calc(100vh - 80px);
-  padding: 22px 22px 18px; position: relative;
+  padding: var(--space-20) var(--space-24) var(--space-16); position: relative;
   transform: scale(0.97);
   opacity: 0;
   transition: transform var(--duration-view) var(--ease-spring),
@@ -62,7 +62,7 @@ select {
 .form-input,
 .form-select {
   min-height: 34px;
-  padding: 0 10px;
+  padding: 0 var(--space-12);
   background: var(--bg-control);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -87,7 +87,7 @@ select {
 /* .secret-row, .eye-btn defined in forms.css */
 
 .oauth-note {
-  font-size: var(--font-sm); color: var(--text-muted); margin-top: var(--space-6);
+  font-size: var(--font-sm); color: var(--text-muted); margin-top: var(--space-4);
   line-height: 1.5;
 }
 
@@ -100,7 +100,7 @@ select {
 }
 
 #settings-feedback {
-  font-size: var(--font-sm); margin: 8px 0; min-height: 18px;
+  font-size: var(--font-sm); margin: var(--space-8) 0; min-height: 18px;
   text-align: center; color: var(--text-muted);
   transition: color var(--duration-fast) ease;
 }
@@ -111,14 +111,14 @@ select {
   display: flex; gap: var(--space-8); justify-content: flex-end;
   /* Content column only: a sticky (positioned) footer would paint over the
      absolutely positioned .settings-tabs otherwise. */
-  margin: var(--space-16) -2px 0 var(--settings-content-offset);
-  padding-top: var(--space-14);
+  margin: var(--space-16) 0 0 var(--settings-content-offset);
+  padding-top: var(--space-12);
   border-top: 1px solid var(--border-subtle);
   position: sticky; bottom: 0;
   background: var(--bg-modal);
 }
 .settings-btns button {
-  min-height: 32px; padding: 0 18px; border-radius: var(--radius-md);
+  min-height: 32px; padding: 0 var(--space-20); border-radius: var(--radius-md);
   font-size: var(--font-sm); font-weight: var(--weight-semibold); cursor: pointer;
   font-family: inherit; transition: all var(--duration-fast) ease; border: none;
   letter-spacing: -0.01em;
@@ -155,15 +155,15 @@ select {
   bottom: 18px;
   left: 18px;
   width: var(--settings-tabs-width);
-  display: flex; flex-direction: column; gap: 4px; margin: 0;
-  padding: 5px;
+  display: flex; flex-direction: column; gap: var(--space-4); margin: 0;
+  padding: var(--space-4);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   background: var(--bg-control);
 }
 .settings-tab {
   min-height: 32px;
-  flex: 0 0 auto; padding: 8px 10px;
+  flex: 0 0 auto; padding: var(--space-8) var(--space-12);
   background: transparent; border: none;
   color: var(--text-muted); font-size: var(--font-sm); font-weight: var(--weight-semibold);
   cursor: pointer; font-family: inherit;
@@ -184,13 +184,13 @@ select {
   max-height: calc(100vh - 190px);
   overflow-y: auto;
   margin-left: var(--settings-content-offset);
-  padding-right: 4px;
+  padding-right: var(--space-4);
 }
 
 @media (max-width: 680px) {
   #settings-modal {
     width: min(94vw, 540px);
-    padding: 22px 18px 18px;
+    padding: var(--space-20) var(--space-20) var(--space-16);
   }
   #settings-modal h2 { padding-left: 0; }
   .settings-tabs {
@@ -198,7 +198,7 @@ select {
     width: auto;
     flex-direction: row;
     overflow-x: auto;
-    margin-bottom: 16px;
+    margin-bottom: var(--space-16);
   }
   .settings-tab {
     text-align: center;
@@ -214,12 +214,12 @@ select {
 .theme-options {
   display: flex;
   gap: var(--space-8);
-  margin-top: var(--space-6);
+  margin-top: var(--space-4);
 }
 .theme-option {
   display: flex;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--space-8);
   padding: var(--space-8) var(--space-12);
   background: var(--bg-control);
   border: 1px solid var(--border-subtle);
@@ -254,7 +254,7 @@ select {
   display: flex;
   gap: var(--space-8);
   flex-wrap: wrap;
-  margin-top: var(--space-6);
+  margin-top: var(--space-4);
 }
 .accent-swatch {
   width: 28px;
@@ -281,7 +281,7 @@ select {
 .checkbox-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-8);
   font-size: var(--font-md);
   cursor: pointer;
 }
@@ -304,12 +304,12 @@ select {
 .setting-user-display {
   font-size: var(--font-md);
   color: var(--text-primary);
-  margin-bottom: 8px;
+  margin-bottom: var(--space-8);
 }
 .setting-quota-display {
   font-size: var(--font-sm);
   color: var(--text-muted);
-  margin-bottom: 8px;
+  margin-bottom: var(--space-8);
 }
 .import-btn {
   width: 100%;
@@ -322,7 +322,7 @@ select {
   font-weight: var(--weight-semibold);
   cursor: pointer;
   font-family: inherit;
-  margin-bottom: 6px;
+  margin-bottom: var(--space-4);
 }
 /* Used on <button> and <a role="button"> alike — reset the UA chrome first,
    otherwise the browser default grey button swallows the label in light theme. */
@@ -344,7 +344,7 @@ select {
 }
 .test-result {
   font-size: var(--font-sm);
-  margin-top: 8px;
+  margin-top: var(--space-8);
   text-align: center;
 }
 .hotkey-capturing {
@@ -355,9 +355,9 @@ select {
 }
 .reset-btn {
   min-height: 32px;
-  margin-top: 10px;
+  margin-top: var(--space-8);
   font-size: var(--font-sm);
-  padding: 4px 10px;
+  padding: var(--space-4) var(--space-12);
   background: var(--bg-elevated);
   color: var(--text-secondary);
   border: 1px solid var(--border-subtle);
@@ -366,7 +366,7 @@ select {
 }
 .stats-loading {
   text-align: center;
-  padding: 20px;
+  padding: var(--space-20);
   color: var(--text-muted);
   font-size: var(--font-md);
 }
@@ -382,7 +382,7 @@ select {
   display: flex;
   align-items: center;
   gap: var(--space-8);
-  margin-bottom: 10px;
+  margin-bottom: var(--space-8);
 }
 .stats-loading--header {
   flex: 1;
@@ -396,20 +396,20 @@ select {
   font-size: var(--font-xs); color: var(--text-muted);
   background: none; border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm); cursor: pointer;
-  padding: 2px 8px; margin-left: auto;
+  padding: var(--space-4) var(--space-8); margin-left: auto;
   font-family: inherit;
 }
 #stats-compact-toggle:hover { color: var(--text-primary); border-color: var(--border-strong); }
 
-.mt-1 { margin-top: 4px; }
-.mb-1 { margin-bottom: 4px; }
-.setting-hint-spaced { margin: 4px 0 10px; }
+.mt-1 { margin-top: var(--space-4); }
+.mb-1 { margin-bottom: var(--space-4); }
+.setting-hint-spaced { margin: var(--space-4) 0 var(--space-8); }
 
 
 .bundled-app-badge {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-8);
   font-size: var(--font-md);
   color: var(--live-green);
   font-weight: var(--weight-medium);
@@ -431,11 +431,11 @@ select {
   border-radius: var(--radius-lg);
   background: var(--bg-elevated);
 }
-.platform-section + .platform-section { margin-top: var(--space-10); }
+.platform-section + .platform-section { margin-top: var(--space-8); }
 .platform-section:first-child { padding-top: var(--space-12); }
 .platform-section-header {
   display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-8);
 }
 .platform-section-name {
   font-size: var(--font-md); font-weight: var(--weight-semibold); color: var(--text-primary);
@@ -443,7 +443,7 @@ select {
 }
 .cred-badge {
   font-size: var(--font-xs); font-weight: var(--weight-semibold);
-  padding: 3px 8px; border-radius: 20px;
+  padding: var(--space-4) var(--space-8); border-radius: var(--radius-lg);
   letter-spacing: 0.01em;
   border: 1px solid transparent;
 }
@@ -460,17 +460,17 @@ select {
   border-color: hsl(36 100% 52% / 0.18);
 }
 .platform-divider {
-  height: var(--space-10); background: transparent; margin: 0;
+  height: var(--space-8); background: transparent; margin: 0;
 }
 .platform-actions {
   display: flex; align-items: center; justify-content: space-between;
-  margin-top: 8px;
+  margin-top: var(--space-8);
 }
 .platform-auth-row {
-  margin: 6px 0;
+  margin: var(--space-4) 0;
 }
 .test-conn-btn {
-  min-height: 28px; padding: 0 12px;
+  min-height: 28px; padding: 0 var(--space-12);
   background: var(--bg-control); color: var(--text-secondary);
   border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
   font-size: var(--font-xs); font-weight: var(--weight-semibold); cursor: pointer; font-family: inherit;
@@ -484,7 +484,7 @@ select {
 }
 .oauth-code {
   font-family: ui-monospace, monospace; font-size: var(--font-xs);
-  background: var(--bg-elevated); border-radius: 3px; padding: 1px 4px;
+  background: var(--bg-elevated); border-radius: var(--radius-sm); padding: 1px var(--space-4);
   color: var(--text-secondary);
   user-select: all;
 }
@@ -492,7 +492,7 @@ select {
 /* ── Hotkeys table ─────────────────────────────────────── */
 .hotkeys-table { width: 100%; border-collapse: collapse; }
 .hotkeys-table tr { border-bottom: 1px solid var(--border-subtle); }
-.hotkeys-table td { padding: 7px 0; }
+.hotkeys-table td { padding: var(--space-8) 0; }
 .hotkeys-table td:first-child {
   font-size: var(--font-xs);
   color: var(--text-secondary);
@@ -501,7 +501,7 @@ select {
 .hotkey-idle,
 .hotkey-capturing {
   display: inline-block;
-  padding: 2px 8px;
+  padding: var(--space-4) var(--space-8);
   border-radius: var(--radius-sm);
   font-size: var(--font-xs);
   font-family: inherit;

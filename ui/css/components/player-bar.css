@@ -23,7 +23,7 @@
 }
 
 .bar-group--left {
-  gap: var(--space-6);
+  gap: var(--space-8);
   flex: 0 0 auto;
 }
 
@@ -50,12 +50,12 @@
 }
 
 .bar-group--right {
-  gap: var(--space-2);
+  gap: 2px;
   flex: 0 0 auto;
 }
 
 .bar-group--audio {
-  gap: var(--space-2);
+  gap: 2px;
 }
 
 /* Controls */
@@ -104,7 +104,7 @@
 
 #watch-btn {
   min-height: 32px;
-  padding: 0 14px;
+  padding: 0 var(--space-16);
   background: var(--bg-control);
   color: var(--text-muted);
   border: none;
@@ -116,7 +116,7 @@
   letter-spacing: -0.01em;
   display: flex;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--space-8);
   transition: background var(--duration-fast) ease, color var(--duration-fast) ease, opacity var(--duration-fast) ease, transform var(--duration-fast) ease;
 }
 #watch-btn.active {
@@ -285,7 +285,7 @@
 
 @container (max-width: 760px) {
   #player-bar {
-    gap: var(--space-2);
+    gap: 2px;
   }
   .bar-group--center #total-viewers,
   .bar-group--center #updated-time {
@@ -354,5 +354,5 @@
   color: var(--error-red);
   display: inline-flex;
   align-items: center;
-  margin-left: 2px;
+  margin-left: var(--space-4);
 }
