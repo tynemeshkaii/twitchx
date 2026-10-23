@@ -40,9 +40,6 @@
   flex: 0 0 auto;
 }
 
-.bar-group--audio {
-  gap: 2px;
-}
 
 /* Controls */
 #player-bar select {
@@ -137,104 +134,6 @@
   opacity: 1;
 }
 
-#watch-external-btn {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  background: transparent;
-  color: var(--text-muted);
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-family: inherit;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: background var(--duration-fast) ease, color var(--duration-fast) ease, transform var(--duration-fast) ease;
-}
-#watch-external-btn:hover {
-  background: var(--hover-bg-strong);
-  color: var(--text-secondary);
-}
-#watch-external-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  transform: none;
-}
-
-/* Status metadata */
-#live-dot {
-  color: var(--live);
-  display: none;
-  align-items: center;
-  justify-content: center;
-}
-#live-dot.visible {
-  display: flex;
-}
-#live-dot svg {
-  animation: pulse 1.6s ease-in-out infinite;
-}
-
-#record-dot {
-  color: var(--live-red);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  animation: pulse 1.2s ease-in-out infinite;
-}
-#record-dot.hidden { display: none; }
-
-
-/* Volume */
-#mute-btn {
-  width: 32px;
-  height: 32px;
-  flex-shrink: 0;
-}
-#mute-btn.muted { color: var(--live-red); }
-
-#volume-slider {
-  width: 72px;
-  height: 4px;
-  -webkit-appearance: none;
-  appearance: none;
-  background: linear-gradient(to right,
-    var(--accent) 0%,
-    var(--accent) var(--volume-pct, 100%),
-    var(--border-default) var(--volume-pct, 100%),
-    var(--border-default) 100%);
-  border-radius: 2px;
-  outline: none;
-  cursor: pointer;
-  margin: 0;
-}
-#volume-slider:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-#volume-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--accent);
-  border: none;
-  cursor: pointer;
-  transition: transform var(--duration-fast) ease;
-}
-#volume-slider::-webkit-slider-thumb:hover { transform: scale(1.25); }
-#volume-slider::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--accent);
-  border: none;
-  cursor: pointer;
-}
-
 /* Responsive density */
 @container (max-width: 900px) {
   #player-bar {
@@ -264,54 +163,3 @@
   }
 }
 
-/* Recording + loader indicators (moved from player.css) */
-/* -- Recording button -- */
-#record-btn {
-  color: var(--text-secondary);
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  border-radius: var(--radius-sm);
-  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
-}
-#record-btn:hover {
-  background: var(--hover-bg-strong);
-  color: var(--error-red);
-}
-#record-btn.recording {
-  color: var(--error-red);
-}
-/* ── Stream loader bar (indeterminate progress in player bar) ── */
-#stream-loader {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  z-index: var(--z-sticky);
-  overflow: hidden;
-  background: transparent;
-}
-#stream-loader.hidden { display: none; }
-#stream-loader-bar {
-  height: 100%;
-  width: 30%;
-  background: var(--accent);
-  animation: loader-slide 1.5s ease-in-out infinite;
-}
-/* -- VOD time display -- */
-#vod-time-display {
-  font-size: var(--font-sm);
-  color: var(--text-muted);
-  font-family: ui-monospace, monospace;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-/* ── Record dot ────────────────────────────────────────── */
-.record-dot {
-  color: var(--error-red);
-  display: inline-flex;
-  align-items: center;
-  margin-left: var(--space-4);
-}

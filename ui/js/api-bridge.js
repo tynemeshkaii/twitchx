@@ -156,6 +156,7 @@ function applyConfigSnapshot(config) {
     });
     if (known) qualitySelect.value = savedQuality;
   }
+  if (TwitchX.syncQualityMenu) TwitchX.syncQualityMenu();
 
   hydrateFavoritesFromConfig(config);
 

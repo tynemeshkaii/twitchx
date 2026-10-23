@@ -238,13 +238,10 @@
           <div id="player-header" class="titlebar-drag">
             <span id="player-channel-name"></span>
             <span id="player-stream-title"></span>
-            <span id="vod-time-display" class="hidden"></span>
             <div id="player-header-actions">
               <button id="stats-overlay-btn" class="player-header-btn hidden" title="Stream Stats" aria-label="Stream Stats"><span data-icon="chart" data-size="16"></span></button>
               <button id="record-btn" class="player-header-btn hidden" title="Start Recording" aria-label="Start Recording"><span data-icon="record" data-size="16"></span></button>
               <button id="toggle-chat-btn" class="player-header-btn" title="Toggle Chat (C)" aria-label="Toggle Chat"><span data-icon="chat" data-size="16"></span></button>
-              <button id="pip-player-btn" class="player-header-btn hidden" title="Picture-in-Picture (P)" aria-label="Picture in Picture"><span data-icon="pip" data-size="16"></span></button>
-              <button id="fullscreen-player-btn" class="player-header-btn" title="Fullscreen (F)" aria-label="Fullscreen"><span data-icon="fullscreen" data-size="16"></span></button>
               <button id="close-player-btn" class="player-header-btn" title="Close Player (Esc)" aria-label="Close Player"><span data-icon="close" data-size="16"></span></button>
             </div>
           </div>
@@ -253,7 +250,8 @@
                  buffering, error and stats are positioned against the picture
                  rather than against the whole row, which also contains chat. -->
             <div id="player-stage">
-              <video id="stream-video" autoplay controls playsinline aria-label="Live stream video"></video>
+              <div id="stream-loader" class="hidden"><div id="stream-loader-bar"></div></div>
+              <video id="stream-video" autoplay playsinline aria-label="Live stream video"></video>
               <div id="player-loader" class="hidden" role="status" aria-live="polite"><div class="player-spinner"></div></div>
               <div id="player-buffering" class="player-buffering buffering-hide"><div class="player-spinner"></div></div>
               <div id="player-error" class="player-error hidden" role="alert">
@@ -264,6 +262,36 @@
                 </div>
               </div>
               <div id="buffer-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"><div id="buffer-loaded"></div><div id="buffer-position"></div></div>
+              <div id="player-overlay">
+                <div class="player-overlay-bar">
+                  <button id="play-pause-btn" class="player-ctl-btn" type="button" title="Pause" aria-label="Pause"><span data-icon="pause" data-size="16"></span></button>
+                  <div class="player-volume hidden" id="volume-group">
+                    <button class="player-ctl-btn" id="mute-btn" type="button" title="Mute/Unmute (M)" aria-label="Mute/Unmute"><span data-icon="volume" data-size="16"></span></button>
+                    <input type="range" id="volume-slider" min="0" max="100" value="100" step="1" aria-label="Volume">
+                  </div>
+                  <span id="live-dot"><span data-icon="live-dot" data-size="12"></span><span class="live-dot-label">LIVE</span></span>
+                  <span id="record-dot" class="hidden record-dot" title="Recording"><span data-icon="record" data-size="10"></span></span>
+                  <div id="seek-bar-container" class="hidden">
+                    <input type="range" id="seek-bar" min="0" max="1000" value="0" step="1" aria-label="VOD seek">
+                    <span id="seek-tooltip" class="hidden"></span>
+                  </div>
+                  <span id="vod-time-display" class="hidden"></span>
+                  <span class="player-overlay-spacer"></span>
+                  <div class="player-menu-wrap">
+                    <button id="quality-menu-btn" class="player-ctl-btn player-ctl-text" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="quality-menu" title="Quality"><span id="quality-menu-label">Best</span></button>
+                    <div id="quality-menu" class="player-menu hidden" role="menu" aria-label="Stream quality"></div>
+                  </div>
+                  <button id="pip-player-btn" class="player-ctl-btn hidden" type="button" title="Picture-in-Picture (P)" aria-label="Picture in Picture"><span data-icon="pip" data-size="16"></span></button>
+                  <div class="player-menu-wrap">
+                    <button id="player-more-btn" class="player-ctl-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="player-more-menu" title="More" aria-label="More actions"><span data-icon="more" data-size="16"></span></button>
+                    <div id="player-more-menu" class="player-menu hidden" role="menu" aria-label="More actions">
+                      <div class="ctx-item" id="watch-external-btn" role="menuitem" tabindex="-1"><span data-icon="external-link" data-size="14"></span> Open in External Player</div>
+                      <div class="ctx-item" id="player-browser-item" role="menuitem" tabindex="-1"><span data-icon="browser" data-size="14"></span> Open in Browser</div>
+                    </div>
+                  </div>
+                  <button id="fullscreen-player-btn" class="player-ctl-btn" type="button" title="Fullscreen (F)" aria-label="Fullscreen"><span data-icon="fullscreen" data-size="16"></span></button>
+                </div>
+              </div>
               <div id="stats-overlay" class="hidden">
                 <div class="stats-row"><span class="stats-key">Latency</span><span class="stats-val" id="so-latency">--</span></div>
                 <div class="stats-row"><span class="stats-key">Buffer</span><span class="stats-val" id="so-buffer">--</span></div>
@@ -348,13 +376,8 @@
 
   <!-- Player bar -->
   <div id="player-bar">
-    <div id="stream-loader" class="hidden"><div id="stream-loader-bar"></div></div>
-    <div id="seek-bar-container" class="hidden">
-      <input type="range" id="seek-bar" min="0" max="1000" value="0" step="1" aria-label="VOD seek">
-      <span id="seek-tooltip" class="hidden"></span>
-    </div>
     <div class="bar-group bar-group--left">
-      <select id="quality-select" aria-label="Stream quality">
+      <select id="quality-select" class="hidden" aria-hidden="true" tabindex="-1">
         <option value="best">Best</option>
         <option value="1440p60">1440p60</option>
         <option value="1080p60">1080p60</option>
@@ -365,15 +388,8 @@
       </select>
       <button id="watch-btn"><span data-icon="play" data-size="16"></span> <span class="btn-label">Watch</span></button>
       <button id="stop-player-btn" class="hidden" title="Stop playback" aria-label="Stop"><span data-icon="stop" data-size="16"></span></button>
-      <button id="watch-external-btn" title="Open in External Player" aria-label="Open in External Player"><span data-icon="external-link" data-size="16"></span></button>
-      <div class="bar-group bar-group--audio hidden" id="volume-group">
-        <button class="bar-btn" id="mute-btn" title="Mute/Unmute (M)" aria-label="Mute/Unmute"><span data-icon="volume" data-size="16"></span></button>
-        <input type="range" id="volume-slider" min="0" max="100" value="100" step="1" aria-label="Volume">
-      </div>
     </div>
     <div class="bar-group bar-group--center">
-      <span id="live-dot"><span data-icon="live-dot" data-size="12"></span></span>
-      <span id="record-dot" class="hidden record-dot"><span data-icon="record" data-size="10"></span></span>
       <span id="status-text" aria-live="polite"></span>
       <span id="total-viewers" class="btn-label"></span>
       <span id="updated-time" class="btn-label"></span>

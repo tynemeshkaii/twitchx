@@ -297,15 +297,6 @@ TwitchX._bindPlayerEvents = function() {
   if (pipBtn) pipBtn.addEventListener('click', function() {
     TwitchX.togglePiP(TwitchX.getPlayerVideo());
   });
-  const extBtn = document.getElementById('watch-external-btn');
-  if (extBtn) extBtn.addEventListener('click', function() {
-    if (!TwitchX.state.selectedChannel || !TwitchX.api) return;
-    const quality = document.getElementById('quality-select').value;
-    const platform = TwitchX.state.selectedPlatform ||
-      TwitchX.getChannelPlatform(TwitchX.state.selectedChannel, TwitchX.state.selectedChannelKey);
-    if (TwitchX.api.watch_external_platform) TwitchX.api.watch_external_platform(TwitchX.state.selectedChannel, platform, quality);
-    else TwitchX.api.watch_external(TwitchX.state.selectedChannel, quality);
-  });
   const browserBtn = document.getElementById('browser-btn');
   if (browserBtn) browserBtn.addEventListener('click', TwitchX.doBrowser);
   const refreshBtn = document.getElementById('refresh-btn');
@@ -336,6 +327,9 @@ TwitchX._bindPlayerEvents = function() {
   if (qualitySelect) {
     qualitySelect.addEventListener('change', TwitchX._handleQualitySelectChange);
   }
+
+  // Overlay controls (play/pause, quality and "…" menus, auto-hide)
+  TwitchX._bindPlayerOverlay();
 
   // Playback recovery
   var retryBtn = document.getElementById('player-retry-btn');

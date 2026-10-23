@@ -64,6 +64,8 @@ var ICONS = {
   edit: '<path d="M10.45 2.85 13.15 5.55 5.75 12.95 2.45 13.55 3.05 10.25z"/><path d="M9.1 4.2 11.8 6.9"/>',
   search: '<circle cx="7.25" cy="7.25" r="4.4"/><path d="M10.35 10.35 13.6 13.6"/>',
   film: '<rect x="2.25" y="3" width="11.5" height="10" rx="2"/><path d="M5.25 3v10M10.75 3v10M2.25 6.35h3M2.25 9.65h3M10.75 6.35h3M10.75 9.65h3"/>',
+  pause: '<rect x="4.25" y="3" width="2.5" height="10" rx=".8" fill="currentColor" stroke="none"/><rect x="9.25" y="3" width="2.5" height="10" rx=".8" fill="currentColor" stroke="none"/>',
+  more: '<circle cx="3.5" cy="8" r="1.1" fill="currentColor" stroke="none"/><circle cx="8" cy="8" r="1.1" fill="currentColor" stroke="none"/><circle cx="12.5" cy="8" r="1.1" fill="currentColor" stroke="none"/>',
   trash: '<path d="M2.75 4.25h10.5"/><path d="M6.25 4.25V3c0-.4.35-.75.75-.75h2c.4 0 .75.35.75.75v1.25"/><path d="m3.95 4.25.6 8.3c.05.7.6 1.2 1.25 1.2h4.4c.65 0 1.2-.5 1.25-1.2l.6-8.3"/><path d="M6.75 6.75v4.5M9.25 6.75v4.5"/>'
 };
 
