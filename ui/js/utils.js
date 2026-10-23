@@ -34,14 +34,31 @@ function formatUptime(isoStr) {
   return m + 'm';
 }
 
+const STATUS_META_MS = 4000;
+let statusMetaTimer = null;
+
+// info/success: a short note in the section header, standing in for
+// "updated …" for a few seconds. warn/error: a toast, so it is seen from any view.
 function setStatus(text, type) {
-  const el = document.getElementById('status-text');
-  if (!el) return;
-  el.textContent = text;
-  el.classList.remove('status-success', 'status-warn', 'status-error');
-  if (type === 'success' || type === 'warn' || type === 'error') {
-    el.classList.add('status-' + type);
+  if (type === 'warn' || type === 'error') {
+    if (text && TwitchX.showToast) TwitchX.showToast(text, type);
+    return;
   }
+  const el = document.getElementById('status-text');
+  const meta = document.getElementById('section-meta');
+  if (!el) return;
+  if (statusMetaTimer) {
+    clearTimeout(statusMetaTimer);
+    statusMetaTimer = null;
+  }
+  el.textContent = text || '';
+  if (meta) meta.classList.toggle('showing-status', !!text);
+  if (!text) return;
+  statusMetaTimer = setTimeout(function() {
+    statusMetaTimer = null;
+    el.textContent = '';
+    if (meta) meta.classList.remove('showing-status');
+  }, STATUS_META_MS);
 }
 
 function formatMediaDate(isoStr) {

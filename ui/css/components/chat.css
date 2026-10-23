@@ -268,7 +268,9 @@
 /* ── Chat panel ───────────────────────────────────────── */
 #chat-panel {
   width: var(--chat-width, 320px);
-  min-width: 240px; max-width: 480px;
+  /* Never more than half the row: at the minimum window the saved width
+     would otherwise squeeze the picture to a sliver. */
+  min-width: 240px; max-width: min(480px, 50%);
   display: flex; flex-direction: column;
   background:
     linear-gradient(180deg, var(--border-subtle), transparent 120px),

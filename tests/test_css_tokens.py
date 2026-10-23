@@ -32,15 +32,12 @@ TWO_PX_ALLOWED = {
     ("border-radius", 'input[type="range"]'),
     ("border-radius", "#volume-slider"),
     ("border-radius", ".channel-item .accent-bar"),
-    ("padding", "#platform-tabs"),
-    ("gap", "#platform-tabs"),
+    ("gap", "#sidebar-nav"),
     ("padding", ".segmented"),
     ("gap", ".segmented"),
     ("gap", ".emote-grid"),
     ("gap", ".drag-handle"),
-    ("gap", ".bar-group--right"),
-    ("gap", ".bar-group--audio"),
-    ("gap", "#player-bar"),
+    ("gap", ".player-volume"),
     ("margin-right", ".chat-msg .badge"),
     ("margin-right", ".badge-fallback"),
     ("padding", ".mod-select"),
@@ -69,7 +66,7 @@ BACKDROP_ALLOWED = {
 }
 
 # Component-local layout lengths (a column width, not a spacing step).
-LAYOUT_VARS = {"--settings-content-offset"}
+LAYOUT_VARS = {"--settings-content-offset", "--traffic-lights-width"}
 
 REMOVED_TOKENS = ("--shadow-glow-accent", "--app-noise", "--glass-content")
 

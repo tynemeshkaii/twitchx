@@ -52,7 +52,7 @@ body {
    them into user-select. */
 #chat-messages, #ms-chat-messages,
 #settings-modal input, #settings-modal select, #settings-modal textarea,
-#search-input, #search-dropdown,
+#palette-input,
 #ms-add-input, #ms-add-form input,
 .channel-body-bio,
 .stream-card .card-title { user-select: text; }
@@ -93,7 +93,7 @@ body {
   .channel-media-card, .channel-media-item,
   .btn, .bar-btn, .player-header-btn, .chat-header-btn, .emote-picker-btn,
   .ms-slot, .ms-add-form input, .ms-add-form select,
-  #search-input, #filter-input, #sort-select,
+  .toolbar-search,
   .text-input, .setting-group input, .setting-group select, .mod-input {
     border-width: 1px;
     border-color: var(--border-default);
@@ -102,7 +102,7 @@ body {
   .browse-stream-card:hover, .channel-media-card:hover, .channel-media-item:hover {
     border-color: var(--border-strong);
   }
-  .stream-card.selected, .channel-item.selected,
+  #app.keyboard-selection .stream-card.selected, #app.keyboard-selection .channel-item.selected,
   .stream-card:focus-visible, .channel-item:focus-visible,
   .browse-category-card:focus-visible, .browse-stream-card:focus-visible,
   .btn:focus-visible, .bar-btn:focus-visible, .player-header-btn:focus-visible,

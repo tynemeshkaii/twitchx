@@ -85,7 +85,7 @@ function renderGrid() {
     var welcomeOpts = {
       illustration: 'empty-favorites',
       title: 'Welcome to TwitchX',
-      subtitle: 'Log in to see followed channels, or add channels manually from search.',
+      subtitle: 'Log in to see followed channels, or add channels with \u2318K.',
       primaryAction: { label: 'Login with Twitch', callback: function() { if (TwitchX.api) TwitchX.api.login(); } },
     };
     if (TwitchX.state.youtubeEnabled) {
@@ -101,8 +101,8 @@ function renderGrid() {
     TwitchX.renderEmptyState(empty, {
       illustration: 'empty-favorites',
       title: 'No favorites yet',
-      subtitle: 'Add channels using the search bar in the sidebar.',
-      primaryAction: { label: 'Focus Search', callback: function() { document.getElementById('search-input').focus(); } },
+      subtitle: 'Search for channels and add them to your favorites.',
+      primaryAction: { label: 'Add channel', callback: function() { TwitchX.openPalette('add'); } },
     });
     return;
   }
@@ -304,8 +304,9 @@ function createStreamCard(s) {
   card.appendChild(info);
 
   // Events
-  card.addEventListener('click', function() { TwitchX.selectChannel(s.login, s.platform || 'twitch'); });
-  card.addEventListener('dblclick', function() { TwitchX.selectChannel(s.login, s.platform || 'twitch'); TwitchX.doWatch(); });
+  // One click starts the stream. The selection stays: the keyboard shortcuts
+  // (watch, next/previous stream) work from it.
+  card.addEventListener('click', function() { TwitchX.selectChannel(s.login, s.platform || 'twitch'); TwitchX.doWatch(); });
   card.addEventListener('contextmenu', function(e) { TwitchX.showContextMenu(e, s.login, s.platform || 'twitch'); });
   card.addEventListener('keydown', function(e) {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -331,7 +332,28 @@ function createOnboardingCard(stepNum, stepText) {
   return card;
 }
 
+// The game filter is picked in the palette and cleared from the chip in the
+// section header; state.filterText stays the single source for the grid.
+function syncGameFilterChip() {
+  var chip = document.getElementById('game-filter-chip');
+  var label = document.getElementById('game-filter-label');
+  if (!chip) return;
+  var text = TwitchX.state.filterText || '';
+  chip.classList.toggle('hidden', !text);
+  if (label) label.textContent = 'Game: ' + text;
+  chip.setAttribute('aria-label', 'Clear game filter ' + text);
+}
+
+function setGameFilter(game) {
+  TwitchX.state.filterText = game || '';
+  syncGameFilterChip();
+  if (TwitchX.showFollowingView) TwitchX.showFollowingView();
+  renderGrid();
+}
+
 TwitchX.getFilteredSortedStreams = getFilteredSortedStreams;
+TwitchX.setGameFilter = setGameFilter;
+TwitchX.syncGameFilterChip = syncGameFilterChip;
 TwitchX.renderGrid = renderGrid;
 
 function showSkeletonGrid() {

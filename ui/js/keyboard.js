@@ -127,6 +127,8 @@ function handleKeydown(e) {
   }
 
   if (e.key === 'Escape') {
+    if (TwitchX.closeAccountPopover && TwitchX.closeAccountPopover()) return;
+    if (TwitchX.closeSortMenu && TwitchX.closeSortMenu(true)) return;
     if (document.getElementById('context-menu').classList.contains('menu-visible')) {
       TwitchX.closeContextMenu(); return;
     }
@@ -149,15 +151,11 @@ function handleKeydown(e) {
       TwitchX.browseGoBack(); return;
     }
     if (TwitchX.multiState.open) { TwitchX.closeMultistreamView(); return; }
-    if (document.getElementById('search-dropdown').classList.contains('visible')) {
-      document.getElementById('search-dropdown').classList.remove('visible'); return;
-    }
     TwitchX.state.selectedChannel = null;
     TwitchX.state.selectedChannelKey = null;
     TwitchX.state.selectedPlatform = null;
     document.querySelectorAll('.stream-card').forEach(function(c) { c.classList.remove('selected'); });
     document.querySelectorAll('.channel-item').forEach(function(c) { c.classList.remove('selected'); });
-    document.getElementById('watch-btn').classList.remove('active');
     TwitchX.setStatus('', 'info');
     return;
   }
@@ -168,6 +166,9 @@ function handleKeydown(e) {
   }
   if (e.metaKey && e.key === ',') {
     e.preventDefault(); TwitchX.openSettings(); return;
+  }
+  if (e.metaKey && e.shiftKey && (e.key === 'm' || e.key === 'M')) {
+    e.preventDefault(); TwitchX.toggleMiniMode(); return;
   }
   if (e.metaKey && e.key === 'k') {
     e.preventDefault();

@@ -37,6 +37,22 @@ def _no_kick_app_token(
     monkeypatch.setattr(KickClient, "_ensure_app_token", _none)
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _no_third_party_emote_fetch():  # type: ignore[return-type]
+    """Keep start_chat's background BTTV/FFZ fetch off the network.
+
+    The fetch runs in a daemon thread that outlives the test which started
+    Twitch chat, so it fired real requests into whichever test owned
+    httpx_mock next and failed that test at teardown. Patched for the whole
+    session: a per-test patch is undone before the late thread reaches the
+    call. tests/test_third_party_emotes.py imports the real function from
+    core.third_party_emotes and is unaffected.
+    """
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("ui.api.chat.fetch_channel_emotes", lambda *args, **kwargs: {})
+        yield
+
+
 @pytest.fixture(autouse=True)
 def _no_socks_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
     """Remove SOCKS proxy env vars so httpx.Client() initializes without socksio."""

@@ -188,6 +188,30 @@
   position: static;
   flex-shrink: 0;
 }
+.palette-item-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-control);
+  color: var(--text-secondary);
+  font-size: var(--font-xs);
+  font-weight: var(--weight-semibold);
+}
+.palette-item-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.palette-item-live {
+  flex-shrink: 0;
+  font-size: var(--font-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--live);
+}
 .palette-item-hint {
   font-size: var(--font-sm);
   color: var(--text-muted);

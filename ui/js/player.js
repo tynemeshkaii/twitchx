@@ -43,7 +43,9 @@ function _createVideoElement(id) {
   const v = document.createElement('video');
   v.id = id || 'stream-video';
   v.autoplay = true;
-  v.controls = true;
+  // The in-page overlay owns the controls; AVKit gets them back only while the
+  // element is in native fullscreen (see enterNativeVideoFullscreen).
+  v.controls = false;
   v.playsInline = true;
   // AVPlayer keeps a fuller buffer with an explicit hint, which shortens the
   // rebuffering window after a source swap.
@@ -99,8 +101,6 @@ function showPlayerView() {
   // watchingChannel/watchingChannelKey come from onStreamReady's payload. The
   // sidebar selection may have moved during the load, or never pointed at this
   // stream (Browse, palette, VOD), and the chat filter keys off these.
-  document.getElementById('watch-btn').classList.add('active');
-  document.getElementById('stop-player-btn').classList.remove('hidden');
   document.getElementById('live-dot').classList.add('visible');
 
   const chatPanel = document.getElementById('chat-panel');
@@ -172,6 +172,9 @@ function showPlayerView() {
   }
 
   TwitchX.syncVolumeSlider(getPlayerVideo());
+  syncPlayPauseButton();
+  syncQualityMenu();
+  showPlayerOverlay();
   TwitchX.renderSidebar();
 }
 
@@ -218,6 +221,8 @@ function hidePlayerView(skipViewTransition) {
 
   // Cancel any pending gentle reset to prevent orphaned shadow videos
   cancelGentleReset();
+  closePlayerMenus();
+  _clearPlayerOverlayTimer();
 
   const video = getPlayerVideo();
   if (video) {
@@ -264,8 +269,6 @@ function hidePlayerView(skipViewTransition) {
   TwitchX.chatPlatform = null;
   TwitchX.chatAuthenticated = false;
   TwitchX.state.playerState = 'idle';
-  document.getElementById('watch-btn').classList.remove('active');
-  document.getElementById('stop-player-btn').classList.add('hidden');
   document.getElementById('live-dot').classList.remove('visible');
   document.getElementById('toggle-chat-btn').classList.remove('hidden');
   TwitchX.setStatus('', 'info');
@@ -308,6 +311,7 @@ function adjustVolume(delta) {
   video.volume = Math.max(0, Math.min(1, video.volume + delta));
   TwitchX.setStatus('Volume: ' + Math.round(video.volume * 100) + '%', 'info');
   syncVolumeSlider(video);
+  showPlayerOverlay();
 }
 
 function toggleMute() {
@@ -316,6 +320,7 @@ function toggleMute() {
   video.muted = !video.muted;
   TwitchX.setStatus(video.muted ? 'Muted' : 'Unmuted', 'info');
   syncVolumeSlider(video);
+  showPlayerOverlay();
 }
 
 function _handleVolumeSliderInput() {
@@ -347,6 +352,8 @@ function cycleStream(dir) {
     idx = (idx + dir + streams.length) % streams.length;
   }
   TwitchX.selectChannel(streams[idx].login, streams[idx].platform || 'twitch');
+  // Show the selection now that the keyboard is driving it.
+  document.getElementById('app').classList.add('keyboard-selection');
 }
 
 function togglePiP(video) {
@@ -400,14 +407,50 @@ function toggleVideoFullscreen() {
     return;
   }
 
-  // Native video fullscreen (works in WKWebView without extra preferences)
-  if (video.webkitEnterFullscreen) {
-    video.webkitEnterFullscreen();
-  } else if (video.requestFullscreen) {
-    video.requestFullscreen();
-  } else if (video.webkitRequestFullscreen) {
-    video.webkitRequestFullscreen();
+  enterNativeVideoFullscreen(video);
+}
+
+/* Native video fullscreen (works in WKWebView without extra preferences).
+   The <video> carries no `controls` attribute — the overlay draws them — and
+   AVKit shows its own fullscreen controls only when the element asks for
+   them. Turn them on for the fullscreen session and off again on the way out,
+   whichever exit path fires (Esc, the AVKit button, PiP, a presentation-mode
+   change). Shared with the multistream slots. */
+function enterNativeVideoFullscreen(video) {
+  if (!video) return;
+  video.controls = true;
+  _armFullscreenControlsRestore(video);
+  try {
+    if (video.webkitEnterFullscreen) {
+      video.webkitEnterFullscreen();
+    } else if (video.requestFullscreen) {
+      video.requestFullscreen();
+    } else if (video.webkitRequestFullscreen) {
+      video.webkitRequestFullscreen();
+    }
+  } catch (e) {
+    console.warn('[Player] entering fullscreen failed', e);
+    video.controls = false;
   }
+}
+
+function _armFullscreenControlsRestore(video) {
+  if (video._fsControlsRestore) return;
+  var restore = function() {
+    // presentationmodechanged also fires on the way in.
+    if (isVideoFullscreen(video)) return;
+    video.controls = false;
+    video.removeEventListener('webkitendfullscreen', restore);
+    video.removeEventListener('webkitpresentationmodechanged', restore);
+    document.removeEventListener('fullscreenchange', restore);
+    document.removeEventListener('webkitfullscreenchange', restore);
+    video._fsControlsRestore = null;
+  };
+  video._fsControlsRestore = restore;
+  video.addEventListener('webkitendfullscreen', restore);
+  video.addEventListener('webkitpresentationmodechanged', restore);
+  document.addEventListener('fullscreenchange', restore);
+  document.addEventListener('webkitfullscreenchange', restore);
 }
 
 function toggleChatPanel() {
@@ -643,8 +686,7 @@ function beginStreamRecovery(reason) {
 }
 
 function _currentQuality() {
-  var sel = document.getElementById('quality-select');
-  return (sel && sel.value) || 'best';
+  return TwitchX.state.quality || 'best';
 }
 
 function _onStreamUrlRefreshed(data) {
@@ -969,7 +1011,7 @@ function gentleResetVideo(reason, newSrc) {
   }
 
   // Show recovery status — only after guards, so early-return paths don't leave it stale
-  setStatus('Recovering playback...', 'warn');
+  setStatus('Recovering playback...', 'info');
 
   // Cancel any previous pending gentle reset to avoid orphaned shadow videos
   if (TwitchX._gentleResetInProgress) {
@@ -1171,6 +1213,7 @@ TwitchX.toggleMute = toggleMute;
 TwitchX.cycleStream = cycleStream;
 TwitchX.togglePiP = togglePiP;
 TwitchX.toggleVideoFullscreen = toggleVideoFullscreen;
+TwitchX.enterNativeVideoFullscreen = enterNativeVideoFullscreen;
 TwitchX.toggleChatPanel = toggleChatPanel;
 TwitchX.updateChatInput = updateChatInput;
 TwitchX.startVideoHealthMonitor = startVideoHealthMonitor;
@@ -1303,7 +1346,7 @@ function changeQualityLive(quality) {
   TwitchX._recovery.requestId += 1;
   const requestId = TwitchX._recovery.requestId;
   _armRefreshWatchdog();
-  TwitchX.setStatus('Switching to ' + quality + '...', 'warn');
+  TwitchX.setStatus('Switching to ' + quality + '...', 'info');
   try {
     TwitchX.api.refresh_stream_url(channel, platform, quality, requestId);
   } catch (e) {
@@ -1316,14 +1359,15 @@ function changeQualityLive(quality) {
   return true;
 }
 
-function _handleQualitySelectChange() {
+// Quality changes apply to the running stream instead of waiting for a relaunch.
+function _handleQualityChange() {
   const playerView = document.getElementById('player-view');
   if (!playerView || !playerView.classList.contains('view-active')) return;
   changeQualityLive(_currentQuality());
 }
 
 TwitchX.changeQualityLive = changeQualityLive;
-TwitchX._handleQualitySelectChange = _handleQualitySelectChange;
+TwitchX._handleQualityChange = _handleQualityChange;
 
 /* ── Recording ──────────────────────────────────────── */
 
@@ -1600,10 +1644,8 @@ function _startFullscreenAutoHide() {
   }
 
   function _showControls() {
-    var bar = document.getElementById('player-bar');
     var header = document.getElementById('player-header');
     var stats = document.getElementById('stats-overlay');
-    if (bar) bar.classList.remove('fs-hidden');
     if (header) header.classList.remove('fs-hidden');
     if (stats && TwitchX._statsOverlayActive) stats.classList.remove('hidden');
   }
@@ -1612,10 +1654,8 @@ function _startFullscreenAutoHide() {
     if (!TwitchX._fsAutoHideActive) return;
     var video = getPlayerVideo();
     if (!video || !isVideoFullscreen(video)) return;
-    var bar = document.getElementById('player-bar');
     var header = document.getElementById('player-header');
     var stats = document.getElementById('stats-overlay');
-    if (bar) bar.classList.add('fs-hidden');
     if (header) header.classList.add('fs-hidden');
     if (stats) stats.classList.add('hidden');
   }
@@ -1671,3 +1711,255 @@ TwitchX._handleSeekBarInput = _handleSeekBarInput;
 TwitchX._handleSeekBarChange = _handleSeekBarChange;
 TwitchX._handleSeekBarLeave = _handleSeekBarLeave;
 TwitchX._watchFullscreenChanges = _watchFullscreenChanges;
+
+/* ── Player overlay (windowed controls) ───────────────── */
+// The bottom bar over the picture: play/pause, volume, live/VOD state, quality,
+// PiP, more actions and fullscreen. It fades out after a short idle period over
+// the stage, together with the cursor, and stays while paused, while a menu is
+// open or while keyboard focus is inside it.
+
+const PLAYER_OVERLAY_IDLE_MS = 2000;
+const QUALITY_LABELS = {
+  best: 'Best',
+  '1440p60': '1440p60',
+  '1080p60': '1080p60',
+  '720p60': '720p60',
+  '480p': '480p',
+  '360p': '360p',
+  audio_only: 'Audio only',
+};
+
+function _playerStage() {
+  return document.getElementById('player-stage');
+}
+
+function _clearPlayerOverlayTimer() {
+  if (TwitchX._overlayHideTimer) {
+    clearTimeout(TwitchX._overlayHideTimer);
+    TwitchX._overlayHideTimer = null;
+  }
+}
+
+function _playerOverlayPinned() {
+  var video = getPlayerVideo();
+  if (video && video.src && video.paused) return true;
+  if (document.querySelector('#player-overlay .player-menu:not(.hidden)')) return true;
+  var overlay = document.getElementById('player-overlay');
+  var active = document.activeElement;
+  return !!(overlay && active && overlay.contains(active) && active.matches(':focus-visible'));
+}
+
+function hidePlayerOverlay() {
+  _clearPlayerOverlayTimer();
+  if (_playerOverlayPinned()) return;
+  var stage = _playerStage();
+  if (stage) stage.classList.add('overlay-hidden');
+}
+
+function showPlayerOverlay() {
+  var stage = _playerStage();
+  if (!stage) return;
+  stage.classList.remove('overlay-hidden');
+  _clearPlayerOverlayTimer();
+  TwitchX._overlayHideTimer = setTimeout(hidePlayerOverlay, PLAYER_OVERLAY_IDLE_MS);
+}
+
+function syncPlayPauseButton() {
+  var btn = document.getElementById('play-pause-btn');
+  if (!btn) return;
+  var video = getPlayerVideo();
+  var paused = !video || video.paused;
+  var label = paused ? 'Play' : 'Pause';
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
+  TwitchX.setIconOnly(btn, paused ? 'play' : 'pause', 16);
+}
+
+function togglePlayPause() {
+  var video = getPlayerVideo();
+  if (!video || !video.src) return;
+  if (video.paused) {
+    video.play().catch(function(e) {
+      console.warn('[Player] play() rejected:', e && e.message || e);
+    });
+  } else {
+    video.pause();
+  }
+}
+
+/* -- Overlay menus (quality, more) -- */
+
+function _playerMenuItems(menu) {
+  return Array.from(menu.querySelectorAll('[role^="menuitem"]'));
+}
+
+function _focusPlayerMenuItem(menu, idx) {
+  var items = _playerMenuItems(menu);
+  if (!items.length) return;
+  var next = ((idx % items.length) + items.length) % items.length;
+  items.forEach(function(item) { item.tabIndex = -1; });
+  items[next].tabIndex = 0;
+  items[next].focus();
+}
+
+function closePlayerMenus(exceptMenu) {
+  var closed = false;
+  document.querySelectorAll('#player-overlay .player-menu').forEach(function(menu) {
+    if (menu === exceptMenu || menu.classList.contains('hidden')) return;
+    menu.classList.add('hidden');
+    closed = true;
+    var btn = document.querySelector('[aria-controls="' + menu.id + '"]');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  });
+  return closed;
+}
+
+function _openPlayerMenu(btn, menu) {
+  closePlayerMenus(menu);
+  menu.classList.remove('hidden');
+  btn.setAttribute('aria-expanded', 'true');
+  var items = _playerMenuItems(menu);
+  var checked = items.findIndex(function(item) { return item.getAttribute('aria-checked') === 'true'; });
+  _focusPlayerMenuItem(menu, Math.max(0, checked));
+  showPlayerOverlay();
+}
+
+function _bindPlayerMenu(btnId, menuId, onPick, beforeOpen) {
+  var btn = document.getElementById(btnId);
+  var menu = document.getElementById(menuId);
+  if (!btn || !menu) return;
+  btn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    if (!menu.classList.contains('hidden')) { closePlayerMenus(); return; }
+    if (beforeOpen) beforeOpen();
+    _openPlayerMenu(btn, menu);
+  });
+  menu.addEventListener('click', function(e) {
+    var item = e.target.closest('[role^="menuitem"]');
+    if (!item) return;
+    closePlayerMenus();
+    btn.focus();
+    onPick(item);
+  });
+  menu.addEventListener('keydown', function(e) {
+    var items = _playerMenuItems(menu);
+    var idx = items.indexOf(document.activeElement);
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      closePlayerMenus();
+      btn.focus();
+    } else if (e.key === 'Tab') {
+      closePlayerMenus();
+    } else if (e.key === 'ArrowDown') { e.preventDefault(); _focusPlayerMenuItem(menu, idx + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); _focusPlayerMenuItem(menu, idx - 1); }
+    else if (e.key === 'Home') { e.preventDefault(); _focusPlayerMenuItem(menu, 0); }
+    else if (e.key === 'End') { e.preventDefault(); _focusPlayerMenuItem(menu, items.length - 1); }
+    else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (idx !== -1) items[idx].click();
+    }
+  });
+}
+
+// TwitchX.state.quality is the value every launch reads; the menu shows and sets it.
+function syncQualityMenu() {
+  var menu = document.getElementById('quality-menu');
+  var label = document.getElementById('quality-menu-label');
+  var current = _currentQuality();
+  if (label) label.textContent = QUALITY_LABELS[current] || current;
+  var btn = document.getElementById('quality-menu-btn');
+  if (btn) btn.setAttribute('aria-label', 'Quality: ' + (QUALITY_LABELS[current] || current));
+  if (!menu) return;
+  if (!menu.children.length) {
+    Object.keys(QUALITY_LABELS).forEach(function(value) {
+      var item = document.createElement('div');
+      item.className = 'ctx-item';
+      item.setAttribute('role', 'menuitemradio');
+      item.tabIndex = -1;
+      item.dataset.quality = value;
+      item.textContent = QUALITY_LABELS[value];
+      menu.appendChild(item);
+    });
+  }
+  Array.prototype.forEach.call(menu.children, function(item) {
+    item.setAttribute('aria-checked', String(item.dataset.quality === current));
+  });
+}
+
+function _pickQuality(item) {
+  var quality = item.dataset.quality;
+  if (!quality || quality === TwitchX.state.quality) return;
+  TwitchX.state.quality = quality;
+  syncQualityMenu();
+  _handleQualityChange();
+}
+
+// Player context for the "…" menu: the stream on screen, not the selection.
+function _playerTarget() {
+  var channel = TwitchX.state.watchingChannel || TwitchX.state.selectedChannel;
+  var platform = TwitchX.state.playerPlatform || TwitchX.state.selectedPlatform ||
+    TwitchX.getChannelPlatform(channel, TwitchX.state.watchingChannelKey);
+  return { channel: channel, platform: platform || 'twitch' };
+}
+
+function _pickPlayerMoreItem(item) {
+  var target = _playerTarget();
+  if (!target.channel || !TwitchX.api) return;
+  if (item.id === 'watch-external-btn') {
+    var quality = _currentQuality();
+    if (TwitchX.api.watch_external_platform) TwitchX.api.watch_external_platform(target.channel, target.platform, quality);
+    else TwitchX.api.watch_external(target.channel, quality);
+  } else if (item.id === 'player-browser-item') {
+    TwitchX.api.open_browser(target.channel, target.platform);
+  }
+}
+
+function _bindPlayerOverlay() {
+  var stage = _playerStage();
+  var overlay = document.getElementById('player-overlay');
+  if (!stage || !overlay || stage._overlayBound) return;
+  stage._overlayBound = true;
+
+  stage.addEventListener('mousemove', showPlayerOverlay);
+  stage.addEventListener('mouseenter', showPlayerOverlay);
+  stage.addEventListener('mouseleave', hidePlayerOverlay);
+  overlay.addEventListener('focusin', function() {
+    _playerStage().classList.remove('overlay-hidden');
+    _clearPlayerOverlayTimer();
+  });
+  overlay.addEventListener('focusout', function() {
+    TwitchX._overlayHideTimer = setTimeout(hidePlayerOverlay, PLAYER_OVERLAY_IDLE_MS);
+  });
+
+  var playBtn = document.getElementById('play-pause-btn');
+  if (playBtn) playBtn.addEventListener('click', togglePlayPause);
+
+  // play/pause do not bubble; capture them on the stage so the element swapped
+  // in by a gentle reset is covered too.
+  stage.addEventListener('play', function(e) {
+    if (e.target.tagName !== 'VIDEO' || _isShadowVideo(e.target)) return;
+    syncPlayPauseButton();
+    showPlayerOverlay();
+  }, true);
+  stage.addEventListener('pause', function(e) {
+    if (e.target.tagName !== 'VIDEO' || _isShadowVideo(e.target)) return;
+    syncPlayPauseButton();
+    showPlayerOverlay();
+  }, true);
+
+  _bindPlayerMenu('quality-menu-btn', 'quality-menu', _pickQuality, syncQualityMenu);
+  _bindPlayerMenu('player-more-btn', 'player-more-menu', _pickPlayerMoreItem);
+  document.addEventListener('click', function(e) {
+    if (!overlay.contains(e.target)) closePlayerMenus();
+  });
+  syncQualityMenu();
+}
+
+TwitchX.showPlayerOverlay = showPlayerOverlay;
+TwitchX.hidePlayerOverlay = hidePlayerOverlay;
+TwitchX.syncPlayPauseButton = syncPlayPauseButton;
+TwitchX.syncQualityMenu = syncQualityMenu;
+TwitchX.QUALITY_LABELS = QUALITY_LABELS;
+TwitchX.closePlayerMenus = closePlayerMenus;
+TwitchX._bindPlayerOverlay = _bindPlayerOverlay;

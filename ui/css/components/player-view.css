@@ -20,7 +20,9 @@
 #player-stage {
   display: flex; flex: 1; min-width: 0;
   position: relative;
+  overflow: hidden;
   background: var(--bg-video);
+  container-type: inline-size;
 }
 #stream-video,
 #stream-video-next {
@@ -53,10 +55,13 @@
 /* Seek bar, buffering, stats overlay and header (moved from player.css) */
 /* ── Seek Bar (VOD) ──────────────────────────────────── */
 #seek-bar-container {
-  position: absolute; top: -20px; left: 0; right: 0;
-  height: 20px; z-index: var(--z-sticky);
-  flex-shrink: 0; cursor: pointer;
-  display: flex; align-items: flex-end;
+  position: relative;
+  flex: 1;
+  min-width: 80px;
+  height: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
 }
 #seek-bar {
   width: 100%; height: 4px;
@@ -122,9 +127,7 @@
 
 /* Phase 9: PiP button active state */
 #pip-player-btn.active {
-  background: var(--accent);
-  color: var(--text-on-accent);
-  border-color: var(--accent);
+  color: var(--accent);
 }
 
 /* -- Player loading spinner -- */
@@ -333,13 +336,206 @@
 }
 
 /* ── Fullscreen auto-hide ─────────────────────────────── */
-#player-bar.fs-hidden {
-  transform: translateY(100%); opacity: 0; pointer-events: none;
-  transition: transform var(--duration-normal) var(--ease-default),
-              opacity var(--duration-normal) var(--ease-default);
-}
 #player-header.fs-hidden {
   transform: translateY(-100%); opacity: 0; pointer-events: none;
   transition: transform var(--duration-normal) var(--ease-default),
               opacity var(--duration-normal) var(--ease-default);
 }
+
+/* ── Player overlay ─────────────────────────────────────── */
+/* Bottom control bar over the picture (play, volume, live/VOD, quality, PiP,
+   more, fullscreen). player.js fades it and the cursor after idle time. */
+#player-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-dropdown);
+  padding: var(--space-32) var(--space-12) var(--space-8);
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0));
+  color: var(--text-on-overlay);
+  transition: opacity var(--duration-normal) var(--ease-default);
+}
+#player-stage.overlay-hidden { cursor: none; }
+#player-stage.overlay-hidden #player-overlay {
+  opacity: 0;
+  pointer-events: none;
+}
+.player-overlay-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+/* The seek bar takes the free width for VODs. */
+#seek-bar-container:not(.hidden) ~ .player-overlay-spacer { display: none; }
+.player-ctl-btn {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background var(--duration-fast) ease;
+}
+.player-ctl-btn:hover { background: rgba(255, 255, 255, 0.14); }
+.player-ctl-btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.player-ctl-btn.hidden { display: none; }
+.player-ctl-text {
+  width: auto;
+  padding: 0 var(--space-8);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+.player-menu-wrap { position: relative; }
+.player-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--space-8));
+  min-width: 180px;
+  padding: var(--space-4) 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  color: var(--text-primary);
+}
+.player-menu.hidden { display: none; }
+.player-menu [aria-checked="true"] { font-weight: var(--weight-semibold); }
+.player-menu [aria-checked="true"]::after {
+  content: '\2713';
+  margin-left: auto;
+  color: var(--accent);
+}
+
+/* Volume */
+.player-volume {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.player-volume.hidden { display: none; }
+#mute-btn.muted { color: var(--live-red); }
+#volume-slider {
+  width: 72px;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(to right,
+    var(--accent) 0%,
+    var(--accent) var(--volume-pct, 100%),
+    rgba(255, 255, 255, 0.3) var(--volume-pct, 100%),
+    rgba(255, 255, 255, 0.3) 100%);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  margin: 0 var(--space-4);
+}
+#volume-slider:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+#volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: none;
+  cursor: pointer;
+}
+
+/* Live / recording state */
+#live-dot {
+  display: none;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 0 var(--space-8);
+  color: var(--live);
+  font-size: var(--font-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-wide);
+}
+#live-dot.visible { display: inline-flex; }
+.live-dot-label { color: var(--text-on-overlay); }
+#record-dot {
+  color: var(--live-red);
+  display: flex;
+  align-items: center;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+#record-dot.hidden { display: none; }
+.record-dot {
+  color: var(--error-red);
+  display: inline-flex;
+  align-items: center;
+  margin-left: var(--space-4);
+}
+#vod-time-display {
+  font-size: var(--font-sm);
+  font-family: ui-monospace, monospace;
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding: 0 var(--space-8);
+}
+#vod-time-display.hidden { display: none; }
+
+/* Recording button (player header) */
+#record-btn {
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
+}
+#record-btn:hover {
+  background: var(--hover-bg-strong);
+  color: var(--error-red);
+}
+#record-btn.recording { color: var(--error-red); }
+
+/* Stream loader: thin indeterminate bar along the top of the stage. */
+#stream-loader {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: var(--z-sticky);
+  overflow: hidden;
+  pointer-events: none;
+}
+#stream-loader.hidden { display: none; }
+#stream-loader-bar {
+  height: 100%;
+  width: 30%;
+  background: var(--accent);
+  animation: loader-slide 1.5s ease-in-out infinite;
+}
+
+/* A narrow stage (small window, wide chat) drops the least needed parts. */
+@container (max-width: 520px) {
+  #volume-slider,
+  .live-dot-label { display: none; }
+}
+@container (max-width: 380px) {
+  #pip-player-btn,
+  #vod-time-display,
+  #live-dot.visible,
+  .player-volume { display: none; }
+}
+.player-overlay-spacer { flex: 1; }

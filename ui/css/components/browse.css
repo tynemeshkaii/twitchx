@@ -341,8 +341,9 @@
   transition: opacity var(--duration-view) var(--ease-view);
 }
 #browse-header {
+  min-height: var(--section-header-height);
   display: flex; align-items: center; gap: var(--space-12);
-  padding: var(--space-8) var(--space-16);
+  padding: 0 var(--space-16);
   border-bottom: 1px solid var(--border-glass);
   background: var(--glass-bar);
   flex-shrink: 0;

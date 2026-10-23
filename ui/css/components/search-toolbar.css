@@ -1,199 +1,89 @@
-/* ── Toolbar inputs & search ──────────────────────────── */
-#search-input {
-  flex: 1;
-  height: 32px;
-  padding: 0 var(--space-12);
-  background: var(--bg-control);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  color: var(--text-primary);
-  font-size: var(--font-sm);
-  font-family: inherit;
-  outline: none;
-  transition: border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
-}
-#search-input:focus {
-  border-color: var(--focus-ring);
-  box-shadow: 0 0 0 2px var(--focus-ring-offset);
-}
-#search-input::placeholder { color: var(--text-muted); opacity: 0.85; }
-
-#add-btn {
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-control);
-  color: var(--text-secondary);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-size: var(--font-lg);
-  font-family: inherit;
-  transition: border-color var(--duration-fast) ease, color var(--duration-fast) ease, background var(--duration-fast) ease, transform var(--duration-fast) ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-#add-btn:hover {
-  border-color: var(--focus-ring);
-  color: var(--accent);
-  background: var(--accent-dim);
-}
-
-#search-dropdown {
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: 48px;
-  z-index: var(--z-dropdown);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-  max-height: 280px;
-  overflow-y: auto;
-  opacity: 0;
-  transform: translateY(4px);
-  pointer-events: none;
-  transition: opacity var(--duration-fast) var(--ease-view),
-              transform var(--duration-fast) var(--ease-view);
-}
-#search-dropdown.visible {
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
-}
-.search-result {
-  display: flex;
-  align-items: center;
-  padding: var(--space-8) var(--space-12);
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  transition: background var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
-  gap: var(--space-8);
-}
-.search-result:hover { background: var(--hover-bg); }
-.search-result:focus-visible {
-  outline: none;
-  background: var(--hover-bg);
-  box-shadow: inset 0 0 0 2px var(--focus-ring);
-}
-.search-result .sr-info { flex: 1; min-width: 0; }
-.search-result .sr-name {
-  font-size: var(--font-sm);
-  color: var(--text-primary);
-  font-weight: var(--weight-semibold);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.search-result .sr-game {
-  font-size: var(--font-sm);
-  color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.search-result .sr-live {
-  font-size: var(--font-xs);
-  color: var(--live);
-  font-weight: var(--weight-semibold);
-}
-.search-result .sr-add {
-  width: 22px;
-  height: 22px;
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: var(--font-lg);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0.54;
-  transition: color var(--duration-fast) ease, background var(--duration-fast) ease, opacity var(--duration-fast) ease, transform var(--duration-fast) ease;
-  font-family: inherit;
-}
-.search-result:hover .sr-add,
-.search-result:focus-within .sr-add { opacity: 1; }
-.search-result .sr-add:hover {
-  color: var(--accent);
-  background: var(--accent-dim);
-}
-.search-result .sr-add:focus-visible {
-  outline: none;
-  color: var(--accent);
-  background: var(--accent-dim);
-  box-shadow: 0 0 0 2px var(--focus-ring-offset);
-}
-.search-result .sr-add:active {
-  transform: scale(var(--scale-press));
-}
-
-/* ── Main toolbar ───────────────────────────────────────── */
-#toolbar select,
-#toolbar input {
-  height: 28px;
-  padding: 0 var(--space-8);
-  background: var(--bg-control);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  color: var(--text-primary);
-  font-size: var(--font-sm);
-  font-family: inherit;
-  outline: none;
-  transition: border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
-}
-#toolbar select:focus,
-#toolbar input:focus {
-  border-color: var(--focus-ring);
-  box-shadow: 0 0 0 2px var(--focus-ring-offset);
-}
-#toolbar input::placeholder { color: var(--text-secondary); opacity: 0.6; }
-
-#sort-select {
-  width: 150px;
-  min-width: 0;
-  flex: 0 1 150px;
-  cursor: pointer;
-}
-#filter-input {
-  width: 175px;
-  min-width: 0;
-  flex: 1 1 120px;
-}
-
 /* ── Platform chips ─────────────────────────────────────── */
-/* Owner of the chips row: layout.css used to style the bar chrome here too. */
+/* Lives inside #toolbar and borrows the shared .segmented control. */
 #toolbar-platform-chips {
-  display: flex;
-  gap: var(--space-8);
-  padding: var(--space-4) var(--space-16);
-  border-bottom: 1px solid var(--border-glass);
-  background: var(--bg-base);
   flex-shrink: 0;
 }
 #toolbar-platform-chips.hidden { display: none; }
-
 .platform-chip.btn {
-  min-height: 28px;
-  padding: 0 var(--space-16);
-  font-size: var(--font-xs);
-  font-weight: var(--weight-semibold);
-  border-radius: var(--radius-full);
-  background: transparent;
-  border: 1px solid var(--border-subtle);
+  padding: 0 var(--space-12);
+  font-size: var(--font-sm);
   color: var(--text-secondary);
-  transition: background var(--duration-fast) ease, color var(--duration-fast) ease, border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
+  background: transparent;
 }
 .platform-chip.btn:hover {
-  background: var(--hover-bg);
+  transform: none;
   color: var(--text-primary);
 }
-.platform-chip.btn.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--text-on-accent);
+
+/* ── Toolbar icon buttons (refresh) ─────────────────────── */
+.bar-btn {
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--font-lg);
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease, transform var(--duration-fast) ease;
+}
+.bar-btn:hover {
+  background: var(--hover-bg-strong);
+  color: var(--text-primary);
+}
+.bar-btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* ── Search field (opens the command palette) ─────────────── */
+.toolbar-search {
+  flex: 0 1 240px;
+  min-width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: 0 var(--space-8) 0 var(--space-12);
+  background: var(--bg-control);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  cursor: pointer;
+  transition: border-color var(--duration-fast) ease, color var(--duration-fast) ease;
+}
+.toolbar-search:hover {
+  border-color: var(--border-default);
+  color: var(--text-secondary);
+}
+.toolbar-search:focus-visible {
+  outline: none;
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 2px var(--focus-ring-offset);
+}
+.toolbar-search-label {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.toolbar-search-kbd {
+  flex-shrink: 0;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: var(--font-xs);
+  color: var(--text-muted);
 }
 
 /* Channel status badge used in compact list mode */
@@ -207,11 +97,11 @@
   text-align: right;
 }
 
-/* Sidebar search area (moved from layout.css) */
-/* ── Search area ────────────────────────────────────────── */
-#search-area {
-  padding: var(--space-4) var(--space-12);
-  border-top: 1px solid var(--border-subtle);
-  position: relative;
+/* Narrow windows: the search field keeps its icon and shortcut only. */
+@container (max-width: 560px) {
+  .toolbar-search-label { display: none; }
+  .toolbar-search { flex: 0 0 auto; }
 }
-#search-row { display: flex; gap: var(--space-4); }
+@container (max-width: 440px) {
+  .toolbar-search-kbd { display: none; }
+}

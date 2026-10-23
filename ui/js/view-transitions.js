@@ -13,6 +13,7 @@ const VIEW_IDS = [
 const CHROME_IDS = [
   'toolbar',
   'toolbar-platform-chips',
+  'section-header',
 ];
 
 const DIRECTIONS = {
@@ -83,8 +84,6 @@ TwitchX.setChromeVisible = function(visible) {
 TwitchX.switchView = function(targetId, direction) {
   var tooltip = document.getElementById('sidebar-tooltip');
   if (tooltip) { tooltip.classList.remove('visible'); tooltip.classList.add('hidden'); }
-  var dd = document.getElementById('search-dropdown');
-  if (dd) dd.classList.remove('visible');
   var filterPanel = document.getElementById('chat-filter-panel');
   if (filterPanel) filterPanel.classList.add('hidden');
   var ctxMenu = document.getElementById('context-menu');
@@ -94,6 +93,7 @@ TwitchX.switchView = function(targetId, direction) {
 
   const target = _getViewElement(targetId);
   if (!target) return;
+  if (TwitchX.syncNavForView) TwitchX.syncNavForView(targetId);
 
   const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 

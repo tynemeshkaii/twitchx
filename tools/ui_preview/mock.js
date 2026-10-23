@@ -33,6 +33,11 @@
     return function(){
       const a = arguments;
       if (k==='get_avatar') setTimeout(()=>{ const key=a[1]+':'+a[0]; const r=live.concat(offline)[idx[key]]; window.onAvatar({login:a[0],platform:a[1],data:avatar(idx[key]||0,(r?r[1]:a[0])[0].toUpperCase())}); },10);
+      if (k==='search_channels') setTimeout(()=>{ const q=String(a[0]).toLowerCase(); window.onSearchResults([
+        {login:'shroud',display_name:'shroud',platform:'twitch',is_live:true,game_name:'VALORANT'},
+        {login:'shahzam',display_name:'ShahZaM',platform:'twitch',is_live:false,game_name:'Counter-Strike 2'},
+        {login:'sharishaxd',display_name:'SharishaxD',platform:'kick',is_live:true,game_name:'Just Chatting'},
+      ].filter(r=>r.login.indexOf(q)!==-1), {query:a[0],platform:a[1]}); },50);
       if (k==='get_thumbnail') setTimeout(()=>{ const i=idx[a[0]]; window.onThumbnail({login:a[0],data:thumb(i,live[i][3])}); },10);
       return Promise.resolve(null);
     };

@@ -26,10 +26,11 @@
 <link rel="stylesheet" href="css/components/forms.css">
 <link rel="stylesheet" href="css/components/modals.css">
 <link rel="stylesheet" href="css/components/sidebar.css">
+<link rel="stylesheet" href="css/components/account-popover.css">
 <link rel="stylesheet" href="css/components/search-toolbar.css">
+<link rel="stylesheet" href="css/components/section-header.css">
 <link rel="stylesheet" href="css/components/stream-card.css">
 <link rel="stylesheet" href="css/components/empty-state.css">
-<link rel="stylesheet" href="css/components/player-bar.css">
 <link rel="stylesheet" href="css/components/chat.css">
 <link rel="stylesheet" href="css/components/context-menu.css">
 <link rel="stylesheet" href="css/components/settings.css">
@@ -52,41 +53,16 @@
   <div id="main">
     <!-- Sidebar -->
     <aside id="sidebar">
-      <div id="sidebar-header">
+      <div id="sidebar-top">
+        <!-- Room for the traffic lights; shown only with the integrated title bar. -->
+        <div class="sidebar-titlebar titlebar-drag" aria-hidden="true"></div>
         <button id="sidebar-collapse-btn" class="sidebar-collapse-btn" title="Collapse sidebar" aria-label="Toggle sidebar collapse"><span data-icon="chevron-left" data-size="16"></span></button>
-      </div>
-
-      <div id="profile-area">
-        <button id="login-btn" class="login-btn">Login with Twitch</button>
-        <div id="user-info" class="platform-user-info hidden">
-          <img id="user-avatar" class="platform-user-avatar is-empty" alt="" aria-hidden="true">
-          <div class="platform-user-details">
-            <div id="user-display-name" class="platform-user-name"></div>
-            <div class="platform-user-actions">
-              <button id="logout-link" class="logout-link" type="button">Logout</button>
-              <button id="import-link" class="logout-link" type="button">Import follows</button>
-            </div>
-          </div>
-          <div class="platform-status-dots" aria-label="Connected platforms"></div>
-        </div>
-      </div>
-      <div id="kick-profile-area">
-        <button id="kick-login-sidebar-btn" class="login-btn">Login with Kick</button>
-        <div id="kick-user-info" class="platform-user-info hidden">
-          <div class="platform-user-details">
-            <div id="kick-user-name" class="platform-user-name"></div>
-            <div class="platform-user-actions">
-              <button id="kick-logout-link" class="logout-link" type="button">Logout</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div id="platform-tabs" class="segmented" role="tablist" aria-label="Sidebar platform filter">
-        <button class="platform-tab btn active" data-platform="all" role="tab" aria-selected="true">All</button>
-        <button class="platform-tab btn" data-platform="twitch" role="tab" aria-selected="false" tabindex="-1">Twitch</button>
-        <button class="platform-tab btn" data-platform="kick" role="tab" aria-selected="false" tabindex="-1">Kick</button>
-        <button class="platform-tab btn" data-platform="youtube" role="tab" aria-selected="false" tabindex="-1">YouTube</button>
+        <button id="mini-exit-btn" class="sidebar-collapse-btn" type="button" title="Exit mini mode (&#8679;&#8984;M)" aria-label="Exit mini mode"><span data-icon="mini-exit" data-size="16"></span></button>
+        <nav id="sidebar-nav" aria-label="Sections">
+          <button class="sidebar-nav-item" type="button" data-nav="following" aria-current="page" title="Following"><span data-icon="star" data-size="16"></span><span class="sidebar-nav-label">Following</span><span id="sidebar-nav-live-count" class="sidebar-nav-count"></span></button>
+          <button class="sidebar-nav-item" type="button" data-nav="browse" title="Browse"><span data-icon="browse" data-size="16"></span><span class="sidebar-nav-label">Browse</span></button>
+          <button class="sidebar-nav-item" type="button" data-nav="multiview" title="Multi-view"><span data-icon="grid-layout" data-size="16"></span><span class="sidebar-nav-label">Multi-view</span></button>
+        </nav>
       </div>
 
       <div id="sidebar-stale-banner" class="sidebar-stale-banner hidden">
@@ -102,41 +78,56 @@
       <div id="channel-list"></div>
 
       <div class="sidebar-footer">
-        <div id="search-area">
-          <div id="search-dropdown" role="listbox" aria-label="Search results"></div>
-          <div id="search-row">
-            <input id="search-input" placeholder="Search or add channel..." autocomplete="off" aria-label="Search or add channel" aria-controls="search-dropdown" aria-expanded="false" role="combobox" aria-haspopup="listbox" aria-autocomplete="list">
-            <button id="add-btn" title="Add channel" aria-label="Add channel"><span data-icon="plus" data-size="16"></span></button>
-          </div>
-        </div>
-        <div id="browse-nav-wrapper">
-          <button id="browse-nav-btn" class="btn btn-secondary"><span data-icon="browse" data-size="16"></span> Browse</button>
+        <div id="account-chip-row">
+          <button id="account-chip" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="account-popover" aria-label="Accounts">
+            <span class="account-chip-avatar" aria-hidden="true"><img id="account-chip-img" class="hidden" alt=""><span id="account-chip-initial"></span></span>
+            <span id="account-chip-name" class="account-chip-name">Not signed in</span>
+            <span class="platform-status-dots" aria-label="Connected platforms"></span>
+          </button>
+          <button id="account-settings-btn" class="account-gear-btn" type="button" title="Settings (&#8984;,)" aria-label="Settings"><span data-icon="settings" data-size="16"></span></button>
         </div>
       </div>
     </aside>
 
     <!-- Content -->
     <main id="content">
-      <div id="toolbar">
+      <div id="toolbar" class="titlebar-drag">
         <div class="toolbar-group toolbar-group--left">
-          <select id="sort-select" aria-label="Sort streams">
-            <option value="viewers">Most Viewers</option>
-            <option value="recent">Recently Started</option>
-            <option value="alpha">Alphabetical</option>
-          </select>
-          <input id="filter-input" placeholder="Filter by game..." aria-label="Filter streams by game">
+          <div id="toolbar-platform-chips" class="segmented" role="tablist" aria-label="Platform filter">
+            <button class="platform-chip btn active" data-platform="all" role="tab" aria-selected="true">All</button>
+            <button class="platform-chip btn" data-platform="twitch" role="tab" aria-selected="false" tabindex="-1">Twitch</button>
+            <button class="platform-chip btn" data-platform="kick" role="tab" aria-selected="false" tabindex="-1">Kick</button>
+            <button class="platform-chip btn" data-platform="youtube" role="tab" aria-selected="false" tabindex="-1">YouTube</button>
+          </div>
         </div>
         <div class="toolbar-group toolbar-group--right">
-          <button id="grid-toggle-btn" class="bar-btn" title="Switch density" aria-label="Toggle grid density"><span data-icon="grid-toggle" data-size="16"></span></button>
+          <button id="toolbar-search-btn" class="toolbar-search" type="button" aria-keyshortcuts="Meta+K"><span data-icon="search" data-size="14"></span><span class="toolbar-search-label">Search channels, games</span><kbd class="toolbar-search-kbd">&#8984;K</kbd></button>
           <button id="toolbar-refresh-btn" class="bar-btn toolbar-refresh-btn" title="Refresh (R)" aria-label="Refresh streams"><span data-icon="refresh" data-size="16"></span></button>
         </div>
       </div>
-      <div id="toolbar-platform-chips" class="segmented" role="tablist" aria-label="Toolbar platform filter">
-        <button class="platform-chip btn active" data-platform="all" role="tab" aria-selected="true">All</button>
-        <button class="platform-chip btn" data-platform="twitch" role="tab" aria-selected="false" tabindex="-1">Twitch</button>
-        <button class="platform-chip btn" data-platform="kick" role="tab" aria-selected="false" tabindex="-1">Kick</button>
-        <button class="platform-chip btn" data-platform="youtube" role="tab" aria-selected="false" tabindex="-1">YouTube</button>
-      </div>
+
+      <header id="section-header">
+        <h1 id="section-title">Following</h1>
+        <div id="section-meta">
+          <span id="section-live-count"></span>
+          <span id="total-viewers"></span>
+          <span id="updated-time"></span>
+          <span id="status-text" aria-live="polite"></span>
+        </div>
+        <div class="section-actions">
+          <button id="game-filter-chip" class="game-filter-chip hidden" type="button" aria-label="Clear game filter"><span id="game-filter-label"></span><span data-icon="close" data-size="12"></span></button>
+          <div class="sort-menu-wrap">
+            <button id="sort-menu-btn" class="section-menu-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="sort-menu"><span id="sort-menu-label">Most viewers</span><span data-icon="chevron-down" data-size="12"></span></button>
+            <div id="sort-menu" class="section-menu hidden" role="menu" aria-label="Sort and density">
+              <div class="ctx-item" role="menuitemradio" data-sort="viewers" aria-checked="true" tabindex="-1">Most viewers</div>
+              <div class="ctx-item" role="menuitemradio" data-sort="recent" aria-checked="false" tabindex="-1">Recently started</div>
+              <div class="ctx-item" role="menuitemradio" data-sort="alpha" aria-checked="false" tabindex="-1">Alphabetical</div>
+              <div class="ctx-separator" role="separator"></div>
+              <div class="ctx-item" id="density-menu-item" role="menuitem" data-density="next" tabindex="-1"><span data-icon="grid-toggle" data-size="14"></span> <span id="density-menu-label">Density: Grid</span></div>
+            </div>
+          </div>
+        </div>
+      </header>
 
       <div id="view-stack">
         <div id="stream-grid" class="view view-active"></div>
@@ -146,7 +137,7 @@
           <div class="empty-subtitle"></div>
         </div>
         <div id="browse-view" class="view hidden">
-          <div id="browse-header">
+          <div id="browse-header" class="titlebar-drag">
             <button id="browse-back-btn" class="browse-back-btn hidden"><span data-icon="arrow-left" data-size="16"></span> Back</button>
             <nav id="browse-breadcrumbs" aria-label="Browse breadcrumbs"></nav>
             <div id="browse-platform-tabs" role="tablist" aria-label="Browse platform filter">
@@ -166,7 +157,7 @@
 
         <!-- Channel profile view -->
         <div id="channel-view" class="view hidden">
-          <div id="channel-header">
+          <div id="channel-header" class="titlebar-drag">
             <button id="channel-back-btn" class="browse-back-btn"><span data-icon="arrow-left" data-size="16"></span> Back</button>
             <span id="channel-header-title"></span>
           </div>
@@ -216,7 +207,7 @@
 
         <!-- Multi-stream view -->
         <div id="multistream-view" class="view hidden">
-          <div id="multistream-header">
+          <div id="multistream-header" class="titlebar-drag">
             <span id="multistream-title"><span data-icon="grid-layout" data-size="16"></span> Multi-stream</span>
             <select id="ms-preset-select" aria-label="Multistream layout preset" title="Layout preset"></select>
             <button id="ms-add-slot-btn" title="Add stream" aria-label="Add stream"><span data-icon="plus" data-size="16"></span></button>
@@ -244,16 +235,13 @@
 
         <!-- Player view (replaces grid when a stream is playing) -->
         <div id="player-view" class="view hidden">
-          <div id="player-header">
+          <div id="player-header" class="titlebar-drag">
             <span id="player-channel-name"></span>
             <span id="player-stream-title"></span>
-            <span id="vod-time-display" class="hidden"></span>
             <div id="player-header-actions">
               <button id="stats-overlay-btn" class="player-header-btn hidden" title="Stream Stats" aria-label="Stream Stats"><span data-icon="chart" data-size="16"></span></button>
               <button id="record-btn" class="player-header-btn hidden" title="Start Recording" aria-label="Start Recording"><span data-icon="record" data-size="16"></span></button>
               <button id="toggle-chat-btn" class="player-header-btn" title="Toggle Chat (C)" aria-label="Toggle Chat"><span data-icon="chat" data-size="16"></span></button>
-              <button id="pip-player-btn" class="player-header-btn hidden" title="Picture-in-Picture (P)" aria-label="Picture in Picture"><span data-icon="pip" data-size="16"></span></button>
-              <button id="fullscreen-player-btn" class="player-header-btn" title="Fullscreen (F)" aria-label="Fullscreen"><span data-icon="fullscreen" data-size="16"></span></button>
               <button id="close-player-btn" class="player-header-btn" title="Close Player (Esc)" aria-label="Close Player"><span data-icon="close" data-size="16"></span></button>
             </div>
           </div>
@@ -262,7 +250,8 @@
                  buffering, error and stats are positioned against the picture
                  rather than against the whole row, which also contains chat. -->
             <div id="player-stage">
-              <video id="stream-video" autoplay controls playsinline aria-label="Live stream video"></video>
+              <div id="stream-loader" class="hidden"><div id="stream-loader-bar"></div></div>
+              <video id="stream-video" autoplay playsinline aria-label="Live stream video"></video>
               <div id="player-loader" class="hidden" role="status" aria-live="polite"><div class="player-spinner"></div></div>
               <div id="player-buffering" class="player-buffering buffering-hide"><div class="player-spinner"></div></div>
               <div id="player-error" class="player-error hidden" role="alert">
@@ -273,6 +262,36 @@
                 </div>
               </div>
               <div id="buffer-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"><div id="buffer-loaded"></div><div id="buffer-position"></div></div>
+              <div id="player-overlay">
+                <div class="player-overlay-bar">
+                  <button id="play-pause-btn" class="player-ctl-btn" type="button" title="Pause" aria-label="Pause"><span data-icon="pause" data-size="16"></span></button>
+                  <div class="player-volume hidden" id="volume-group">
+                    <button class="player-ctl-btn" id="mute-btn" type="button" title="Mute/Unmute (M)" aria-label="Mute/Unmute"><span data-icon="volume" data-size="16"></span></button>
+                    <input type="range" id="volume-slider" min="0" max="100" value="100" step="1" aria-label="Volume">
+                  </div>
+                  <span id="live-dot"><span data-icon="live-dot" data-size="12"></span><span class="live-dot-label">LIVE</span></span>
+                  <span id="record-dot" class="hidden record-dot" title="Recording"><span data-icon="record" data-size="10"></span></span>
+                  <div id="seek-bar-container" class="hidden">
+                    <input type="range" id="seek-bar" min="0" max="1000" value="0" step="1" aria-label="VOD seek">
+                    <span id="seek-tooltip" class="hidden"></span>
+                  </div>
+                  <span id="vod-time-display" class="hidden"></span>
+                  <span class="player-overlay-spacer"></span>
+                  <div class="player-menu-wrap">
+                    <button id="quality-menu-btn" class="player-ctl-btn player-ctl-text" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="quality-menu" title="Quality"><span id="quality-menu-label">Best</span></button>
+                    <div id="quality-menu" class="player-menu hidden" role="menu" aria-label="Stream quality"></div>
+                  </div>
+                  <button id="pip-player-btn" class="player-ctl-btn hidden" type="button" title="Picture-in-Picture (P)" aria-label="Picture in Picture"><span data-icon="pip" data-size="16"></span></button>
+                  <div class="player-menu-wrap">
+                    <button id="player-more-btn" class="player-ctl-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="player-more-menu" title="More" aria-label="More actions"><span data-icon="more" data-size="16"></span></button>
+                    <div id="player-more-menu" class="player-menu hidden" role="menu" aria-label="More actions">
+                      <div class="ctx-item" id="watch-external-btn" role="menuitem" tabindex="-1"><span data-icon="external-link" data-size="14"></span> Open in External Player</div>
+                      <div class="ctx-item" id="player-browser-item" role="menuitem" tabindex="-1"><span data-icon="browser" data-size="14"></span> Open in Browser</div>
+                    </div>
+                  </div>
+                  <button id="fullscreen-player-btn" class="player-ctl-btn" type="button" title="Fullscreen (F)" aria-label="Fullscreen"><span data-icon="fullscreen" data-size="16"></span></button>
+                </div>
+              </div>
               <div id="stats-overlay" class="hidden">
                 <div class="stats-row"><span class="stats-key">Latency</span><span class="stats-val" id="so-latency">--</span></div>
                 <div class="stats-row"><span class="stats-key">Buffer</span><span class="stats-val" id="so-buffer">--</span></div>
@@ -355,45 +374,6 @@
     </main>
   </div>
 
-  <!-- Player bar -->
-  <div id="player-bar">
-    <div id="stream-loader" class="hidden"><div id="stream-loader-bar"></div></div>
-    <div id="seek-bar-container" class="hidden">
-      <input type="range" id="seek-bar" min="0" max="1000" value="0" step="1" aria-label="VOD seek">
-      <span id="seek-tooltip" class="hidden"></span>
-    </div>
-    <div class="bar-group bar-group--left">
-      <select id="quality-select" aria-label="Stream quality">
-        <option value="best">Best</option>
-        <option value="1440p60">1440p60</option>
-        <option value="1080p60">1080p60</option>
-        <option value="720p60">720p60</option>
-        <option value="480p">480p</option>
-        <option value="360p">360p</option>
-        <option value="audio_only">Audio only</option>
-      </select>
-      <button id="watch-btn"><span data-icon="play" data-size="16"></span> <span class="btn-label">Watch</span></button>
-      <button id="stop-player-btn" class="hidden" title="Stop playback" aria-label="Stop"><span data-icon="stop" data-size="16"></span></button>
-      <button id="watch-external-btn" title="Open in External Player" aria-label="Open in External Player"><span data-icon="external-link" data-size="16"></span></button>
-      <div class="bar-group bar-group--audio hidden" id="volume-group">
-        <button class="bar-btn" id="mute-btn" title="Mute/Unmute (M)" aria-label="Mute/Unmute"><span data-icon="volume" data-size="16"></span></button>
-        <input type="range" id="volume-slider" min="0" max="100" value="100" step="1" aria-label="Volume">
-      </div>
-    </div>
-    <div class="bar-group bar-group--center">
-      <span id="live-dot"><span data-icon="live-dot" data-size="12"></span></span>
-      <span id="record-dot" class="hidden record-dot"><span data-icon="record" data-size="10"></span></span>
-      <span id="status-text" aria-live="polite"></span>
-      <span id="total-viewers" class="btn-label"></span>
-      <span id="updated-time" class="btn-label"></span>
-    </div>
-    <div class="bar-group bar-group--right">
-      <button class="bar-btn" id="browser-btn" title="Open in browser" aria-label="Open in Browser"><span data-icon="browser" data-size="16"></span></button>
-      <button class="bar-btn" id="refresh-btn" title="Refresh (R)" aria-label="Refresh streams"><span data-icon="refresh" data-size="16"></span></button>
-      <button class="bar-btn" id="mini-mode-btn" title="Mini mode" aria-label="Toggle mini mode"><span data-icon="minimize" data-size="16"></span></button>
-      <button class="bar-btn" id="settings-btn" title="Settings (&#8984;,)" aria-label="Settings"><span data-icon="settings" data-size="16"></span></button>
-    </div>
-  </div>
 </div>
 
 <!-- Context menu -->
@@ -401,12 +381,53 @@
   <div class="ctx-item" data-action="watch" role="menuitem" tabindex="-1"><span data-icon="play" data-size="14"></span> Watch in App</div>
   <div class="ctx-item" data-action="multistream" role="menuitem" tabindex="-1"><span data-icon="grid-layout" data-size="14"></span> Add to Multi-stream</div>
   <div class="ctx-item" data-action="watch-external" role="menuitem" tabindex="-1"><span data-icon="external-link" data-size="14"></span> Open in External Player</div>
+  <div class="ctx-item" data-action="browser" role="menuitem" tabindex="-1"><span data-icon="browser" data-size="14"></span> Open in Browser</div>
   <div class="ctx-separator" role="separator"></div>
   <div class="ctx-item" data-action="favorite" role="menuitem" tabindex="-1"><span data-icon="star" data-size="14"></span> Add to Favorites</div>
   <div class="ctx-item" data-action="pin" role="menuitem" tabindex="-1"><span data-icon="pin" data-size="14"></span> Pin to top</div>
   <div class="ctx-item" data-action="create-group" role="menuitem" tabindex="-1"><span data-icon="folder-plus" data-size="14"></span> Create group</div>
   <div class="ctx-item" data-action="move-to-group" role="menuitem" tabindex="-1"><span data-icon="folder-move" data-size="14"></span> Move to group</div>
   <div class="ctx-item" data-action="remove" role="menuitem" tabindex="-1"><span data-icon="close" data-size="14"></span> Remove</div>
+</div>
+
+<!-- Account popover (opened from the account chip at the bottom of the sidebar) -->
+<div id="account-popover" class="hidden" role="dialog" aria-labelledby="account-popover-title">
+  <h2 id="account-popover-title" class="account-popover-title">Accounts</h2>
+  <section class="account-section" aria-label="Twitch">
+    <div class="account-section-head"><span class="account-platform-dot twitch" aria-hidden="true"></span>Twitch</div>
+    <button id="login-btn" class="login-btn">Login with Twitch</button>
+    <div id="user-info" class="platform-user-info hidden">
+      <img id="user-avatar" class="platform-user-avatar is-empty" alt="" aria-hidden="true">
+      <div class="platform-user-details">
+        <div id="user-display-name" class="platform-user-name"></div>
+        <div class="platform-user-actions">
+          <button id="logout-link" class="logout-link" type="button">Logout</button>
+          <button id="import-link" class="logout-link" type="button">Import follows</button>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="account-section" aria-label="Kick">
+    <div class="account-section-head"><span class="account-platform-dot kick" aria-hidden="true"></span>Kick</div>
+    <button id="kick-login-sidebar-btn" class="login-btn">Login with Kick</button>
+    <div id="kick-user-info" class="platform-user-info hidden">
+      <div class="platform-user-details">
+        <div id="kick-user-name" class="platform-user-name"></div>
+        <div class="platform-user-actions">
+          <button id="kick-logout-link" class="logout-link" type="button">Logout</button>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section id="account-youtube-section" class="account-section" aria-label="YouTube">
+    <div class="account-section-head"><span class="account-platform-dot youtube" aria-hidden="true"></span>YouTube</div>
+    <div id="account-youtube-status" class="account-section-status">Not connected</div>
+    <button id="account-youtube-btn" class="logout-link" type="button">Set up in Settings</button>
+  </section>
+  <div class="account-popover-actions">
+    <button id="account-mini-mode-btn" class="account-action" type="button"><span data-icon="minimize" data-size="14"></span><span id="account-mini-mode-label">Mini mode</span><kbd>&#8679;&#8984;M</kbd></button>
+    <button id="account-settings-item" class="account-action" type="button"><span data-icon="settings" data-size="14"></span><span>Settings&#8230;</span><kbd>&#8984;,</kbd></button>
+  </div>
 </div>
 
 <!-- Group context menu -->
@@ -726,6 +747,7 @@
 <script src="js/api-bridge.js"></script>
 <script src="js/render.js"></script>
 <script src="js/sidebar.js"></script>
+<script src="js/account.js"></script>
 <script src="js/player.js"></script>
 <script src="js/multistream.js"></script>
 <script src="js/browse.js"></script>

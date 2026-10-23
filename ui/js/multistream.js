@@ -401,14 +401,9 @@ function toggleMsSlotFullscreen(idx) {
   if (!TwitchX.multiState.slots[idx]) return;
   if (!slotEl) return;
   if (!video) return;
-  // webkitEnterFullscreen is the most reliable path in WKWebView (uses native AVKit)
-  if (video.webkitEnterFullscreen) {
-    video.webkitEnterFullscreen();
-  } else if (video.requestFullscreen) {
-    video.requestFullscreen();
-  } else if (video.webkitRequestFullscreen) {
-    video.webkitRequestFullscreen();
-  }
+  // webkitEnterFullscreen is the most reliable path in WKWebView (uses native
+  // AVKit); the helper also lends AVKit its controls for the session.
+  TwitchX.enterNativeVideoFullscreen(video);
 }
 
 function _createMultiSlot(idx) {

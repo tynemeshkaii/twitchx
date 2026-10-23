@@ -40,6 +40,8 @@ document.addEventListener('DOMContentLoaded', function() {
   if (TwitchX.applyYoutubeGating) TwitchX.applyYoutubeGating();
   TwitchX.loadPinnedStreams();
   TwitchX._bindSidebarEvents();
+  TwitchX._bindSidebarNavEvents();
+  TwitchX._bindAccountEvents();
   TwitchX._bindToolbarEvents();
   TwitchX._bindPlayerEvents();
   TwitchX._bindBrowseEvents();
@@ -51,6 +53,7 @@ document.addEventListener('DOMContentLoaded', function() {
   TwitchX._bindGlobalEvents();
   TwitchX._bindMultistreamEvents();
   TwitchX._bindPaletteEvents();
+  TwitchX._bindTitlebarEvents();
   TwitchX._initMultistreamSlots();
   TwitchX._watchFullscreenChanges();
   TwitchX._watchNetworkChanges();
@@ -81,27 +84,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Restore saved grid density mode
   (function() {
-    var validModes = ['grid', 'comfortable', 'compact', 'list'];
     var saved = localStorage.getItem('twitchx.grid_mode') || 'grid';
-    if (validModes.indexOf(saved) === -1) saved = 'grid';
+    if (DENSITY_MODES.indexOf(saved) === -1) saved = 'grid';
     TwitchX.state.gridMode = saved;
-    var btn = document.getElementById('grid-toggle-btn');
-    if (btn) {
-      var iconMap = {
-        grid: 'grid-toggle',
-        comfortable: 'grid-toggle',
-        compact: 'compact-toggle',
-        list: 'list-toggle'
-      };
-      var titleMap = {
-        grid: 'Switch to comfortable view',
-        comfortable: 'Switch to compact view',
-        compact: 'Switch to list view',
-        list: 'Switch to grid view'
-      };
-      btn.title = titleMap[saved];
-      TwitchX.setIconOnly(btn, iconMap[saved], 16);
-    }
+    _syncSortMenu();
   })();
 
   // Apply saved mini mode
@@ -145,8 +131,9 @@ TwitchX._bindSidebarEvents = function() {
   if (kickLoginBtn) kickLoginBtn.addEventListener('click', function() { if (TwitchX.api) TwitchX.api.kick_login(); });
   const kickLogoutLink = document.getElementById('kick-logout-link');
   if (kickLogoutLink) kickLogoutLink.addEventListener('click', function() { if (TwitchX.api) TwitchX.api.kick_logout(); });
-  const addBtn = document.getElementById('add-btn');
-  if (addBtn) addBtn.addEventListener('click', TwitchX.addChannel);
+
+  var miniExitBtn = document.getElementById('mini-exit-btn');
+  if (miniExitBtn) miniExitBtn.addEventListener('click', TwitchX.toggleMiniMode);
 
   // Sidebar collapse toggle
   var collapseBtn = document.getElementById('sidebar-collapse-btn');
@@ -163,13 +150,6 @@ TwitchX._bindSidebarEvents = function() {
     TwitchX.state.activePlatformFilter = platform;
     TwitchX.renderGrid();
     TwitchX.renderSidebar();
-    // Sync sidebar tabs and toolbar chips
-    document.querySelectorAll('.platform-tab').forEach(function(tab) {
-      var active = tab.dataset.platform === platform;
-      tab.classList.toggle('active', active);
-      tab.setAttribute('aria-selected', String(active));
-      tab.tabIndex = active ? 0 : -1;
-    });
     document.querySelectorAll('.platform-chip').forEach(function(chip) {
       var active = chip.dataset.platform === platform;
       chip.classList.toggle('active', active);
@@ -177,18 +157,6 @@ TwitchX._bindSidebarEvents = function() {
       chip.tabIndex = active ? 0 : -1;
     });
   }
-
-  // Platform tab switching (sidebar)
-  document.querySelectorAll('.platform-tab').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      setPlatformFilter(btn.dataset.platform);
-    });
-    btn.addEventListener('keydown', function(e) {
-      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-      e.preventDefault();
-      TwitchX.focusAdjacentTab(Array.from(document.querySelectorAll('.platform-tab')), btn, e.key === 'ArrowRight' ? 1 : -1);
-    });
-  });
 
   // Platform chip switching (toolbar)
   document.querySelectorAll('.platform-chip').forEach(function(btn) {
@@ -202,73 +170,118 @@ TwitchX._bindSidebarEvents = function() {
     });
   });
 
-  const searchInput = document.getElementById('search-input');
-  if (searchInput) {
-    searchInput.addEventListener('input', function(e) {
-      const query = e.target.value.trim();
-      clearTimeout(TwitchX.state.searchDebounce);
-      if (!query) {
-        TwitchX.state.searchResults = [];
-        document.getElementById('search-dropdown').classList.remove('visible');
-        searchInput.setAttribute('aria-expanded', 'false');
-        return;
-      }
-      TwitchX.state.searchDebounce = setTimeout(function() {
-        const searchPlatform = TwitchX.state.activePlatformFilter === 'all' ? 'all' : TwitchX.state.activePlatformFilter;
-        if (TwitchX.api) TwitchX.api.search_channels(query, searchPlatform);
-      }, 400);
-    });
-    searchInput.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') { e.preventDefault(); TwitchX.addChannel(); }
-    });
-  }
 };
+
+const DENSITY_MODES = ['grid', 'comfortable', 'compact', 'list'];
+const DENSITY_LABELS = { grid: 'Grid', comfortable: 'Comfortable', compact: 'Compact', list: 'List' };
+const SORT_LABELS = { viewers: 'Most viewers', recent: 'Recently started', alpha: 'Alphabetical' };
+
+// The sort button shows the current order; the menu marks it and names the
+// density that one click on the density item leaves behind.
+function _syncSortMenu() {
+  var label = document.getElementById('sort-menu-label');
+  if (label) label.textContent = SORT_LABELS[TwitchX.state.sortKey] || SORT_LABELS.viewers;
+  document.querySelectorAll('#sort-menu [data-sort]').forEach(function(item) {
+    item.setAttribute('aria-checked', String(item.dataset.sort === TwitchX.state.sortKey));
+  });
+  var density = document.getElementById('density-menu-label');
+  if (density) density.textContent = 'Density: ' + (DENSITY_LABELS[TwitchX.state.gridMode] || DENSITY_LABELS.grid);
+}
+
+function _sortMenuItems() {
+  return Array.from(document.querySelectorAll('#sort-menu [role^="menuitem"]'));
+}
+
+function _focusSortMenuItem(idx) {
+  var items = _sortMenuItems();
+  if (!items.length) return;
+  var next = ((idx % items.length) + items.length) % items.length;
+  items.forEach(function(item) { item.tabIndex = -1; });
+  items[next].tabIndex = 0;
+  items[next].focus();
+}
+
+function openSortMenu() {
+  var menu = document.getElementById('sort-menu');
+  var btn = document.getElementById('sort-menu-btn');
+  if (!menu || !btn) return;
+  _syncSortMenu();
+  menu.classList.remove('hidden');
+  btn.setAttribute('aria-expanded', 'true');
+  var items = _sortMenuItems();
+  var checked = items.findIndex(function(item) { return item.getAttribute('aria-checked') === 'true'; });
+  _focusSortMenuItem(Math.max(0, checked));
+}
+
+function closeSortMenu(restoreFocus) {
+  var menu = document.getElementById('sort-menu');
+  var btn = document.getElementById('sort-menu-btn');
+  if (!menu || menu.classList.contains('hidden')) return false;
+  menu.classList.add('hidden');
+  if (btn) {
+    btn.setAttribute('aria-expanded', 'false');
+    if (restoreFocus) btn.focus();
+  }
+  return true;
+}
+
+function _applySortMenuItem(item) {
+  if (item.dataset.sort) {
+    TwitchX.state.sortKey = item.dataset.sort;
+  } else if (item.dataset.density) {
+    var idx = DENSITY_MODES.indexOf(TwitchX.state.gridMode);
+    TwitchX.state.gridMode = DENSITY_MODES[(idx + 1) % DENSITY_MODES.length];
+    localStorage.setItem('twitchx.grid_mode', TwitchX.state.gridMode);
+  }
+  _syncSortMenu();
+  TwitchX.renderGrid();
+}
 
 TwitchX._bindToolbarEvents = function() {
-  const sortSelect = document.getElementById('sort-select');
-  if (sortSelect) sortSelect.addEventListener('change', function(e) {
-    TwitchX.state.sortKey = e.target.value;
-    TwitchX.renderGrid();
+  var gameChip = document.getElementById('game-filter-chip');
+  if (gameChip) gameChip.addEventListener('click', function() { TwitchX.setGameFilter(''); });
+  var sortBtn = document.getElementById('sort-menu-btn');
+  var sortMenu = document.getElementById('sort-menu');
+  if (sortBtn) sortBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    if (!closeSortMenu(false)) openSortMenu();
   });
-  const filterInput = document.getElementById('filter-input');
-  if (filterInput) filterInput.addEventListener('input', function(e) {
-    TwitchX.state.filterText = e.target.value;
-    TwitchX.renderGrid();
+  if (sortMenu) {
+    sortMenu.addEventListener('click', function(e) {
+      var item = e.target.closest('[role^="menuitem"]');
+      if (!item) return;
+      _applySortMenuItem(item);
+      // Density is a cycle: keep the menu open so the next step is one click.
+      if (item.dataset.sort) closeSortMenu(true);
+    });
+    sortMenu.addEventListener('keydown', function(e) {
+      var items = _sortMenuItems();
+      var idx = items.indexOf(document.activeElement);
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeSortMenu(true); }
+      else if (e.key === 'Tab') { closeSortMenu(false); }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); _focusSortMenuItem(idx + 1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); _focusSortMenuItem(idx - 1); }
+      else if (e.key === 'Home') { e.preventDefault(); _focusSortMenuItem(0); }
+      else if (e.key === 'End') { e.preventDefault(); _focusSortMenuItem(items.length - 1); }
+      else if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        if (idx !== -1) items[idx].click();
+      }
+    });
+  }
+  document.addEventListener('click', function(e) {
+    if (sortMenu && !sortMenu.contains(e.target) && e.target !== sortBtn) closeSortMenu(false);
   });
-  const browseNavBtn = document.getElementById('browse-nav-btn');
-  if (browseNavBtn) browseNavBtn.addEventListener('click', TwitchX.showBrowseView);
+
+  const toolbarSearchBtn = document.getElementById('toolbar-search-btn');
+  if (toolbarSearchBtn) toolbarSearchBtn.addEventListener('click', function() { TwitchX.openPalette(); });
   const toolbarRefreshBtn = document.getElementById('toolbar-refresh-btn');
   if (toolbarRefreshBtn) toolbarRefreshBtn.addEventListener('click', TwitchX.doRefresh);
-  var gridToggleBtn = document.getElementById('grid-toggle-btn');
-  var DENSITY_MODES = ['grid', 'comfortable', 'compact', 'list'];
-  var DENSITY_ICONS = {
-    grid: 'grid-toggle',
-    comfortable: 'grid-toggle',
-    compact: 'compact-toggle',
-    list: 'list-toggle'
-  };
-  var DENSITY_TITLES = {
-    grid: 'Switch to comfortable view',
-    comfortable: 'Switch to compact view',
-    compact: 'Switch to list view',
-    list: 'Switch to grid view'
-  };
-  if (gridToggleBtn) gridToggleBtn.addEventListener('click', function() {
-    var idx = DENSITY_MODES.indexOf(TwitchX.state.gridMode);
-    var next = DENSITY_MODES[(idx + 1) % DENSITY_MODES.length];
-    TwitchX.state.gridMode = next;
-    localStorage.setItem('twitchx.grid_mode', next);
-    gridToggleBtn.title = DENSITY_TITLES[next];
-    TwitchX.setIconOnly(gridToggleBtn, DENSITY_ICONS[next], 16);
-    TwitchX.renderGrid();
-  });
 };
 
+TwitchX.closeSortMenu = closeSortMenu;
+
 TwitchX._bindPlayerEvents = function() {
-  const watchBtn = document.getElementById('watch-btn');
-  if (watchBtn) watchBtn.addEventListener('click', TwitchX.doWatch);
-  const stopBtn = document.getElementById('stop-player-btn');
-  if (stopBtn) stopBtn.addEventListener('click', function() { if (TwitchX.api) TwitchX.api.stop_player(); });
   const closeBtn = document.getElementById('close-player-btn');
   if (closeBtn) closeBtn.addEventListener('click', function() { if (TwitchX.api) TwitchX.api.stop_player(); });
   const fsBtn = document.getElementById('fullscreen-player-btn');
@@ -283,29 +296,12 @@ TwitchX._bindPlayerEvents = function() {
   if (pipBtn) pipBtn.addEventListener('click', function() {
     TwitchX.togglePiP(TwitchX.getPlayerVideo());
   });
-  const extBtn = document.getElementById('watch-external-btn');
-  if (extBtn) extBtn.addEventListener('click', function() {
-    if (!TwitchX.state.selectedChannel || !TwitchX.api) return;
-    const quality = document.getElementById('quality-select').value;
-    const platform = TwitchX.state.selectedPlatform ||
-      TwitchX.getChannelPlatform(TwitchX.state.selectedChannel, TwitchX.state.selectedChannelKey);
-    if (TwitchX.api.watch_external_platform) TwitchX.api.watch_external_platform(TwitchX.state.selectedChannel, platform, quality);
-    else TwitchX.api.watch_external(TwitchX.state.selectedChannel, quality);
-  });
-  const browserBtn = document.getElementById('browser-btn');
-  if (browserBtn) browserBtn.addEventListener('click', TwitchX.doBrowser);
-  const refreshBtn = document.getElementById('refresh-btn');
-  if (refreshBtn) refreshBtn.addEventListener('click', TwitchX.doRefresh);
-  const settingsBtn = document.getElementById('settings-btn');
-  if (settingsBtn) settingsBtn.addEventListener('click', TwitchX.openSettings);
   const toggleChatBtn = document.getElementById('toggle-chat-btn');
   if (toggleChatBtn) toggleChatBtn.addEventListener('click', TwitchX.toggleChatPanel);
   const recordBtn = document.getElementById('record-btn');
   if (recordBtn) recordBtn.addEventListener('click', TwitchX.toggleRecording);
   const statsOverlayBtn = document.getElementById('stats-overlay-btn');
   if (statsOverlayBtn) statsOverlayBtn.addEventListener('click', TwitchX.toggleStatsOverlay);
-  var miniBtn = document.getElementById('mini-mode-btn');
-  if (miniBtn) miniBtn.addEventListener('click', TwitchX.toggleMiniMode);
 
   // Volume slider
   var muteBtn = document.getElementById('mute-btn');
@@ -321,11 +317,8 @@ TwitchX._bindPlayerEvents = function() {
     seekBar.addEventListener('mouseleave', TwitchX._handleSeekBarLeave);
   }
 
-  // Quality changes apply to the running stream instead of waiting for a relaunch
-  var qualitySelect = document.getElementById('quality-select');
-  if (qualitySelect) {
-    qualitySelect.addEventListener('change', TwitchX._handleQualitySelectChange);
-  }
+  // Overlay controls (play/pause, quality and "…" menus, auto-hide)
+  TwitchX._bindPlayerOverlay();
 
   // Playback recovery
   var retryBtn = document.getElementById('player-retry-btn');
@@ -761,7 +754,6 @@ TwitchX._bindContextMenuEvents = function() {
     if (target.getAttribute('aria-disabled') === 'true') {
       const reason = target.dataset.disabledReason || target.title || 'This action is not available for this platform.';
       TwitchX.setStatus(reason, 'warn');
-      TwitchX.showToast(reason, 'warn');
       e.preventDefault();
       return;
     }
@@ -771,7 +763,7 @@ TwitchX._bindContextMenuEvents = function() {
     if (action === 'watch') { TwitchX.selectChannel(TwitchX.ctxChannel, ctxPlat); TwitchX.doWatch(); }
     else if (action === 'watch-external') {
       TwitchX.selectChannel(TwitchX.ctxChannel, ctxPlat);
-      const quality = document.getElementById('quality-select').value;
+      const quality = TwitchX.state.quality;
       if (TwitchX.api.watch_external_platform) TwitchX.api.watch_external_platform(TwitchX.ctxChannel, ctxPlat, quality);
       else if (TwitchX.api) TwitchX.api.watch_external(TwitchX.ctxChannel, quality);
     }
@@ -901,12 +893,7 @@ TwitchX.toggleMiniMode = function() {
     }
   }
   localStorage.setItem('twitchx.mini', isMini ? '1' : '0');
-  var btn = document.getElementById('mini-mode-btn');
-  if (btn) {
-    btn.title = isMini ? 'Exit mini mode' : 'Mini mode';
-    btn.setAttribute('aria-label', isMini ? 'Exit mini mode' : 'Mini mode');
-    TwitchX.setIconOnly(btn, isMini ? 'mini-exit' : 'minimize', 16);
-  }
+  if (TwitchX.updateAccountChip) TwitchX.updateAccountChip();
 };
 
 TwitchX.applyMiniMode = function() {
@@ -915,13 +902,8 @@ TwitchX.applyMiniMode = function() {
     document.getElementById('app').classList.add('mini');
     var content = document.getElementById('content');
     if (content) content.setAttribute('inert', '');
-    var btn = document.getElementById('mini-mode-btn');
-    if (btn) {
-      btn.title = 'Exit mini mode';
-      btn.setAttribute('aria-label', 'Exit mini mode');
-      TwitchX.setIconOnly(btn, 'mini-exit', 16);
-    }
   }
+  if (TwitchX.updateAccountChip) TwitchX.updateAccountChip();
 };
 
 TwitchX._bindPaletteEvents = function() {
@@ -941,10 +923,38 @@ TwitchX._bindPaletteEvents = function() {
 TwitchX._bindGlobalEvents = function() {
   TwitchX.initSidebarScrollShadow();
   TwitchX.initChatScrollShadow();
+  // A mouse click on a channel starts it, so the selection ring goes away.
+  document.addEventListener('mousedown', function() {
+    document.getElementById('app').classList.remove('keyboard-selection');
+  }, true);
   document.addEventListener('keydown', function(e) {
     if ((e.key !== 'Enter' && e.key !== ' ') || !e.target.matches('a[role="button"]')) return;
     e.preventDefault();
     e.target.click();
+  });
+};
+
+// With the integrated title bar the window has no native strip to grab, and
+// -webkit-app-region does nothing in WKWebView. Empty spots of .titlebar-drag
+// hand the press to AppKit through the bridge instead.
+const TITLEBAR_INTERACTIVE_SELECTOR =
+  'button, a, input, select, textarea, label, [role="button"], [role="tab"], [role="option"], [tabindex]';
+
+function _isTitlebarDragTarget(e) {
+  if (e.button !== 0) return false;
+  if (!document.getElementById('app').classList.contains('titlebar-integrated')) return false;
+  if (!e.target.closest || !e.target.closest('.titlebar-drag')) return false;
+  return !e.target.closest(TITLEBAR_INTERACTIVE_SELECTOR);
+}
+
+TwitchX._bindTitlebarEvents = function() {
+  document.addEventListener('mousedown', function(e) {
+    if (!_isTitlebarDragTarget(e) || e.detail > 1) return;
+    if (TwitchX.api && TwitchX.api.window_titlebar_action) TwitchX.api.window_titlebar_action('drag');
+  });
+  document.addEventListener('dblclick', function(e) {
+    if (!_isTitlebarDragTarget(e)) return;
+    if (TwitchX.api && TwitchX.api.window_titlebar_action) TwitchX.api.window_titlebar_action('double-click');
   });
 };
 

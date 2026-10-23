@@ -55,12 +55,13 @@ TwitchX.state = {
   configLoaded: false,
   version: '',
   sortKey: 'viewers',
+  // Playback quality for every launch; the player overlay menu sets it and
+  // applyConfigSnapshot restores the saved value.
+  quality: 'best',
   filterText: '',
   avatars: {},
   thumbnails: {},
   thumbnailFetchedAt: {},
-  searchResults: [],
-  searchDebounce: null,
   // channelKey of the profile request in flight; late replies for others are dropped.
   pendingProfileKey: '',
   hasCredentials: false,

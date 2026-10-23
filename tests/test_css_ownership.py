@@ -37,9 +37,7 @@ def test_layout_css_only_owns_the_app_frame() -> None:
     """Sidebar/search rules moved to their components; layout keeps the shell."""
     text = (CSS_DIR / "layout.css").read_text(encoding="utf-8")
     owned = set()
-    for prelude, _body, layer in iter_rules(text):
-        if layer == "drag-regions":
-            continue
+    for prelude, _body, _layer in iter_rules(text):
         for selector in prelude.split(","):
             owned.add(" ".join(selector.split()))
     strays = [
@@ -57,23 +55,22 @@ def test_layout_css_only_owns_the_app_frame() -> None:
 def test_layer_marker_covers_only_the_next_rule() -> None:
     """A sticky marker would exempt every rule below it in the same file."""
     sample = (
-        "/* css-layer: drag-regions */\n"
-        ".a { -webkit-app-region: drag; }\n"
+        "/* css-layer: text-selection */\n"
+        ".a { user-select: text; }\n"
         ".b { color: red; }\n"
     )
     layers = [layer for _prelude, _body, layer in iter_rules(sample)]
-    assert layers == ["drag-regions", None]
+    assert layers == ["text-selection", None]
 
 
 @pytest.mark.parametrize(
     "layer,rel",
     [
         ("theme-tokens", "tokens.css"),
-        ("drag-regions", "layout.css"),
         ("text-selection", "reset.css"),
     ],
 )
 def test_cross_cutting_layers_declare_themselves(layer: str, rel: str) -> None:
-    """The three exempt layers must stay explicitly marked, or the checker
+    """The two exempt layers must stay explicitly marked, or the checker
     would silently start ignoring real duplicates."""
     assert f"css-layer: {layer}" in (CSS_DIR / rel).read_text(encoding="utf-8")

@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """Report CSS selectors that are defined in more than one stylesheet.
 
-Every component-level selector must have exactly one owner file. Three
+Every component-level selector must have exactly one owner file. Two
 cross-cutting layers are exempt and must declare themselves with a
 `/* css-layer: <name> */` comment:
 
     theme-tokens    :root in tokens.css + themes/*.css
-    drag-regions    -webkit-app-region assignments in layout.css
     text-selection  the user-select allowlist in reset.css
 
 At-rule blocks (@media / @supports) are exempt too: the accessibility
