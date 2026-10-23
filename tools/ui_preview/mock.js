@@ -61,9 +61,24 @@
         return { name: n, box_art_url: null, viewers: 300000 - i * 20000, platforms: i % 3 ? ['twitch','kick'] : ['twitch','kick','youtube'] };
       }));
     },
+    'browse-streams': function() {
+      TwitchX.showBrowseView();
+      TwitchX._triggerBrowseTopStreams({ name: 'VALORANT' });
+      window.onBrowseTopStreams({ category: 'VALORANT', streams: live.slice(0, 6).map(function(r, i) {
+        return { channel_login: r[0], display_name: r[1], platform: r[2], title: r[4], viewers: r[5], category: 'VALORANT', thumbnail_url: thumb(i, 'VALORANT'), started_at: new Date(now - (i * 53 + 20) * 60000).toISOString() };
+      }) });
+    },
+    'channel-vods': function() {
+      window.__scenario.channel();
+      const btn = document.getElementById('channel-tab-vods-btn');
+      TwitchX.switchChannelTab(btn, 'vods');
+      window.onChannelMedia({ tab: 'vods', login: 'shroud', platform: 'twitch', items: [0, 1, 2, 3].map(function(i) {
+        return { title: ['Ranked to Radiant day 4', 'Tarkov wipe, part 2', 'Late night aim training', 'Viewer games'][i], url: 'https://example.com/' + i, thumbnail_url: thumb(i + 2, 'VOD'), duration_seconds: 3600 * (i + 2) + 640, published_at: new Date(now - i * 86400000).toISOString(), views: 120000 - i * 21000, platform: 'twitch' };
+      }) });
+    },
     channel: function() {
       TwitchX.showChannelView('shroud', 'twitch');
-      window.onChannelProfile({ login: 'shroud', display_name: 'shroud', platform: 'twitch', bio: 'Former CS pro, full-time streamer.', followers: 11200000, is_live: true, avatar_url: avatar(0, 'S'), can_follow: true });
+      window.onChannelProfile({ login: 'shroud', display_name: 'shroud', platform: 'twitch', bio: 'Former CS pro, full-time streamer.', followers: 11200000, is_live: true, watch_supported: true, avatar_url: avatar(0, 'S'), can_follow: true });
     },
     player: function() {
       window.onStreamReady({ url: '', channel: 'shroud', platform: 'twitch', title: 'ranked grind w/ the boys — !socials !merch', has_chat: true });

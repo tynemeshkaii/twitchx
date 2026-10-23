@@ -40,6 +40,10 @@ var ICONS = {
   'arrow-left': '<path d="m10.85 3.1-4.7 4.9 4.7 4.9"/>',
   'arrow-down': '<path d="m3.1 5.7 4.9 4.6 4.9-4.6"/>',
   send: '<path d="M8 12.75V3.6"/><path d="m4.1 7.4 3.9-3.9 3.9 3.9"/>',
+  // Monochrome platform glyphs (Browse categories, channel identity).
+  twitch: '<path d="M3.25 2.5h9.75v6.6l-2.9 2.9H7.6l-2.1 2.1V12H3.25z"/><path d="M7 5.4v2.6M10 5.4v2.6"/>',
+  kick: '<path d="M4.25 2.75v10.5"/><path d="m4.25 8.4 5.6-5.65"/><path d="m6.6 6.05 5.15 7.2"/>',
+  youtube: '<rect x="1.75" y="3.5" width="12.5" height="9" rx="2.6"/><path d="M6.75 6.1v3.8L10.1 8z" fill="currentColor" stroke="none"/>',
   'arrow-up': '<path d="m3.1 10.3 4.9-4.6 4.9 4.6"/>',
   'arrow-right': '<path d="m5.15 3.1 4.7 4.9-4.7 4.9"/>',
   'chevron-left': '<path d="m10.15 3.9-3.95 4.1 3.95 4.1"/>',

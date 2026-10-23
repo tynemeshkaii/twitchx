@@ -110,11 +110,15 @@ function browseStreamRestriction(stream) {
   return { canWatch: true, reason: '' };
 }
 
-function createPlatformBadge(platform, label) {
-  var badge = document.createElement('span');
-  badge.className = 'platform-badge ' + (platform || 'twitch');
-  badge.textContent = label || TwitchX.platformLabel(platform || 'twitch');
-  return badge;
+// Monochrome platform glyph (icon-muted): platforms are named, not coloured.
+function createPlatformGlyph(platform, size) {
+  var name = platform || 'twitch';
+  var glyph = TwitchX.makeIcon(name, size || 12);
+  glyph.classList.add('platform-glyph-mono');
+  glyph.title = TwitchX.platformLabel(name);
+  glyph.setAttribute('aria-label', TwitchX.platformLabel(name));
+  glyph.setAttribute('role', 'img');
+  return glyph;
 }
 
 function createImageFallback(label, className) {
@@ -150,6 +154,14 @@ function _triggerBrowseTopStreams(category) {
   renderBrowseBreadcrumbs();
 }
 
+function _breadcrumbSeparator() {
+  var sep = document.createElement('span');
+  sep.className = 'breadcrumb-separator';
+  sep.setAttribute('aria-hidden', 'true');
+  TwitchX.setIconOnly(sep, 'chevron-right', 12);
+  return sep;
+}
+
 function renderBrowseBreadcrumbs() {
   const nav = document.getElementById('browse-breadcrumbs');
   if (!nav) return;
@@ -174,10 +186,7 @@ function renderBrowseBreadcrumbs() {
   followingLink.textContent = 'Following';
   nav.appendChild(followingLink);
 
-  var sep1 = document.createElement('span');
-  sep1.className = 'breadcrumb-separator';
-  sep1.textContent = '>';
-  nav.appendChild(sep1);
+  nav.appendChild(_breadcrumbSeparator());
 
   if (TwitchX.state.browseMode === 'streams' && TwitchX.state.browseCategory && TwitchX.state.browseCategory.name) {
     var browseLink = document.createElement('button');
@@ -187,10 +196,7 @@ function renderBrowseBreadcrumbs() {
     browseLink.textContent = 'Browse';
     nav.appendChild(browseLink);
 
-    var sep2 = document.createElement('span');
-    sep2.className = 'breadcrumb-separator';
-    sep2.textContent = '>';
-    nav.appendChild(sep2);
+    nav.appendChild(_breadcrumbSeparator());
 
     var current = document.createElement('span');
     current.className = 'breadcrumb-current';
@@ -213,7 +219,7 @@ TwitchX.setBrowseEmpty = setBrowseEmpty;
 TwitchX.clearBrowseEmpty = clearBrowseEmpty;
 TwitchX.browseErrorSummary = browseErrorSummary;
 TwitchX.browseStreamRestriction = browseStreamRestriction;
-TwitchX.createPlatformBadge = createPlatformBadge;
+TwitchX.createPlatformGlyph = createPlatformGlyph;
 TwitchX.createImageFallback = createImageFallback;
 TwitchX._triggerBrowseTopStreams = _triggerBrowseTopStreams;
 TwitchX.renderBrowseBreadcrumbs = renderBrowseBreadcrumbs;

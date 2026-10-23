@@ -162,7 +162,10 @@ function _buildPaletteItem(icon, label, hint, action, options) {
   labelEl.textContent = label;
   labelWrap.appendChild(labelEl);
   if (options.platform) {
-    labelWrap.appendChild(TwitchX.createPlatformBadge(options.platform, TwitchX.platformLabel(options.platform)));
+    var platformDot = document.createElement('span');
+    platformDot.className = 'platform-dot ' + options.platform;
+    platformDot.title = TwitchX.platformLabel(options.platform);
+    labelWrap.appendChild(platformDot);
   }
   if (options.live) {
     var liveEl = document.createElement('span');

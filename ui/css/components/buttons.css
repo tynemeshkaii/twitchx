@@ -47,8 +47,7 @@
               color var(--duration-fast) ease,
               opacity var(--duration-fast) ease;
 }
-.btn:hover { transform: translateY(-1px); }
-.btn:active { transform: translateY(0) scale(0.98); }
+.btn:active { transform: scale(0.98); }
 .btn:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--focus-ring-offset), 0 0 0 4px var(--focus-ring);

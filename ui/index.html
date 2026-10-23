@@ -136,13 +136,13 @@
         </div>
         <div id="browse-view" class="view hidden">
           <div id="browse-header" class="titlebar-drag">
-            <button id="browse-back-btn" class="browse-back-btn hidden"><span data-icon="arrow-left" data-size="16"></span> Back</button>
+            <button id="browse-back-btn" class="browse-back-btn hidden" type="button" title="Back" aria-label="Back"><span data-icon="arrow-left" data-size="16"></span></button>
             <nav id="browse-breadcrumbs" aria-label="Browse breadcrumbs"></nav>
-            <div id="browse-platform-tabs" role="tablist" aria-label="Browse platform filter">
-              <button class="browse-platform-tab active" data-platform="all" role="tab" aria-selected="true">All</button>
-              <button class="browse-platform-tab" data-platform="twitch" role="tab" aria-selected="false" tabindex="-1">Twitch</button>
-              <button class="browse-platform-tab" data-platform="kick" role="tab" aria-selected="false" tabindex="-1">Kick</button>
-              <button class="browse-platform-tab" data-platform="youtube" role="tab" aria-selected="false" tabindex="-1">YouTube</button>
+            <div id="browse-platform-tabs" class="segmented" role="tablist" aria-label="Browse platform filter">
+              <button class="btn browse-platform-tab active" data-platform="all" role="tab" aria-selected="true">All</button>
+              <button class="btn browse-platform-tab" data-platform="twitch" role="tab" aria-selected="false" tabindex="-1">Twitch</button>
+              <button class="btn browse-platform-tab" data-platform="kick" role="tab" aria-selected="false" tabindex="-1">Kick</button>
+              <button class="btn browse-platform-tab" data-platform="youtube" role="tab" aria-selected="false" tabindex="-1">YouTube</button>
             </div>
           </div>
           <div id="browse-body">
@@ -156,36 +156,39 @@
         <!-- Channel profile view -->
         <div id="channel-view" class="view hidden">
           <div id="channel-header" class="titlebar-drag">
-            <button id="channel-back-btn" class="browse-back-btn"><span data-icon="arrow-left" data-size="16"></span> Back</button>
+            <button id="channel-back-btn" class="browse-back-btn" type="button" title="Back" aria-label="Back"><span data-icon="arrow-left" data-size="16"></span></button>
             <span id="channel-header-title"></span>
           </div>
           <div id="channel-body">
             <div id="channel-loading" class="browse-loading hidden">Loading...</div>
+            <div id="channel-banner" aria-hidden="true"></div>
             <div id="channel-profile-card">
               <img id="channel-avatar" class="channel-avatar hidden" alt="">
               <div id="channel-avatar-fallback" class="channel-avatar-fallback hidden" aria-hidden="true"></div>
               <div id="channel-meta">
-                <div id="channel-display-name"></div>
+                <div id="channel-name-row">
+                  <div id="channel-display-name"></div>
+                  <div id="channel-live-badge" class="channel-live-badge hidden">Live</div>
+                </div>
                 <div id="channel-identity-row">
                   <span id="channel-login-text"></span>
-                  <span id="channel-platform-badge" class="platform-badge hidden"></span>
+                  <span id="channel-platform-badge" class="hidden"></span>
+                  <span id="channel-followers"></span>
                 </div>
-                <div id="channel-live-badge" class="channel-live-badge hidden">LIVE</div>
-                <div id="channel-followers"></div>
                 <div id="channel-platform-note" class="channel-platform-note hidden"></div>
               </div>
               <div id="channel-actions">
-                <button id="channel-follow-btn" class="channel-follow-btn">Follow</button>
-                <button id="channel-open-btn" class="channel-open-btn"><span data-icon="browser" data-size="16"></span> Browser</button>
-                <button id="channel-watch-btn" class="channel-watch-btn hidden"><span data-icon="play" data-size="16"></span> Watch Now</button>
+                <button id="channel-open-btn" class="btn btn-secondary" type="button"><span data-icon="browser" data-size="16"></span> Open in browser</button>
+                <button id="channel-follow-btn" class="btn btn-secondary channel-follow-btn" type="button">Follow</button>
+                <button id="channel-watch-btn" class="btn btn-primary hidden" type="button"><span data-icon="play" data-size="16"></span> Watch</button>
                 <div id="channel-action-note" class="channel-action-note hidden"></div>
               </div>
             </div>
             <div id="channel-bio"></div>
-            <div id="channel-tabs" role="tablist" aria-label="Channel media">
-              <button id="channel-tab-live-btn" class="channel-tab active" data-tab="live" role="tab" aria-selected="true" aria-controls="channel-tab-live">Live Now</button>
-              <button id="channel-tab-vods-btn" class="channel-tab" data-tab="vods" role="tab" aria-selected="false" aria-controls="channel-tab-vods" tabindex="-1">VODs</button>
-              <button id="channel-tab-clips-btn" class="channel-tab" data-tab="clips" role="tab" aria-selected="false" aria-controls="channel-tab-clips" tabindex="-1">Clips</button>
+            <div id="channel-tabs" class="segmented" role="tablist" aria-label="Channel media">
+              <button id="channel-tab-live-btn" class="btn channel-tab active" data-tab="live" role="tab" aria-selected="true" aria-controls="channel-tab-live">Live</button>
+              <button id="channel-tab-vods-btn" class="btn channel-tab" data-tab="vods" role="tab" aria-selected="false" aria-controls="channel-tab-vods" tabindex="-1">VODs</button>
+              <button id="channel-tab-clips-btn" class="btn channel-tab" data-tab="clips" role="tab" aria-selected="false" aria-controls="channel-tab-clips" tabindex="-1">Clips</button>
             </div>
             <div id="channel-tab-live" class="channel-tab-panel" role="tabpanel" aria-labelledby="channel-tab-live-btn">
               <div id="channel-live-empty" class="channel-empty hidden">Channel is not live right now.</div>
@@ -193,7 +196,7 @@
             <div id="channel-tab-vods" class="channel-tab-panel hidden" role="tabpanel" aria-labelledby="channel-tab-vods-btn">
               <div id="channel-vods-loading" class="browse-loading hidden">Loading VODs...</div>
               <div id="channel-vods-empty" class="channel-empty hidden"></div>
-              <div id="channel-vods-list" class="channel-media-list"></div>
+              <div id="channel-vods-list" class="channel-media-grid"></div>
             </div>
             <div id="channel-tab-clips" class="channel-tab-panel hidden" role="tabpanel" aria-labelledby="channel-tab-clips-btn">
               <div id="channel-clips-loading" class="browse-loading hidden">Loading Clips...</div>
@@ -393,6 +396,7 @@
   <div class="ctx-item" data-action="multistream" role="menuitem" tabindex="-1"><span data-icon="grid-layout" data-size="14"></span> Add to Multi-stream</div>
   <div class="ctx-item" data-action="watch-external" role="menuitem" tabindex="-1"><span data-icon="external-link" data-size="14"></span> Open in External Player</div>
   <div class="ctx-item" data-action="browser" role="menuitem" tabindex="-1"><span data-icon="browser" data-size="14"></span> Open in Browser</div>
+  <div class="ctx-item" data-action="profile" role="menuitem" tabindex="-1"><span data-icon="user" data-size="14"></span> View Channel</div>
   <div class="ctx-separator" role="separator"></div>
   <div class="ctx-item" data-action="favorite" role="menuitem" tabindex="-1"><span data-icon="star" data-size="14"></span> Add to Favorites</div>
   <div class="ctx-item" data-action="pin" role="menuitem" tabindex="-1"><span data-icon="pin" data-size="14"></span> Pin to top</div>

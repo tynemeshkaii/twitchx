@@ -67,6 +67,7 @@ def test_context_menu_keeps_all_channel_actions() -> None:
         "multistream",
         "watch-external",
         "browser",
+        "profile",
         "favorite",
         "pin",
         "create-group",
