@@ -418,10 +418,8 @@ class FavoritesComponent(BaseApiComponent):
                     )
 
                 if platform in {"twitch", "all"}:
-                    twitch_conf = self._get_twitch_config()
-                    if twitch_conf.get("client_id") and twitch_conf.get(
-                        "client_secret"
-                    ):
+                    cid, csec = self._twitch._effective_creds()
+                    if cid and csec:
                         twitch_results = loop.run_until_complete(
                             self._twitch.search_channels(query)
                         )

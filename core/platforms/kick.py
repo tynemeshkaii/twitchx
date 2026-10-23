@@ -18,6 +18,11 @@ from core.storage import token_is_valid, update_config
 
 logger = logging.getLogger(__name__)
 
+
+def _str_id(value: object) -> str:
+    return "" if value is None else str(value)
+
+
 VALID_SLUG = re.compile(r"^[a-zA-Z0-9_-]{1,25}$")
 
 KICK_API_URL = "https://api.kick.com"
@@ -541,6 +546,6 @@ class KickClient(BasePlatformClient):
             "thumbnail_url": thumbnail_url,
             "viewer_trend": None,
             "platform": "kick",
-            "broadcaster_user_id": raw.get("broadcaster_user_id"),
-            "channel_id": raw.get("channel_id"),
+            "broadcaster_user_id": _str_id(raw.get("broadcaster_user_id")),
+            "channel_id": _str_id(raw.get("channel_id")),
         }

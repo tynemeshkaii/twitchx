@@ -157,6 +157,35 @@ def test_search_channels_all_combines_kick_and_twitch_results(
     }
 
 
+def test_twitch_search_uses_bundled_credentials(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Empty config client_id/secret must not disable Twitch search."""
+    from unittest.mock import AsyncMock
+
+    api = TwitchXApi()
+    emitted: list[str] = []
+    assert not api._get_twitch_config().get("client_id")
+
+    twitch_search = AsyncMock(
+        return_value=[
+            {"broadcaster_login": "foo", "display_name": "Foo", "is_live": False}
+        ]
+    )
+    monkeypatch.setattr(api._twitch, "search_channels", twitch_search)
+    monkeypatch.setattr(api._kick, "search_channels", AsyncMock(return_value=[]))
+    monkeypatch.setattr(api._twitch, "_effective_creds", lambda: ("bid", "bsecret"))
+    monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+    monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+
+    api.search_channels("foo", "twitch")
+
+    twitch_search.assert_awaited_once_with("foo")
+    assert emitted
+    assert "window.onSearchResults(" in emitted[-1]
+    assert '"foo"' in emitted[-1]
+
+
 @pytest.mark.asyncio
 async def test_build_kick_stream_item_maps_current_public_payload() -> None:
     from core.platforms.kick import KickClient
@@ -179,7 +208,7 @@ async def test_build_kick_stream_item_maps_current_public_payload() -> None:
     assert item["title"] == "CATCHING CHILD PREDATORS!"
     assert item["thumbnail_url"].endswith("/480.webp")
     assert item["game"] == "IRL"
-    assert item["broadcaster_user_id"] == 21725177
+    assert item["broadcaster_user_id"] == "21725177"
 
 
 def test_save_settings_clears_credentials_when_empty(
@@ -1786,7 +1815,11 @@ def test_on_data_fetched_skips_normalize_when_loop_is_none(
 
 
 def _multi_resolve_ok(
-    ch: str, q: str, sl: str = "streamlink", platform_client: Any = None, extra_args: Any = None
+    ch: str,
+    q: str,
+    sl: str = "streamlink",
+    platform_client: Any = None,
+    extra_args: Any = None,
 ) -> tuple[str, str]:
     return "https://hls.example.com/s.m3u8", ""
 
@@ -1806,10 +1839,17 @@ class TestWatchDirect:
         captured: dict[str, str] = {}
 
         def fake_resolve(
-            ch: str, q: str, sl: str = "streamlink", platform_client: Any = None, extra_args: Any = None, **kw
+            ch: str,
+            q: str,
+            sl: str = "streamlink",
+            platform_client: Any = None,
+            extra_args: Any = None,
+            **kw,
         ) -> tuple[str, str]:
             captured["channel"] = ch
-            captured["platform"] = platform_client.PLATFORM_ID if platform_client else ""
+            captured["platform"] = (
+                platform_client.PLATFORM_ID if platform_client else ""
+            )
             return "https://example.com/direct.m3u8", ""
 
         monkeypatch.setattr("ui.api.streams.resolve_hls_url", fake_resolve)
@@ -1872,7 +1912,10 @@ class TestWatchDirect:
         emitted: list[str] = []
         monkeypatch.setattr(
             "ui.api.streams.resolve_hls_url",
-            lambda ch, q, sl, platform_client=None, extra_args=None, **kw: (None, "boom"),
+            lambda ch, q, sl, platform_client=None, extra_args=None, **kw: (
+                None,
+                "boom",
+            ),
         )
         monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
@@ -1904,7 +1947,10 @@ class TestWatchMediaErrors:
         emitted: list[str] = []
         monkeypatch.setattr(
             "ui.api.streams.resolve_hls_url",
-            lambda ch, q, sl, platform_client=None, extra_args=None, **kw: (None, "no vod"),
+            lambda ch, q, sl, platform_client=None, extra_args=None, **kw: (
+                None,
+                "no vod",
+            ),
         )
         monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
@@ -1968,7 +2014,11 @@ class TestRecording:
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
         rec = MagicMock()
         rec.start.return_value = None
-        rec.state_dict.return_value = {"active": True, "filename": "xqc.ts", "elapsed": 0}
+        rec.state_dict.return_value = {
+            "active": True,
+            "filename": "xqc.ts",
+            "elapsed": 0,
+        }
         api._recorder = rec
 
         api.start_recording()

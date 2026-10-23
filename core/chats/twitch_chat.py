@@ -13,6 +13,8 @@ from core.chats.base import BaseChatClient, StopReconnect
 
 logger = logging.getLogger(__name__)
 
+_REPLY_ID_RE = re.compile(r"[A-Za-z0-9-]+")
+
 TWITCH_IRC_URL = "wss://irc-ws.chat.twitch.tv:443"
 EMOTE_URL_TEMPLATE = "https://static-cdn.jtvnw.net/emoticons/v2/{id}/default/dark/1.0"
 
@@ -332,6 +334,17 @@ class TwitchChatClient(BaseChatClient):
                 channel_id=channel_id,
                 error="Twitch chat is not connected yet.",
             )
+        # CR/LF would split the payload into multiple IRC commands.
+        text = text.replace("\r", " ").replace("\n", " ").strip()
+        if not text:
+            return ChatSendResult(
+                ok=False,
+                platform="twitch",
+                channel_id=channel_id,
+                error="Message is empty.",
+            )
+        if reply_to and not _REPLY_ID_RE.fullmatch(reply_to):
+            reply_to = None
         try:
             if reply_to:
                 await self._ws.send(

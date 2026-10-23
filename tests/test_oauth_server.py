@@ -49,3 +49,23 @@ def test_oauth_server_ignores_non_callback_paths() -> None:
 
     code = wait_for_oauth_code(timeout=5)
     assert code == "real-code"
+
+
+def test_oauth_server_port_busy_raises_typed_error() -> None:
+    """Occupied port surfaces as OAuthPortBusy, not a bare OSError."""
+    import socket
+
+    import pytest
+
+    from core.oauth_server import OAuthPortBusy
+
+    blocker = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    blocker.bind(("127.0.0.1", 0))
+    blocker.listen(1)
+    port = blocker.getsockname()[1]
+    try:
+        with pytest.raises(OAuthPortBusy) as excinfo:
+            wait_for_oauth_code(port=port, timeout=1)
+        assert not isinstance(excinfo.value, OSError)
+    finally:
+        blocker.close()

@@ -744,3 +744,120 @@ class TestYouTubeTestConnection:
         data = json.loads(call.split("onYouTubeTestResult(")[1].rstrip(")"))
         assert data["success"] is False
         assert "parse error" in data["message"]
+
+
+# ═══════════════════════════════════════════════════════════════════
+# OAuth port busy / concurrent login guard
+# ═══════════════════════════════════════════════════════════════════
+
+
+class TestOAuthPortBusy:
+    def test_port_busy_reports_error_and_restarts_polling(
+        self,
+        temp_config_dir: Path,
+        capture_eval_js: Any,
+        run_sync: Any,
+        mock_twitch_client: MagicMock,
+    ) -> None:
+        from core.oauth_server import OAuthPortBusy
+
+        api = _make_api(capture_eval_js, mock_twitch=mock_twitch_client)
+
+        with (
+            patch("ui.api.auth.webbrowser.open"),
+            patch(
+                "ui.api.auth.wait_for_oauth_code",
+                side_effect=OAuthPortBusy("port busy"),
+            ),
+        ):
+            api.login()
+
+        capture_eval_js.assert_any("onLoginError")
+        capture_eval_js.assert_any("Another login is already in progress")
+        api._data.restart_polling.assert_called_once()
+
+    def test_kick_port_busy_restarts_polling(
+        self,
+        temp_config_dir: Path,
+        capture_eval_js: Any,
+        run_sync: Any,
+        mock_kick_client: MagicMock,
+    ) -> None:
+        from core.oauth_server import OAuthPortBusy
+
+        api = _make_api(capture_eval_js, mock_kick=mock_kick_client)
+
+        with (
+            patch("ui.api.auth.webbrowser.open"),
+            patch(
+                "ui.api.auth.wait_for_oauth_code",
+                side_effect=OAuthPortBusy("port busy"),
+            ),
+        ):
+            api.kick_login()
+
+        capture_eval_js.assert_any("onKickLoginError")
+        api._data.restart_polling.assert_called_once()
+
+    def test_youtube_port_busy_restarts_polling(
+        self,
+        temp_config_dir: Path,
+        capture_eval_js: Any,
+        run_sync: Any,
+        mock_youtube_client: MagicMock,
+    ) -> None:
+        from core.oauth_server import OAuthPortBusy
+
+        api = _make_api(capture_eval_js, mock_youtube=mock_youtube_client)
+
+        with (
+            patch("ui.api.auth.webbrowser.open"),
+            patch(
+                "ui.api.auth.wait_for_oauth_code",
+                side_effect=OAuthPortBusy("port busy"),
+            ),
+        ):
+            api.youtube_login()
+
+        capture_eval_js.assert_any("onYouTubeLoginError")
+        api._data.restart_polling.assert_called_once()
+
+    def test_second_login_while_first_in_progress_is_rejected(
+        self,
+        temp_config_dir: Path,
+        capture_eval_js: Any,
+        mock_twitch_client: MagicMock,
+        mock_kick_client: MagicMock,
+    ) -> None:
+        api = _make_api(
+            capture_eval_js,
+            mock_twitch=mock_twitch_client,
+            mock_kick=mock_kick_client,
+        )
+        # First login's worker thread never runs → flow stays "in progress"
+        api._run_in_thread = lambda fn: None  # type: ignore[method-assign]
+
+        api.login()
+        api.kick_login()
+
+        api._data.stop_polling.assert_called_once()
+        capture_eval_js.assert_any("onKickLoginError")
+        capture_eval_js.assert_any("Another login is already in progress")
+
+    def test_lock_released_after_login_finishes(
+        self,
+        temp_config_dir: Path,
+        capture_eval_js: Any,
+        run_sync: Any,
+        mock_twitch_client: MagicMock,
+    ) -> None:
+        api = _make_api(capture_eval_js, mock_twitch=mock_twitch_client)
+
+        with (
+            patch("ui.api.auth.webbrowser.open"),
+            patch("ui.api.auth.wait_for_oauth_code", return_value=None),
+        ):
+            api.login()
+            api.login()
+
+        assert api._data.stop_polling.call_count == 2

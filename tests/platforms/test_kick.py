@@ -659,6 +659,28 @@ class TestMergeChannelPayloads:
 
 class TestNormalizeStreamItemKick:
     @pytest.mark.asyncio
+    async def test_ids_are_stringified(self) -> None:
+        from core.platforms.kick import KickClient
+
+        client = KickClient()
+        item = await client.normalize_stream_item(
+            {"slug": "ids", "channel_id": 123, "broadcaster_user_id": 456}
+        )
+        await client.close()
+        assert item["channel_id"] == "123"
+        assert item["broadcaster_user_id"] == "456"
+
+    @pytest.mark.asyncio
+    async def test_missing_ids_become_empty_string(self) -> None:
+        from core.platforms.kick import KickClient
+
+        client = KickClient()
+        item = await client.normalize_stream_item({"slug": "noids"})
+        await client.close()
+        assert item["channel_id"] == ""
+        assert item["broadcaster_user_id"] == ""
+
+    @pytest.mark.asyncio
     async def test_with_categories_list(self) -> None:
         from core.platforms.kick import KickClient
 

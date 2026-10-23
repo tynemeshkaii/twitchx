@@ -42,12 +42,17 @@ h1 { color: #FF6B6B; }
  """
 
 
+class OAuthPortBusy(Exception):
+    """The local OAuth callback port could not be bound."""
+
+
 def wait_for_oauth_code(
     port: int = OAUTH_PORT, timeout: int = OAUTH_TIMEOUT_SECONDS
 ) -> str | None:
     """Start a temporary HTTP server and wait for Twitch OAuth callback.
 
     Returns the authorization code, or None on timeout.
+    Raises OAuthPortBusy if the callback port cannot be bound.
     """
     result: list[str | None] = [None]
     server_ready = threading.Event()
@@ -84,7 +89,11 @@ def wait_for_oauth_code(
         def log_message(self, format: str, *args: object) -> None:
             pass  # Suppress request logging
 
-    server = HTTPServer(("127.0.0.1", port), Handler)
+    try:
+        server = HTTPServer(("127.0.0.1", port), Handler)
+    except OSError as exc:
+        logger.warning("OAuth server cannot bind port %d: %s", port, exc)
+        raise OAuthPortBusy(f"OAuth port {port} unavailable: {exc}") from exc
     server.timeout = timeout
     logger.info("OAuth server listening on port %d (timeout=%ds)", port, timeout)
     server_ready.set()
@@ -96,12 +105,15 @@ def wait_for_oauth_code(
     thread.start()
     server_ready.wait()
 
-    thread.join(timeout=timeout)
-    if thread.is_alive():
-        logger.warning("OAuth server timed out after %ds", timeout)
-        server.shutdown()
-        thread.join(timeout=5)
-    else:
-        logger.debug("OAuth server shut down")
+    try:
+        thread.join(timeout=timeout)
+        if thread.is_alive():
+            logger.warning("OAuth server timed out after %ds", timeout)
+            server.shutdown()
+            thread.join(timeout=5)
+        else:
+            logger.debug("OAuth server shut down")
+    finally:
+        server.server_close()
 
     return result[0]

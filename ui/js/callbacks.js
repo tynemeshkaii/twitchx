@@ -15,11 +15,6 @@ window.onStreamsUpdate = function(data) {
 
   if (TwitchX.hideSkeletonGrid) TwitchX.hideSkeletonGrid();
 
-  // Phase 9: keep PiP button visibility in sync with server config
-  TwitchX.state.pipEnabled = data.pip_enabled === true;
-  const pipBtn = document.getElementById('pip-player-btn');
-  if (pipBtn) pipBtn.classList.toggle('hidden', !TwitchX.state.pipEnabled);
-
   // Compute viewer trends
   for (const s of newStreams) {
     const streamKey = TwitchX.channelKey(s.login, s.platform || 'twitch');

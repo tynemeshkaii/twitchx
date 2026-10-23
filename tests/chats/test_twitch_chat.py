@@ -464,3 +464,39 @@ class TestParseJoinPart:
         action, user = parse_join_part("PING :tmi.twitch.tv")
         assert action is None
         assert user is None
+
+
+class TestSendMessageSanitizing:
+    def _client(self) -> TwitchChatClient:
+        client = TwitchChatClient()
+        client._authenticated = True
+        client._running = True
+        client._ws = AsyncMock()
+        client._channel = "test"
+        return client
+
+    async def test_crlf_in_text_collapsed_to_single_line(self) -> None:
+        client = self._client()
+        result = await client.send_message("a\r\nJOIN #x")
+        assert result.ok is True
+        client._ws.send.assert_called_once_with("PRIVMSG #test :a  JOIN #x")
+        sent = client._ws.send.call_args.args[0]
+        assert "\r" not in sent and "\n" not in sent
+
+    async def test_empty_after_strip_rejected(self) -> None:
+        client = self._client()
+        result = await client.send_message(" \r\n ")
+        assert result.ok is False
+        client._ws.send.assert_not_called()
+
+    async def test_valid_reply_to_sends_tag(self) -> None:
+        client = self._client()
+        await client.send_message("hi", reply_to="abc-123")
+        client._ws.send.assert_called_once_with(
+            "@reply-parent-msg-id=abc-123 PRIVMSG #test :hi"
+        )
+
+    async def test_malicious_reply_to_dropped(self) -> None:
+        client = self._client()
+        await client.send_message("hi", reply_to="x\r\nJOIN #evil")
+        client._ws.send.assert_called_once_with("PRIVMSG #test :hi")
