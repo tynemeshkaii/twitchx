@@ -360,6 +360,8 @@ function switchMultiChat(idx) {
     document.getElementById('ms-chat-messages').replaceChildren();
   }
   if (TwitchX.clearChatBatch) TwitchX.clearChatBatch();
+  TwitchX.thirdPartyEmotes = {};
+  TwitchX._cachedPickerEmotes = null;
   document.getElementById('ms-chat-title').textContent = slot.channel;
   if (TwitchX.api) {
     TwitchX.api.stop_chat();

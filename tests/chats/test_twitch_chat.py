@@ -13,6 +13,7 @@ from core.chats.twitch_chat import (
     TwitchChatClient,
     parse_badges,
     parse_emotes,
+    parse_irc_line,
     parse_irc_message,
     parse_join_part,
     parse_names_reply,
@@ -500,3 +501,168 @@ class TestSendMessageSanitizing:
         client = self._client()
         await client.send_message("hi", reply_to="x\r\nJOIN #evil")
         client._ws.send.assert_called_once_with("PRIVMSG #test :hi")
+
+
+# ── Phase 1 audit: command dispatch, cancel, token provider ────────
+
+
+class TestCommandDispatch:
+    def test_privmsg_mentioning_353_is_a_message_not_names(self) -> None:
+        line = (
+            "@display-name=Bob;emotes=;id=m1 "
+            ":bob!bob@bob.tmi.twitch.tv PRIVMSG #xqc :hello 353 guys :x"
+        )
+        assert parse_names_reply(line) == []
+        msg = parse_irc_message(line, "xqc")
+        assert msg is not None
+        assert msg.text == "hello 353 guys :x"
+
+    def test_privmsg_containing_join_is_not_join(self) -> None:
+        line = ":bob!bob@bob.tmi.twitch.tv PRIVMSG #xqc :please JOIN us"
+        assert parse_join_part(line) == (None, None)
+
+    def test_parse_irc_line_reconnect(self) -> None:
+        parsed = parse_irc_line(":tmi.twitch.tv RECONNECT")
+        assert parsed is not None
+        assert parsed.command == "RECONNECT"
+
+    def test_parse_irc_line_notice(self) -> None:
+        parsed = parse_irc_line(
+            "@msg-id=msg_slowmode :tmi.twitch.tv NOTICE #xqc :This room is in slow mode."
+        )
+        assert parsed is not None
+        assert parsed.command == "NOTICE"
+        assert parsed.tags["msg-id"] == "msg_slowmode"
+        assert parsed.trailing == "This room is in slow mode."
+
+
+def _multi_connect(*sockets: AsyncMock) -> Any:
+    """websockets.connect stand-in yielding the given sockets in order, then stopping."""
+    queue = list(sockets)
+    calls: list[int] = []
+
+    @asynccontextmanager
+    async def fake_connect(*_a: Any, **_k: Any):  # type: ignore[type-arg]
+        calls.append(1)
+        if not queue:
+            raise websockets.exceptions.ConnectionClosedOK(None, None)
+        yield queue.pop(0)
+
+    fake_connect.calls = calls  # type: ignore[attr-defined]
+    return fake_connect
+
+
+class TestNoticeAndUserstate:
+    async def test_rejection_notice_triggers_callback(self) -> None:
+        client = TwitchChatClient()
+        notices: list[tuple[str, str]] = []
+        client.on_notice(lambda msg_id, text: notices.append((msg_id, text)))
+        ws = _make_ws_mock(
+            [
+                "@msg-id=msg_slowmode :tmi.twitch.tv NOTICE #chan :This room is in slow mode."
+            ]
+        )
+        async with _patch_ws(ws):
+            await client.connect("chan")
+        assert notices == [("msg_slowmode", "This room is in slow mode.")]
+
+    async def test_userstate_triggers_callback(self) -> None:
+        client = TwitchChatClient()
+        states: list[dict[str, str]] = []
+        client.on_userstate(states.append)
+        ws = _make_ws_mock(
+            ["@color=#FF0000;display-name=Me :tmi.twitch.tv USERSTATE #chan"]
+        )
+        async with _patch_ws(ws):
+            await client.connect("chan")
+        assert states and states[0]["display-name"] == "Me"
+
+    async def test_reconnect_command_reconnects_immediately(self) -> None:
+        ws1 = _make_ws_mock([":tmi.twitch.tv RECONNECT"])
+        ws2 = _make_ws_mock([])
+        fake = _multi_connect(ws1, ws2)
+        client = TwitchChatClient()
+        sleep = AsyncMock()
+        with (
+            patch("core.chats.twitch_chat.websockets.connect", fake),
+            patch("core.chats.base.asyncio.sleep", sleep),
+        ):
+            await client.connect("chan")
+        assert len(fake.calls) == 2
+        sleep.assert_not_called()
+        assert "JOIN #chan" in [c.args[0] for c in ws2.send.call_args_list]
+
+    async def test_welcome_marks_connected(self) -> None:
+        client = TwitchChatClient()
+        ws = _make_ws_mock([":tmi.twitch.tv 001 justinfan12345 :Welcome, GLHF!"])
+        with patch.object(client, "_mark_connected") as mark:
+            async with _patch_ws(ws):
+                await client.connect("chan")
+        mark.assert_called_once()
+
+    async def test_no_welcome_no_mark(self) -> None:
+        client = TwitchChatClient()
+        ws = _make_ws_mock([])
+        with patch.object(client, "_mark_connected") as mark:
+            async with _patch_ws(ws):
+                await client.connect("chan")
+        mark.assert_not_called()
+
+
+class TestCancelBeforeConnect:
+    async def test_cancel_before_connect_never_opens_socket(self) -> None:
+        client = TwitchChatClient()
+        client.cancel()
+        connect = MagicMock()
+        with patch("core.chats.twitch_chat.websockets.connect", connect):
+            await client.connect("chan")
+        connect.assert_not_called()
+        assert client._running is False
+
+
+class TestTokenProvider:
+    async def test_provider_called_before_each_connect(self) -> None:
+        provider = AsyncMock(side_effect=["tok1", "tok2"])
+        ws1 = _make_ws_mock(
+            [
+                ":tmi.twitch.tv 001 me :Welcome",
+                websockets.exceptions.ConnectionClosedError(None, None),
+            ]
+        )
+        ws2 = _make_ws_mock([])
+        client = TwitchChatClient(token_provider=provider)
+        with (
+            patch(
+                "core.chats.twitch_chat.websockets.connect", _multi_connect(ws1, ws2)
+            ),
+            patch("core.chats.base.asyncio.sleep", AsyncMock()),
+        ):
+            await client.connect("chan", token="old", login="me")
+        assert provider.await_count == 2
+        assert "PASS oauth:tok1" in [c.args[0] for c in ws1.send.call_args_list]
+        assert "PASS oauth:tok2" in [c.args[0] for c in ws2.send.call_args_list]
+
+    async def test_login_failure_retries_with_fresh_token_then_anonymous(
+        self,
+    ) -> None:
+        provider = AsyncMock(side_effect=["stale", "fresh"])
+        fail = ":tmi.twitch.tv NOTICE * :Login authentication failed"
+        ws1 = _make_ws_mock([fail])
+        ws2 = _make_ws_mock([fail])
+        ws3 = _make_ws_mock([])
+        client = TwitchChatClient(token_provider=provider)
+        with patch(
+            "core.chats.twitch_chat.websockets.connect", _multi_connect(ws1, ws2, ws3)
+        ):
+            await client.connect("chan", token="old", login="me")
+        assert "PASS oauth:fresh" in [c.args[0] for c in ws2.send.call_args_list]
+        assert "PASS SCHMOOPIIE" in [c.args[0] for c in ws3.send.call_args_list]
+        assert client._authenticated is False
+
+    async def test_provider_failure_keeps_previous_token(self) -> None:
+        provider = AsyncMock(return_value=None)
+        ws = _make_ws_mock([])
+        client = TwitchChatClient(token_provider=provider)
+        async with _patch_ws(ws):
+            await client.connect("chan", token="old", login="me")
+        assert "PASS oauth:old" in [c.args[0] for c in ws.send.call_args_list]

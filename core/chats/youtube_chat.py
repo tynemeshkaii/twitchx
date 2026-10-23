@@ -121,6 +121,8 @@ class YouTubeChatClient(BaseChatClient):
         If live_chat_id is not provided, attempts to resolve it from the
         channel's current live stream via the YouTube Data API.
         """
+        if self._cancelled:
+            return
         self._channel = channel_id
         self._running = True
         self._loop = __import__("asyncio").get_running_loop()
@@ -260,6 +262,7 @@ class YouTubeChatClient(BaseChatClient):
 
     async def disconnect(self) -> None:
         """Stop polling and disconnect."""
+        self._cancelled = True
         self._running = False
         self._live_chat_id = None
         self._next_page_token = None

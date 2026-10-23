@@ -1,6 +1,23 @@
 window.TwitchX = window.TwitchX || {};
 const TwitchX = window.TwitchX;
 
+// Key ("platform:login") of the channel whose chat is on screen, or '' if none.
+TwitchX._activeChatKey = function() {
+  if (TwitchX.multiState.open) {
+    var activeSlot = TwitchX.multiState.slots[TwitchX.multiState.chatSlot];
+    return activeSlot ? TwitchX.channelKey(activeSlot.channel, activeSlot.platform) : '';
+  }
+  return TwitchX.state.watchingChannelKey || '';
+};
+
+// Chat callbacks from Python carry their source channel; events of a channel
+// we already switched away from must not leak into the current chat.
+TwitchX._isActiveChatKey = function(channelId, platform) {
+  var key = TwitchX.channelKey(channelId, platform || TwitchX.state.playerPlatform || 'twitch');
+  var active = TwitchX._activeChatKey();
+  return !key || !active || key === active;
+};
+
 window.onStreamsUpdate = function(data) {
   TwitchX.state.hasCredentials = data.has_credentials !== false;
   TwitchX.state.streamsLoaded = true;
@@ -251,6 +268,10 @@ window.onStreamReady = function(data) {
   // Clear stale chat messages from the previous stream before switching
   TwitchX.clearChatMessages();
   if (TwitchX.clearChatBatch) TwitchX.clearChatBatch();
+  // Third-party emotes belong to the previous channel; the new set arrives
+  // via onThirdPartyEmotes once start_chat fetched it.
+  TwitchX.thirdPartyEmotes = {};
+  TwitchX._cachedPickerEmotes = null;
   var loader = document.getElementById('stream-loader');
   if (loader) loader.classList.add('hidden');
 
@@ -581,6 +602,7 @@ window.onMultiSlotReady = function(data) {
   }
 
   window.onChatMessage = function(msg) {
+    if (!msg || !TwitchX._isActiveChatKey(msg.channel_id, msg.platform)) return;
     chatBatch.push(msg);
     if (!chatBatchTimer) {
       chatBatchTimer = setTimeout(function() {
@@ -623,14 +645,7 @@ window.onChatSendResult = function(result) {
 };
 
 window.onChatStatus = function(status) {
-  var statusKey = TwitchX.channelKey(status.channel_id, status.platform || TwitchX.state.playerPlatform || 'twitch');
-  if (TwitchX.multiState.open) {
-    var activeSlot = TwitchX.multiState.slots[TwitchX.multiState.chatSlot];
-    var activeMsKey = activeSlot ? TwitchX.channelKey(activeSlot.channel, activeSlot.platform) : '';
-    if (statusKey && activeMsKey && statusKey !== activeMsKey) return;
-  } else if (TwitchX.state.watchingChannelKey && statusKey && statusKey !== TwitchX.state.watchingChannelKey) {
-    return;
-  }
+  if (!status || !TwitchX._isActiveChatKey(status.channel_id, status.platform)) return;
   TwitchX.chatAuthenticated = !!(status.authenticated);
   TwitchX.chatPlatform = status.platform || TwitchX.state.playerPlatform || 'twitch';
   if (status.self_login) TwitchX.chatSelfLogin = status.self_login;
@@ -710,7 +725,10 @@ window.onChatStatus = function(status) {
 };
 
 window.onThirdPartyEmotes = function(data) {
-  if (!data || !data.emotes) return;
+  if (!data || !data.emotes || !data.channel) return;
+  // Strict: emotes of a channel that is no longer on screen are dropped.
+  var active = TwitchX._activeChatKey();
+  if (!active || active !== TwitchX.channelKey(data.channel, 'twitch')) return;
   Object.assign(TwitchX.thirdPartyEmotes, data.emotes);
   TwitchX._cachedPickerEmotes = null;
   if (TwitchX._emotePickerOpen) {
@@ -720,12 +738,39 @@ window.onThirdPartyEmotes = function(data) {
 };
 
 window.onChatUserList = function(data) {
+  if (!data || !TwitchX._isActiveChatKey(data.channel_id, data.platform)) return;
   TwitchX._chatUserList = data.users || [];
   var countEl = document.getElementById('chat-userlist-count');
   if (countEl) countEl.textContent = data.count || TwitchX._chatUserList.length;
   var panel = document.getElementById('chat-userlist-panel');
   if (panel && !panel.classList.contains('hidden')) {
     TwitchX.renderChatUserList('');
+  }
+};
+
+// Twitch rejected a message we sent (slow mode, followers-only, duplicate, ...).
+window.onChatNotice = function(data) {
+  if (!data || !TwitchX._isActiveChatKey(data.channel_id, data.platform)) return;
+  var text = data.text || 'Message was not sent';
+  window.onChatMessage({
+    channel_id: data.channel_id,
+    platform: data.platform,
+    author: '',
+    author_display: '',
+    author_color: null,
+    text: text,
+    timestamp: '',
+    badges: [],
+    emotes: [],
+    is_system: true,
+    message_type: 'notice',
+    msg_id: null,
+    is_self: false
+  });
+  TwitchX.showToast(text, 'error');
+  if (data.failed_text) {
+    var input = document.getElementById(TwitchX.multiState.open ? 'ms-chat-input' : 'chat-input');
+    if (input && !input.value) input.value = data.failed_text;
   }
 };
 

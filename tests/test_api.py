@@ -613,6 +613,9 @@ def test_start_chat_kick_uses_chatroom_and_scope_for_send_auth(
     class FakeKickChatClient:
         platform = "kick"
 
+        def __init__(self, token_provider: object = None) -> None:
+            captured["token_provider"] = token_provider
+
         def on_message(self, _callback: object) -> None:
             return None
 
@@ -654,6 +657,7 @@ def test_start_chat_kick_uses_chatroom_and_scope_for_send_auth(
     assert captured["chatroom_id"] == 20466645
     assert captured["broadcaster_user_id"] == 21725177
     assert captured["can_send"] is True
+    assert captured["token_provider"] == api._kick._ensure_token
 
 
 def test_send_chat_kick_emits_send_result_without_local_echo(

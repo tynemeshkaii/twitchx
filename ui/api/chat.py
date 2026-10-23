@@ -5,25 +5,82 @@ import contextlib
 import json
 import logging
 import threading
-from typing import Any
+import time
+from collections import deque
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
 from core import storage as _storage
-from core.chat import ChatMessage, ChatSendResult, ChatStatus
+from core.chat import ChatMessage, ChatSendResult, ChatStatus, Emote
 from core.chats.kick_chat import KickChatClient
-from core.chats.twitch_chat import TwitchChatClient
+from core.chats.twitch_chat import TwitchChatClient, parse_badges
 from core.chats.youtube_chat import YouTubeChatClient
 from core.storage import get_platform_config, update_config
 from core.third_party_emotes import fetch_channel_emotes
 
 from ._base import BaseApiComponent
 
+if TYPE_CHECKING:
+    from . import TwitchXApi
+
 logger = logging.getLogger(__name__)
+
+# A Twitch echo waits for USERSTATE (accepted) or NOTICE (rejected); entries
+# older than this are considered lost and never rendered.
+_ECHO_TTL = 10.0
+
+
+def _to_utf16_offset(text: str, cp_index: int) -> int:
+    """Convert a code-point index into ``text`` to a UTF-16 code-unit index (JS)."""
+    return len(text[:cp_index].encode("utf-16-le")) // 2
+
+
+def _emotes_payload(text: str, emotes: list[Emote]) -> list[dict[str, Any]]:
+    """Serialize emotes with start/end converted from code points to UTF-16 units."""
+    result: list[dict[str, Any]] = []
+    for e in emotes:
+        length = len(e.code) if e.code else e.end - e.start + 1
+        result.append(
+            {
+                "code": e.code,
+                "url": e.url,
+                "start": _to_utf16_offset(text, e.start),
+                "end": _to_utf16_offset(text, e.start + length) - 1,
+            }
+        )
+    return result
+
+
+@dataclass
+class _PendingEcho:
+    client: Any
+    payload: dict[str, Any]
+    created: float = field(default_factory=time.monotonic)
 
 
 class ChatComponent(BaseApiComponent):
     """Chat connection, message sending, and callbacks."""
+
+    def __init__(self, parent: TwitchXApi) -> None:
+        super().__init__(parent)
+        self._pending_echoes: deque[_PendingEcho] = deque()
+        self._echo_lock = threading.Lock()
+
+    def _is_current(self, client: Any) -> bool:
+        return self._api._chat_client is client
+
+    def _bind_callbacks(self, client: Any, channel: str) -> None:
+        """Route client callbacks through a check that the client is still active.
+
+        A replaced client may keep delivering for a while (its loop is still
+        draining); those events must never reach the UI of the new channel.
+        """
+        # Known before connect() runs, so every payload can name its channel.
+        client._channel = channel
+        client.on_message(lambda msg: self._on_chat_message(msg, client))
+        client.on_status(lambda status: self._on_chat_status(status, client))
 
     # ── Start / Stop ────────────────────────────────────────────
 
@@ -49,16 +106,29 @@ class ChatComponent(BaseApiComponent):
             token = twitch_conf.get("access_token") or None
             login = twitch_conf.get("user_login") or None
 
-            twitch_client = TwitchChatClient()
-            twitch_client.on_message(self._on_chat_message)
-            twitch_client.on_status(self._on_chat_status)
+            twitch_client = TwitchChatClient(token_provider=self._twitch_user_token)
+            self._bind_callbacks(twitch_client, channel)
 
             def _on_user_list(users: list[str]) -> None:
-                payload = json.dumps({"count": len(users), "users": users[:500]})
+                if not self._is_current(twitch_client):
+                    return
+                payload = json.dumps(
+                    {
+                        "channel_id": channel,
+                        "platform": "twitch",
+                        "count": len(users),
+                        "users": users[:500],
+                    }
+                )
                 self._eval_js(f"window.onChatUserList({payload})")
 
-            if hasattr(twitch_client, "on_user_list"):
-                twitch_client.on_user_list(_on_user_list)  # type: ignore[arg-type]
+            twitch_client.on_user_list(_on_user_list)
+            twitch_client.on_notice(
+                lambda msg_id, text: self._on_notice(msg_id, text, twitch_client)
+            )
+            twitch_client.on_userstate(
+                lambda tags: self._on_userstate(tags, twitch_client)
+            )
 
             self._api._chat_client = twitch_client
 
@@ -79,11 +149,12 @@ class ChatComponent(BaseApiComponent):
                             channel_id=channel,
                             error=str(exc)[:120],
                             authenticated=bool(token and login),
-                        )
+                        ),
+                        twitch_client,
                     )
                 finally:
                     twitch_client._loop = None
-                    loop.close()
+                    self._close_thread_loop(loop)
 
             self._api._chat_thread = threading.Thread(target=run_chat, daemon=True)
             self._api._chat_thread.start()
@@ -107,10 +178,14 @@ class ChatComponent(BaseApiComponent):
                                 "Failed to resolve Twitch user ID for emotes: %s", exc
                             )
                         finally:
-                            emote_loop.close()
+                            self._close_thread_loop(emote_loop)
                     cache_dir = str(_storage.CONFIG_DIR / "emotes")
                     emote_map = fetch_channel_emotes(channel, twitch_user_id, cache_dir)
-                    if emote_map and not self._shutdown.is_set():
+                    if (
+                        emote_map
+                        and not self._shutdown.is_set()
+                        and self._is_current(twitch_client)
+                    ):
                         payload = json.dumps({"channel": channel, "emotes": emote_map})
                         self._eval_js(f"window.onThirdPartyEmotes({payload})")
                 except Exception as exc:
@@ -125,9 +200,11 @@ class ChatComponent(BaseApiComponent):
             token = kick_conf.get("access_token") or None
             scopes = self._api._parse_scopes(kick_conf.get("oauth_scopes", ""))
 
-            kick_chat_client = KickChatClient()
-            kick_chat_client.on_message(self._on_chat_message)
-            kick_chat_client.on_status(self._on_chat_status)
+            kick_platform = self._platforms.get("kick")
+            kick_chat_client = KickChatClient(
+                token_provider=kick_platform._ensure_token if kick_platform else None
+            )
+            self._bind_callbacks(kick_chat_client, channel)
             self._api._chat_client = kick_chat_client
 
             def run_kick_chat() -> None:
@@ -162,7 +239,8 @@ class ChatComponent(BaseApiComponent):
                                 platform="kick",
                                 channel_id=channel,
                                 error="No chatroom found",
-                            )
+                            ),
+                            kick_chat_client,
                         )
                         return
                     can_send = bool(
@@ -189,11 +267,12 @@ class ChatComponent(BaseApiComponent):
                             platform="kick",
                             channel_id=channel,
                             error=str(exc)[:120] or "Kick chat failed",
-                        )
+                        ),
+                        kick_chat_client,
                     )
                 finally:
                     kick_chat_client._loop = None
-                    loop.close()
+                    self._close_thread_loop(loop)
 
             self._api._chat_thread = threading.Thread(target=run_kick_chat, daemon=True)
             self._api._chat_thread.start()
@@ -212,8 +291,7 @@ class ChatComponent(BaseApiComponent):
                 return
 
             yt_chat_client = YouTubeChatClient(yt_client)
-            yt_chat_client.on_message(self._on_chat_message)
-            yt_chat_client.on_status(self._on_chat_status)
+            self._bind_callbacks(yt_chat_client, channel)
             self._api._chat_client = yt_chat_client
 
             yt_conf = get_platform_config(self._config, "youtube")
@@ -240,11 +318,12 @@ class ChatComponent(BaseApiComponent):
                             channel_id=channel,
                             error=str(exc)[:120],
                             authenticated=bool(token),
-                        )
+                        ),
+                        yt_chat_client,
                     )
                 finally:
                     yt_chat_client._loop = None
-                    loop.close()
+                    self._close_thread_loop(loop)
 
             self._api._chat_thread = threading.Thread(
                 target=run_youtube_chat, daemon=True
@@ -261,15 +340,29 @@ class ChatComponent(BaseApiComponent):
                 )
             )
 
+    async def _twitch_user_token(self) -> str | None:
+        """Fresh Twitch *user* token for IRC; app tokens can't log into chat."""
+        twitch = self._platforms.get("twitch")
+        if twitch is None:
+            return None
+        token = await twitch._ensure_token()
+        if twitch._platform_config().get("token_type") != "user":
+            return None
+        return token or None
+
     def stop_chat(self) -> None:
         client = self._api._chat_client
         self._api._chat_client = None
         self._api._chat_thread = None
+        with self._echo_lock:
+            self._pending_echoes.clear()
         if client is None:
             return
-        client._running = False
+        # Before looking at client._loop: the chat thread may not have set it yet,
+        # and a cancelled client refuses to start connect() later.
+        client.cancel()
         loop = client._loop
-        if loop is not None:
+        if loop is not None and not loop.is_closed():
             with contextlib.suppress(Exception):
                 fut = asyncio.run_coroutine_threadsafe(client.disconnect(), loop)
                 fut.result(timeout=3)
@@ -319,6 +412,35 @@ class ChatComponent(BaseApiComponent):
         channel_id = getattr(client, "_channel", "") or ""
 
         def _do_send() -> None:
+            # Twitch IRC never echoes our own PRIVMSG. Queue a local echo *before*
+            # sending (USERSTATE can arrive before future.result() returns); it is
+            # rendered on USERSTATE (accepted) and dropped on a rejection NOTICE.
+            pending: _PendingEcho | None = None
+            if platform == "twitch":
+                pending = _PendingEcho(
+                    client=client,
+                    payload={
+                        "channel_id": channel_id,
+                        "platform": platform,
+                        "author": login,
+                        "author_display": display,
+                        "author_color": None,
+                        "text": text,
+                        "timestamp": "",
+                        "badges": [],
+                        "emotes": [],
+                        "is_system": False,
+                        "message_type": "text",
+                        "msg_id": None,
+                        "reply_to_id": reply_to,
+                        "reply_to_display": reply_display,
+                        "reply_to_body": reply_body,
+                        "is_self": True,
+                    },
+                )
+                with self._echo_lock:
+                    self._pending_echoes.append(pending)
+
             future = asyncio.run_coroutine_threadsafe(
                 client.send_message(text, reply_to=reply_to), loop
             )
@@ -333,27 +455,9 @@ class ChatComponent(BaseApiComponent):
                     error="Timed out while sending the chat message.",
                 )
 
-            if result.ok and platform == "twitch":
-                echo = json.dumps(
-                    {
-                        "platform": platform,
-                        "author": login,
-                        "author_display": display,
-                        "author_color": None,
-                        "text": text,
-                        "timestamp": "",
-                        "badges": [],
-                        "emotes": [],
-                        "is_system": False,
-                        "message_type": "text",
-                        "msg_id": result.message_id,
-                        "reply_to_id": reply_to,
-                        "reply_to_display": reply_display,
-                        "reply_to_body": reply_body,
-                        "is_self": True,
-                    }
-                )
-                self._eval_js(f"window.onChatMessage({echo})")
+            if pending is not None and not result.ok:
+                with self._echo_lock, contextlib.suppress(ValueError):
+                    self._pending_echoes.remove(pending)
             send_result = json.dumps(
                 {
                     "ok": result.ok,
@@ -416,7 +520,7 @@ class ChatComponent(BaseApiComponent):
                 logger.warning("set_chat_mode failed: %s", exc)
                 payload = json.dumps({"ok": False, "error": str(exc)[:100]})
             finally:
-                loop.close()
+                self._close_thread_loop(loop)
             self._eval_js(f"window.onChatModeChanged({payload})")
 
         threading.Thread(target=_do, daemon=True).start()
@@ -452,13 +556,18 @@ class ChatComponent(BaseApiComponent):
 
     # ── Callbacks ────────────────────────────────────────────────
 
-    def _on_chat_message(self, msg: ChatMessage) -> None:
+    def _on_chat_message(self, msg: ChatMessage, source: Any = None) -> None:
+        if source is not None and not self._is_current(source):
+            return
+        client = source if source is not None else self._api._chat_client
+        channel_id = getattr(client, "_channel", None) or ""
         config = self._config
         platform_conf = get_platform_config(config, msg.platform)
         self_login = str(platform_conf.get("user_login", "")).strip().lower()
         is_self = bool(self_login and self_login == str(msg.author).strip().lower())
         data = json.dumps(
             {
+                "channel_id": channel_id,
                 "platform": msg.platform,
                 "author": msg.author,
                 "author_display": msg.author_display,
@@ -468,10 +577,7 @@ class ChatComponent(BaseApiComponent):
                 "badges": [
                     {"name": b.name, "icon_url": b.icon_url} for b in msg.badges
                 ],
-                "emotes": [
-                    {"code": e.code, "url": e.url, "start": e.start, "end": e.end}
-                    for e in msg.emotes
-                ],
+                "emotes": _emotes_payload(msg.text, msg.emotes),
                 "is_system": msg.is_system,
                 "message_type": msg.message_type,
                 "msg_id": msg.msg_id,
@@ -483,7 +589,9 @@ class ChatComponent(BaseApiComponent):
         )
         self._eval_js(f"window.onChatMessage({data})")
 
-    def _on_chat_status(self, status: ChatStatus) -> None:
+    def _on_chat_status(self, status: ChatStatus, source: Any = None) -> None:
+        if source is not None and not self._is_current(source):
+            return
         platform_conf = get_platform_config(self._config, status.platform)
         self_login = platform_conf.get("user_login", "")
         data = json.dumps(
@@ -498,3 +606,47 @@ class ChatComponent(BaseApiComponent):
             }
         )
         self._eval_js(f"window.onChatStatus({data})")
+
+    def _pop_pending_echo(self, client: Any) -> _PendingEcho | None:
+        """Oldest live pending echo of ``client``; stale entries are discarded."""
+        now = time.monotonic()
+        with self._echo_lock:
+            while self._pending_echoes:
+                entry = self._pending_echoes.popleft()
+                if entry.client is client and now - entry.created <= _ECHO_TTL:
+                    return entry
+        return None
+
+    def _on_userstate(self, tags: dict[str, str], source: Any) -> None:
+        """Twitch accepted our PRIVMSG: render the queued local echo."""
+        if not self._is_current(source):
+            return
+        entry = self._pop_pending_echo(source)
+        if entry is None:
+            return  # USERSTATE on JOIN, not a reply to our message
+        payload = entry.payload
+        if tags.get("color"):
+            payload["author_color"] = tags["color"]
+        if tags.get("display-name"):
+            payload["author_display"] = tags["display-name"]
+        payload["badges"] = [
+            {"name": b.name, "icon_url": b.icon_url}
+            for b in parse_badges(tags.get("badges", ""))
+        ]
+        self._eval_js(f"window.onChatMessage({json.dumps(payload)})")
+
+    def _on_notice(self, msg_id: str, text: str, source: Any) -> None:
+        """Twitch rejected our PRIVMSG (slow mode, followers-only, ...)."""
+        if not self._is_current(source):
+            return
+        entry = self._pop_pending_echo(source)
+        data = json.dumps(
+            {
+                "channel_id": getattr(source, "_channel", None) or "",
+                "platform": getattr(source, "platform", "twitch"),
+                "msg_id": msg_id,
+                "text": text,
+                "failed_text": entry.payload["text"] if entry else None,
+            }
+        )
+        self._eval_js(f"window.onChatNotice({data})")
