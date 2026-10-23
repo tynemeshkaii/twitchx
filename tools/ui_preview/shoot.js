@@ -31,6 +31,7 @@ const SCENARIOS = {
   settings: { action: p => p.evaluate(() => TwitchX.openSettings()) },
   palette: { action: async p => { await p.evaluate(() => TwitchX.openPalette()); await p.keyboard.type('sh'); await p.waitForTimeout(500); } },
   'palette-empty': { action: p => p.evaluate(() => TwitchX.openPalette()) },
+  'sidebar-watching': { action: p => p.evaluate(() => { TwitchX._notifBadgeLogins = ['twitch:shroud', 'kick:xqc']; TwitchX.state.watchingChannelKey = 'twitch:shroud'; TwitchX.state.watchingChannel = 'shroud'; TwitchX.state.sidebarSections.offline = false; TwitchX.renderSidebar(); }) },
   collapsed: { action: p => p.click('#sidebar-collapse-btn') },
   account: { action: p => p.click('#account-chip') },
   browse: { action: p => p.evaluate(() => window.__scenario.browse()) },

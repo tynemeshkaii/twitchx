@@ -31,12 +31,12 @@ KEYWORDS = {"0", "1px", "50%", "auto", "inherit"}
 TWO_PX_ALLOWED = {
     ("border-radius", 'input[type="range"]'),
     ("border-radius", "#volume-slider"),
-    ("border-radius", ".channel-item .accent-bar"),
     ("gap", "#sidebar-nav"),
     ("padding", ".segmented"),
     ("gap", ".segmented"),
     ("gap", ".emote-grid"),
     ("gap", ".drag-handle"),
+    ("gap", ".watching-eq"),
     ("gap", ".player-volume"),
     ("margin-right", ".chat-msg .badge"),
     ("margin-right", ".badge-fallback"),
