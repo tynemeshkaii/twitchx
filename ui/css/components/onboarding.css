@@ -104,7 +104,6 @@
 .onboarding-platform-card.selected {
   border-color: var(--accent);
   background: var(--accent-dim);
-  box-shadow: var(--shadow-glow-accent);
 }
 .onboarding-platform-card .platform-icon {
   width: 40px;

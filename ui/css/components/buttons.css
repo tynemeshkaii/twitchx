@@ -63,11 +63,9 @@
   background: var(--btn-primary-bg);
   border-color: var(--accent);
   color: var(--text-on-accent);
-  box-shadow: var(--shadow-glow-accent);
 }
 .btn-primary:hover {
   background: var(--btn-primary-bg-hover);
-  box-shadow: var(--shadow-glow-accent), 0 4px 14px hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.22);
 }
 .btn-primary:active {
   transform: scale(var(--scale-press));

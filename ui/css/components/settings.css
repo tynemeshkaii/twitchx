@@ -131,12 +131,10 @@ select {
 #save-btn {
   background: var(--btn-primary-bg);
   color: var(--text-on-accent); font-weight: var(--weight-semibold);
-  box-shadow: var(--shadow-glow-accent);
 }
 #save-btn:hover {
   opacity: 0.95;
   background: var(--btn-primary-bg-hover);
-  box-shadow: var(--shadow-glow-accent);
 }
 
 #close-settings {
@@ -346,9 +344,6 @@ select {
   font-size: var(--font-sm);
   margin-top: var(--space-8);
   text-align: center;
-}
-.hotkey-capturing {
-  animation: pulse 1.2s ease-in-out infinite;
 }
 .hotkey-idle {
   cursor: pointer;

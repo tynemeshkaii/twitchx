@@ -1,9 +1,7 @@
 /* ── Player bar ─────────────────────────────────────────── */
 #player-bar {
   height: 46px;
-  background: var(--glass-bar), var(--bg-player-bar);
-  backdrop-filter: var(--glass-thick);
-  -webkit-backdrop-filter: var(--glass-thick);
+  background: var(--bg-surface);
   border-top: 1px solid var(--border-glass);
   display: flex;
   align-items: center;
@@ -123,11 +121,9 @@
   background: var(--btn-primary-bg);
   color: var(--text-on-accent);
   cursor: pointer;
-  box-shadow: var(--shadow-glow-accent);
 }
 #watch-btn.active:hover {
   background: var(--btn-primary-bg-hover);
-  box-shadow: var(--shadow-glow-accent);
 }
 
 #stop-player-btn {

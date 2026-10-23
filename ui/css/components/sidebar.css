@@ -233,7 +233,6 @@
   width: 3px;
   border-radius: var(--radius-full);
   background: var(--accent);
-  box-shadow: var(--shadow-glow-accent);
 }
 .rail-avatar.watching {
   box-shadow: 0 0 0 2px var(--border-accent);
@@ -304,7 +303,7 @@
   background: var(--accent-dim);
 }
 .channel-item.watching .name { color: var(--accent); }
-.channel-item.watching .live-dot { color: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+.channel-item.watching .live-dot { color: var(--accent); }
 
 /* ── Notification badge ───────────────────────────────── */
 .channel-item .notif-dot {
@@ -609,7 +608,6 @@
   margin: 1px var(--space-8);
   border-radius: 1px;
   background: var(--accent);
-  box-shadow: var(--shadow-glow-accent);
   pointer-events: none;
   animation: spotlight-pulse 1.2s ease-in-out infinite;
 }
@@ -694,16 +692,12 @@
 #sidebar {
   width: 244px;
   flex-shrink: 0;
-  background:
-    var(--glass-sidebar),
-    var(--bg-glass, var(--bg-surface));
+  background: var(--bg-surface);
   border-right: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   transition: width var(--duration-slow) var(--ease-out-expo);
-  backdrop-filter: var(--glass-thick);
-  -webkit-backdrop-filter: var(--glass-thick);
 }
 #sidebar.collapsed-sidebar {
   width: 52px;

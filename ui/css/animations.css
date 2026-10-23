@@ -115,12 +115,6 @@
   50% { box-shadow: 0 0 0 8px transparent; }
 }
 
-/* App mesh gradient drift */
-@keyframes mesh-drift {
-  0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-}
-
 /* Utility animation classes */
 .anim-view-exit {
   animation: view-exit var(--view-exit-duration) var(--view-exit-ease) forwards;

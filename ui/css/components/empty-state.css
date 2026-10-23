@@ -65,7 +65,6 @@
   border: 1px solid var(--accent);
   background: var(--btn-primary-bg);
   color: var(--text-on-accent);
-  box-shadow: var(--shadow-glow-accent);
 }
 .empty-action.secondary {
   border: 1px solid var(--border-default);

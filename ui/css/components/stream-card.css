@@ -20,18 +20,11 @@
   border-radius: var(--radius-lg);
   cursor: pointer; overflow: hidden;
   display: flex; flex-direction: column;
-  box-shadow: var(--shadow-card);
-  transition: background var(--duration-normal) ease,
-              box-shadow var(--duration-normal) ease,
-              border-color var(--duration-normal) ease,
-              transform var(--duration-normal) ease;
+  transition: background var(--duration-normal) ease;
   contain: layout style paint;
 }
 .stream-card:hover {
   background: var(--surface-card-hover), var(--bg-overlay);
-  border-color: var(--border-default);
-  box-shadow: var(--shadow-card-hover);
-  transform: translateY(-4px);
 }
 .stream-card:hover .thumb-img {
   filter: brightness(1.05);
@@ -43,7 +36,7 @@
 }
 .stream-card.selected {
   border-color: var(--border-accent);
-  box-shadow: 0 0 0 1px var(--border-accent), var(--shadow-glow-accent);
+  box-shadow: 0 0 0 1px var(--border-accent);
 }
 .stream-card.offline {
   filter: grayscale(0.7);
@@ -70,29 +63,18 @@
 .stream-card:nth-child(n+13).card-enter { animation-delay: 240ms; }
 
 .card-thumb { position: relative; width: 100%; aspect-ratio: 16/9; overflow: hidden; }
-.card-thumb::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 50% 20%, var(--border-strong), transparent 46%);
-  opacity: 0;
-  transition: opacity var(--duration-normal) ease;
-  pointer-events: none;
-  z-index: 1;
-}
 .card-thumb::after {
   content: '';
   position: absolute; inset: 0;
   background: var(--thumb-overlay);
   pointer-events: none; z-index: 2;
 }
-.stream-card:hover .card-thumb::before { opacity: 1; }
 .thumb-img {
   width: 100%; height: 100%; object-fit: cover;
   display: none;
   transition: transform var(--duration-slow) ease;
 }
-.stream-card:hover .thumb-img { transform: scale(1.04); }
+.stream-card:hover .thumb-img { transform: scale(1.02); }
 .thumb-img.loaded { display: block; }
 
 @keyframes shimmer-card {
@@ -122,16 +104,13 @@
   font-size: var(--font-xs); font-weight: var(--weight-semibold);
   padding: var(--space-4) var(--space-8) var(--space-4) var(--space-16); border-radius: var(--radius-sm);
   text-transform: uppercase; letter-spacing: var(--tracking-wide);
-  box-shadow: 0 6px 14px rgba(0,0,0,0.28), 0 0 10px color-mix(in srgb, var(--live) 36%, transparent);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.28);
 }
 .live-badge::before {
   content: '';
   position: absolute; left: 5px; top: 50%; transform: translateY(-50%);
   width: 5px; height: 5px; border-radius: 50%;
   background: var(--text-inverse);
-  animation: pulse 1.4s ease-in-out infinite;
 }
 .watching-badge {
   position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 3;

@@ -170,9 +170,7 @@
   gap: var(--space-8);
   padding: var(--space-4) var(--space-16);
   border-bottom: 1px solid var(--border-glass);
-  background: var(--glass-bar);
-  backdrop-filter: var(--glass-thick);
-  -webkit-backdrop-filter: var(--glass-thick);
+  background: var(--bg-base);
   flex-shrink: 0;
 }
 #toolbar-platform-chips.hidden { display: none; }
@@ -196,7 +194,6 @@
   background: var(--accent);
   border-color: var(--accent);
   color: var(--text-on-accent);
-  box-shadow: var(--shadow-glow-accent);
 }
 
 /* Channel status badge used in compact list mode */

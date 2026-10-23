@@ -261,7 +261,6 @@
 }
 #chat-status-dot.connecting,
 #ms-chat-status-dot.connecting {
-  animation: pulse 1.8s infinite;
   background: var(--warn-yellow);
 }
 
