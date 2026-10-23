@@ -231,9 +231,13 @@ window.onLoginError = function(msg) {
   TwitchX.showToast('Login error: ' + msg, 'error');
 };
 
-window.onLogout = function() {
+window.onLogout = function(reason) {
   TwitchX.hideUserProfile();
-  TwitchX.showToast('Logged out', 'info');
+  if (reason) {
+    TwitchX.showToast(reason, 'warn');
+  } else {
+    TwitchX.showToast('Logged out', 'info');
+  }
 };
 
 window.onImportComplete = function(data) {
@@ -865,17 +869,18 @@ window.onKickLoginError = function(msg) {
   TwitchX.showToast('Kick login: ' + msg, 'error');
 };
 
-window.onKickLogout = function() {
+window.onKickLogout = function(reason) {
   TwitchX.state.kickUser = null;
   TwitchX.state.kickScopes = '';
   document.getElementById('kick-login-area').classList.remove('hidden');
   document.getElementById('kick-user-area').classList.add('hidden');
   document.getElementById('kick-user-display').textContent = '';
   const fb = document.getElementById('settings-feedback');
-  fb.textContent = 'Logged out from Kick';
+  fb.textContent = reason || 'Logged out from Kick';
   TwitchX.setFeedbackClass(fb, 'muted');
   TwitchX.hideKickProfile();
   TwitchX.updateChatInput();
+  if (reason) TwitchX.showToast(reason, 'warn');
 };
 
 window.onKickTestResult = function(data) {

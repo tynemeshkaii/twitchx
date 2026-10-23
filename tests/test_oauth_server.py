@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 import time
+import urllib.error
 import urllib.request
 from contextlib import suppress
 
@@ -69,3 +70,41 @@ def test_oauth_server_port_busy_raises_typed_error() -> None:
         assert not isinstance(excinfo.value, OSError)
     finally:
         blocker.close()
+
+
+def test_oauth_server_rejects_wrong_state_and_keeps_waiting() -> None:
+    """A forged callback is refused; the real one still completes the flow."""
+    statuses: list[int] = []
+
+    def _forged() -> None:
+        time.sleep(0.1)
+        try:
+            urllib.request.urlopen(
+                "http://localhost:3457/callback?code=evil-code&state=attacker"
+            )
+        except urllib.error.HTTPError as exc:
+            statuses.append(exc.code)
+
+    def _real() -> None:
+        time.sleep(0.3)
+        with suppress(Exception):
+            urllib.request.urlopen(
+                "http://localhost:3457/callback?code=real-code&state=expected"
+            )
+
+    threading.Thread(target=_forged, daemon=True).start()
+    threading.Thread(target=_real, daemon=True).start()
+
+    code = wait_for_oauth_code(timeout=5, expected_state="expected")
+    assert code == "real-code"
+    assert statuses == [400]
+
+
+def test_oauth_server_rejects_missing_state() -> None:
+    def _no_state() -> None:
+        time.sleep(0.1)
+        with suppress(Exception):
+            urllib.request.urlopen("http://localhost:3457/callback?code=c")
+
+    threading.Thread(target=_no_state, daemon=True).start()
+    assert wait_for_oauth_code(timeout=1, expected_state="expected") is None

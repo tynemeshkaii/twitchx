@@ -1666,7 +1666,7 @@ class TestLoginWithoutCustomCredentials:
         monkeypatch.setattr(api._data, "restart_polling", lambda: None)
 
         monkeypatch.setattr("ui.api.auth.webbrowser.open", lambda url: None)
-        monkeypatch.setattr("ui.api.auth.wait_for_oauth_code", lambda: None)
+        monkeypatch.setattr("ui.api.auth.wait_for_oauth_code", lambda **kw: None)
 
         api.login()
 
@@ -1688,7 +1688,7 @@ class TestLoginWithoutCustomCredentials:
         monkeypatch.setattr(api._data, "restart_polling", lambda: None)
 
         monkeypatch.setattr("ui.api.auth.webbrowser.open", lambda url: None)
-        monkeypatch.setattr("ui.api.auth.wait_for_oauth_code", lambda: None)
+        monkeypatch.setattr("ui.api.auth.wait_for_oauth_code", lambda **kw: None)
 
         api.kick_login()
 
@@ -1710,7 +1710,7 @@ class TestLoginWithoutCustomCredentials:
         monkeypatch.setattr(api._data, "restart_polling", lambda: None)
 
         monkeypatch.setattr("ui.api.auth.webbrowser.open", lambda url: None)
-        monkeypatch.setattr("ui.api.auth.wait_for_oauth_code", lambda: None)
+        monkeypatch.setattr("ui.api.auth.wait_for_oauth_code", lambda **kw: None)
 
         api.youtube_login()
 

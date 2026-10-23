@@ -44,6 +44,7 @@ DEFAULT_PLATFORM_TWITCH: dict[str, Any] = {
     "user_login": "",
     "user_display_name": "",
     "pkce_verifier": "",
+    "oauth_state": "",
 }
 
 DEFAULT_PLATFORM_KICK: dict[str, Any] = {
@@ -75,6 +76,7 @@ DEFAULT_PLATFORM_YOUTUBE: dict[str, Any] = {
     "daily_quota_used": 0,
     "quota_reset_date": "",
     "pkce_verifier": "",
+    "oauth_state": "",
 }
 
 DEFAULT_SETTINGS: dict[str, Any] = {

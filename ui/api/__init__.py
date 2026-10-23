@@ -88,6 +88,8 @@ class TwitchXApi:
         self._twitch = TwitchClient()
         self._kick = KickClient()
         self._youtube = YouTubeClient()
+        self._twitch.on_auth_revoked = self._handle_twitch_revoked
+        self._kick.on_auth_revoked = self._handle_kick_revoked
         self._platforms: dict[str, Any] = {
             "twitch": self._twitch,
             "kick": self._kick,
@@ -698,6 +700,28 @@ class TwitchXApi:
             webbrowser.open(url)
 
     # ─── Shared infrastructure (used by components) ────────────
+
+    # ─── Auth revoked by the platform (refresh token rejected) ───
+
+    def _handle_twitch_revoked(self) -> None:
+        """Twitch wiped user auth during a refresh: mirror logout() in the UI."""
+        self._current_user = None
+        msg = json.dumps("Twitch session expired, log in again")
+
+        def _notify() -> None:
+            self._eval_js(f"window.onLogout({msg})")
+            self.push_config()
+
+        self._run_in_thread(_notify)
+
+    def _handle_kick_revoked(self) -> None:
+        msg = json.dumps("Kick session expired, log in again")
+
+        def _notify() -> None:
+            self._eval_js(f"window.onKickLogout({msg})")
+            self.push_config()
+
+        self._run_in_thread(_notify)
 
     def _eval_js(self, code: str) -> None:
         if self._shutdown.is_set() or self._window is None:

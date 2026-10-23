@@ -48,15 +48,17 @@ class AuthComponent(BaseApiComponent):
 
         self._run_in_thread(runner)
 
-    def _await_oauth_code(self, auth_url: str, error_callback: str) -> str | None:
-        """Open the browser and wait for the callback code.
+    def _await_oauth_code(
+        self, auth_url: str, error_callback: str, expected_state: str
+    ) -> str | None:
+        """Open the browser and wait for the callback code carrying our state.
 
         Returns None when there is nothing left to do: shutdown, timeout or a
         failure. Timeout and failure are reported to the UI and restart polling.
         """
         try:
             webbrowser.open(auth_url)
-            code = wait_for_oauth_code()
+            code = wait_for_oauth_code(expected_state=expected_state)
         except OAuthPortBusy:
             self._eval_js(f"window.{error_callback}({json.dumps(_LOGIN_BUSY_MSG)})")
             self._api._data.restart_polling()
@@ -80,6 +82,7 @@ class AuthComponent(BaseApiComponent):
             return
         try:
             auth_url = self._twitch.get_auth_url()
+            expected_state = self._twitch._platform_config().get("oauth_state", "")
         except Exception:
             self._login_lock.release()
             raise
@@ -89,7 +92,7 @@ class AuthComponent(BaseApiComponent):
         )
 
         def do_login() -> None:
-            code = self._await_oauth_code(auth_url, "onLoginError")
+            code = self._await_oauth_code(auth_url, "onLoginError", expected_state)
             if code is None:
                 return
             loop = asyncio.new_event_loop()
@@ -181,6 +184,7 @@ class AuthComponent(BaseApiComponent):
 
                 self._config = update_config(_save_creds)
             auth_url = self._kick.get_auth_url()
+            expected_state = self._kick._platform_config().get("oauth_state", "")
         except Exception:
             self._login_lock.release()
             raise
@@ -190,7 +194,7 @@ class AuthComponent(BaseApiComponent):
         )
 
         def do_login() -> None:
-            code = self._await_oauth_code(auth_url, "onKickLoginError")
+            code = self._await_oauth_code(auth_url, "onKickLoginError", expected_state)
             if code is None:
                 return
             loop = asyncio.new_event_loop()
@@ -280,6 +284,7 @@ class AuthComponent(BaseApiComponent):
 
                 self._config = update_config(_save_creds)
             auth_url = self._youtube.get_auth_url()
+            expected_state = self._youtube._platform_config().get("oauth_state", "")
         except Exception:
             self._login_lock.release()
             raise
@@ -289,7 +294,9 @@ class AuthComponent(BaseApiComponent):
         )
 
         def do_login() -> None:
-            code = self._await_oauth_code(auth_url, "onYouTubeLoginError")
+            code = self._await_oauth_code(
+                auth_url, "onYouTubeLoginError", expected_state
+            )
             if code is None:
                 return
             loop = asyncio.new_event_loop()

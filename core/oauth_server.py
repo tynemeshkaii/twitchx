@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import logging
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -46,10 +47,22 @@ class OAuthPortBusy(Exception):
     """The local OAuth callback port could not be bound."""
 
 
+def _state_matches(expected: str | None, received: str | None) -> bool:
+    if expected is None:
+        return True
+    return received is not None and hmac.compare_digest(expected, received)
+
+
 def wait_for_oauth_code(
-    port: int = OAUTH_PORT, timeout: int = OAUTH_TIMEOUT_SECONDS
+    port: int = OAUTH_PORT,
+    timeout: int = OAUTH_TIMEOUT_SECONDS,
+    expected_state: str | None = None,
 ) -> str | None:
-    """Start a temporary HTTP server and wait for Twitch OAuth callback.
+    """Start a temporary HTTP server and wait for the OAuth callback.
+
+    When ``expected_state`` is given, a callback whose ``state`` differs gets
+    an error page and is ignored: the server keeps waiting, so a forged
+    request cannot cut the real login short.
 
     Returns the authorization code, or None on timeout.
     Raises OAuthPortBusy if the callback port cannot be bound.
@@ -68,6 +81,15 @@ def wait_for_oauth_code(
 
             params = parse_qs(parsed.query)
             code = params.get("code", [None])[0]
+            state = params.get("state", [None])[0]
+
+            if not _state_matches(expected_state, state):
+                logger.warning("OAuth callback rejected: state mismatch")
+                self.send_response(400)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(_ERROR_HTML.encode())
+                return
 
             if code:
                 logger.info("OAuth authorization code received")

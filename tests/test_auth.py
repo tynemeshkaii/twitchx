@@ -861,3 +861,78 @@ class TestOAuthPortBusy:
             api.login()
 
         assert api._data.stop_polling.call_count == 2
+
+
+# ═══════════════════════════════════════════════════════════════════
+# OAuth state + platform-initiated revocation (audit phase 2)
+# ═══════════════════════════════════════════════════════════════════
+
+
+class TestOAuthState:
+    def test_each_login_waits_for_its_own_state(
+        self, temp_config_dir: Path, capture_eval_js: Any, run_sync: Any
+    ) -> None:
+        from urllib.parse import parse_qs, urlparse
+
+        api = _make_api(capture_eval_js)
+        for platform, start in (
+            ("twitch", api.login),
+            ("kick", api.kick_login),
+            ("youtube", api.youtube_login),
+        ):
+            opened: list[str] = []
+            with (
+                patch("ui.api.auth.webbrowser.open", side_effect=opened.append),
+                patch("ui.api.auth.wait_for_oauth_code", return_value=None) as wait,
+            ):
+                start()
+            stored = load_config()["platforms"][platform]["oauth_state"]
+            url_state = parse_qs(urlparse(opened[0]).query)["state"][0]
+            assert stored and url_state == stored, platform
+            wait.assert_called_once_with(expected_state=stored)
+
+    async def test_exchange_clears_oauth_state(
+        self, temp_config_dir: Path, httpx_mock: Any
+    ) -> None:
+        from core.platforms.twitch import TWITCH_AUTH_URL, TwitchClient
+
+        client = TwitchClient()
+        client.get_auth_url()
+        assert load_config()["platforms"]["twitch"]["oauth_state"]
+        httpx_mock.add_response(url=TWITCH_AUTH_URL, json={"access_token": "t"})
+        await client.exchange_code("code")
+        await client.close()
+        tc = load_config()["platforms"]["twitch"]
+        assert tc["oauth_state"] == ""
+        assert tc["pkce_verifier"] == ""
+
+
+class TestAuthRevoked:
+    def test_twitch_revoked_resets_user_and_notifies_js(
+        self, temp_config_dir: Path, capture_eval_js: Any
+    ) -> None:
+        with patch("ui.api.httpx.Client"):
+            api = TwitchXApi()
+        api._eval_js = capture_eval_js
+        api._run_in_thread = lambda fn: fn()
+        api._current_user = {"id": "1", "login": "me"}
+
+        api._twitch.on_auth_revoked()  # type: ignore[misc]
+
+        assert api._current_user is None
+        capture_eval_js.assert_any("onLogout")
+        capture_eval_js.assert_any("Twitch session expired")
+        capture_eval_js.assert_any("onConfigLoaded")
+
+    def test_kick_revoked_notifies_js(
+        self, temp_config_dir: Path, capture_eval_js: Any
+    ) -> None:
+        with patch("ui.api.httpx.Client"):
+            api = TwitchXApi()
+        api._eval_js = capture_eval_js
+        api._run_in_thread = lambda fn: fn()
+
+        api._kick.on_auth_revoked()  # type: ignore[misc]
+
+        capture_eval_js.assert_any("onKickLogout")
+        capture_eval_js.assert_any("Kick session expired")

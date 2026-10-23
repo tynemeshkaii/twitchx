@@ -13,7 +13,13 @@ from urllib.parse import urlencode
 
 from curl_cffi import requests as curl_requests
 
-from core.platforms.base import BasePlatformClient
+from core.platforms.base import (
+    MAX_RATE_LIMIT_RETRIES,
+    AuthRevokedError,
+    BasePlatformClient,
+    _refresh_rejected,
+    _retry_delay,
+)
 from core.storage import token_is_valid, update_config
 
 logger = logging.getLogger(__name__)
@@ -107,23 +113,30 @@ class KickClient(BasePlatformClient):
         resp.raise_for_status()
 
         def _clear_verifier(cfg: dict) -> None:
-            cfg.get("platforms", {}).get("kick", {})["pkce_verifier"] = ""
+            kc = cfg.get("platforms", {}).get("kick", {})
+            kc["pkce_verifier"] = ""
+            kc["oauth_state"] = ""
 
         self._config = update_config(_clear_verifier)
         return resp.json()
 
     async def refresh_user_token(self) -> str:
-        """Refresh the user token; clear auth state on 400/401."""
+        """Refresh the user token; clear auth state only if the token is rejected.
+
+        docs.kick.com (OAuth 2.1 → refresh token) lists client_secret as required.
+        """
         kc = self._platform_config()
+        cid, csec = self._effective_creds()
         resp = await self._get_client().post(
             f"{KICK_AUTH_URL}/oauth/token",
             data={
-                "client_id": self._effective_creds()[0],
+                "client_id": cid,
+                "client_secret": csec,
                 "refresh_token": kc.get("refresh_token", ""),
                 "grant_type": "refresh_token",
             },
         )
-        if resp.status_code in (400, 401):
+        if _refresh_rejected(resp):
 
             def _clear(cfg: dict) -> None:
                 kc = cfg.get("platforms", {}).get("kick", {})
@@ -137,7 +150,8 @@ class KickClient(BasePlatformClient):
                 kc["user_display_name"] = ""
 
             self._config = update_config(_clear)
-            raise ValueError("User token expired. Please log in again.")
+            self._notify_auth_revoked()
+            raise AuthRevokedError("User token expired. Please log in again.")
         resp.raise_for_status()
         data = resp.json()
         new_token = data["access_token"]
@@ -227,31 +241,28 @@ class KickClient(BasePlatformClient):
             headers["Authorization"] = f"Bearer {token}"
         elif auth_required:
             raise ValueError("Authentication required but no valid token available.")
-        logger.debug("GET %s params=%s", url, params)
         client = self._get_client()
-        resp = await client.get(url, headers=headers, params=params)
-        logger.debug("Response: %d", resp.status_code)
-        if resp.status_code != 200:
-            logger.debug("Body: %s", resp.text[:300])
-        if resp.status_code == 429:
-            retry_after = float(resp.headers.get("Retry-After", "2"))
-            await asyncio.sleep(max(retry_after, 1))
-            return await self._get(url, params, auth_required)
-        if resp.status_code == 401 and token:
-            async with self._get_token_lock():
-
-                def _clear_token(cfg: dict) -> None:
-                    cfg.get("platforms", {}).get("kick", {})["access_token"] = ""
-
-                self._config = update_config(_clear_token)
-            new_token = await self._ensure_token()
-            if new_token:
-                headers["Authorization"] = f"Bearer {new_token}"
-                resp = await client.get(url, headers=headers, params=params)
-            else:
-                resp.raise_for_status()
-        resp.raise_for_status()
-        return resp.json()
+        rate_limit_retries = 0
+        refreshed = False
+        while True:
+            logger.debug("GET %s params=%s", url, params)
+            resp = await client.get(url, headers=headers, params=params)
+            logger.debug("Response: %d", resp.status_code)
+            if resp.status_code != 200:
+                logger.debug("Body: %s", resp.text[:300])
+            if resp.status_code == 429 and rate_limit_retries < MAX_RATE_LIMIT_RETRIES:
+                rate_limit_retries += 1
+                await asyncio.sleep(_retry_delay(resp, 2))
+                continue
+            if resp.status_code == 401 and token and not refreshed:
+                refreshed = True
+                new_token = await self._refresh_after_401(token)
+                if new_token:
+                    token = new_token
+                    headers["Authorization"] = f"Bearer {new_token}"
+                    continue
+            resp.raise_for_status()
+            return resp.json()
 
     async def _legacy_get_json(self, path: str) -> dict[str, Any]:
         """Fetch browser-protected Kick endpoints through a browser-like client."""
