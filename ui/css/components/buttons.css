@@ -26,7 +26,7 @@
   outline-offset: 2px;
 }
 #login-btn { --login-dot: var(--platform-twitch); }
-#kick-login-sidebar-btn { --login-dot: var(--platform-kick); }
+#kick-login-sidebar-btn { --login-dot: var(--platform-kick-ink); }
 
 .btn {
   min-height: 34px;
