@@ -109,6 +109,9 @@
   --platform-twitch:  #9146FF;
   --platform-kick:    #53FC18;
   --platform-kick-text: #0A0A0C;
+  /* Neon Kick green is unreadable on white: use this for Kick text/glyphs
+     in the light theme (via --platform-kick-ink). */
+  --platform-kick-on-light: #2E8A0E;
   --platform-youtube: #FF0000;
 
   /* ── Glass shell surfaces (overlaid on theme backgrounds) ── */

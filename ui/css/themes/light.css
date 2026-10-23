@@ -28,6 +28,10 @@
   --error-red:   #D32F2F;
   --error-red-bright: #FF6961;
   --info-blue:   #1565C0;
+  /* "On air" only — never success. */
+  --live:        #D32F2F;
+  --viewers:     var(--text-secondary);
+  --platform-kick-ink: var(--platform-kick-on-light);
 
   /* ── Border tokens ──────────────────────────────────── */
   --border-subtle:  rgba(0, 0, 0, 0.06);

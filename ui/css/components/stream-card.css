@@ -118,11 +118,11 @@
 }
 .live-badge {
   position: absolute; top: 8px; left: 8px; z-index: 3;
-  background: color-mix(in srgb, var(--live-red) 92%, transparent); color: var(--text-inverse);
+  background: var(--live); color: var(--text-inverse);
   font-size: 9px; font-weight: 800;
   padding: 2px 6px 2px 14px; border-radius: var(--radius-sm);
   text-transform: uppercase; letter-spacing: 0.05em;
-  box-shadow: 0 6px 14px rgba(0,0,0,0.28), 0 0 10px color-mix(in srgb, var(--live-red) 36%, transparent);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.28), 0 0 10px color-mix(in srgb, var(--live) 36%, transparent);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
@@ -135,10 +135,10 @@
 }
 .watching-badge {
   position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 3;
-  background: rgba(48, 209, 88, 0.18);
+  background: hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.18);
   backdrop-filter: blur(2px);
   display: none; align-items: center; justify-content: center;
-  color: var(--live-green); font-size: var(--font-md); font-weight: 700;
+  color: var(--accent); font-size: var(--font-md); font-weight: 700;
   letter-spacing: 0.05em;
 }
 .watching-badge.visible { display: flex; }
@@ -157,21 +157,29 @@
   border-radius: var(--radius-full);
   display: flex; align-items: center; justify-content: center;
   font-size: 9px; font-weight: 800;
-  color: var(--text-inverse); text-transform: uppercase;
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  text-transform: uppercase;
   letter-spacing: 0.03em;
-  box-shadow: 0 6px 14px rgba(0,0,0,0.20);
 }
 .card-overlay .platform-badge {
+  /* Thumbnails are video — dark in both themes. */
+  --badge-base: var(--bg-dark-50);
+  --platform-kick-ink: var(--platform-kick);
   position: absolute;
   top: 8px;
   right: 8px;
   z-index: 3;
 }
-.platform-badge.twitch { background: rgba(145, 70, 255, 0.82); }
-.platform-badge.kick { background: rgba(83, 252, 24, 0.82); color: var(--platform-kick-text); }
-.platform-badge.youtube { background: rgba(196, 0, 0, 0.92); }
+/* Platform = 16% tint + platform-coloured text. --badge-base is the surface
+   under the tint: transparent on panels, a dark scrim over video frames. */
+.platform-badge.twitch { --badge-platform: var(--platform-twitch); --badge-ink: var(--platform-twitch); }
+.platform-badge.kick { --badge-platform: var(--platform-kick); --badge-ink: var(--platform-kick-ink); }
+.platform-badge.youtube { --badge-platform: var(--platform-youtube); --badge-ink: var(--platform-youtube); }
+.platform-badge.twitch,
+.platform-badge.kick,
+.platform-badge.youtube {
+  background: color-mix(in srgb, var(--badge-platform) 16%, var(--badge-base, transparent));
+  color: var(--badge-ink);
+}
 
 .card-body,
 .card-info { padding: var(--space-12) var(--space-12) var(--space-14); }

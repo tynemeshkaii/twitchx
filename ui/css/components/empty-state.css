@@ -30,7 +30,7 @@
   opacity: 0.92;
 }
 .empty-illustration.empty-live { color: var(--text-muted); }
-.empty-illustration.empty-browse { color: var(--live-green); }
+.empty-illustration.empty-browse { color: var(--text-muted); }
 .empty-illustration.empty-channel { color: var(--platform-twitch); }
 #empty-state .empty-title {
   font-size: 17px; font-weight: 700; color: var(--text-primary);

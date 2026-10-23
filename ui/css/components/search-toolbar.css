@@ -95,7 +95,7 @@
 }
 .search-result .sr-live {
   font-size: var(--font-xs);
-  color: var(--live-green);
+  color: var(--live);
   font-weight: 700;
 }
 .search-result .sr-add {

@@ -180,7 +180,7 @@
   left: 8px;
   padding: 2px 6px;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--live-red) 92%, transparent);
+  background: var(--live);
   color: var(--text-inverse);
   font-size: var(--font-2xs);
   font-weight: 800;
@@ -189,6 +189,9 @@
   z-index: 3;
 }
 .browse-stream-thumb-wrap .platform-badge {
+  /* Thumbnails are video — dark in both themes. */
+  --badge-base: var(--bg-dark-50);
+  --platform-kick-ink: var(--platform-kick);
   position: absolute;
   right: 8px;
   top: 8px;
@@ -246,7 +249,7 @@
 }
 .browse-stream-viewers {
   font-size: var(--font-sm);
-  color: var(--live-green);
+  color: var(--viewers);
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   margin-top: var(--space-4);

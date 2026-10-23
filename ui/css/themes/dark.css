@@ -29,6 +29,10 @@
   --error-red:   #FF453A;
   --error-red-bright: #FF6961;
   --info-blue:   #64B5FF;
+  /* "On air" only — never success. */
+  --live:        #FF453A;
+  --viewers:     var(--text-secondary);
+  --platform-kick-ink: var(--platform-kick);
 
   /* ── Border tokens ──────────────────────────────────── */
   --border-subtle:  rgba(255, 255, 255, 0.06);

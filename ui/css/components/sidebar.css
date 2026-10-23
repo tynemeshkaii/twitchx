@@ -187,7 +187,7 @@
   position: absolute;
   inset: -1px;
   border-radius: 50%;
-  border: 1.5px solid var(--live-green);
+  border: 1.5px solid var(--live);
   pointer-events: none;
 }
 .rail-av-dot {
@@ -197,7 +197,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--live-green);
+  background: var(--live);
   border: 2px solid var(--bg-surface);
   pointer-events: none;
 }
@@ -282,7 +282,7 @@
   font-size: var(--font-xs); color: var(--text-muted);
 }
 .tooltip-viewers {
-  font-size: var(--font-xs); color: var(--live-green);
+  font-size: var(--font-xs); color: var(--text-secondary);
 }
 .tooltip-viewers.offline {
   color: var(--text-muted);
@@ -436,11 +436,6 @@
   color: var(--text-muted);
   background: var(--bg-control);
 }
-.sidebar-section.online .section-count {
-  color: var(--live-green);
-  background: var(--status-bg-green);
-  box-shadow: inset 0 0 0 1px var(--status-border-green);
-}
 
 .section-body {
   flex: 1 1 auto;
@@ -526,11 +521,10 @@
   background: transparent; border-radius: 0 2px 2px 0;
   transition: background var(--duration-fast) ease; flex-shrink: 0;
 }
-.channel-item.live .accent-bar { background: var(--live-green); opacity: 0.45; }
 .channel-item.selected .accent-bar { background: var(--accent); opacity: 1; }
 
 .channel-item .live-dot { font-size: 8px; color: var(--text-muted); flex-shrink: 0; opacity: 0.55; }
-.channel-item.live .live-dot { color: var(--live-green); opacity: 0.95; }
+.channel-item.live .live-dot { color: var(--live); opacity: 0.95; }
 
 .channel-item .avatar {
   width: 28px; height: 28px; border-radius: 50%; object-fit: cover;
@@ -539,7 +533,7 @@
   box-shadow: 0 0 0 1px var(--border-subtle);
   transition: filter var(--duration-normal) ease, box-shadow var(--duration-fast) ease;
 }
-.channel-item.live .avatar { filter: none; box-shadow: 0 0 0 1px var(--status-border-green); }
+.channel-item.live .avatar { filter: none; }
 
 .channel-item .channel-copy {
   flex: 1; min-width: 0;
@@ -570,7 +564,7 @@
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
-.channel-item.live .metric { color: var(--live-green); }
+.channel-item.live .metric { color: var(--viewers); }
 
 /* ── Drag & drop favorites ────────────────────────────── */
 .drag-handle {
