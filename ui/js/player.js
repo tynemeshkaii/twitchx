@@ -688,8 +688,7 @@ function beginStreamRecovery(reason) {
 }
 
 function _currentQuality() {
-  var sel = document.getElementById('quality-select');
-  return (sel && sel.value) || 'best';
+  return TwitchX.state.quality || 'best';
 }
 
 function _onStreamUrlRefreshed(data) {
@@ -1362,14 +1361,15 @@ function changeQualityLive(quality) {
   return true;
 }
 
-function _handleQualitySelectChange() {
+// Quality changes apply to the running stream instead of waiting for a relaunch.
+function _handleQualityChange() {
   const playerView = document.getElementById('player-view');
   if (!playerView || !playerView.classList.contains('view-active')) return;
   changeQualityLive(_currentQuality());
 }
 
 TwitchX.changeQualityLive = changeQualityLive;
-TwitchX._handleQualitySelectChange = _handleQualitySelectChange;
+TwitchX._handleQualityChange = _handleQualityChange;
 
 /* ── Recording ──────────────────────────────────────── */
 
@@ -1868,26 +1868,23 @@ function _bindPlayerMenu(btnId, menuId, onPick, beforeOpen) {
   });
 }
 
-// The hidden #quality-select is still the value every caller reads; the menu
-// is a view of it and writes through it.
+// TwitchX.state.quality is the value every launch reads; the menu shows and sets it.
 function syncQualityMenu() {
-  var sel = document.getElementById('quality-select');
   var menu = document.getElementById('quality-menu');
   var label = document.getElementById('quality-menu-label');
-  if (!sel) return;
-  var current = sel.value || 'best';
+  var current = _currentQuality();
   if (label) label.textContent = QUALITY_LABELS[current] || current;
   var btn = document.getElementById('quality-menu-btn');
   if (btn) btn.setAttribute('aria-label', 'Quality: ' + (QUALITY_LABELS[current] || current));
   if (!menu) return;
   if (!menu.children.length) {
-    Array.prototype.forEach.call(sel.options, function(opt) {
+    Object.keys(QUALITY_LABELS).forEach(function(value) {
       var item = document.createElement('div');
       item.className = 'ctx-item';
       item.setAttribute('role', 'menuitemradio');
       item.tabIndex = -1;
-      item.dataset.quality = opt.value;
-      item.textContent = QUALITY_LABELS[opt.value] || opt.textContent;
+      item.dataset.quality = value;
+      item.textContent = QUALITY_LABELS[value];
       menu.appendChild(item);
     });
   }
@@ -1897,11 +1894,11 @@ function syncQualityMenu() {
 }
 
 function _pickQuality(item) {
-  var sel = document.getElementById('quality-select');
-  if (!sel || !item.dataset.quality || sel.value === item.dataset.quality) return;
-  sel.value = item.dataset.quality;
-  sel.dispatchEvent(new Event('change'));
+  var quality = item.dataset.quality;
+  if (!quality || quality === TwitchX.state.quality) return;
+  TwitchX.state.quality = quality;
   syncQualityMenu();
+  _handleQualityChange();
 }
 
 // Player context for the "…" menu: the stream on screen, not the selection.
@@ -1969,5 +1966,6 @@ TwitchX.showPlayerOverlay = showPlayerOverlay;
 TwitchX.hidePlayerOverlay = hidePlayerOverlay;
 TwitchX.syncPlayPauseButton = syncPlayPauseButton;
 TwitchX.syncQualityMenu = syncQualityMenu;
+TwitchX.QUALITY_LABELS = QUALITY_LABELS;
 TwitchX.closePlayerMenus = closePlayerMenus;
 TwitchX._bindPlayerOverlay = _bindPlayerOverlay;

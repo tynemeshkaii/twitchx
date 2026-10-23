@@ -77,7 +77,7 @@ function doWatch() {
     TwitchX.setStatus('Already watching ' + TwitchX.state.selectedChannel, 'info');
     return;
   }
-  const quality = document.getElementById('quality-select').value;
+  const quality = TwitchX.state.quality;
   const platform = TwitchX.state.selectedPlatform || TwitchX.getChannelPlatform(TwitchX.state.selectedChannel, TwitchX.state.selectedChannelKey);
   if (TwitchX.api.watch_platform) {
     TwitchX.api.watch_platform(TwitchX.state.selectedChannel, platform, quality);
@@ -122,9 +122,7 @@ function playChannelMedia(item) {
     TwitchX.showToast(item.play_disabled_reason || 'This media cannot be played in app.', 'warn');
     return;
   }
-  const quality = document.getElementById('quality-select')
-    ? document.getElementById('quality-select').value
-    : 'best';
+  const quality = TwitchX.state.quality;
   hideChannelView();
   TwitchX.api.watch_media(
     item.url,
@@ -461,9 +459,7 @@ function watchChannelStream() {
     return;
   }
   hideChannelView();
-  const quality = document.getElementById('quality-select')
-    ? document.getElementById('quality-select').value
-    : 'best';
+  const quality = TwitchX.state.quality;
   TwitchX.api.watch_direct(p.login, p.platform, quality);
 }
 

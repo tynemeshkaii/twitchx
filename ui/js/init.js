@@ -322,12 +322,6 @@ TwitchX._bindPlayerEvents = function() {
     seekBar.addEventListener('mouseleave', TwitchX._handleSeekBarLeave);
   }
 
-  // Quality changes apply to the running stream instead of waiting for a relaunch
-  var qualitySelect = document.getElementById('quality-select');
-  if (qualitySelect) {
-    qualitySelect.addEventListener('change', TwitchX._handleQualitySelectChange);
-  }
-
   // Overlay controls (play/pause, quality and "…" menus, auto-hide)
   TwitchX._bindPlayerOverlay();
 
@@ -774,7 +768,7 @@ TwitchX._bindContextMenuEvents = function() {
     if (action === 'watch') { TwitchX.selectChannel(TwitchX.ctxChannel, ctxPlat); TwitchX.doWatch(); }
     else if (action === 'watch-external') {
       TwitchX.selectChannel(TwitchX.ctxChannel, ctxPlat);
-      const quality = document.getElementById('quality-select').value;
+      const quality = TwitchX.state.quality;
       if (TwitchX.api.watch_external_platform) TwitchX.api.watch_external_platform(TwitchX.ctxChannel, ctxPlat, quality);
       else if (TwitchX.api) TwitchX.api.watch_external(TwitchX.ctxChannel, quality);
     }

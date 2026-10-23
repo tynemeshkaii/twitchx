@@ -1134,9 +1134,7 @@ window.onBrowseTopStreams = function(payload) {
         return;
       }
       TwitchX.hideBrowseView();
-      const quality = document.getElementById('quality-select')
-        ? document.getElementById('quality-select').value
-        : 'best';
+      const quality = TwitchX.state.quality;
       if (TwitchX.api) TwitchX.api.watch_direct(stream.channel_login, stream.platform, quality);
     });
     actions.appendChild(watchBtn);

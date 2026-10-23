@@ -148,13 +148,9 @@ function applyConfigSnapshot(config) {
   const pipBtn = document.getElementById('pip-player-btn');
   if (pipBtn) pipBtn.classList.toggle('hidden', !TwitchX.state.pipEnabled);
 
-  const qualitySelect = document.getElementById('quality-select');
   const savedQuality = (config.settings && config.settings.quality) || '';
-  if (qualitySelect && savedQuality) {
-    const known = Array.prototype.some.call(qualitySelect.options, function(opt) {
-      return opt.value === savedQuality;
-    });
-    if (known) qualitySelect.value = savedQuality;
+  if (savedQuality && TwitchX.QUALITY_LABELS && TwitchX.QUALITY_LABELS[savedQuality]) {
+    TwitchX.state.quality = savedQuality;
   }
   if (TwitchX.syncQualityMenu) TwitchX.syncQualityMenu();
 
