@@ -252,8 +252,13 @@ window.onLaunchResult = function(data) {
   var loader = document.getElementById('stream-loader');
   if (loader) loader.classList.add('hidden');
   if (data.success) {
-    TwitchX.state.watchingChannel = data.channel;
-    TwitchX.state.watchingChannelKey = TwitchX.channelKey(data.channel, data.platform || TwitchX.state.selectedPlatform || TwitchX.state.playerPlatform || 'twitch');
+    // An in-app launch already set the watched channel in onStreamReady. Only
+    // an external-player launch, with no stream in the player, may set it here:
+    // overwriting the in-app key would cut the player's chat off.
+    if (!TwitchX.state.playerPlatform) {
+      TwitchX.state.watchingChannel = data.channel;
+      TwitchX.state.watchingChannelKey = TwitchX.channelKey(data.channel, data.platform || TwitchX.state.selectedPlatform || 'twitch');
+    }
     TwitchX.setStatus(data.message, 'success');
     document.getElementById('live-dot').classList.add('visible');
     TwitchX.renderGrid();

@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 
 from core.codecs import resolve_supported_codecs, twitch_codec_args
-from core.stream_resolver import _quality_arg
+from core.stream_resolver import quality_arg
 from ui.api import TwitchXApi
 
 
@@ -54,14 +54,14 @@ class TestTwitchCodecArgs:
 
 class TestQualityLadder1440:
     def test_1440p60_steps_down_through_1080(self) -> None:
-        ladder = _quality_arg("1440p60").split(",")
+        ladder = quality_arg("1440p60").split(",")
         assert ladder[0] == "1440p60"
         assert ladder.index("1080p60") < ladder.index("best")
         assert ladder[-1] == "best"
 
     def test_1080p60_ladder_never_climbs_to_1440(self) -> None:
         """Picking 1080p60 must not be upgraded into a heavier rendition."""
-        assert "1440p" not in _quality_arg("1080p60")
+        assert "1440p" not in quality_arg("1080p60")
 
 
 def _resolver_spy(captured: dict[str, Any]):

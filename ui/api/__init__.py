@@ -42,7 +42,7 @@ from .data import DataComponent, _aggregate_categories  # noqa: F401
 from .favorites import FavoritesComponent
 from .images import ImagesComponent
 from .settings_schema import validate_settings_payload
-from .streams import StreamsComponent
+from .streams import StreamsComponent, WatchTarget
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +94,8 @@ class TwitchXApi:
         self._games: dict[str, str] = {}
         self._prev_live_logins: set[str] = set()
         self._first_fetch_done = False
-        self._watching_channel: str | None = None
+        # Set only once a launch reached the player; see WatchTarget.
+        self._watching: WatchTarget | None = None
         self._selected_channel: str | None = None
         self._current_user: dict[str, Any] | None = None
         self._launch_timer: threading.Timer | None = None
@@ -132,6 +133,7 @@ class TwitchXApi:
         # and binding early made every TwitchXApi() open the real stats DB.
         self._watch_stats = WatchStatsDB(str(_storage.CONFIG_DIR / WATCH_STATS_DB_NAME))
         self._recorder = Recorder()
+        self._recording_lock = threading.Lock()
         self._active_watch_session: int | None = None
         self._active_watch_lock = threading.Lock()
         threading.Thread(
@@ -751,6 +753,11 @@ class TwitchXApi:
     @staticmethod
     def _parse_scopes(raw: str) -> set[str]:
         return {part.strip() for part in raw.split() if part.strip()}
+
+    @property
+    def _watching_channel(self) -> str | None:
+        """Login of the watched stream. Read-only: assign ``_watching`` instead."""
+        return self._watching.channel if self._watching is not None else None
 
     # ─── Lifecycle ───────────────────────────────────────────
 

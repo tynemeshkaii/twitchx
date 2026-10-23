@@ -494,10 +494,15 @@ class ChatComponent(BaseApiComponent):
             )
             return
 
-        channel = self._api._watching_channel
-        if not channel:
+        target = self._api._watching
+        if target is None:
             self._eval_js(
                 "window.onChatModeChanged({ok: false, error: 'Not watching any channel'})"
+            )
+            return
+        if target.platform != "twitch":
+            self._eval_js(
+                "window.onChatModeChanged({ok: false, error: 'Chat modes are Twitch-only'})"
             )
             return
 
