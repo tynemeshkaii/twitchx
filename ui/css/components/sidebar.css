@@ -88,9 +88,9 @@
 .sidebar-stale-banner {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-1) var(--space-2);
-  margin: var(--space-1) var(--space-2);
+  gap: var(--space-6);
+  padding: var(--space-4) var(--space-8);
+  margin: var(--space-4) var(--space-10);
   background: var(--toast-bg-warn);
   border: 1px solid var(--toast-border-warn);
   border-radius: var(--radius-sm);
