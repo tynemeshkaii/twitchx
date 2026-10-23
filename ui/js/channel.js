@@ -142,78 +142,40 @@ function openChannelInBrowser() {
   TwitchX.api.open_browser(TwitchX.channelProfile.login, TwitchX.channelProfile.platform);
 }
 
+// VODs and clips use the stream card (render.js buildMediaCard) with the
+// length in the corner instead of uptime.
 function createChannelMediaCard(item, tab) {
-  const card = document.createElement('div');
-  card.className = 'channel-media-card' + (tab === 'clips' ? ' clip' : '');
-
-  const thumbWrap = document.createElement('button');
-  thumbWrap.className = 'channel-media-thumb-wrap';
-  thumbWrap.type = 'button';
-  thumbWrap.disabled = item.play_supported === false;
-  thumbWrap.setAttribute('aria-label', 'Play ' + (item.title || (tab === 'clips' ? 'untitled clip' : 'untitled VOD')));
-  if (thumbWrap.disabled) {
-    thumbWrap.title = item.play_disabled_reason || 'This media cannot be played in app.';
+  const profile = TwitchX.channelProfile || {};
+  const untitled = tab === 'clips' ? 'Untitled clip' : 'Untitled VOD';
+  const parts = [];
+  const dateText = TwitchX.formatMediaDate(item.published_at);
+  if (dateText) parts.push(dateText);
+  if (item.views) parts.push(TwitchX.formatViewers(item.views) + ' views');
+  const card = TwitchX.buildMediaCard({
+    platform: item.platform || profile.platform || 'twitch',
+    thumb: item.thumbnail_url || null,
+    fallbackLabel: item.title || item.channel_login || profile.login,
+    showAvatar: false,
+    title: item.title || untitled,
+    channel: parts.join(' \u00b7 '),
+    corner: TwitchX.formatDuration(item.duration_seconds || 0),
+    label: 'Play ' + (item.title || untitled),
+  });
+  card.classList.add('channel-media-card');
+  // Media that cannot play in the app opens in the browser instead.
+  const playable = item.play_supported !== false;
+  if (!playable) card.title = (item.play_disabled_reason || 'This media cannot be played in app.') + ' Opens in the browser.';
+  function activate() {
+    if (playable) playChannelMedia(item);
+    else openChannelMedia(item);
   }
-  thumbWrap.onclick = function() { playChannelMedia(item); };
-
-  if (item.thumbnail_url) {
-    const thumb = document.createElement('img');
-    thumb.className = 'channel-media-thumb';
-    thumb.alt = '';
-    thumb.src = item.thumbnail_url;
-    thumb.loading = 'lazy';
-    thumb.decoding = 'async';
-    thumb.onerror = function() {
-      thumb.remove();
-      thumbWrap.appendChild(TwitchX.createImageFallback(item.title || item.channel_login, 'channel-media-thumb-fallback'));
-    };
-    thumbWrap.appendChild(thumb);
-  } else {
-    thumbWrap.appendChild(TwitchX.createImageFallback(item.title || item.channel_login, 'channel-media-thumb-fallback'));
-  }
-
-  const body = document.createElement('div');
-  body.className = 'channel-media-body';
-
-  const title = document.createElement('div');
-  title.className = 'channel-media-title';
-  title.textContent = item.title || (tab === 'clips' ? 'Untitled clip' : 'Untitled VOD');
-
-  const meta = document.createElement('div');
-  meta.className = 'channel-media-meta';
-  meta.textContent = TwitchX.buildChannelMediaMeta(item, tab);
-
-  const platformRow = document.createElement('div');
-  platformRow.className = 'channel-media-platform-row';
-  platformRow.appendChild(TwitchX.createPlatformBadge(item.platform || (TwitchX.channelProfile && TwitchX.channelProfile.platform) || 'twitch'));
-
-  const actions = document.createElement('div');
-  actions.className = 'channel-media-actions';
-
-  const playBtn = document.createElement('button');
-  playBtn.className = 'channel-media-btn';
-  playBtn.type = 'button';
-  playBtn.textContent = 'Play';
-  playBtn.disabled = item.play_supported === false;
-  if (playBtn.disabled) {
-    playBtn.title = item.play_disabled_reason || 'This media cannot be played in app.';
-  }
-  playBtn.onclick = function() { playChannelMedia(item); };
-
-  const openBtn = document.createElement('button');
-  openBtn.className = 'channel-media-btn secondary';
-  openBtn.type = 'button';
-  openBtn.textContent = 'Open';
-  openBtn.onclick = function() { openChannelMedia(item); };
-
-  actions.appendChild(playBtn);
-  actions.appendChild(openBtn);
-  body.appendChild(title);
-  body.appendChild(platformRow);
-  body.appendChild(meta);
-  body.appendChild(actions);
-  card.appendChild(thumbWrap);
-  card.appendChild(body);
+  card.addEventListener('click', activate);
+  card.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      activate();
+    }
+  });
   return card;
 }
 
@@ -235,76 +197,28 @@ function renderChannelLivePanel(profile) {
   const key = TwitchX.channelKey(profile.login, platform);
   const label = profile.display_name || profile.login;
 
-  const card = document.createElement('div');
+  const card = TwitchX.buildMediaCard({
+    platform: platform,
+    thumb: TwitchX.state.thumbnails[key] || (stream && stream.thumbnail_url) || null,
+    fallbackLabel: label,
+    avatar: TwitchX.state.avatars[key] || profile.avatar_url || null,
+    title: (stream && stream.title) || label + ' is live',
+    channel: label,
+    game: stream && stream.game,
+    viewers: stream && typeof stream.viewers === 'number' ? stream.viewers : null,
+    corner: stream && stream.started_at ? TwitchX.formatUptimeClock(stream.started_at) : '',
+    watching: TwitchX.state.watchingChannelKey === key,
+    label: 'Watch ' + label + ' now',
+  });
   card.id = 'channel-live-card';
-  card.className = 'channel-media-card';
-
-  const thumbWrap = document.createElement('button');
-  thumbWrap.className = 'channel-media-thumb-wrap';
-  thumbWrap.type = 'button';
-  thumbWrap.setAttribute('aria-label', 'Watch ' + label + ' now');
-  thumbWrap.addEventListener('click', watchChannelStream);
-
-  const thumbUrl = TwitchX.state.thumbnails[key] || (stream && stream.thumbnail_url);
-  if (thumbUrl) {
-    const thumb = document.createElement('img');
-    thumb.className = 'channel-media-thumb';
-    thumb.alt = '';
-    thumb.loading = 'lazy';
-    thumb.decoding = 'async';
-    thumb.onerror = function() {
-      thumb.remove();
-      thumbWrap.appendChild(TwitchX.createImageFallback(label, 'channel-media-thumb-fallback'));
-    };
-    thumb.src = thumbUrl;
-    thumbWrap.appendChild(thumb);
-  } else {
-    thumbWrap.appendChild(TwitchX.createImageFallback(label, 'channel-media-thumb-fallback'));
-  }
-
-  const body = document.createElement('div');
-  body.className = 'channel-media-body';
-
-  const title = document.createElement('div');
-  title.className = 'channel-media-title';
-  title.textContent = (stream && stream.title) || label + ' is live';
-  body.appendChild(title);
-
-  const platformRow = document.createElement('div');
-  platformRow.className = 'channel-media-platform-row';
-  platformRow.appendChild(TwitchX.createPlatformBadge(platform));
-  body.appendChild(platformRow);
-
-  const meta = document.createElement('div');
-  meta.className = 'channel-media-meta';
-  const parts = [];
-  if (stream && stream.game) parts.push(stream.game);
-  if (stream && typeof stream.viewers === 'number') {
-    parts.push(TwitchX.formatViewers(stream.viewers) + ' viewers');
-  }
-  if (stream && stream.started_at) parts.push(TwitchX.formatUptime(stream.started_at));
-  meta.textContent = parts.length ? parts.join(' \u00b7 ') : 'Live now';
-  body.appendChild(meta);
-
-  const actions = document.createElement('div');
-  actions.className = 'channel-media-actions';
-  const watchBtn = document.createElement('button');
-  watchBtn.className = 'channel-media-btn';
-  watchBtn.type = 'button';
-  watchBtn.textContent = 'Watch Now';
-  watchBtn.addEventListener('click', watchChannelStream);
-  actions.appendChild(watchBtn);
-
-  const openBtn = document.createElement('button');
-  openBtn.className = 'channel-media-btn secondary';
-  openBtn.type = 'button';
-  openBtn.textContent = 'Open';
-  openBtn.addEventListener('click', openChannelInBrowser);
-  actions.appendChild(openBtn);
-  body.appendChild(actions);
-
-  card.appendChild(thumbWrap);
-  card.appendChild(body);
+  card.classList.add('channel-media-card');
+  card.addEventListener('click', watchChannelStream);
+  card.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      watchChannelStream();
+    }
+  });
   panel.appendChild(card);
 }
 
@@ -367,8 +281,9 @@ function showChannelView(login, platform, source) {
   document.getElementById('channel-header-title').textContent = login;
   document.getElementById('channel-display-name').textContent = '';
   document.getElementById('channel-login-text').textContent = '';
-  document.getElementById('channel-platform-badge').textContent = '';
-  document.getElementById('channel-platform-badge').className = 'platform-badge hidden';
+  document.getElementById('channel-platform-badge').replaceChildren();
+  document.getElementById('channel-platform-badge').className = 'hidden';
+  document.getElementById('channel-banner').style.removeProperty('--banner-color');
   document.getElementById('channel-platform-note').textContent = '';
   document.getElementById('channel-platform-note').classList.add('hidden');
   document.getElementById('channel-followers').textContent = '';
@@ -449,6 +364,27 @@ function toggleChannelFollow() {
   }
 }
 
+// The profile banner takes the avatar's average colour. A cross-origin avatar
+// taints the canvas; the banner then keeps its neutral gradient.
+function tintChannelBanner(img) {
+  const banner = document.getElementById('channel-banner');
+  if (!banner || !img || !img.naturalWidth) return;
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 8;
+    canvas.height = 8;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, 8, 8);
+    const px = ctx.getImageData(0, 0, 8, 8).data;
+    let r = 0, g = 0, b = 0;
+    for (let i = 0; i < px.length; i += 4) { r += px[i]; g += px[i + 1]; b += px[i + 2]; }
+    const n = px.length / 4;
+    banner.style.setProperty('--banner-color', 'rgb(' + Math.round(r / n) + ', ' + Math.round(g / n) + ', ' + Math.round(b / n) + ')');
+  } catch (e) {
+    banner.style.removeProperty('--banner-color');
+  }
+}
+
 function watchChannelStream() {
   if (!TwitchX.channelProfile || !TwitchX.api) return;
   const p = TwitchX.channelProfile;
@@ -474,6 +410,7 @@ TwitchX.openChannelMedia = openChannelMedia;
 TwitchX.openChannelInBrowser = openChannelInBrowser;
 TwitchX.createChannelMediaCard = createChannelMediaCard;
 TwitchX.renderChannelLivePanel = renderChannelLivePanel;
+TwitchX.tintChannelBanner = tintChannelBanner;
 TwitchX.renderChannelMediaTab = renderChannelMediaTab;
 TwitchX.ensureChannelTabLoaded = ensureChannelTabLoaded;
 TwitchX.showChannelView = showChannelView;

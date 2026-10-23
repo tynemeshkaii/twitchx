@@ -23,6 +23,7 @@
 <link rel="stylesheet" href="css/reset.css">
 <link rel="stylesheet" href="css/layout.css">
 <link rel="stylesheet" href="css/components/buttons.css">
+<link rel="stylesheet" href="css/components/platform-dot.css">
 <link rel="stylesheet" href="css/components/forms.css">
 <link rel="stylesheet" href="css/components/modals.css">
 <link rel="stylesheet" href="css/components/sidebar.css">
@@ -68,11 +69,6 @@
       <div id="sidebar-stale-banner" class="sidebar-stale-banner hidden">
         <span class="sidebar-stale-icon">&#x26A0;</span>
         <span class="sidebar-stale-text">Data may be stale</span>
-      </div>
-
-      <div id="favorites-header">
-        <span class="favorites-label">Favorites</span>
-        <span id="favorites-count-badge" aria-label="0 favorites">0</span>
       </div>
 
       <div id="channel-list"></div>
@@ -123,7 +119,9 @@
               <div class="ctx-item" role="menuitemradio" data-sort="recent" aria-checked="false" tabindex="-1">Recently started</div>
               <div class="ctx-item" role="menuitemradio" data-sort="alpha" aria-checked="false" tabindex="-1">Alphabetical</div>
               <div class="ctx-separator" role="separator"></div>
-              <div class="ctx-item" id="density-menu-item" role="menuitem" data-density="next" tabindex="-1"><span data-icon="grid-toggle" data-size="14"></span> <span id="density-menu-label">Density: Grid</span></div>
+              <div class="ctx-menu-label" aria-hidden="true">View</div>
+              <div class="ctx-item" role="menuitemradio" data-density="grid" aria-checked="true" tabindex="-1"><span data-icon="grid-toggle" data-size="16"></span> Grid</div>
+              <div class="ctx-item" role="menuitemradio" data-density="list" aria-checked="false" tabindex="-1"><span data-icon="list-toggle" data-size="16"></span> List</div>
             </div>
           </div>
         </div>
@@ -138,13 +136,13 @@
         </div>
         <div id="browse-view" class="view hidden">
           <div id="browse-header" class="titlebar-drag">
-            <button id="browse-back-btn" class="browse-back-btn hidden"><span data-icon="arrow-left" data-size="16"></span> Back</button>
+            <button id="browse-back-btn" class="browse-back-btn hidden" type="button" title="Back" aria-label="Back"><span data-icon="arrow-left" data-size="16"></span></button>
             <nav id="browse-breadcrumbs" aria-label="Browse breadcrumbs"></nav>
-            <div id="browse-platform-tabs" role="tablist" aria-label="Browse platform filter">
-              <button class="browse-platform-tab active" data-platform="all" role="tab" aria-selected="true">All</button>
-              <button class="browse-platform-tab" data-platform="twitch" role="tab" aria-selected="false" tabindex="-1">Twitch</button>
-              <button class="browse-platform-tab" data-platform="kick" role="tab" aria-selected="false" tabindex="-1">Kick</button>
-              <button class="browse-platform-tab" data-platform="youtube" role="tab" aria-selected="false" tabindex="-1">YouTube</button>
+            <div id="browse-platform-tabs" class="segmented" role="tablist" aria-label="Browse platform filter">
+              <button class="btn browse-platform-tab active" data-platform="all" role="tab" aria-selected="true">All</button>
+              <button class="btn browse-platform-tab" data-platform="twitch" role="tab" aria-selected="false" tabindex="-1">Twitch</button>
+              <button class="btn browse-platform-tab" data-platform="kick" role="tab" aria-selected="false" tabindex="-1">Kick</button>
+              <button class="btn browse-platform-tab" data-platform="youtube" role="tab" aria-selected="false" tabindex="-1">YouTube</button>
             </div>
           </div>
           <div id="browse-body">
@@ -158,36 +156,39 @@
         <!-- Channel profile view -->
         <div id="channel-view" class="view hidden">
           <div id="channel-header" class="titlebar-drag">
-            <button id="channel-back-btn" class="browse-back-btn"><span data-icon="arrow-left" data-size="16"></span> Back</button>
+            <button id="channel-back-btn" class="browse-back-btn" type="button" title="Back" aria-label="Back"><span data-icon="arrow-left" data-size="16"></span></button>
             <span id="channel-header-title"></span>
           </div>
           <div id="channel-body">
             <div id="channel-loading" class="browse-loading hidden">Loading...</div>
+            <div id="channel-banner" aria-hidden="true"></div>
             <div id="channel-profile-card">
               <img id="channel-avatar" class="channel-avatar hidden" alt="">
               <div id="channel-avatar-fallback" class="channel-avatar-fallback hidden" aria-hidden="true"></div>
               <div id="channel-meta">
-                <div id="channel-display-name"></div>
+                <div id="channel-name-row">
+                  <div id="channel-display-name"></div>
+                  <div id="channel-live-badge" class="channel-live-badge hidden">Live</div>
+                </div>
                 <div id="channel-identity-row">
                   <span id="channel-login-text"></span>
-                  <span id="channel-platform-badge" class="platform-badge hidden"></span>
+                  <span id="channel-platform-badge" class="hidden"></span>
+                  <span id="channel-followers"></span>
                 </div>
-                <div id="channel-live-badge" class="channel-live-badge hidden">LIVE</div>
-                <div id="channel-followers"></div>
                 <div id="channel-platform-note" class="channel-platform-note hidden"></div>
               </div>
               <div id="channel-actions">
-                <button id="channel-follow-btn" class="channel-follow-btn">Follow</button>
-                <button id="channel-open-btn" class="channel-open-btn"><span data-icon="browser" data-size="16"></span> Browser</button>
-                <button id="channel-watch-btn" class="channel-watch-btn hidden"><span data-icon="play" data-size="16"></span> Watch Now</button>
+                <button id="channel-open-btn" class="btn btn-secondary" type="button"><span data-icon="browser" data-size="16"></span> Open in browser</button>
+                <button id="channel-follow-btn" class="btn btn-secondary channel-follow-btn" type="button">Follow</button>
+                <button id="channel-watch-btn" class="btn btn-primary hidden" type="button"><span data-icon="play" data-size="16"></span> Watch</button>
                 <div id="channel-action-note" class="channel-action-note hidden"></div>
               </div>
             </div>
             <div id="channel-bio"></div>
-            <div id="channel-tabs" role="tablist" aria-label="Channel media">
-              <button id="channel-tab-live-btn" class="channel-tab active" data-tab="live" role="tab" aria-selected="true" aria-controls="channel-tab-live">Live Now</button>
-              <button id="channel-tab-vods-btn" class="channel-tab" data-tab="vods" role="tab" aria-selected="false" aria-controls="channel-tab-vods" tabindex="-1">VODs</button>
-              <button id="channel-tab-clips-btn" class="channel-tab" data-tab="clips" role="tab" aria-selected="false" aria-controls="channel-tab-clips" tabindex="-1">Clips</button>
+            <div id="channel-tabs" class="segmented" role="tablist" aria-label="Channel media">
+              <button id="channel-tab-live-btn" class="btn channel-tab active" data-tab="live" role="tab" aria-selected="true" aria-controls="channel-tab-live">Live</button>
+              <button id="channel-tab-vods-btn" class="btn channel-tab" data-tab="vods" role="tab" aria-selected="false" aria-controls="channel-tab-vods" tabindex="-1">VODs</button>
+              <button id="channel-tab-clips-btn" class="btn channel-tab" data-tab="clips" role="tab" aria-selected="false" aria-controls="channel-tab-clips" tabindex="-1">Clips</button>
             </div>
             <div id="channel-tab-live" class="channel-tab-panel" role="tabpanel" aria-labelledby="channel-tab-live-btn">
               <div id="channel-live-empty" class="channel-empty hidden">Channel is not live right now.</div>
@@ -195,7 +196,7 @@
             <div id="channel-tab-vods" class="channel-tab-panel hidden" role="tabpanel" aria-labelledby="channel-tab-vods-btn">
               <div id="channel-vods-loading" class="browse-loading hidden">Loading VODs...</div>
               <div id="channel-vods-empty" class="channel-empty hidden"></div>
-              <div id="channel-vods-list" class="channel-media-list"></div>
+              <div id="channel-vods-list" class="channel-media-grid"></div>
             </div>
             <div id="channel-tab-clips" class="channel-tab-panel hidden" role="tabpanel" aria-labelledby="channel-tab-clips-btn">
               <div id="channel-clips-loading" class="browse-loading hidden">Loading Clips...</div>
@@ -208,26 +209,40 @@
         <!-- Multi-stream view -->
         <div id="multistream-view" class="view hidden">
           <div id="multistream-header" class="titlebar-drag">
-            <span id="multistream-title"><span data-icon="grid-layout" data-size="16"></span> Multi-stream</span>
-            <select id="ms-preset-select" aria-label="Multistream layout preset" title="Layout preset"></select>
-            <button id="ms-add-slot-btn" title="Add stream" aria-label="Add stream"><span data-icon="plus" data-size="16"></span></button>
-            <button id="ms-sidebar-btn" title="Toggle Sidebar" aria-label="Toggle Sidebar"><span data-icon="sidebar" data-size="16"></span></button>
-            <button id="ms-toggle-chat-btn" title="Toggle Chat" aria-label="Toggle Multi Chat"><span data-icon="chat" data-size="16"></span></button>
-            <button id="ms-close-btn" title="Close Multistream" aria-label="Close Multistream"><span data-icon="close" data-size="16"></span></button>
+            <span id="multistream-title">Multi-view</span>
+            <div class="player-menu-wrap">
+              <button id="ms-preset-btn" class="ms-header-btn ms-preset-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="ms-preset-menu" title="Layout"><span id="ms-preset-icon" class="ms-preset-icon"></span><span id="ms-preset-label">Grid</span><span data-icon="chevron-down" data-size="12"></span></button>
+              <div id="ms-preset-menu" class="player-menu player-menu-down hidden" role="menu" aria-label="Layout"></div>
+            </div>
+            <button id="ms-add-slot-btn" class="ms-header-btn" type="button" title="Add stream" aria-label="Add stream"><span data-icon="plus" data-size="16"></span></button>
+            <button id="ms-sidebar-btn" class="ms-header-btn" type="button" title="Toggle Sidebar" aria-label="Toggle Sidebar"><span data-icon="sidebar" data-size="16"></span></button>
+            <button id="ms-toggle-chat-btn" class="ms-header-btn" type="button" title="Toggle Chat" aria-label="Toggle Multi Chat"><span data-icon="chat" data-size="16"></span></button>
+            <button id="ms-close-btn" class="ms-header-btn" type="button" title="Close Multistream" aria-label="Close Multistream"><span data-icon="close" data-size="16"></span></button>
           </div>
           <div id="ms-sidebar-backdrop"></div>
           <div id="multistream-body">
+            <!-- Before the first stream: one centred prompt instead of four
+                 identical dashed slots. Also a drop target for the sidebar. -->
+            <div id="ms-empty-hint" class="hidden">
+              <span class="ms-empty-icon" data-icon="grid-layout" data-size="40"></span>
+              <h2 class="ms-empty-title">Add up to 4 streams</h2>
+              <p class="ms-empty-text">Pick a channel by name, or drag one here from the sidebar.</p>
+              <button id="ms-empty-add-btn" class="btn btn-primary" type="button"><span data-icon="plus" data-size="16"></span> Add stream</button>
+              <div id="ms-empty-presets" class="ms-empty-presets" role="radiogroup" aria-label="Layout"></div>
+            </div>
             <div id="multistream-grid"></div>
             <div id="ms-chat-panel" class="hidden">
               <div id="ms-chat-header">
                 <span id="ms-chat-title">Chat</span>
-                <span id="ms-chat-status-dot"></span>
+                <span id="ms-chat-status-dot" title="Not connected"></span>
               </div>
               <div id="ms-chat-messages"></div>
               <div id="ms-chat-new-messages"><span data-icon="arrow-down" data-size="16"></span> New messages</div>
               <div id="ms-chat-input-area">
-                <input id="ms-chat-input" type="text" placeholder="Send a message..." maxlength="500" disabled aria-label="Multi-stream chat message" />
-                <button id="ms-chat-send-btn" disabled>Send</button>
+                <div class="chat-field">
+                  <input id="ms-chat-input" type="text" placeholder="Send a message..." maxlength="500" disabled aria-label="Multi-stream chat message" />
+                  <button id="ms-chat-send-btn" class="chat-field-btn chat-send-btn" type="button" title="Send" aria-label="Send message" disabled><span data-icon="send" data-size="16"></span></button>
+                </div>
               </div>
             </div>
           </div>
@@ -235,16 +250,6 @@
 
         <!-- Player view (replaces grid when a stream is playing) -->
         <div id="player-view" class="view hidden">
-          <div id="player-header" class="titlebar-drag">
-            <span id="player-channel-name"></span>
-            <span id="player-stream-title"></span>
-            <div id="player-header-actions">
-              <button id="stats-overlay-btn" class="player-header-btn hidden" title="Stream Stats" aria-label="Stream Stats"><span data-icon="chart" data-size="16"></span></button>
-              <button id="record-btn" class="player-header-btn hidden" title="Start Recording" aria-label="Start Recording"><span data-icon="record" data-size="16"></span></button>
-              <button id="toggle-chat-btn" class="player-header-btn" title="Toggle Chat (C)" aria-label="Toggle Chat"><span data-icon="chat" data-size="16"></span></button>
-              <button id="close-player-btn" class="player-header-btn" title="Close Player (Esc)" aria-label="Close Player"><span data-icon="close" data-size="16"></span></button>
-            </div>
-          </div>
           <div id="player-content">
             <!-- Video and its overlays live in their own stage so that loader,
                  buffering, error and stats are positioned against the picture
@@ -282,14 +287,28 @@
                     <div id="quality-menu" class="player-menu hidden" role="menu" aria-label="Stream quality"></div>
                   </div>
                   <button id="pip-player-btn" class="player-ctl-btn hidden" type="button" title="Picture-in-Picture (P)" aria-label="Picture in Picture"><span data-icon="pip" data-size="16"></span></button>
+                  <button id="toggle-chat-btn" class="player-ctl-btn" type="button" title="Toggle Chat (C)" aria-label="Toggle Chat"><span data-icon="chat" data-size="16"></span></button>
+                  <button id="fullscreen-player-btn" class="player-ctl-btn" type="button" title="Fullscreen (F)" aria-label="Fullscreen"><span data-icon="fullscreen" data-size="16"></span></button>
+                </div>
+              </div>
+              <!-- Top strip over the picture; fades with the bottom bar. -->
+              <div id="player-header" class="titlebar-drag">
+                <img id="player-header-avatar" class="player-header-avatar hidden" alt="">
+                <div class="player-header-text">
+                  <span id="player-channel-name"></span>
+                  <span id="player-stream-title"></span>
+                </div>
+                <div id="player-header-actions">
                   <div class="player-menu-wrap">
                     <button id="player-more-btn" class="player-ctl-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="player-more-menu" title="More" aria-label="More actions"><span data-icon="more" data-size="16"></span></button>
-                    <div id="player-more-menu" class="player-menu hidden" role="menu" aria-label="More actions">
-                      <div class="ctx-item" id="watch-external-btn" role="menuitem" tabindex="-1"><span data-icon="external-link" data-size="14"></span> Open in External Player</div>
-                      <div class="ctx-item" id="player-browser-item" role="menuitem" tabindex="-1"><span data-icon="browser" data-size="14"></span> Open in Browser</div>
+                    <div id="player-more-menu" class="player-menu player-menu-down hidden" role="menu" aria-label="More actions">
+                      <div class="ctx-item hidden" id="stats-overlay-btn" role="menuitemcheckbox" aria-checked="false" tabindex="-1"><span data-icon="chart" data-size="16"></span> Stream stats</div>
+                      <div class="ctx-item hidden" id="record-btn" role="menuitem" tabindex="-1"><span data-icon="record" data-size="16"></span> <span class="record-btn-label">Start recording</span></div>
+                      <div class="ctx-item" id="watch-external-btn" role="menuitem" tabindex="-1"><span data-icon="external-link" data-size="16"></span> Open in external player</div>
+                      <div class="ctx-item" id="player-browser-item" role="menuitem" tabindex="-1"><span data-icon="browser" data-size="16"></span> Open in browser</div>
                     </div>
                   </div>
-                  <button id="fullscreen-player-btn" class="player-ctl-btn" type="button" title="Fullscreen (F)" aria-label="Fullscreen"><span data-icon="fullscreen" data-size="16"></span></button>
+                  <button id="close-player-btn" class="player-ctl-btn" type="button" title="Close Player (Esc)" aria-label="Close Player"><span data-icon="close" data-size="16"></span></button>
                 </div>
               </div>
               <div id="stats-overlay" class="hidden">
@@ -303,13 +322,18 @@
             <div id="chat-panel">
               <div id="chat-header">
                 <span id="chat-title">Chat</span>
-                <span id="chat-status-dot"></span>
-                <span id="chat-status-text"></span>
-                <button id="chat-timestamp-btn" class="chat-header-btn" title="Toggle timestamps" aria-label="Toggle timestamps"><span data-icon="clock" data-size="14"></span></button>
-                <button id="chat-filter-btn" class="chat-header-btn" title="Chat Filters" aria-label="Chat filters" aria-expanded="false" aria-controls="chat-filter-panel"><span data-icon="filter" data-size="14"></span></button>
-                <button id="chat-export-btn" class="chat-header-btn" title="Export Chat Log" aria-label="Export chat log" aria-expanded="false" aria-controls="chat-export-menu"><span data-icon="download" data-size="14"></span></button>
-                <button id="chat-userlist-btn" class="chat-header-btn" title="Chat Users" aria-label="Chat users" aria-expanded="false" aria-controls="chat-userlist-panel"><span data-icon="users" data-size="14"></span> <span id="chat-userlist-count">0</span></button>
-                <button id="chat-mod-btn" class="chat-header-btn hidden" title="Chat Controls" aria-label="Chat moderation controls" aria-expanded="false" aria-controls="chat-mod-panel"><span data-icon="shield" data-size="14"></span> Mod</button>
+                <span id="chat-status-dot" title="Connecting"></span>
+                <span id="chat-status-text" class="hidden"></span>
+                <div class="player-menu-wrap chat-menu-wrap">
+                  <button id="chat-more-btn" class="chat-header-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="chat-more-menu" title="Chat options" aria-label="Chat options"><span data-icon="more" data-size="16"></span></button>
+                  <div id="chat-more-menu" class="player-menu player-menu-down hidden" role="menu" aria-label="Chat options">
+                    <div class="ctx-item" id="chat-timestamp-btn" role="menuitemcheckbox" aria-checked="false" tabindex="-1"><span data-icon="clock" data-size="16"></span> Timestamps</div>
+                    <div class="ctx-item" id="chat-filter-btn" role="menuitem" tabindex="-1" aria-expanded="false" aria-controls="chat-filter-panel"><span data-icon="filter" data-size="16"></span> Filters</div>
+                    <div class="ctx-item" id="chat-userlist-btn" role="menuitem" tabindex="-1" aria-expanded="false" aria-controls="chat-userlist-panel"><span data-icon="users" data-size="16"></span> Users (<span id="chat-userlist-count">0</span>)</div>
+                    <div class="ctx-item" id="chat-export-btn" role="menuitem" tabindex="-1" aria-expanded="false" aria-controls="chat-export-menu"><span data-icon="download" data-size="16"></span> Export</div>
+                    <div class="ctx-item hidden" id="chat-mod-btn" role="menuitem" tabindex="-1" aria-expanded="false" aria-controls="chat-mod-panel"><span data-icon="shield" data-size="16"></span> Mod tools</div>
+                  </div>
+                </div>
               </div>
               <div id="chat-filter-panel" class="hidden chat-filter-panel">
                 <label class="filter-row">
@@ -363,9 +387,11 @@
                 <div id="emote-grid" class="emote-grid"></div>
               </div>
               <div id="chat-input-area">
-                <button id="emote-picker-btn" class="emote-picker-btn" title="Emotes" aria-label="Open emote picker" aria-expanded="false" aria-controls="emote-picker"><span data-icon="smile" data-size="16"></span></button>
-                <input id="chat-input" type="text" placeholder="Send a message..." maxlength="500" disabled aria-label="Chat message" />
-                <button id="chat-send-btn" disabled>Send</button>
+                <div class="chat-field">
+                  <button id="emote-picker-btn" class="chat-field-btn" type="button" title="Emotes" aria-label="Open emote picker" aria-expanded="false" aria-controls="emote-picker"><span data-icon="smile" data-size="16"></span></button>
+                  <input id="chat-input" type="text" placeholder="Send a message..." maxlength="500" disabled aria-label="Chat message" />
+                  <button id="chat-send-btn" class="chat-field-btn chat-send-btn" type="button" title="Send" aria-label="Send message" disabled><span data-icon="send" data-size="16"></span></button>
+                </div>
               </div>
             </div>
           </div>
@@ -378,16 +404,17 @@
 
 <!-- Context menu -->
 <div id="context-menu" role="menu" tabindex="-1" aria-label="Channel actions">
-  <div class="ctx-item" data-action="watch" role="menuitem" tabindex="-1"><span data-icon="play" data-size="14"></span> Watch in App</div>
-  <div class="ctx-item" data-action="multistream" role="menuitem" tabindex="-1"><span data-icon="grid-layout" data-size="14"></span> Add to Multi-stream</div>
-  <div class="ctx-item" data-action="watch-external" role="menuitem" tabindex="-1"><span data-icon="external-link" data-size="14"></span> Open in External Player</div>
-  <div class="ctx-item" data-action="browser" role="menuitem" tabindex="-1"><span data-icon="browser" data-size="14"></span> Open in Browser</div>
+  <div class="ctx-item" data-action="watch" role="menuitem" tabindex="-1"><span data-icon="play" data-size="16"></span> Watch in App</div>
+  <div class="ctx-item" data-action="multistream" role="menuitem" tabindex="-1"><span data-icon="grid-layout" data-size="16"></span> Add to Multi-stream</div>
+  <div class="ctx-item" data-action="watch-external" role="menuitem" tabindex="-1"><span data-icon="external-link" data-size="16"></span> Open in External Player</div>
+  <div class="ctx-item" data-action="browser" role="menuitem" tabindex="-1"><span data-icon="browser" data-size="16"></span> Open in Browser</div>
+  <div class="ctx-item" data-action="profile" role="menuitem" tabindex="-1"><span data-icon="user" data-size="16"></span> View Channel</div>
   <div class="ctx-separator" role="separator"></div>
-  <div class="ctx-item" data-action="favorite" role="menuitem" tabindex="-1"><span data-icon="star" data-size="14"></span> Add to Favorites</div>
-  <div class="ctx-item" data-action="pin" role="menuitem" tabindex="-1"><span data-icon="pin" data-size="14"></span> Pin to top</div>
-  <div class="ctx-item" data-action="create-group" role="menuitem" tabindex="-1"><span data-icon="folder-plus" data-size="14"></span> Create group</div>
-  <div class="ctx-item" data-action="move-to-group" role="menuitem" tabindex="-1"><span data-icon="folder-move" data-size="14"></span> Move to group</div>
-  <div class="ctx-item" data-action="remove" role="menuitem" tabindex="-1"><span data-icon="close" data-size="14"></span> Remove</div>
+  <div class="ctx-item" data-action="favorite" role="menuitem" tabindex="-1"><span data-icon="star" data-size="16"></span> Add to Favorites</div>
+  <div class="ctx-item" data-action="pin" role="menuitem" tabindex="-1"><span data-icon="pin" data-size="16"></span> Pin to top</div>
+  <div class="ctx-item" data-action="create-group" role="menuitem" tabindex="-1"><span data-icon="folder-plus" data-size="16"></span> Create group</div>
+  <div class="ctx-item" data-action="move-to-group" role="menuitem" tabindex="-1"><span data-icon="folder-move" data-size="16"></span> Move to group</div>
+  <div class="ctx-item destructive" data-action="remove" role="menuitem" tabindex="-1"><span data-icon="close" data-size="16"></span> Remove</div>
 </div>
 
 <!-- Account popover (opened from the account chip at the bottom of the sidebar) -->
@@ -432,8 +459,8 @@
 
 <!-- Group context menu -->
 <div id="group-context-menu" role="menu" tabindex="-1" aria-label="Group actions">
-  <div class="ctx-item" data-action="rename-group" role="menuitem" tabindex="-1"><span data-icon="edit" data-size="14"></span> Rename group</div>
-  <div class="ctx-item" data-action="delete-group" role="menuitem" tabindex="-1"><span data-icon="trash" data-size="14"></span> Delete group</div>
+  <div class="ctx-item" data-action="rename-group" role="menuitem" tabindex="-1"><span data-icon="edit" data-size="16"></span> Rename group</div>
+  <div class="ctx-item destructive" data-action="delete-group" role="menuitem" tabindex="-1"><span data-icon="trash" data-size="16"></span> Delete group</div>
 </div>
 
 <!-- Command Palette -->
@@ -457,282 +484,276 @@
 <!-- Settings overlay -->
 <div id="settings-overlay" role="dialog" aria-modal="true" aria-labelledby="settings-title" aria-hidden="true" inert>
   <div id="settings-modal">
+    <!-- macOS-style settings: section list on the left, inset-list groups on
+         the right. Everything applies on change; only credentials have a
+         Save button of their own. -->
+    <nav class="settings-nav">
+      <h2 id="settings-title">Settings</h2>
+      <div class="settings-tabs" role="tablist" aria-label="Settings sections" aria-orientation="vertical">
+        <button id="settings-tab-accounts" class="settings-tab active" data-tab="accounts" role="tab" aria-selected="true" aria-controls="settings-panel-accounts"><span data-icon="user" data-size="16"></span>Accounts</button>
+        <button id="settings-tab-player" class="settings-tab" data-tab="player" role="tab" aria-selected="false" aria-controls="settings-panel-player" tabindex="-1"><span data-icon="play" data-size="16"></span>Player</button>
+        <button id="settings-tab-chat" class="settings-tab" data-tab="chat" role="tab" aria-selected="false" aria-controls="settings-panel-chat" tabindex="-1"><span data-icon="chat" data-size="16"></span>Chat</button>
+        <button id="settings-tab-appearance" class="settings-tab" data-tab="appearance" role="tab" aria-selected="false" aria-controls="settings-panel-appearance" tabindex="-1"><span data-icon="eye" data-size="16"></span>Appearance</button>
+        <button id="settings-tab-advanced" class="settings-tab" data-tab="advanced" role="tab" aria-selected="false" aria-controls="settings-panel-advanced" tabindex="-1"><span data-icon="settings" data-size="16"></span>Advanced</button>
+      </div>
+      <div class="settings-footer" id="settings-version-footer"></div>
+    </nav>
+
+    <div class="settings-content">
     <button id="close-settings" aria-label="Close settings"><span data-icon="close" data-size="12"></span></button>
-    <h2 id="settings-title"><span data-icon="settings" data-size="16" class="settings-title-icon"></span>TwitchX Settings</h2>
 
-    <div class="settings-tabs" role="tablist" aria-label="Settings sections">
-      <button id="settings-tab-accounts" class="settings-tab active" data-tab="accounts" role="tab" aria-selected="true" aria-controls="settings-panel-accounts">Accounts</button>
-      <button id="settings-tab-player" class="settings-tab" data-tab="player" role="tab" aria-selected="false" aria-controls="settings-panel-player" tabindex="-1">Player</button>
-      <button id="settings-tab-chat" class="settings-tab" data-tab="chat" role="tab" aria-selected="false" aria-controls="settings-panel-chat" tabindex="-1">Chat</button>
-      <button id="settings-tab-appearance" class="settings-tab" data-tab="appearance" role="tab" aria-selected="false" aria-controls="settings-panel-appearance" tabindex="-1">Appearance</button>
-      <button id="settings-tab-advanced" class="settings-tab" data-tab="advanced" role="tab" aria-selected="false" aria-controls="settings-panel-advanced" tabindex="-1">Advanced</button>
-    </div>
-
-    <!-- Accounts panel: Twitch + Kick + YouTube -->
+    <!-- Accounts: one group per platform -->
     <div class="settings-panel active" id="settings-panel-accounts" role="tabpanel" aria-labelledby="settings-tab-accounts">
+      <h3 class="settings-section-title">Accounts</h3>
 
-      <!-- Twitch -->
-      <div class="platform-section">
-        <div class="platform-section-header">
-          <span class="platform-section-name">Twitch</span>
-          <span id="twitch-cred-status" class="cred-badge cred-bundled">Built-in credentials</span>
-        </div>
-        <div id="twitch-advanced-section" class="hidden">
-          <div class="setting-group">
-            <label for="s-client-id">Client ID</label>
-            <input id="s-client-id" type="text" autocomplete="off" placeholder="Leave blank to use built-in">
+      <div class="settings-group">
+        <div class="settings-row account-row">
+          <span class="platform-dot twitch" aria-hidden="true"></span>
+          <div class="account-row-text">
+            <span class="account-row-name">Twitch</span>
+            <span id="twitch-cred-status" class="account-status">Not connected</span>
           </div>
-          <div class="setting-group">
+          <button id="twitch-connect-btn" class="settings-btn" type="button">Connect</button>
+        </div>
+        <details id="twitch-advanced-section" class="settings-disclosure">
+          <summary class="settings-row">Advanced <span class="settings-row-hint">Custom app credentials</span></summary>
+          <div class="settings-row">
+            <label for="s-client-id">Client ID</label>
+            <input id="s-client-id" class="settings-input" type="text" autocomplete="off" placeholder="Built-in">
+          </div>
+          <div class="settings-row">
             <label for="s-client-secret">Client Secret</label>
             <div class="secret-row">
-              <input id="s-client-secret" type="password" autocomplete="off" placeholder="Leave blank to use built-in">
-              <button class="eye-btn" id="eye-toggle-btn" aria-label="Toggle visibility"><span data-icon="eye" data-size="14"></span></button>
+              <input id="s-client-secret" class="settings-input" type="password" autocomplete="off" placeholder="Built-in">
+              <button class="eye-btn" id="eye-toggle-btn" type="button" aria-label="Toggle visibility"><span data-icon="eye" data-size="14"></span></button>
             </div>
           </div>
-          <div class="oauth-note">OAuth Redirect URL: <code class="oauth-code">http://localhost:3457/callback</code></div>
-        </div>
-        <div class="platform-actions">
-          <a id="twitch-advanced-toggle" class="toggle-link" href="#">Use custom credentials ▾</a>
-          <button id="test-btn" class="test-conn-btn">Test connection</button>
-        </div>
+          <div class="settings-row settings-row-actions">
+            <span class="settings-row-hint">Redirect URL <code class="oauth-code">http://localhost:3457/callback</code></span>
+            <button id="test-btn" class="settings-btn" type="button">Test</button>
+            <button id="twitch-save-creds-btn" class="settings-btn primary" type="button" data-creds="twitch">Save credentials</button>
+          </div>
+        </details>
       </div>
 
-      <div class="platform-divider"></div>
-
-      <!-- Kick -->
-      <div class="platform-section">
-        <div class="platform-section-header">
-          <span class="platform-section-name">Kick</span>
-          <span id="kick-cred-status" class="cred-badge cred-bundled">Built-in credentials</span>
-        </div>
-        <div id="kick-advanced-section" class="hidden">
-          <div class="setting-group">
-            <label for="s-kick-client-id">Client ID</label>
-            <input id="s-kick-client-id" type="text" autocomplete="off" placeholder="Leave blank to use built-in">
+      <div class="settings-group">
+        <div class="settings-row account-row">
+          <span class="platform-dot kick" aria-hidden="true"></span>
+          <div class="account-row-text">
+            <span class="account-row-name">Kick</span>
+            <span id="kick-cred-status" class="account-status">Not connected</span>
           </div>
-          <div class="setting-group">
+          <span id="kick-login-area"><button id="kick-login-btn" class="settings-btn" type="button">Connect</button></span>
+          <span id="kick-user-area" class="hidden"><span id="kick-user-display" class="hidden"></span><button id="kick-logout-settings-link" class="settings-btn" type="button">Disconnect</button></span>
+        </div>
+        <details id="kick-advanced-section" class="settings-disclosure">
+          <summary class="settings-row">Advanced <span class="settings-row-hint">Custom app credentials</span></summary>
+          <div class="settings-row">
+            <label for="s-kick-client-id">Client ID</label>
+            <input id="s-kick-client-id" class="settings-input" type="text" autocomplete="off" placeholder="Built-in">
+          </div>
+          <div class="settings-row">
             <label for="s-kick-client-secret">Client Secret</label>
             <div class="secret-row">
-              <input id="s-kick-client-secret" type="password" autocomplete="off" placeholder="Leave blank to use built-in">
-              <button class="eye-btn" id="kick-eye-toggle-btn" aria-label="Toggle visibility"><span data-icon="eye" data-size="14"></span></button>
+              <input id="s-kick-client-secret" class="settings-input" type="password" autocomplete="off" placeholder="Built-in">
+              <button class="eye-btn" id="kick-eye-toggle-btn" type="button" aria-label="Toggle visibility"><span data-icon="eye" data-size="14"></span></button>
             </div>
           </div>
-          <div class="oauth-note">
-            OAuth Redirect URL: <code class="oauth-code">http://localhost:3457/callback</code><br>
-            Kick's API doesn't expose followed channels — favorites must be added manually via search.
+          <div class="settings-row settings-row-actions">
+            <span class="settings-row-hint">Redirect URL <code class="oauth-code">http://localhost:3457/callback</code></span>
+            <button id="kick-test-btn" class="settings-btn" type="button">Test</button>
+            <button id="kick-save-creds-btn" class="settings-btn primary" type="button" data-creds="kick">Save credentials</button>
           </div>
-        </div>
-        <div id="kick-login-area" class="platform-auth-row">
-          <button id="kick-login-btn" class="oauth-login-btn">Login with Kick</button>
-        </div>
-        <div id="kick-user-area" class="platform-auth-row hidden">
-          <div id="kick-user-display" class="setting-user-display"></div>
-          <a id="kick-logout-settings-link" class="logout-link" role="button" tabindex="0">Logout</a>
-        </div>
-        <div class="platform-actions">
-          <a id="kick-advanced-toggle" class="toggle-link" href="#">Use custom credentials ▾</a>
-          <button id="kick-test-btn" class="test-conn-btn">Test connection</button>
-        </div>
+        </details>
       </div>
+      <p class="setting-hint">Kick's API does not list followed channels: add Kick favorites from search.</p>
 
-      <div class="platform-divider" id="yt-settings-divider"></div>
-
-      <!-- YouTube -->
-      <div class="platform-section" id="yt-settings-section">
-        <div class="platform-section-header">
-          <span class="platform-section-name">YouTube</span>
-          <span id="yt-cred-status" class="cred-badge cred-missing">API key required</span>
-        </div>
-        <div id="yt-advanced-section">
-          <div class="setting-group">
-            <label for="yt-api-key">API Key <span class="field-optional">(required for browsing)</span></label>
-            <div class="secret-row">
-              <input id="yt-api-key" type="password" autocomplete="off" placeholder="YouTube Data API v3 key">
-              <button class="eye-btn" id="yt-api-key-eye-btn" aria-label="Toggle visibility"><span data-icon="eye" data-size="14"></span></button>
+      <div id="yt-settings-section">
+        <div class="settings-group">
+          <div class="settings-row account-row">
+            <span class="platform-dot youtube" aria-hidden="true"></span>
+            <div class="account-row-text">
+              <span class="account-row-name">YouTube</span>
+              <span id="yt-cred-status" class="account-status">API key required</span>
             </div>
+            <span id="yt-login-area"><button id="yt-login-btn" class="settings-btn" type="button">Connect</button></span>
+            <span id="yt-user-area" class="hidden"><span id="yt-display-name" class="hidden"></span><button id="yt-logout-btn" class="settings-btn" type="button">Disconnect</button></span>
           </div>
-          <div class="setting-group">
-            <label for="yt-client-id">OAuth Client ID <span class="field-optional">(required for login)</span></label>
-            <input id="yt-client-id" type="text" autocomplete="off" placeholder="From Google Cloud Console">
-          </div>
-          <div class="setting-group">
-            <label for="yt-client-secret">OAuth Client Secret <span class="field-optional">(required for login)</span></label>
-            <div class="secret-row">
-              <input id="yt-client-secret" type="password" autocomplete="off" placeholder="From Google Cloud Console">
-              <button class="eye-btn" id="yt-client-secret-eye-btn" aria-label="Toggle visibility"><span data-icon="eye" data-size="14"></span></button>
+          <div id="yt-import-row" class="settings-row hidden">
+            <div class="account-row-text">
+              <span>Subscriptions</span>
+              <span id="yt-quota-display" class="settings-row-hint"></span>
             </div>
+            <button id="yt-import-btn" class="settings-btn" type="button">Import</button>
           </div>
-          <div class="oauth-note">
-            Enable YouTube Data API v3 in Google Cloud Console, create an OAuth 2.0 client, add <code class="oauth-code">http://localhost:3457/callback</code> as redirect URI.
-          </div>
+          <details id="yt-advanced-section" class="settings-disclosure">
+            <summary class="settings-row">Advanced <span class="settings-row-hint">API key and OAuth client</span></summary>
+            <div class="settings-row">
+              <label for="yt-api-key">API Key</label>
+              <div class="secret-row">
+                <input id="yt-api-key" class="settings-input" type="password" autocomplete="off" placeholder="YouTube Data API v3 key">
+                <button class="eye-btn" id="yt-api-key-eye-btn" type="button" aria-label="Toggle visibility"><span data-icon="eye" data-size="14"></span></button>
+              </div>
+            </div>
+            <div class="settings-row">
+              <label for="yt-client-id">OAuth Client ID</label>
+              <input id="yt-client-id" class="settings-input" type="text" autocomplete="off" placeholder="From Google Cloud Console">
+            </div>
+            <div class="settings-row">
+              <label for="yt-client-secret">OAuth Client Secret</label>
+              <div class="secret-row">
+                <input id="yt-client-secret" class="settings-input" type="password" autocomplete="off" placeholder="From Google Cloud Console">
+                <button class="eye-btn" id="yt-client-secret-eye-btn" type="button" aria-label="Toggle visibility"><span data-icon="eye" data-size="14"></span></button>
+              </div>
+            </div>
+            <div class="settings-row settings-row-actions">
+              <span class="settings-row-hint">Redirect URL <code class="oauth-code">http://localhost:3457/callback</code></span>
+              <button id="yt-test-btn" class="settings-btn" type="button">Test</button>
+              <button id="yt-save-creds-btn" class="settings-btn primary" type="button" data-creds="youtube">Save credentials</button>
+            </div>
+          </details>
         </div>
-        <div id="yt-login-area" class="platform-auth-row">
-          <button id="yt-login-btn" class="oauth-login-btn">Connect YouTube Account</button>
-        </div>
-        <div id="yt-user-area" class="platform-auth-row hidden">
-          <div id="yt-display-name" class="setting-user-display mb-1"></div>
-          <div id="yt-quota-display" class="setting-quota-display"></div>
-          <button id="yt-import-btn" class="import-btn">Import Subscriptions</button>
-          <button id="yt-logout-btn" class="logout-link" type="button">Logout</button>
-        </div>
-        <div class="platform-actions">
-          <button id="yt-test-btn" class="test-conn-btn ml-auto">Test connection</button>
-        </div>
+        <p class="setting-hint">The API key is needed for browsing, the OAuth client for signing in. Enable YouTube Data API v3 in Google Cloud Console.</p>
         <div id="yt-test-result" class="hidden test-result"></div>
       </div>
-
+      <span id="yt-settings-divider" class="hidden"></span>
     </div>
 
-    <!-- Player panel -->
+    <!-- Player -->
     <div class="settings-panel" id="settings-panel-player" role="tabpanel" aria-labelledby="settings-tab-player">
-      <div class="setting-group">
-        <label for="s-external-player">External Player</label>
-        <select id="s-external-player">
-          <option value="iina">IINA</option>
-          <option value="mpv">mpv</option>
-        </select>
+      <h3 class="settings-section-title">Player</h3>
+      <div class="settings-group">
+        <div class="settings-row">
+          <label for="s-stream-codecs">Twitch video codecs</label>
+          <select id="s-stream-codecs" class="settings-select" data-setting="stream_codecs">
+            <option value="auto">Automatic</option>
+            <option value="h264,h265">H.264 + HEVC</option>
+            <option value="h264,h265,av1">H.264 + HEVC + AV1</option>
+            <option value="h264">H.264 only</option>
+          </select>
+        </div>
+        <div class="settings-row">
+          <label for="s-low-latency">Low-latency mode (Twitch)</label>
+          <input type="checkbox" id="s-low-latency" class="settings-switch" role="switch" data-setting="low_latency_mode">
+        </div>
       </div>
-      <div class="setting-group">
-        <label for="s-iina">IINA Path</label>
-        <input id="s-iina" type="text" autocomplete="off">
-      </div>
-      <div class="setting-group hidden" id="s-mpv-group">
-        <label for="s-mpv">mpv Path</label>
-        <input id="s-mpv" type="text" autocomplete="off">
-      </div>
-      <div class="setting-group">
-        <label for="s-streamlink">Streamlink Path</label>
-        <input id="s-streamlink" type="text" autocomplete="off">
-      </div>
-      <div class="setting-group">
-        <label for="s-recording-path">Recording Directory</label>
-        <input id="s-recording-path" type="text" autocomplete="off">
-      </div>
-      <div class="setting-group">
-        <label for="s-stream-codecs">Twitch Video Codecs</label>
-        <select id="s-stream-codecs">
-          <option value="auto">Automatic (recommended)</option>
-          <option value="h264,h265">H.264 + HEVC</option>
-          <option value="h264,h265,av1">H.264 + HEVC + AV1</option>
-          <option value="h264">H.264 only</option>
-        </select>
-        <p class="setting-hint" id="s-stream-codecs-hint">Twitch offers 1440p60 and other high renditions only to clients that accept HEVC or AV1. Automatic requests HEVC always, and AV1 only when this Mac decodes it in hardware.</p>
-      </div>
-      <div class="setting-group">
-        <div class="setting-label">Twitch Low-Latency Mode</div>
-        <label class="checkbox-row">
-          <input type="checkbox" id="s-low-latency"> Enable low-latency HLS (Twitch only)
-        </label>
-        <p class="setting-hint">Reduces stream delay. Requires streamlink &ge;6.x and Twitch support.</p>
+      <p class="setting-hint" id="s-stream-codecs-hint">Twitch offers 1440p60 and other high renditions only to clients that accept HEVC or AV1. Automatic requests HEVC always, and AV1 only when this Mac decodes it in hardware. Low latency needs streamlink 6 or newer.</p>
+
+      <div class="settings-group">
+        <div class="settings-row">
+          <label for="s-external-player">External player</label>
+          <select id="s-external-player" class="settings-select" data-setting="external_player">
+            <option value="iina">IINA</option>
+            <option value="mpv">mpv</option>
+          </select>
+        </div>
+        <div class="settings-row">
+          <label for="s-iina">IINA path</label>
+          <input id="s-iina" class="settings-input" type="text" autocomplete="off" data-setting="iina_path" data-debounce>
+        </div>
+        <div class="settings-row hidden" id="s-mpv-group">
+          <label for="s-mpv">mpv path</label>
+          <input id="s-mpv" class="settings-input" type="text" autocomplete="off" data-setting="mpv_path" data-debounce>
+        </div>
+        <div class="settings-row">
+          <label for="s-streamlink">Streamlink path</label>
+          <input id="s-streamlink" class="settings-input" type="text" autocomplete="off" data-setting="streamlink_path" data-debounce>
+        </div>
+        <div class="settings-row">
+          <label for="s-recording-path">Recording folder</label>
+          <input id="s-recording-path" class="settings-input" type="text" autocomplete="off" data-setting="recording_path" data-debounce>
+        </div>
       </div>
     </div>
 
-    <!-- Chat panel -->
+    <!-- Chat -->
     <div class="settings-panel" id="settings-panel-chat" role="tabpanel" aria-labelledby="settings-tab-chat">
-      <div class="setting-group">
-        <div class="setting-label">Picture-in-Picture</div>
-        <label class="checkbox-row">
-          <input type="checkbox" id="s-pip-enabled"> Show PiP button in player header
-        </label>
+      <h3 class="settings-section-title">Chat</h3>
+      <div class="settings-group">
+        <div class="settings-row">
+          <label for="s-pip-enabled">Picture-in-Picture button</label>
+          <input type="checkbox" id="s-pip-enabled" class="settings-switch" role="switch" data-setting="pip_enabled">
+        </div>
       </div>
+      <p class="setting-hint">Chat filters, timestamps and the user list live in the chat's &#8230; menu.</p>
     </div>
 
-    <!-- Appearance panel -->
+    <!-- Appearance -->
     <div class="settings-panel" id="settings-panel-appearance" role="tabpanel" aria-labelledby="settings-tab-appearance">
-      <div class="setting-group">
-        <div class="setting-label" id="theme-label">Theme</div>
-        <div class="theme-options" role="radiogroup" aria-labelledby="theme-label">
-          <label class="theme-option">
-            <input type="radio" name="theme" value="auto">
-            <span>Auto</span>
-          </label>
-          <label class="theme-option">
-            <input type="radio" name="theme" value="dark">
-            <span>Dark</span>
-          </label>
-          <label class="theme-option">
-            <input type="radio" name="theme" value="light">
-            <span>Light</span>
-          </label>
+      <h3 class="settings-section-title">Appearance</h3>
+      <div class="settings-group">
+        <div class="settings-row">
+          <span class="settings-row-label" id="theme-label">Theme</span>
+          <div id="theme-options" class="segmented" role="radiogroup" aria-labelledby="theme-label">
+            <button type="button" class="btn" role="radio" aria-checked="false" data-theme-value="auto">Auto</button>
+            <button type="button" class="btn" role="radio" aria-checked="true" data-theme-value="dark">Dark</button>
+            <button type="button" class="btn" role="radio" aria-checked="false" data-theme-value="light">Light</button>
+          </div>
         </div>
-      </div>
-      <div class="setting-group">
-        <div class="setting-label" id="accent-color-label">Accent Color</div>
-        <div id="accent-swatches" class="accent-swatches"></div>
+        <div class="settings-row">
+          <span class="settings-row-label" id="accent-color-label">Accent color</span>
+          <div id="accent-swatches" class="accent-swatches" role="radiogroup" aria-labelledby="accent-color-label"></div>
+        </div>
       </div>
     </div>
 
-    <!-- Advanced panel: intervals + hotkeys + statistics -->
+    <!-- Advanced: refresh, shortcuts, statistics -->
     <div class="settings-panel" id="settings-panel-advanced" role="tabpanel" aria-labelledby="settings-tab-advanced">
-      <div class="setting-group">
-        <label for="s-interval">Refresh Interval</label>
-        <select id="s-interval">
-          <option value="30">30 seconds</option>
-          <option value="60">60 seconds</option>
-          <option value="120">120 seconds</option>
-        </select>
+      <h3 class="settings-section-title">Advanced</h3>
+      <div class="settings-group">
+        <div class="settings-row">
+          <label for="s-interval">Refresh interval</label>
+          <select id="s-interval" class="settings-select" data-setting="refresh_interval">
+            <option value="30">30 seconds</option>
+            <option value="60">60 seconds</option>
+            <option value="120">2 minutes</option>
+          </select>
+        </div>
       </div>
-      <div class="setting-group">
-        <div class="setting-label">Keyboard Shortcuts</div>
-        <p class="setting-hint setting-hint-spaced">Click a key badge to rebind it. Press Esc to cancel.</p>
+
+      <h4 class="settings-group-title">Keyboard shortcuts</h4>
+      <div class="settings-group">
         <table id="hotkeys-table" class="hotkeys-table"></table>
-        <button id="reset-shortcuts-btn" class="reset-btn">Reset to Defaults</button>
       </div>
-      <div class="setting-group">
-        <div class="setting-label">Watch Statistics</div>
-        <div class="stats-controls">
-          <div id="stats-loading" class="stats-loading stats-loading--header">Loading...</div>
-          <button id="stats-compact-toggle" class="hidden" title="Toggle compact view">Compact</button>
-        </div>
-        <div id="stats-content" class="hidden">
-          <div class="setting-group mt-1">
-            <div class="setting-label">Today</div>
-            <div id="stats-today" class="stats-grid">
-              <div class="stat-card">
-                <span class="stat-value" id="stat-today-time">--</span>
-                <span class="stat-label">Watch time</span>
-              </div>
-              <div class="stat-card">
-                <span class="stat-value" id="stat-today-streams">--</span>
-                <span class="stat-label">Streams</span>
-              </div>
-              <div class="stat-card">
-                <span class="stat-value" id="stat-today-channels">--</span>
-                <span class="stat-label">Channels</span>
-              </div>
-            </div>
+      <div class="settings-group-foot">
+        <p class="setting-hint">Click a key to rebind it. Esc cancels.</p>
+        <button id="reset-shortcuts-btn" class="settings-btn" type="button">Reset to defaults</button>
+      </div>
+
+      <h4 class="settings-group-title">Statistics</h4>
+      <div id="stats-loading" class="stats-loading">Loading&#8230;</div>
+      <div id="stats-content" class="hidden">
+        <div id="stats-today" class="stats-grid">
+          <div class="stat-card">
+            <span class="stat-value" id="stat-today-time">--</span>
+            <span class="stat-label">Today</span>
           </div>
-          <div class="setting-group">
-            <div class="setting-label">This Week</div>
-            <div id="stats-weekly"></div>
+          <div class="stat-card">
+            <span class="stat-value" id="stat-today-streams">--</span>
+            <span class="stat-label">Streams today</span>
           </div>
-          <div class="setting-group">
-            <div class="setting-label">All Time</div>
-            <div class="stats-grid stats-grid-cols-2">
-              <div class="stat-card">
-                <span class="stat-value" id="stat-total-time">--</span>
-                <span class="stat-label">Total watch time</span>
-              </div>
-              <div class="stat-card">
-                <span class="stat-value" id="stat-total-channels">--</span>
-                <span class="stat-label">Unique channels</span>
-              </div>
-            </div>
+          <div class="stat-card">
+            <span class="stat-value" id="stat-today-channels">--</span>
+            <span class="stat-label">Channels today</span>
           </div>
-          <div class="setting-group">
-            <div class="setting-label">Top Channels</div>
-            <div id="stats-top-channels" class="stats-list"></div>
+          <div class="stat-card">
+            <span class="stat-value" id="stat-total-time">--</span>
+            <span class="stat-label">All time</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-value" id="stat-total-channels">--</span>
+            <span class="stat-label">Unique channels</span>
           </div>
         </div>
+        <h4 class="settings-group-title">Top channels</h4>
+        <div id="stats-top-channels" class="settings-group stats-list"></div>
+        <h4 class="settings-group-title">This week</h4>
+        <div id="stats-weekly" class="settings-group"></div>
       </div>
     </div>
 
-    <div id="settings-feedback"></div>
-
-    <div class="settings-btns">
-      <button id="save-btn">Save</button>
+    <div id="settings-feedback" role="status" aria-live="polite"></div>
     </div>
-    <div class="settings-footer" id="settings-version-footer"></div>
   </div>
 </div>
 

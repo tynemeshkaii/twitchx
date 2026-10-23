@@ -8,6 +8,12 @@ const MULTISTREAM_PRESET_LABELS = {
   rows: 'Rows',
   columns: 'Columns',
 };
+const MULTISTREAM_PRESET_ICONS = {
+  grid: 'grid-layout',
+  'focus-left': 'layout-focus',
+  rows: 'layout-rows',
+  columns: 'layout-columns',
+};
 
 function openMultistreamView() {
   TwitchX.multiState.open = true;
@@ -40,8 +46,53 @@ function _applyMultistreamPreset(preset) {
     grid.classList.remove('ms-preset-' + p);
   });
   grid.classList.add('ms-preset-' + valid);
-  const select = document.getElementById('ms-preset-select');
-  if (select && select.value !== valid) select.value = valid;
+  const label = document.getElementById('ms-preset-label');
+  if (label) label.textContent = MULTISTREAM_PRESET_LABELS[valid];
+  const icon = document.getElementById('ms-preset-icon');
+  if (icon) TwitchX.setIconOnly(icon, MULTISTREAM_PRESET_ICONS[valid], 16);
+  document.querySelectorAll('#ms-preset-menu [data-preset], #ms-empty-presets [data-preset]').forEach(function(item) {
+    item.setAttribute('aria-checked', String(item.dataset.preset === valid));
+  });
+}
+
+// The header's layout menu and the icon row of the empty prompt.
+function _buildMultistreamPresetControls() {
+  const menu = document.getElementById('ms-preset-menu');
+  const row = document.getElementById('ms-empty-presets');
+  if (menu) {
+    menu.replaceChildren();
+    MULTISTREAM_PRESETS.forEach(function(p) {
+      const item = document.createElement('div');
+      item.className = 'ctx-item';
+      item.setAttribute('role', 'menuitemradio');
+      item.tabIndex = -1;
+      item.dataset.preset = p;
+      item.appendChild(TwitchX.makeIcon(MULTISTREAM_PRESET_ICONS[p], 16));
+      item.appendChild(document.createTextNode(' ' + MULTISTREAM_PRESET_LABELS[p]));
+      menu.appendChild(item);
+    });
+    if (TwitchX.bindPopupMenu) {
+      TwitchX.bindPopupMenu('ms-preset-btn', 'ms-preset-menu', function(item) {
+        setMultistreamPreset(item.dataset.preset);
+      });
+    }
+  }
+  if (row) {
+    row.replaceChildren();
+    MULTISTREAM_PRESETS.forEach(function(p) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ms-empty-preset';
+      btn.dataset.preset = p;
+      btn.setAttribute('role', 'radio');
+      btn.title = MULTISTREAM_PRESET_LABELS[p];
+      btn.setAttribute('aria-label', MULTISTREAM_PRESET_LABELS[p] + ' layout');
+      TwitchX.setIconOnly(btn, MULTISTREAM_PRESET_ICONS[p], 20);
+      btn.addEventListener('click', function() { setMultistreamPreset(p); });
+      row.appendChild(btn);
+    });
+  }
+  _applyMultistreamPreset(TwitchX.multiState.activePreset);
 }
 
 function _loadMultistreamPresets() {
@@ -73,6 +124,11 @@ function _updateMultiGridLayout() {
   const visualCount = Math.min(4, count + openFormCount);
   grid.classList.remove('ms-grid-empty', 'ms-grid-count-1', 'ms-grid-count-2', 'ms-grid-count-3', 'ms-grid-count-4');
   grid.classList.add(visualCount === 0 ? 'ms-grid-empty' : 'ms-grid-count-' + visualCount);
+  // Nothing to show yet: the centred prompt replaces the slot grid. Both are
+  // toggled by class only (CLAUDE.md: never style.display around video).
+  const hint = document.getElementById('ms-empty-hint');
+  if (hint) hint.classList.toggle('hidden', visualCount !== 0);
+  grid.classList.toggle('hidden', visualCount === 0);
   _applyMultistreamPreset(TwitchX.multiState.activePreset);
 
   let nextEmptyMarked = false;
@@ -245,8 +301,8 @@ function addMultiSlot(idx, channel, platform, quality) {
   active.querySelector('.ms-error-msg').classList.add('hidden');
   active.querySelector('.ms-channel-name').textContent = channel || '';
   const badge = active.querySelector('.ms-platform-badge');
-  badge.className = 'ms-platform-badge ' + (platform || 'twitch');
-  badge.textContent = TwitchX.platformLabel(platform || 'twitch');
+  badge.className = 'ms-platform-badge platform-dot ' + (platform || 'twitch');
+  badge.title = TwitchX.platformLabel(platform || 'twitch');
   const msVideo = active.querySelector('.ms-video');
   if (msVideo) msVideo.muted = true;
   _setMultiSlotState(idx, 'loading', 'Loading');
@@ -554,7 +610,7 @@ function _createMultiSlot(idx) {
   status.textContent = 'Empty';
   info.appendChild(status);
   const badge = document.createElement('span');
-  badge.className = 'ms-platform-badge';
+  badge.className = 'ms-platform-badge platform-dot';
   info.appendChild(badge);
   const name = document.createElement('span');
   name.className = 'ms-channel-name';
@@ -571,28 +627,28 @@ function _createMultiSlot(idx) {
   audioBtn.dataset.slot = idx;
   audioBtn.title = 'Focus audio';
   audioBtn.setAttribute('aria-label', 'Focus audio');
-  TwitchX.setIconOnly(audioBtn, 'volume', 14);
+  TwitchX.setIconOnly(audioBtn, 'volume', 16);
   controls.appendChild(audioBtn);
   const chatBtn = document.createElement('button');
   chatBtn.className = 'ms-chat-sw-btn';
   chatBtn.dataset.slot = idx;
   chatBtn.title = 'Switch chat';
   chatBtn.setAttribute('aria-label', 'Switch chat');
-  TwitchX.setIconOnly(chatBtn, 'chat', 14);
+  TwitchX.setIconOnly(chatBtn, 'chat', 16);
   controls.appendChild(chatBtn);
   const fsBtn = document.createElement('button');
   fsBtn.className = 'ms-fullscreen-btn';
   fsBtn.dataset.slot = idx;
   fsBtn.title = 'Fullscreen (double-click)';
   fsBtn.setAttribute('aria-label', 'Fullscreen');
-  TwitchX.setIconOnly(fsBtn, 'fullscreen', 14);
+  TwitchX.setIconOnly(fsBtn, 'fullscreen', 16);
   controls.appendChild(fsBtn);
   const pipBtn = document.createElement('button');
   pipBtn.className = 'ms-pip-btn';
   pipBtn.dataset.slot = idx;
   pipBtn.title = 'Picture-in-Picture';
   pipBtn.setAttribute('aria-label', 'Picture in Picture');
-  TwitchX.setIconOnly(pipBtn, 'pip', 14);
+  TwitchX.setIconOnly(pipBtn, 'pip', 16);
   controls.appendChild(pipBtn);
   _bindSlotPiPEvents(video, pipBtn);
   const removeBtn = document.createElement('button');
@@ -600,7 +656,7 @@ function _createMultiSlot(idx) {
   removeBtn.dataset.slot = idx;
   removeBtn.title = 'Remove';
   removeBtn.setAttribute('aria-label', 'Remove');
-  TwitchX.setIconOnly(removeBtn, 'close', 14);
+  TwitchX.setIconOnly(removeBtn, 'close', 16);
   controls.appendChild(removeBtn);
   overlay.appendChild(controls);
   active.appendChild(overlay);
@@ -896,6 +952,7 @@ TwitchX.openFirstEmptyMultiSlot = openFirstEmptyMultiSlot;
 TwitchX.closeMultiAddForm = closeMultiAddForm;
 TwitchX._setMultiSlotState = _setMultiSlotState;
 TwitchX._updateMultiGridLayout = _updateMultiGridLayout;
+TwitchX._buildMultistreamPresetControls = _buildMultistreamPresetControls;
 TwitchX._applyMultistreamPreset = _applyMultistreamPreset;
 TwitchX._loadMultistreamPresets = _loadMultistreamPresets;
 TwitchX.setMultistreamPreset = setMultistreamPreset;

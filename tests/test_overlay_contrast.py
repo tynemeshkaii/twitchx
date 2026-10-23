@@ -66,7 +66,6 @@ def _token(theme: str, name: str) -> str:
 
 # (file, selector) pairs whose background stays dark regardless of theme
 FIXED_DARK_SURFACES = [
-    ("components/stream-card.css", ".uptime-badge"),
     ("components/multistream.css", ".ms-audio-state"),
     ("components/player-view.css", "#seek-tooltip"),
 ]
@@ -98,6 +97,45 @@ def test_fixed_dark_surface_contrast(
 
     surface = composite(bg_decl, backdrop)
     text = composite(color_decl, surface)
+    ratio = contrast_ratio(text, surface)
+    assert ratio >= 4.5, f"{theme}: {selector} over {backdrop} is {ratio:.2f}:1"
+
+
+# Chips with no backing of their own: they sit on the .card-thumb scrim, whose
+# darkest stop (bottom edge) is the surface behind them.
+SCRIM_CHIPS = [".uptime-badge", ".card-viewers-overlay"]
+
+
+def _scrim_stop(theme: str) -> str:
+    scrim = _token(theme, "thumb-overlay")
+    stops = re.findall(r"rgba\([^)]*\)", scrim)
+    assert stops, scrim
+    return stops[-1]
+
+
+def _color_token(theme: str, value: str) -> str:
+    if not value.startswith("var("):
+        return value
+    name = value[6:-1]
+    shared = load_theme_tokens(CSS / "tokens.css")
+    return load_theme_tokens(CSS / "themes" / f"{theme}.css").get(name) or shared[name]
+
+
+@pytest.mark.parametrize("selector", SCRIM_CHIPS)
+def test_scrim_chips_do_not_use_theme_text(selector: str) -> None:
+    body = _rule_body(CSS / "components" / "stream-card.css", selector)
+    assert not re.search(r"var\(--text-(primary|secondary|muted)", _decl(body, "color"))
+
+
+@pytest.mark.parametrize("theme", THEMES)
+@pytest.mark.parametrize("backdrop", [WHITE, BLACK], ids=["on-white", "on-black"])
+@pytest.mark.parametrize("selector", SCRIM_CHIPS)
+def test_scrim_chip_contrast(theme: str, backdrop: Color, selector: str) -> None:
+    css = (CSS / "components" / "stream-card.css").read_text(encoding="utf-8")
+    assert "background: var(--thumb-overlay);" in css
+    body = _rule_body(CSS / "components" / "stream-card.css", selector)
+    surface = composite(_scrim_stop(theme), backdrop)
+    text = composite(_color_token(theme, _decl(body, "color")), surface)
     ratio = contrast_ratio(text, surface)
     assert ratio >= 4.5, f"{theme}: {selector} over {backdrop} is {ratio:.2f}:1"
 

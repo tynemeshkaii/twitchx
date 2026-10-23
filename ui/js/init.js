@@ -21,18 +21,22 @@ document.addEventListener('keydown', function(e) {
   if (existing) {
     var msg = '"' + TwitchX.formatKeyName(e.key) + '" is already bound to "' +
               TwitchX.SHORTCUT_LABELS[existing] + '". Swap bindings?';
-    if (window.confirm(msg)) {
+    var swapped = window.confirm(msg);
+    if (swapped) {
       TwitchX.state.shortcuts[existing] = TwitchX.DEFAULT_SHORTCUTS[TwitchX._rebindAction];
       TwitchX.state.shortcuts[TwitchX._rebindAction] = e.key;
     }
     TwitchX._rebindAction = null;
     TwitchX.renderHotkeysSettings();
+    if (swapped && TwitchX.saveShortcuts) TwitchX.saveShortcuts();
     return;
   }
 
   TwitchX.state.shortcuts[TwitchX._rebindAction] = e.key;
   TwitchX._rebindAction = null;
   TwitchX.renderHotkeysSettings();
+  // Applies at once, like every other setting.
+  if (TwitchX.saveShortcuts) TwitchX.saveShortcuts();
 }, true);
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -84,9 +88,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Restore saved grid density mode
   (function() {
-    var saved = localStorage.getItem('twitchx.grid_mode') || 'grid';
-    if (DENSITY_MODES.indexOf(saved) === -1) saved = 'grid';
-    TwitchX.state.gridMode = saved;
+    var saved = null;
+    try { saved = localStorage.getItem('twitchx.grid_mode'); } catch (e) { /* storage off */ }
+    // comfortable/compact were retired in the redesign: they become grid.
+    var validModes = DENSITY_MODES;
+    var mode = validModes.indexOf(saved) === -1 ? 'grid' : saved;
+    if (saved && saved !== mode) {
+      try { localStorage.setItem('twitchx.grid_mode', mode); } catch (e) { /* storage off */ }
+    }
+    TwitchX.state.gridMode = mode;
     _syncSortMenu();
   })();
 
@@ -108,7 +118,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (saved === '1') {
       TwitchX.chatTimestamps = true;
       var btn = document.getElementById('chat-timestamp-btn');
-      if (btn) btn.classList.add('active');
+      if (btn) btn.setAttribute('aria-checked', 'true');
     } else {
       TwitchX.chatTimestamps = false;
     }
@@ -172,20 +182,19 @@ TwitchX._bindSidebarEvents = function() {
 
 };
 
-const DENSITY_MODES = ['grid', 'comfortable', 'compact', 'list'];
-const DENSITY_LABELS = { grid: 'Grid', comfortable: 'Comfortable', compact: 'Compact', list: 'List' };
+const DENSITY_MODES = ['grid', 'list'];
 const SORT_LABELS = { viewers: 'Most viewers', recent: 'Recently started', alpha: 'Alphabetical' };
 
-// The sort button shows the current order; the menu marks it and names the
-// density that one click on the density item leaves behind.
+// The sort button shows the current order; the menu checks it and the view.
 function _syncSortMenu() {
   var label = document.getElementById('sort-menu-label');
   if (label) label.textContent = SORT_LABELS[TwitchX.state.sortKey] || SORT_LABELS.viewers;
   document.querySelectorAll('#sort-menu [data-sort]').forEach(function(item) {
     item.setAttribute('aria-checked', String(item.dataset.sort === TwitchX.state.sortKey));
   });
-  var density = document.getElementById('density-menu-label');
-  if (density) density.textContent = 'Density: ' + (DENSITY_LABELS[TwitchX.state.gridMode] || DENSITY_LABELS.grid);
+  document.querySelectorAll('#sort-menu [data-density]').forEach(function(item) {
+    item.setAttribute('aria-checked', String(item.dataset.density === TwitchX.state.gridMode));
+  });
 }
 
 function _sortMenuItems() {
@@ -228,10 +237,9 @@ function closeSortMenu(restoreFocus) {
 function _applySortMenuItem(item) {
   if (item.dataset.sort) {
     TwitchX.state.sortKey = item.dataset.sort;
-  } else if (item.dataset.density) {
-    var idx = DENSITY_MODES.indexOf(TwitchX.state.gridMode);
-    TwitchX.state.gridMode = DENSITY_MODES[(idx + 1) % DENSITY_MODES.length];
-    localStorage.setItem('twitchx.grid_mode', TwitchX.state.gridMode);
+  } else if (DENSITY_MODES.indexOf(item.dataset.density) !== -1) {
+    TwitchX.state.gridMode = item.dataset.density;
+    try { localStorage.setItem('twitchx.grid_mode', TwitchX.state.gridMode); } catch (e) { /* storage off */ }
   }
   _syncSortMenu();
   TwitchX.renderGrid();
@@ -416,7 +424,7 @@ TwitchX._bindChatEvents = function() {
   if (chatTsBtn) chatTsBtn.addEventListener('click', function() {
     TwitchX.chatTimestamps = !TwitchX.chatTimestamps;
     localStorage.setItem('twitchx.chat_timestamps', TwitchX.chatTimestamps ? '1' : '0');
-    this.classList.toggle('active', TwitchX.chatTimestamps);
+    this.setAttribute('aria-checked', String(TwitchX.chatTimestamps));
     document.querySelectorAll('.chat-msg .msg-time').forEach(function(el) {
       el.classList.toggle('hidden', !TwitchX.chatTimestamps);
     });
@@ -455,8 +463,9 @@ TwitchX._bindChatEvents = function() {
   var chatExportBtn = document.getElementById('chat-export-btn');
   var chatExportMenu = document.getElementById('chat-export-menu');
   if (chatExportBtn) {
-    chatExportBtn.addEventListener('click', function(e) {
-      e.stopPropagation();
+    // An item of the chat "…" menu: the click has to reach that menu so it
+    // closes, so no stopPropagation here.
+    chatExportBtn.addEventListener('click', function() {
       if (chatExportMenu) {
         var opening = chatExportMenu.classList.toggle('hidden') === false;
         chatExportBtn.setAttribute('aria-expanded', String(opening));
@@ -482,7 +491,7 @@ TwitchX._bindChatEvents = function() {
     });
   }
   document.addEventListener('click', function(e) {
-    if (chatExportMenu && chatExportBtn && !chatExportMenu.contains(e.target) && e.target !== chatExportBtn) {
+    if (chatExportMenu && chatExportBtn && !chatExportMenu.contains(e.target) && !chatExportBtn.contains(e.target)) {
       chatExportMenu.classList.add('hidden');
       chatExportBtn.setAttribute('aria-expanded', 'false');
     }
@@ -532,7 +541,7 @@ TwitchX._bindChatEvents = function() {
     if (TwitchX._emotePickerOpen) {
       var picker = document.getElementById('emote-picker');
       var btn = document.getElementById('emote-picker-btn');
-      if (picker && btn && !picker.contains(e.target) && e.target !== btn) {
+      if (picker && btn && !picker.contains(e.target) && !btn.contains(e.target)) {
         TwitchX.closeEmotePicker();
       }
     }
@@ -603,45 +612,26 @@ TwitchX._bindSettingsEvents = function() {
   if (eyeToggleBtn) eyeToggleBtn.addEventListener('click', TwitchX.toggleSecret);
   const testBtn = document.getElementById('test-btn');
   if (testBtn) testBtn.addEventListener('click', TwitchX.testConnection);
-  const saveBtn = document.getElementById('save-btn');
-  if (saveBtn) saveBtn.addEventListener('click', TwitchX.saveSettings);
   const resetShortcutsBtn = document.getElementById('reset-shortcuts-btn');
   if (resetShortcutsBtn) resetShortcutsBtn.addEventListener('click', function() {
     TwitchX.state.shortcuts = Object.assign({}, TwitchX.DEFAULT_SHORTCUTS);
     TwitchX.renderHotkeysSettings();
+    TwitchX.saveShortcuts();
   });
-  const extPlayerSelect = document.getElementById('s-external-player');
-  if (extPlayerSelect) extPlayerSelect.addEventListener('change', function() {
-    document.getElementById('s-mpv-group').classList.toggle('hidden', this.value !== 'mpv');
-  });
-
-  // Stats compact toggle
-  var statsCompactBtn = document.getElementById('stats-compact-toggle');
-  if (statsCompactBtn) statsCompactBtn.addEventListener('click', TwitchX._toggleStatsCompact);
+  // Toggles, selects, paths, theme, accent and credential buttons.
+  TwitchX._bindInstantSettings();
 
   // Settings tab switching
   document.querySelectorAll('.settings-tab').forEach(function(btn) {
     btn.addEventListener('click', function() {
-      TwitchX.setActiveTab(Array.from(document.querySelectorAll('.settings-tab')), btn);
-      document.querySelectorAll('.settings-panel').forEach(function(p) { p.classList.remove('active'); });
-      document.getElementById('settings-panel-' + btn.dataset.tab).classList.add('active');
-      if (btn.dataset.tab === 'advanced') {
-        TwitchX.loadWatchStatistics();
-      }
+      TwitchX.showSettingsTab(btn.dataset.tab);
     });
+    // Vertical list: up/down move between sections (left/right kept too).
     btn.addEventListener('keydown', function(e) {
-      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      var dir = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+      if (!dir) return;
       e.preventDefault();
-      TwitchX.focusAdjacentTab(Array.from(document.querySelectorAll('.settings-tab')), btn, e.key === 'ArrowRight' ? 1 : -1);
-    });
-  });
-
-  // Theme radio buttons
-  document.querySelectorAll('input[name="theme"]').forEach(function(radio) {
-    radio.addEventListener('change', function() {
-      if (this.checked && TwitchX.applyTheme) {
-        TwitchX.applyTheme(this.value);
-      }
+      TwitchX.focusAdjacentTab(Array.from(document.querySelectorAll('.settings-tab')), btn, dir);
     });
   });
 
@@ -723,26 +713,6 @@ TwitchX._bindSettingsEvents = function() {
     document.getElementById('yt-test-btn').disabled = true;
     TwitchX.api.youtube_test_connection();
   });
-
-  TwitchX._bindAdvancedToggles();
-};
-
-TwitchX._bindAdvancedToggles = function() {
-  function _makeToggle(toggleId, sectionId, showText, hideText) {
-    var btn = document.getElementById(toggleId);
-    if (!btn) return;
-    btn.addEventListener('click', function(e) {
-      e.preventDefault();
-      var section = document.getElementById(sectionId);
-      if (!section) return;
-      var isHidden = section.classList.toggle('hidden');
-      btn.textContent = isHidden ? showText : hideText;
-    });
-  }
-  _makeToggle('twitch-advanced-toggle', 'twitch-advanced-section',
-    'Use custom credentials ▾', 'Hide custom credentials ▴');
-  _makeToggle('kick-advanced-toggle', 'kick-advanced-section',
-    'Use custom credentials ▾', 'Hide custom credentials ▴');
 };
 
 TwitchX._bindContextMenuEvents = function() {
@@ -1087,17 +1057,28 @@ TwitchX._initMultistreamSlots = function() {
   for (let i = 0; i < 4; i++) {
     grid.appendChild(TwitchX._createMultiSlot(i));
   }
-  const select = document.getElementById('ms-preset-select');
-  if (select) {
-    select.replaceChildren();
-    ['grid', 'focus-left', 'rows', 'columns'].forEach(function(p) {
-      const opt = document.createElement('option');
-      opt.value = p;
-      opt.textContent = { grid: 'Grid', 'focus-left': 'Focus', rows: 'Rows', columns: 'Columns' }[p];
-      select.appendChild(opt);
+  if (TwitchX._buildMultistreamPresetControls) TwitchX._buildMultistreamPresetControls();
+  const emptyAdd = document.getElementById('ms-empty-add-btn');
+  if (emptyAdd) emptyAdd.addEventListener('click', function() { TwitchX.openFirstEmptyMultiSlot(); });
+  // The empty prompt takes the same sidebar drops as a slot would.
+  const hint = document.getElementById('ms-empty-hint');
+  if (hint) {
+    hint.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      hint.classList.add('drag-over');
     });
-    select.addEventListener('change', function() {
-      if (TwitchX.setMultistreamPreset) TwitchX.setMultistreamPreset(select.value);
+    hint.addEventListener('dragleave', function(e) {
+      if (!hint.contains(e.relatedTarget)) hint.classList.remove('drag-over');
+    });
+    hint.addEventListener('drop', function(e) {
+      e.preventDefault();
+      hint.classList.remove('drag-over');
+      try {
+        const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+        const idx = TwitchX.multiState.slots.indexOf(null);
+        if (data && data.login && idx !== -1) TwitchX.addMultiSlot(idx, data.login, data.platform || 'twitch');
+      } catch (_) {}
     });
   }
   if (TwitchX._loadMultistreamPresets) TwitchX._loadMultistreamPresets();
@@ -1109,8 +1090,9 @@ setInterval(function() {
   document.querySelectorAll('.stream-card').forEach(function(card) {
     const started = card.dataset.started;
     if (started) {
-      const badge = card.querySelector('.uptime-badge');
-      if (badge) badge.textContent = TwitchX.formatUptime(started);
+      card.querySelectorAll('.card-uptime').forEach(function(badge) {
+        badge.textContent = TwitchX.formatUptimeClock(started);
+      });
     }
   });
 }, 60000);

@@ -109,8 +109,8 @@ function applySidebarLayout(groups) {
   const offlineCollapsed = !!TwitchX.state.sidebarSections.offline;
   const onlineBody = onlineSection.querySelector('.section-body');
   const offlineBody = offlineSection.querySelector('.section-body');
-  const onlineHeaderHeight = onlineSection.querySelector('.section-toggle').offsetHeight;
-  const offlineHeaderHeight = offlineSection.querySelector('.section-toggle').offsetHeight;
+  const onlineHeaderHeight = onlineSection.querySelector('.section-head').offsetHeight;
+  const offlineHeaderHeight = offlineSection.querySelector('.section-head').offsetHeight;
 
   function setVar(el, name, value) {
     if (value === '' || value === null || value === undefined) {
@@ -141,7 +141,8 @@ function applySidebarLayout(groups) {
     offlineReservedHeight = offlineHeaderHeight + offlineBody.scrollHeight;
   } else {
     const offlineMinRows = Math.min(Math.max(groups.offline.length, 2), 4);
-    const offlineRowHeight = 52;
+    // .channel-item: 40px live rows, 32px offline rows (sidebar.css).
+    const offlineRowHeight = 32;
     offlineReservedHeight = Math.max(
       offlineHeaderHeight + 24,
       offlineHeaderHeight + (offlineMinRows * offlineRowHeight)
@@ -149,7 +150,7 @@ function applySidebarLayout(groups) {
   }
 
   const onlineMaxHeight = Math.max(
-    onlineHeaderHeight + 96,
+    onlineHeaderHeight + 80,
     listHeight - offlineReservedHeight - sectionGap
   );
   const onlineTargetHeight = Math.min(onlineNaturalHeight, onlineMaxHeight);
@@ -159,27 +160,13 @@ function applySidebarLayout(groups) {
 
   if (!offlineCollapsed) {
     setVar(offlineSection, '--section-min-height', Math.min(
-      Math.max(offlineReservedHeight, offlineHeaderHeight + 72),
+      Math.max(offlineReservedHeight, offlineHeaderHeight + 64),
       Math.max(listHeight - onlineTargetHeight - sectionGap, offlineHeaderHeight)
     ) + 'px');
   }
 }
 
-function getSidebarSectionMeta(sectionKey, entries, streamMap) {
-  if (sectionKey === 'online') {
-    if (entries.length === 0) {
-      return 'Waiting for the next live channel';
-    }
-    const totalViewers = entries.reduce(function(sum, entry) {
-      return sum + ((streamMap[entry.key] && streamMap[entry.key].viewers) || 0);
-    }, 0);
-    return entries.length + ' live now • ' + TwitchX.formatViewers(totalViewers) + ' combined viewers';
-  }
-  if (entries.length === 0) {
-    return 'Saved channels appear here';
-  }
-  return entries.length + ' saved • sorted A to Z';
-}
+
 
 function _matchWatching(login, key) {
   if (TwitchX.state.watchingChannelKey && key) {
@@ -255,6 +242,60 @@ function _setupSidebarTooltip(item, entry, streamMap) {
   });
 }
 
+function _sidebarItemLabel(login, platform, stream) {
+  return stream
+    ? login + ', live, ' + Number(stream.viewers || 0).toLocaleString() + ' viewers'
+    : login + ', offline on ' + TwitchX.platformLabel(platform);
+}
+
+// Avatar with the platform dot in its lower-right corner (row and rail).
+function _createSidebarAvatar(key, platform, imgClass) {
+  const wrap = document.createElement('span');
+  wrap.className = 'sidebar-avatar';
+  const avatar = document.createElement('img');
+  avatar.className = imgClass;
+  if (TwitchX.state.avatars[key]) {
+    avatar.src = TwitchX.state.avatars[key];
+  }
+  avatar.alt = '';
+  avatar.onerror = function() {
+    avatar.classList.add('is-empty');
+  };
+  wrap.appendChild(avatar);
+  const dot = document.createElement('span');
+  dot.className = 'platform-dot ' + platform;
+  wrap.appendChild(dot);
+  return wrap;
+}
+
+// Right edge of a live row: viewers, or a small equalizer while it plays.
+function _syncSidebarItemEnd(item, stream, isWatching) {
+  let end = item.querySelector('.channel-end');
+  if (!stream) {
+    if (end) end.remove();
+    return;
+  }
+  if (!end) {
+    end = document.createElement('span');
+    end.className = 'channel-end';
+    item.insertBefore(end, item.querySelector('.notif-dot'));
+  }
+  if (isWatching) {
+    if (!end.querySelector('.watching-eq')) {
+      const eq = document.createElement('span');
+      eq.className = 'watching-eq';
+      eq.setAttribute('aria-hidden', 'true');
+      for (let i = 0; i < 3; i++) eq.appendChild(document.createElement('span'));
+      end.replaceChildren(eq);
+    }
+    end.title = 'Watching';
+    return;
+  }
+  const viewers = TwitchX.formatViewers(stream.viewers);
+  if (end.textContent !== viewers || end.querySelector('.watching-eq')) end.textContent = viewers;
+  end.title = Number(stream.viewers || 0).toLocaleString() + ' viewers';
+}
+
 function createSidebarItem(entry, streamMap) {
   const login = entry.login;
   const key = entry.key;
@@ -272,37 +313,14 @@ function createSidebarItem(entry, streamMap) {
   item.tabIndex = 0;
   item.setAttribute('role', 'button');
   item.setAttribute('aria-pressed', String(isSelected));
-  item.setAttribute(
-    'aria-label',
-    isLive
-      ? login + ', live, ' + Number(stream.viewers || 0).toLocaleString() + ' viewers'
-      : login + ', offline on ' + TwitchX.platformLabel(platform)
-  );
+  item.setAttribute('aria-label', _sidebarItemLabel(login, platform, stream));
 
   const dragHandle = document.createElement('span');
   dragHandle.className = 'drag-handle';
   dragHandle.setAttribute('aria-hidden', 'true');
   item.appendChild(dragHandle);
 
-  const bar = document.createElement('div');
-  bar.className = 'accent-bar';
-  item.appendChild(bar);
-
-  const dot = document.createElement('span');
-  dot.className = 'live-dot';
-  TwitchX.setIconOnly(dot, 'live-dot', 10);
-  item.appendChild(dot);
-
-  const avatar = document.createElement('img');
-  avatar.className = 'avatar';
-  if (TwitchX.state.avatars[key]) {
-    avatar.src = TwitchX.state.avatars[key];
-  }
-  avatar.alt = '';
-  avatar.onerror = function() {
-    avatar.classList.add('is-empty');
-  };
-  item.appendChild(avatar);
+  item.appendChild(_createSidebarAvatar(key, platform, 'avatar'));
 
   const copy = document.createElement('div');
   copy.className = 'channel-copy';
@@ -315,28 +333,17 @@ function createSidebarItem(entry, streamMap) {
 
   const meta = document.createElement('span');
   meta.className = 'channel-meta';
-  meta.textContent = isLive ? TwitchX.truncate(stream.game || 'Live now', 24) : 'Offline';
+  meta.textContent = isLive ? (stream.game || 'Live now') : '';
   copy.appendChild(meta);
   item.appendChild(copy);
-
-  if (isLive) {
-    const metric = document.createElement('span');
-    metric.className = 'metric';
-    metric.textContent = TwitchX.formatViewers(stream.viewers);
-    metric.title = Number(stream.viewers || 0).toLocaleString() + ' viewers';
-    item.appendChild(metric);
-  } else {
-    const status = document.createElement('span');
-    status.className = 'status-badge';
-    status.textContent = 'Off';
-    item.appendChild(status);
-  }
 
   // Notification dot for new live channels
   var notifDot = document.createElement('span');
   notifDot.className = 'notif-dot';
   notifDot.setAttribute('aria-label', 'New');
   item.appendChild(notifDot);
+
+  _syncSidebarItemEnd(item, stream, isWatching);
 
   _setupSidebarTooltip(item, entry, streamMap);
 
@@ -363,12 +370,17 @@ function createSidebarItem(entry, streamMap) {
   return item;
 }
 
-function createSidebarSection(sectionKey, title, metaText, entries, streamMap) {
+function createSidebarSection(sectionKey, title, entries, streamMap) {
   const isCollapsed = !!TwitchX.state.sidebarSections[sectionKey];
 
   const section = document.createElement('section');
   section.className = 'sidebar-section ' + sectionKey + (isCollapsed ? ' collapsed' : '');
   section.dataset.section = sectionKey;
+
+  // "Live  9": the label toggles the section; the count (and, for Live, the
+  // new-live badge) sit outside the button so the badge stays clickable.
+  const head = document.createElement('div');
+  head.className = 'section-head';
 
   const toggle = document.createElement('button');
   toggle.className = 'section-toggle';
@@ -382,36 +394,23 @@ function createSidebarSection(sectionKey, title, metaText, entries, streamMap) {
     renderSidebar();
   });
 
-  const titleWrap = document.createElement('div');
-  titleWrap.className = 'section-title-wrap';
+  const titleEl = document.createElement('span');
+  titleEl.className = 'section-title';
+  titleEl.textContent = title;
+  toggle.appendChild(titleEl);
 
   const chevron = document.createElement('span');
   chevron.className = 'section-chevron';
-  TwitchX.setIconOnly(chevron, 'chevron-right', 12);
-  titleWrap.appendChild(chevron);
-
-  const copy = document.createElement('div');
-  copy.className = 'section-copy';
-
-  const titleEl = document.createElement('div');
-  titleEl.className = 'section-title';
-  titleEl.textContent = title;
-  copy.appendChild(titleEl);
-
-  const meta = document.createElement('div');
-  meta.className = 'section-meta';
-  meta.textContent = metaText;
-  copy.appendChild(meta);
-
-  titleWrap.appendChild(copy);
-  toggle.appendChild(titleWrap);
+  TwitchX.setIconOnly(chevron, 'chevron-down', 12);
+  toggle.appendChild(chevron);
+  head.appendChild(toggle);
 
   const count = document.createElement('span');
   count.className = 'section-count';
   count.textContent = String(entries.length);
-  toggle.appendChild(count);
+  head.appendChild(count);
 
-  section.appendChild(toggle);
+  section.appendChild(head);
 
   const body = document.createElement('div');
   body.className = 'section-body';
@@ -421,19 +420,9 @@ function createSidebarSection(sectionKey, title, metaText, entries, streamMap) {
   if (entries.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'section-empty';
-    const emptyTitle = document.createElement('div');
-    emptyTitle.className = 'section-empty-title';
-    emptyTitle.textContent = sectionKey === 'online'
+    empty.textContent = sectionKey === 'online'
       ? 'No one is live right now'
-      : 'No offline channels yet';
-    empty.appendChild(emptyTitle);
-
-    const emptySubtitle = document.createElement('div');
-    emptySubtitle.className = 'section-empty-subtitle';
-    emptySubtitle.textContent = sectionKey === 'online'
-      ? 'As soon as one of your favorites goes live, they will appear here first.'
-      : 'Any saved channel that is currently offline will appear in this list.';
-    empty.appendChild(emptySubtitle);
+      : 'No offline channels';
     body.appendChild(empty);
   } else {
     entries.forEach(function(entry) {
@@ -454,34 +443,13 @@ function updateSidebarItem(item, entry, streamMap) {
   const isLive = !!stream;
   const isSelected = TwitchX.state.selectedChannelKey === key;
 
-  const wasLive = item.classList.contains('live');
-  const wasSelected = item.classList.contains('selected');
-
-  if (isLive !== wasLive) {
-    item.classList.toggle('live', isLive);
-    item.setAttribute('aria-label',
-      isLive
-        ? login + ', live, ' + Number(stream.viewers || 0).toLocaleString() + ' viewers'
-        : login + ', offline on ' + TwitchX.platformLabel(platform));
-    if (isLive && stream) {
-      item.dataset._lastViewers = String(stream.viewers || 0);
-    } else {
-      delete item.dataset._lastViewers;
-    }
-  } else if (isLive && stream) {
-    const lastViewers = item.dataset._lastViewers;
-    const currentViewers = String(stream.viewers || 0);
-    if (lastViewers !== currentViewers) {
-      item.setAttribute('aria-label', login + ', live, ' + Number(currentViewers).toLocaleString() + ' viewers');
-      item.dataset._lastViewers = currentViewers;
-    }
-  }
-  if (isSelected !== wasSelected) {
+  item.classList.toggle('live', isLive);
+  item.setAttribute('aria-label', _sidebarItemLabel(login, platform, stream));
+  if (isSelected !== item.classList.contains('selected')) {
     item.classList.toggle('selected', isSelected);
     item.setAttribute('aria-pressed', String(isSelected));
   }
 
-  // Watching indicator
   var isWatching = _matchWatching(login, key);
   item.classList.toggle('watching', isWatching);
 
@@ -493,42 +461,18 @@ function updateSidebarItem(item, entry, streamMap) {
   }
 
   const metaEl = item.querySelector('.channel-meta');
-  const newMeta = isLive ? TwitchX.truncate(stream.game || 'Live now', 24) : 'Offline';
+  const newMeta = isLive ? (stream.game || 'Live now') : '';
   if (metaEl.textContent !== newMeta) {
     metaEl.textContent = newMeta;
   }
 
   const avatar = item.querySelector('.avatar');
-  const newAvatar = TwitchX.state.avatars[key] || '';
-  if (avatar && avatar.src !== newAvatar) {
+  const newAvatar = TwitchX.state.avatars[key];
+  if (avatar && newAvatar && avatar.src !== newAvatar) {
     avatar.src = newAvatar;
   }
 
-  const metricOrStatus = item.querySelector('.metric, .status-badge');
-  if (isLive) {
-    if (!metricOrStatus || !metricOrStatus.classList.contains('metric')) {
-      if (metricOrStatus) metricOrStatus.remove();
-      const metric = document.createElement('span');
-      metric.className = 'metric';
-      metric.textContent = TwitchX.formatViewers(stream.viewers);
-      metric.title = Number(stream.viewers || 0).toLocaleString() + ' viewers';
-      item.appendChild(metric);
-    } else {
-      const newViewers = TwitchX.formatViewers(stream.viewers);
-      if (metricOrStatus.textContent !== newViewers) {
-        metricOrStatus.textContent = newViewers;
-        metricOrStatus.title = Number(stream.viewers || 0).toLocaleString() + ' viewers';
-      }
-    }
-  } else {
-    if (!metricOrStatus || !metricOrStatus.classList.contains('status-badge')) {
-      if (metricOrStatus) metricOrStatus.remove();
-      const status = document.createElement('span');
-      status.className = 'status-badge';
-      status.textContent = 'Off';
-      item.appendChild(status);
-    }
-  }
+  _syncSidebarItemEnd(item, stream, isWatching);
 }
 
 function createRailAvatar(entry, isLive, streamMap) {
@@ -557,26 +501,7 @@ function createRailAvatar(entry, isLive, streamMap) {
       : login + ', offline on ' + TwitchX.platformLabel(platform)
   );
 
-  var img = document.createElement('img');
-  img.className = 'rail-av-img';
-  img.alt = '';
-  if (TwitchX.state.avatars[key]) {
-    img.src = TwitchX.state.avatars[key];
-  }
-  img.onerror = function() {
-    img.classList.add('is-empty');
-  };
-  item.appendChild(img);
-
-  if (isLive) {
-    var ring = document.createElement('div');
-    ring.className = 'rail-av-ring';
-    item.appendChild(ring);
-
-    var dot = document.createElement('div');
-    dot.className = 'rail-av-dot';
-    item.appendChild(dot);
-  }
+  item.appendChild(_createSidebarAvatar(key, platform, 'rail-av-img'));
 
   var newDot = document.createElement('span');
   newDot.className = 'rail-notif-dot' + (isNewLive ? ' visible' : '');
@@ -633,8 +558,8 @@ function renderRail(groups) {
 
       // Sync avatar image
       var img = el.querySelector('.rail-av-img');
-      var newSrc = TwitchX.state.avatars[key] || '';
-      if (img && img.src !== newSrc) {
+      var newSrc = TwitchX.state.avatars[key];
+      if (img && newSrc && img.src !== newSrc) {
         img.src = newSrc;
       }
 
@@ -686,25 +611,20 @@ function createSidebarGroupHeader(name, count, collapsed) {
   header.setAttribute('aria-expanded', String(!collapsed));
   header.setAttribute('aria-controls', sidebarGroupBodyId(name));
 
-  const copy = document.createElement('div');
-  copy.className = 'section-copy';
-
-  const title = document.createElement('div');
+  const title = document.createElement('span');
   title.className = 'section-title';
   title.textContent = name;
-  copy.appendChild(title);
-
-  const meta = document.createElement('div');
-  meta.className = 'section-meta';
-  meta.textContent = count + ' channel' + (count !== 1 ? 's' : '');
-  copy.appendChild(meta);
-
-  header.appendChild(copy);
+  header.appendChild(title);
 
   const chevron = document.createElement('span');
-  chevron.className = 'group-chevron';
-  TwitchX.setIconOnly(chevron, 'chevron-right', 12);
+  chevron.className = 'section-chevron';
+  TwitchX.setIconOnly(chevron, 'chevron-down', 12);
   header.appendChild(chevron);
+
+  const countEl = document.createElement('span');
+  countEl.className = 'section-count';
+  countEl.textContent = String(count);
+  header.appendChild(countEl);
 
   header.addEventListener('click', function() {
     const key = 'group:' + name;
@@ -915,29 +835,16 @@ function renderSidebar() {
   // Calling it per render re-opened the selected channel's section on every poll.
   const sidebarFrag = document.createDocumentFragment();
 
-  function updateFavoritesCountBadge(count) {
-    const badge = document.getElementById('favorites-count-badge');
-    if (!badge) return;
-    badge.textContent = String(count);
-    badge.setAttribute('aria-label', count + ' favorite' + (count === 1 ? '' : 's'));
-  }
-
   if (TwitchX.getFavoriteEntries().length === 0) {
     list.replaceChildren();
-    updateFavoritesCountBadge(0);
     updatePlatformStatusDots();
     return;
   }
 
-  const totalCount = groups.online.length + groups.offline.length +
-    Object.keys(groups.custom).reduce(function(sum, k) { return sum + groups.custom[k].length; }, 0);
-  updateFavoritesCountBadge(totalCount);
-
   sidebarFrag.appendChild(
     createSidebarSection(
       'online',
-      'Online',
-      getSidebarSectionMeta('online', groups.online, groups.streamMap),
+      'Live',
       groups.online,
       groups.streamMap
     )
@@ -959,7 +866,6 @@ function renderSidebar() {
     createSidebarSection(
       'offline',
       'Offline',
-      getSidebarSectionMeta('offline', groups.offline, groups.streamMap),
       groups.offline,
       groups.streamMap
     )
@@ -1090,10 +996,10 @@ function initSidebarScrollShadow() {
 
 function _updateNotifBadges() {
   var badgeLogins = TwitchX._notifBadgeLogins || [];
-  var header = document.getElementById('favorites-header');
-  if (!header) return;
-  var notifBadge = header.querySelector('.notif-badge');
-  if (!notifBadge) {
+  // Lives in the Live section label; the rail shows per-avatar dots instead.
+  var header = document.querySelector('#channel-list .sidebar-section.online .section-head');
+  var notifBadge = header ? header.querySelector('.notif-badge') : null;
+  if (header && !notifBadge) {
     notifBadge = document.createElement('button');
     notifBadge.type = 'button';
     notifBadge.className = 'notif-badge';
@@ -1101,15 +1007,15 @@ function _updateNotifBadges() {
       e.stopPropagation();
       _clearNotifBadges();
     });
-    header.appendChild(notifBadge);
+    header.insertBefore(notifBadge, header.querySelector('.section-count'));
   }
-  if (badgeLogins.length > 0) {
+  if (notifBadge && badgeLogins.length > 0) {
     notifBadge.textContent = String(badgeLogins.length);
     notifBadge.title = 'Dismiss ' + badgeLogins.length + ' new live notification' +
       (badgeLogins.length === 1 ? '' : 's');
     notifBadge.setAttribute('aria-label', notifBadge.title);
     notifBadge.classList.add('visible');
-  } else {
+  } else if (notifBadge) {
     notifBadge.classList.remove('visible');
   }
   // Show notif-dot on each new-live item
@@ -1163,7 +1069,6 @@ TwitchX.saveSidebarSections = saveSidebarSections;
 TwitchX.expandSidebarSectionForLogin = expandSidebarSectionForLogin;
 TwitchX.getSidebarGroups = getSidebarGroups;
 TwitchX.applySidebarLayout = applySidebarLayout;
-TwitchX.getSidebarSectionMeta = getSidebarSectionMeta;
 TwitchX.createSidebarItem = createSidebarItem;
 TwitchX.createSidebarSection = createSidebarSection;
 TwitchX.updateSidebarItem = updateSidebarItem;

@@ -47,8 +47,7 @@
               color var(--duration-fast) ease,
               opacity var(--duration-fast) ease;
 }
-.btn:hover { transform: translateY(-1px); }
-.btn:active { transform: translateY(0) scale(0.98); }
+.btn:active { transform: scale(0.98); }
 .btn:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--focus-ring-offset), 0 0 0 4px var(--focus-ring);
@@ -124,14 +123,26 @@
   position: relative;
   z-index: 1;
 }
+/* Unselected segments are plain text; the selected one gets the raised fill. */
+.segmented .btn {
+  padding: 0 var(--space-12);
+  color: var(--text-secondary);
+  background: transparent;
+}
+.segmented .btn:hover {
+  transform: none;
+  color: var(--text-primary);
+}
 .segmented .active,
-.segmented [aria-selected="true"] {
+.segmented [aria-selected="true"],
+.segmented [aria-checked="true"] {
   background: var(--bg-elevated);
   color: var(--text-primary);
   border-color: var(--border-default);
 }
 .segmented.accent .active,
-.segmented.accent [aria-selected="true"] {
+.segmented.accent [aria-selected="true"],
+.segmented.accent [aria-checked="true"] {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--text-on-accent);

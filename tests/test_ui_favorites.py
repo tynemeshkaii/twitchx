@@ -77,7 +77,7 @@ def test_notif_badge_is_dismissable() -> None:
     assert "function acknowledgeNotifBadge(key)" in sidebar
     assert "TwitchX.acknowledgeNotifBadge = acknowledgeNotifBadge;" in sidebar
     css = (CSS / "components" / "sidebar.css").read_text(encoding="utf-8")
-    badge_rule = css[css.index("#favorites-header .notif-badge {") :]
+    badge_rule = css[css.index(".section-head .notif-badge {") :]
     badge_rule = badge_rule[: badge_rule.index("}")]
     assert "border: none" in badge_rule
     assert "cursor: pointer" in badge_rule

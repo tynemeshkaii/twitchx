@@ -1,50 +1,38 @@
 
 #stream-grid {
-  flex: 1; overflow-y: auto; overflow-x: hidden; padding: var(--space-16);
+  flex: 1; overflow-y: auto; overflow-x: hidden; padding: var(--space-8) var(--space-24) var(--space-24);
   min-width: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(228px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
   /* The grid has a fixed height: without this, rows shrink to min-content and
      .card-thumb (overflow: hidden, flex item) collapses to 0px. */
   grid-auto-rows: max-content;
-  gap: var(--space-16); align-content: start;
+  gap: var(--space-24) var(--space-16); align-content: start;
   opacity: 1;
   transition: opacity var(--duration-view) var(--ease-view);
   contain: layout style paint;
   content-visibility: auto;
   contain-intrinsic-size: auto 500px;
 }
+/* No surface of its own: the frame carries the card, the text sits on the
+   window background. */
 .stream-card {
-  background: var(--surface-card), var(--bg-elevated);
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-lg);
-  cursor: pointer; overflow: hidden;
+  cursor: pointer;
   display: flex; flex-direction: column;
-  transition: background var(--duration-normal) ease;
+  gap: var(--space-8);
+  min-width: 0;
+  outline: none;
   contain: layout style paint;
 }
-.stream-card:hover {
-  background: var(--surface-card-hover), var(--bg-overlay);
+.stream-card:hover .card-thumb,
+.stream-card:focus-visible .card-thumb,
+#app.keyboard-selection .stream-card.selected .card-thumb {
+  box-shadow: 0 0 0 2px var(--accent);
 }
-.stream-card:hover .thumb-img {
-  filter: brightness(1.05);
-}
-.stream-card:focus-visible {
-  outline: none;
-  border-color: var(--focus-ring);
-  box-shadow: 0 0 0 2px var(--focus-ring-offset);
-}
-/* The selection only matters to the keyboard (Space = watch, ←/→ = next
-   stream); a mouse click starts the stream at once. It is drawn like focus,
-   and only after the arrow keys moved it (#app.keyboard-selection). */
-#app.keyboard-selection .stream-card.selected {
-  border-color: var(--focus-ring);
-  box-shadow: 0 0 0 2px var(--focus-ring-offset);
-}
-.stream-card.offline {
-  filter: grayscale(0.7);
-  opacity: 0.55;
-}
+.stream-card:focus-visible .card-thumb { box-shadow: 0 0 0 2px var(--accent), 0 0 0 5px var(--focus-ring); }
+.stream-card:hover .thumb-img { filter: brightness(1.05); }
+.stream-card.offline .card-thumb { filter: grayscale(1); opacity: 0.55; }
+.stream-card.offline .card-text { opacity: 0.7; }
 
 /* Staggered entrance */
 .stream-card.card-enter {
@@ -65,7 +53,14 @@
 .stream-card:nth-child(12).card-enter { animation-delay: 220ms; }
 .stream-card:nth-child(n+13).card-enter { animation-delay: 240ms; }
 
-.card-thumb { position: relative; width: 100%; aspect-ratio: 16/9; overflow: hidden; }
+.card-thumb {
+  position: relative; width: 100%; aspect-ratio: 16/9; overflow: hidden;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  transition: box-shadow var(--duration-fast) ease;
+}
+/* Bottom scrim under the viewers and uptime, so white text reads on any frame. */
 .card-thumb::after {
   content: '';
   position: absolute; inset: 0;
@@ -75,9 +70,8 @@
 .thumb-img {
   width: 100%; height: 100%; object-fit: cover;
   display: none;
-  transition: transform var(--duration-slow) ease;
+  transition: filter var(--duration-fast) ease;
 }
-.stream-card:hover .thumb-img { transform: scale(1.02); }
 .thumb-img.loaded { display: block; }
 
 @keyframes shimmer-card {
@@ -85,7 +79,7 @@
   100% { background-position: 400px 0; }
 }
 .thumb-shimmer {
-  width: 100%; aspect-ratio: 16/9;
+  width: 100%; height: 100%;
   background: linear-gradient(90deg,
     var(--bg-elevated) 25%,
     var(--bg-overlay) 50%,
@@ -95,117 +89,114 @@
 }
 .thumb-img.loaded + .thumb-shimmer { display: none; }
 
-.card-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
+/* ── Chips on the frame ─────────────────────────────────── */
+.card-platform {
+  position: absolute; top: 8px; left: 8px; z-index: 3;
+}
+.card-corner {
+  position: absolute; top: 8px; right: 8px; z-index: 3;
+  display: flex; align-items: center; gap: var(--space-4);
+}
+.card-corner:empty { display: none; }
+.pin-badge {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--media-chip-bg);
+  color: var(--text-on-overlay);
   pointer-events: none;
 }
-.live-badge {
-  position: absolute; top: 8px; left: 8px; z-index: 3;
-  background: var(--live); color: var(--text-inverse);
-  font-size: var(--font-xs); font-weight: var(--weight-semibold);
-  padding: var(--space-4) var(--space-8) var(--space-4) var(--space-16); border-radius: var(--radius-sm);
-  text-transform: uppercase; letter-spacing: var(--tracking-wide);
-  box-shadow: 0 6px 14px rgba(0,0,0,0.28);
-}
-.live-badge::before {
-  content: '';
-  position: absolute; left: 5px; top: 50%; transform: translateY(-50%);
-  width: 5px; height: 5px; border-radius: 50%;
-  background: var(--text-inverse);
-}
 .watching-badge {
-  position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 3;
-  background: hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.18);
-  backdrop-filter: blur(2px);
-  display: none; align-items: center; justify-content: center;
-  color: var(--accent); font-size: var(--font-md); font-weight: var(--weight-semibold);
-  letter-spacing: 0.05em;
-}
-.watching-badge.visible { display: flex; }
-.uptime-badge {
-  position: absolute; bottom: 6px; right: 6px; z-index: 3;
-  /* The chip stays dark in both themes, so its text and border must be fixed
-     light values — a --text-* token drops to ~2.4:1 in the light theme. */
-  background: rgba(0,0,0,0.74); color: var(--text-on-overlay);
-  font-size: var(--font-xs); padding: var(--space-4) var(--space-8); border-radius: var(--radius-sm);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-.platform-badge {
-  height: 20px; padding: 0 var(--space-8);
+  display: none; align-items: center; gap: var(--space-4);
+  height: 18px;
+  padding: 0 var(--space-8);
   border-radius: var(--radius-full);
-  display: flex; align-items: center; justify-content: center;
+  background: var(--media-chip-bg-strong);
+  color: var(--text-on-overlay);
   font-size: var(--font-xs); font-weight: var(--weight-semibold);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-wide);
 }
-.card-overlay .platform-badge {
-  /* Thumbnails are video — dark in both themes. */
-  --badge-base: var(--bg-dark-50);
-  --platform-kick-ink: var(--platform-kick);
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 3;
+.watching-badge::before {
+  content: '';
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent);
 }
-/* Platform = 16% tint + platform-coloured text. --badge-base is the surface
-   under the tint: transparent on panels, a dark scrim over video frames. */
-.platform-badge.twitch { --badge-platform: var(--platform-twitch); --badge-ink: var(--platform-twitch); }
-.platform-badge.kick { --badge-platform: var(--platform-kick); --badge-ink: var(--platform-kick-ink); }
-.platform-badge.youtube { --badge-platform: var(--platform-youtube); --badge-ink: var(--platform-youtube); }
-.platform-badge.twitch,
-.platform-badge.kick,
-.platform-badge.youtube {
-  background: color-mix(in srgb, var(--badge-platform) 16%, var(--badge-base, transparent));
-  color: var(--badge-ink);
+.watching-badge.visible { display: inline-flex; }
+.card-viewers-overlay {
+  position: absolute; left: 8px; bottom: 6px; z-index: 3;
+  display: flex; align-items: center; gap: var(--space-4);
+  color: var(--text-on-overlay);
+  font-size: var(--font-xs); font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
 }
+.card-live-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--live);
+}
+.card-viewers-overlay .trend {
+  display: inline-flex;
+  color: var(--icon-on-media);
+}
+.card-viewers-overlay .trend:empty { display: none; }
+.uptime-badge {
+  position: absolute; bottom: 6px; right: 8px; z-index: 3;
+  /* Sits on the .card-thumb scrim, which is dark in both themes: fixed light
+     text, never --text-*. */
+  background: transparent;
+  color: var(--text-on-media-muted);
+  font-size: var(--font-xs);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.card-play {
+  position: absolute; top: 50%; left: 50%; z-index: 3;
+  width: 40px; height: 40px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--media-chip-bg-strong);
+  color: var(--text-on-overlay);
+  opacity: 0;
+  transition: opacity var(--duration-fast) ease;
+  pointer-events: none;
+}
+.stream-card:hover .card-play,
+.stream-card:focus-visible .card-play { opacity: 1; }
 
-.card-body,
-.card-info { padding: var(--space-12); }
-.card-title-row,
+/* ── Text under the frame ───────────────────────────────── */
 .card-meta {
-  display: flex; align-items: center; gap: var(--space-8);
-  margin-bottom: var(--space-4);
+  display: flex; align-items: flex-start; gap: var(--space-8);
   min-width: 0;
+  padding: 0 var(--space-4);
 }
 .card-avatar {
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   object-fit: cover;
   flex-shrink: 0;
-  background: linear-gradient(135deg, var(--bg-control), var(--bg-elevated));
-  box-shadow: inset 0 0 0 1px var(--border-subtle);
+  background: var(--bg-elevated);
 }
 .card-avatar.is-empty { opacity: 0.62; }
-.card-viewers,
-.viewers {
-  margin-left: auto;
-  flex-shrink: 0;
-  font-size: var(--font-sm);
-  color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
-}
-.trend { font-size: var(--font-xs); font-weight: var(--weight-semibold); }
-.trend.up { color: var(--live-green); }
-.trend.down { color: var(--live-red); }
-.card-channel {
+.card-text {
   min-width: 0;
   flex: 1;
-  font-size: var(--font-md); font-weight: var(--weight-semibold); color: var(--text-primary);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  letter-spacing: -0.02em;
+  display: flex; flex-direction: column;
+  gap: var(--space-4);
 }
 .card-title {
-  font-size: var(--font-sm); color: var(--text-secondary);
+  font-size: var(--font-md); font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  color: var(--text-primary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  margin-top: var(--space-4);
 }
-.card-game {
-  font-size: var(--font-sm); font-weight: var(--weight-semibold); color: var(--text-muted);
+.card-sub {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  margin-top: var(--space-4);
+}
+.card-channel { color: var(--text-secondary); }
+.card-game:not(:empty)::before {
+  content: '\00b7';
+  margin: 0 var(--space-4);
 }

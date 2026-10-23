@@ -3,25 +3,19 @@
 button:not(:disabled):active,
 .login-btn:active,
 .bar-btn:active,
-.player-header-btn:active,
 .onboarding-btn:active,
 .browse-back-btn:active,
 .channel-follow-btn:active,
-.channel-watch-btn:active,
 .ms-confirm-btn:active,
 .ms-cancel-btn:active,
 #watch-external-btn:active,
 #fullscreen-player-btn:active,
 #pip-player-btn:active,
 #close-player-btn:active,
-.oauth-login-btn:active,
-.import-btn:active,
 .eye-btn:active,
 #chat-send-btn:not(:disabled):active,
 #ms-chat-send-btn:not(:disabled):active,
-.channel-media-btn:active,
 .browse-platform-tab:not(.active):active,
-#save-btn:active,
 #test-btn:active,
 #kick-test-btn:active,
 #yt-test-btn:active,
@@ -31,7 +25,6 @@ button:not(:disabled):active,
 
 .channel-item:active {
   background: var(--pressed-bg);
-  transform: scale(0.98);
 }
 
 /* Missing hover states */
@@ -41,18 +34,6 @@ button:not(:disabled):active,
 .ms-cancel-btn:hover {
   border-color: var(--border-strong);
   color: var(--text-secondary);
-}
-#ms-chat-send-btn:not(:disabled):hover,
-.chat-header-btn:hover {
-  color: var(--text-primary);
-}
-/* Moved from player.css, where a second copy re-set the colour to
-   --text-secondary and cancelled the brighten entirely. */
-.chat-header-btn:hover {
-  background: var(--hover-bg-strong);
-}
-#emote-picker-btn:hover {
-  color: var(--text-primary);
 }
 
 /* ── Reduced motion overrides ─────────────────────────── */

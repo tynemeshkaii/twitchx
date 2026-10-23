@@ -86,16 +86,6 @@
   color: var(--text-muted);
 }
 
-/* Channel status badge used in compact list mode */
-.channel-item .status-badge {
-  flex-shrink: 0;
-  min-width: 40px;
-  padding: var(--space-4) 0 var(--space-4) var(--space-8);
-  font-size: var(--font-xs);
-  font-weight: var(--weight-semibold);
-  color: var(--text-muted);
-  text-align: right;
-}
 
 /* Narrow windows: the search field keeps its icon and shortcut only. */
 @container (max-width: 560px) {

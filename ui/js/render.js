@@ -44,17 +44,31 @@ function getStreamCardLabel(s) {
 // Pin state changes without a full rebuild, so the diff branch has to keep the
 // badge in sync — otherwise the card reorders but the icon lags a poll behind.
 function _syncPinBadge(card, s) {
-  const thumb = card.querySelector('.card-thumb') || card;
+  const corner = card.querySelector('.card-corner') || card;
   const existing = card.querySelector('.pin-badge');
   const pinned = TwitchX.isPinned(s.platform || 'twitch', s.login);
   if (pinned && !existing) {
-    const pinBadge = document.createElement('span');
-    pinBadge.className = 'pin-badge';
-    TwitchX.setIconOnly(pinBadge, 'pin', 12);
-    pinBadge.title = 'Pinned';
-    thumb.appendChild(pinBadge);
+    corner.insertBefore(_createPinBadge(), corner.firstChild);
   } else if (!pinned && existing) {
     existing.remove();
+  }
+}
+
+function _createPinBadge() {
+  const pinBadge = document.createElement('span');
+  pinBadge.className = 'pin-badge';
+  TwitchX.setIconOnly(pinBadge, 'pin', 10);
+  pinBadge.title = 'Pinned';
+  return pinBadge;
+}
+
+function _setTrend(trend, direction) {
+  if (direction === 'up') {
+    TwitchX.setIconOnly(trend, 'trend-up', 10); trend.className = 'trend up';
+  } else if (direction === 'down') {
+    TwitchX.setIconOnly(trend, 'trend-down', 10); trend.className = 'trend down';
+  } else {
+    trend.replaceChildren(); trend.className = 'trend';
   }
 }
 
@@ -68,11 +82,11 @@ function renderGrid() {
   if (TwitchX.multiState.open) return;
 
   const grid = document.getElementById('stream-grid');
-  grid.classList.remove('grid-mode', 'comfortable-mode', 'compact-mode', 'list-mode');
+  grid.classList.remove('grid-mode', 'list-mode');
   grid.classList.add('view', 'view-active');
   if (TwitchX.state.gridMode) grid.classList.add(TwitchX.state.gridMode + '-mode');
   grid.querySelectorAll('.stream-card').forEach(function(card) {
-    card.classList.remove('grid-mode', 'comfortable-mode', 'compact-mode', 'list-mode');
+    card.classList.remove('grid-mode', 'list-mode');
     if (TwitchX.state.gridMode) card.classList.add(TwitchX.state.gridMode + '-mode');
   });
   const empty = document.getElementById('empty-state');
@@ -82,16 +96,15 @@ function renderGrid() {
   var anyLoggedIn = TwitchX.state.currentUser || TwitchX.state.kickUser || TwitchX.state.youtubeUser;
   if (TwitchX.state.favorites.length === 0 && !anyLoggedIn) {
     grid.classList.add('hidden');
-    var welcomeOpts = {
+    // No brand colours here: one neutral Connect opens the account popover,
+    // where each platform has its own sign-in.
+    TwitchX.renderEmptyState(empty, {
       illustration: 'empty-favorites',
       title: 'Welcome to TwitchX',
-      subtitle: 'Log in to see followed channels, or add channels with \u2318K.',
-      primaryAction: { label: 'Login with Twitch', callback: function() { if (TwitchX.api) TwitchX.api.login(); } },
-    };
-    if (TwitchX.state.youtubeEnabled) {
-      welcomeOpts.secondaryAction = { label: 'Connect YouTube', callback: function() { if (TwitchX.api) TwitchX.api.youtube_login(); } };
-    }
-    TwitchX.renderEmptyState(empty, welcomeOpts);
+      subtitle: 'Connect Twitch, Kick or YouTube to see the channels you follow, or add channels with \u2318K.',
+      primaryAction: { label: 'Connect account', callback: function() { if (TwitchX.openAccountPopover) TwitchX.openAccountPopover(); } },
+      secondaryAction: { label: 'Browse live channels', callback: function() { TwitchX.navigateTo('browse'); } },
+    });
 
     return;
   }
@@ -139,19 +152,12 @@ function renderGrid() {
       const streamKey = TwitchX.channelKey(s.login, s.platform || 'twitch');
       const card = grid.querySelector('.stream-card[data-key="' + streamKey + '"]');
       if (!card) return;
-      card.querySelector('.card-viewers').textContent = TwitchX.formatViewers(s.viewers);
-      const trend = card.querySelector('.trend');
-      if (s.viewer_trend === 'up') {
-        TwitchX.setIconOnly(trend, 'trend-up', 14); trend.className = 'trend up';
-      } else if (s.viewer_trend === 'down') {
-        TwitchX.setIconOnly(trend, 'trend-down', 14); trend.className = 'trend down';
-      } else {
-        trend.textContent = ''; trend.className = 'trend';
-      }
+      card.querySelectorAll('.card-viewers').forEach(function(el) { el.textContent = TwitchX.formatViewers(s.viewers); });
+      _setTrend(card.querySelector('.trend'), s.viewer_trend);
       card.querySelector('.card-title').textContent = s.title;
       card.querySelector('.card-title').title = s.title;
-      card.querySelector('.card-game').textContent = TwitchX.truncate(s.game, 28);
-      card.querySelector('.uptime-badge').textContent = TwitchX.formatUptime(s.started_at);
+      card.querySelector('.card-game').textContent = s.game || '';
+      card.querySelectorAll('.card-uptime').forEach(function(el) { el.textContent = TwitchX.formatUptimeClock(s.started_at); });
       const wb = card.querySelector('.watching-badge');
       wb.classList.toggle('visible', TwitchX.state.watchingChannelKey === streamKey);
       card.classList.toggle('selected', TwitchX.state.selectedChannelKey === streamKey);
@@ -180,138 +186,184 @@ function renderGrid() {
   }
 }
 
-function createStreamCard(s) {
-  const streamKey = TwitchX.channelKey(s.login, s.platform || 'twitch');
+// One card for every stream-like item: the Following grid, Browse top streams
+// and the channel's VODs/clips. The caller sets data-* and events.
+//   o.thumb / o.avatar   image URLs (null → shimmer / empty disc)
+//   o.viewers, o.trend   number + 'up'|'down' → the chip bottom-left
+//   o.corner             uptime or duration → bottom-right
+//   o.pinned, o.watching chips top-right
+function buildMediaCard(o) {
   const card = document.createElement('div');
-  card.className = 'stream-card card-enter' + (TwitchX.state.selectedChannelKey === streamKey ? ' selected' : '');
-  card.dataset.login = s.login;
-  card.dataset.key = streamKey;
-  card.dataset.started = s.started_at;
-  card.dataset.platform = s.platform || 'twitch';
+  card.className = 'stream-card card-enter';
   card.tabIndex = 0;
   card.setAttribute('role', 'button');
-  card.setAttribute('aria-pressed', String(TwitchX.state.selectedChannelKey === streamKey));
-  card.setAttribute('aria-label', getStreamCardLabel(s));
+  if (o.label) card.setAttribute('aria-label', o.label);
   card.addEventListener('animationend', function() { card.classList.remove('card-enter'); }, { once: true });
-  if (TwitchX.state.gridMode) card.classList.add(TwitchX.state.gridMode + '-mode');
 
-  // Thumb area
   const thumb = document.createElement('div');
   thumb.className = 'card-thumb';
 
   const img = document.createElement('img');
-  img.className = 'thumb-img' + (TwitchX.state.thumbnails[streamKey] ? ' loaded' : '');
+  img.className = 'thumb-img' + (o.thumb ? ' loaded' : '');
   // No src until the thumbnail arrives — an empty src fires onerror in WebKit,
   // which would permanently hide both the image and the shimmer placeholder.
-  if (TwitchX.state.thumbnails[streamKey]) img.src = TwitchX.state.thumbnails[streamKey];
+  if (o.thumb) img.src = o.thumb;
   img.alt = '';
   img.loading = 'lazy';
   img.decoding = 'async';
-  img.onerror = function() {
-    img.classList.add('hidden');
-    shimmer.classList.add('hidden');
-  };
   thumb.appendChild(img);
 
   const shimmer = document.createElement('div');
   shimmer.className = 'thumb-shimmer';
   thumb.appendChild(shimmer);
+  img.onerror = function() {
+    img.classList.add('hidden');
+    img.classList.remove('loaded');
+    if (o.fallbackLabel) {
+      shimmer.replaceWith(TwitchX.createImageFallback(o.fallbackLabel, 'card-thumb-fallback'));
+    } else {
+      shimmer.classList.add('hidden');
+    }
+  };
 
-  const overlay = document.createElement('div');
-  overlay.className = 'card-overlay';
+  const platform = document.createElement('span');
+  platform.className = 'card-platform platform-glyph';
+  platform.title = TwitchX.platformLabel(o.platform || 'twitch');
+  const dot = document.createElement('span');
+  dot.className = 'platform-dot ' + (o.platform || 'twitch');
+  platform.appendChild(dot);
+  thumb.appendChild(platform);
 
-  const liveBadge = document.createElement('span');
-  liveBadge.className = 'live-badge';
-  liveBadge.textContent = 'LIVE';
-  overlay.appendChild(liveBadge);
-
-  const platformBadge = document.createElement('span');
-  platformBadge.className = 'platform-badge ' + (s.platform || 'twitch');
-  platformBadge.textContent = s.platform === 'kick' ? 'K' : s.platform === 'youtube' ? 'YT' : 'T';
-  overlay.appendChild(platformBadge);
-
+  const corner = document.createElement('div');
+  corner.className = 'card-corner';
+  if (o.pinned) corner.appendChild(_createPinBadge());
   const watchBadge = document.createElement('span');
-  watchBadge.className = 'watching-badge' + (TwitchX.state.watchingChannelKey === streamKey ? ' visible' : '');
-  TwitchX.setIconText(watchBadge, 'play', 10, 'WATCHING');
-  thumb.appendChild(watchBadge);
+  watchBadge.className = 'watching-badge' + (o.watching ? ' visible' : '');
+  watchBadge.textContent = 'Watching';
+  corner.appendChild(watchBadge);
+  thumb.appendChild(corner);
+
+  if (o.viewers !== undefined && o.viewers !== null) {
+    const chip = document.createElement('span');
+    chip.className = 'card-viewers-overlay';
+    const liveDot = document.createElement('span');
+    liveDot.className = 'card-live-dot';
+    chip.appendChild(liveDot);
+    const viewers = document.createElement('span');
+    viewers.className = 'card-viewers';
+    viewers.textContent = TwitchX.formatViewers(o.viewers);
+    chip.appendChild(viewers);
+    const trend = document.createElement('span');
+    _setTrend(trend, o.trend);
+    chip.appendChild(trend);
+    thumb.appendChild(chip);
+  }
 
   const uptime = document.createElement('span');
-  uptime.className = 'uptime-badge';
-  uptime.textContent = TwitchX.formatUptime(s.started_at);
-  overlay.appendChild(uptime);
-  thumb.appendChild(overlay);
+  uptime.className = 'uptime-badge card-uptime';
+  uptime.textContent = o.corner || '';
+  thumb.appendChild(uptime);
 
-  if (TwitchX.isPinned(s.platform || 'twitch', s.login)) {
-    var pinBadge = document.createElement('span');
-    pinBadge.className = 'pin-badge';
-    TwitchX.setIconOnly(pinBadge, 'pin', 12);
-    pinBadge.title = 'Pinned';
-    thumb.appendChild(pinBadge);
-  }
+  const play = document.createElement('span');
+  play.className = 'card-play';
+  play.setAttribute('aria-hidden', 'true');
+  TwitchX.setIconOnly(play, 'play', 18);
+  thumb.appendChild(play);
 
   card.appendChild(thumb);
 
-  // Info area
-  const info = document.createElement('div');
-  info.className = 'card-body card-info';
+  const meta = document.createElement('div');
+  meta.className = 'card-meta';
 
-  const titleRow = document.createElement('div');
-  titleRow.className = 'card-title-row';
-
-  const avatar = document.createElement('img');
-  avatar.className = 'card-avatar';
-  avatar.alt = '';
-  avatar.loading = 'lazy';
-  avatar.decoding = 'async';
-  // Same rule as the thumbnail above: never assign an empty src — WebKit
-  // treats it as a failed load and paints its broken-image glyph.
-  var avatarUrl = TwitchX.state.avatars[streamKey];
-  if (avatarUrl) avatar.src = avatarUrl;
-  avatar.classList.toggle('is-empty', !avatarUrl);
-  titleRow.appendChild(avatar);
-
-  const channelName = document.createElement('span');
-  channelName.className = 'card-channel';
-  channelName.textContent = s.display_name;
-  titleRow.appendChild(channelName);
-
-  const viewers = document.createElement('span');
-  viewers.className = 'card-viewers viewers';
-  viewers.textContent = TwitchX.formatViewers(s.viewers);
-  titleRow.appendChild(viewers);
-
-  const trend = document.createElement('span');
-  trend.className = 'trend' + (s.viewer_trend === 'up' ? ' up' : s.viewer_trend === 'down' ? ' down' : '');
-  if (s.viewer_trend === 'up') {
-    TwitchX.setIconOnly(trend, 'trend-up', 14);
-  } else if (s.viewer_trend === 'down') {
-    TwitchX.setIconOnly(trend, 'trend-down', 14);
+  if (o.showAvatar !== false) {
+    const avatar = document.createElement('img');
+    avatar.className = 'card-avatar';
+    avatar.alt = '';
+    avatar.loading = 'lazy';
+    avatar.decoding = 'async';
+    // Same rule as the thumbnail above: never assign an empty src — WebKit
+    // treats it as a failed load and paints its broken-image glyph.
+    if (o.avatar) avatar.src = o.avatar;
+    avatar.classList.toggle('is-empty', !o.avatar);
+    meta.appendChild(avatar);
   }
-  titleRow.appendChild(trend);
-  info.appendChild(titleRow);
+
+  const text = document.createElement('div');
+  text.className = 'card-text';
 
   const title = document.createElement('div');
   title.className = 'card-title';
-  title.textContent = s.title;
-  title.title = s.title;
-  info.appendChild(title);
+  title.textContent = o.title || '';
+  title.title = o.title || '';
+  text.appendChild(title);
 
-  const game = document.createElement('div');
+  const sub = document.createElement('div');
+  sub.className = 'card-sub';
+  const channelName = document.createElement('span');
+  channelName.className = 'card-channel';
+  channelName.textContent = o.channel || '';
+  sub.appendChild(channelName);
+  const game = document.createElement('span');
   game.className = 'card-game';
-  game.textContent = TwitchX.truncate(s.game, 28);
-  info.appendChild(game);
+  game.textContent = o.game || '';
+  sub.appendChild(game);
+  text.appendChild(sub);
 
-  card.appendChild(info);
+  meta.appendChild(text);
 
-  // Events
+  // List mode shows viewers and uptime at the row's end instead of on the
+  // (tiny) frame; grid mode hides this.
+  const aside = document.createElement('div');
+  aside.className = 'card-aside';
+  if (o.viewers !== undefined && o.viewers !== null) {
+    const asideViewers = document.createElement('span');
+    asideViewers.className = 'card-aside-viewers card-viewers';
+    asideViewers.textContent = TwitchX.formatViewers(o.viewers);
+    aside.appendChild(asideViewers);
+  }
+  const asideUptime = document.createElement('span');
+  asideUptime.className = 'card-aside-uptime card-uptime';
+  asideUptime.textContent = o.corner || '';
+  aside.appendChild(asideUptime);
+  meta.appendChild(aside);
+
+  card.appendChild(meta);
+  return card;
+}
+
+function createStreamCard(s) {
+  const platform = s.platform || 'twitch';
+  const streamKey = TwitchX.channelKey(s.login, platform);
+  const card = buildMediaCard({
+    platform: platform,
+    thumb: TwitchX.state.thumbnails[streamKey],
+    avatar: TwitchX.state.avatars[streamKey],
+    title: s.title,
+    channel: s.display_name,
+    game: s.game,
+    viewers: s.viewers,
+    trend: s.viewer_trend,
+    corner: TwitchX.formatUptimeClock(s.started_at),
+    pinned: TwitchX.isPinned(platform, s.login),
+    watching: TwitchX.state.watchingChannelKey === streamKey,
+    label: getStreamCardLabel(s),
+  });
+  if (TwitchX.state.selectedChannelKey === streamKey) card.classList.add('selected');
+  card.dataset.login = s.login;
+  card.dataset.key = streamKey;
+  card.dataset.started = s.started_at;
+  card.dataset.platform = platform;
+  card.setAttribute('aria-pressed', String(TwitchX.state.selectedChannelKey === streamKey));
+  if (TwitchX.state.gridMode) card.classList.add(TwitchX.state.gridMode + '-mode');
+
   // One click starts the stream. The selection stays: the keyboard shortcuts
   // (watch, next/previous stream) work from it.
-  card.addEventListener('click', function() { TwitchX.selectChannel(s.login, s.platform || 'twitch'); TwitchX.doWatch(); });
-  card.addEventListener('contextmenu', function(e) { TwitchX.showContextMenu(e, s.login, s.platform || 'twitch'); });
+  card.addEventListener('click', function() { TwitchX.selectChannel(s.login, platform); TwitchX.doWatch(); });
+  card.addEventListener('contextmenu', function(e) { TwitchX.showContextMenu(e, s.login, platform); });
   card.addEventListener('keydown', function(e) {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      TwitchX.selectChannel(s.login, s.platform || 'twitch');
+      TwitchX.selectChannel(s.login, platform);
     }
   });
 
@@ -388,6 +440,7 @@ function hideSkeletonGrid() {
 TwitchX.showSkeletonGrid = showSkeletonGrid;
 TwitchX.hideSkeletonGrid = hideSkeletonGrid;
 TwitchX.createStreamCard = createStreamCard;
+TwitchX.buildMediaCard = buildMediaCard;
 TwitchX.createOnboardingCard = createOnboardingCard;
 
 var EMPTY_STATE_ICONS = {
@@ -408,7 +461,8 @@ function renderEmptyState(target, opts) {
 
   var art = document.createElement('div');
   art.className = 'empty-illustration ' + (config.illustration || 'empty-generic');
-  TwitchX.setIconOnly(art, EMPTY_STATE_ICONS[config.illustration] || 'info', 36);
+  art.setAttribute('aria-hidden', 'true');
+  TwitchX.setIconOnly(art, EMPTY_STATE_ICONS[config.illustration] || 'info', 40);
   target.appendChild(art);
 
   var title = document.createElement('div');
@@ -429,7 +483,8 @@ function renderEmptyState(target, opts) {
     if (!action || !action.label || !action.callback) return;
     var btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = idx === 0 ? 'empty-action primary' : 'empty-action secondary';
+    // At most two: the first is primary, the second secondary.
+    btn.className = 'btn ' + (idx === 0 ? 'btn-primary' : 'btn-secondary');
     btn.textContent = action.label;
     btn.addEventListener('click', action.callback);
     actions.appendChild(btn);

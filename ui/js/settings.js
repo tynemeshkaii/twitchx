@@ -165,21 +165,21 @@ function renderWatchStats(stats) {
   if (stats.top_channels && stats.top_channels.length > 0) {
     stats.top_channels.forEach(function(ch) {
       var item = document.createElement('div');
-      item.className = 'stats-list-item';
 
       var leftSpan = document.createElement('span');
+      leftSpan.className = 'stats-channel-wrap';
+      var dot = document.createElement('span');
+      dot.className = 'platform-dot ' + (ch.platform || 'twitch');
+      dot.title = TwitchX.platformLabel(ch.platform || 'twitch');
+      leftSpan.appendChild(dot);
       var chName = document.createElement('span');
       chName.className = 'stats-channel';
       chName.textContent = ch.display_name || ch.channel;
       leftSpan.appendChild(chName);
 
-      var badge = document.createElement('span');
-      badge.className = 'stats-platform-badge';
-      badge.textContent = ch.platform.charAt(0).toUpperCase();
-      leftSpan.appendChild(badge);
-
       var rightSpan = document.createElement('span');
       rightSpan.className = 'stats-value';
+      item.className = 'stats-list-item settings-row';
       rightSpan.textContent = formatStatsDuration(ch.total_sec) + ' \u00b7 ' + ch.sessions_count + ' sessions';
 
       item.appendChild(leftSpan);
@@ -212,70 +212,242 @@ function loadWatchStatistics() {
     console.warn('Failed to request watch statistics:', e);
     if (loading) loading.textContent = 'Failed to load statistics';
   }
-  // Show compact toggle
-  var toggleBtn = document.getElementById('stats-compact-toggle');
-  if (toggleBtn) toggleBtn.classList.remove('hidden');
-  // Restore compact state
-  var compact = localStorage.getItem('twitchx.stats.compact') === '1';
-  _applyStatsCompact(compact);
 }
 
-function _toggleStatsCompact() {
-  var compact = localStorage.getItem('twitchx.stats.compact') !== '1';
-  localStorage.setItem('twitchx.stats.compact', compact ? '1' : '0');
-  _applyStatsCompact(compact);
-}
+// ── Instant apply ────────────────────────────────────────
+// Every control saves on change through the partial save_settings payload.
+// Text paths wait 300ms after the last keystroke; toggles and selects go at
+// once. Credentials are the exception: they save from their own button.
 
-function _applyStatsCompact(compact) {
-  var grids = document.querySelectorAll('.stats-grid');
-  var cards = document.querySelectorAll('.stat-card');
-  var toggleBtn = document.getElementById('stats-compact-toggle');
-  grids.forEach(function(g) { g.classList.toggle('compact', compact); });
-  cards.forEach(function(c) { c.classList.toggle('compact', compact); });
-  if (toggleBtn) toggleBtn.textContent = compact ? 'Normal' : 'Compact';
-}
+const SETTINGS_TEXT_DEBOUNCE_MS = 300;
+const SETTINGS_SAVED_MS = 1600;
+const _settingsTextTimers = {};
+let _settingsSavedRow = null;
+let _settingsSavedTimer = null;
 
-function _getSelectedTheme() {
-  var checked = document.querySelector('input[name="theme"]:checked');
-  return checked ? checked.value : 'dark';
-}
-
-function _readAllFormValues() {
-  var activeSwatch = document.querySelector('.accent-swatch.active');
-  return {
-    theme: _getSelectedTheme(),
-    client_id: document.getElementById('s-client-id').value.trim(),
-    client_secret: document.getElementById('s-client-secret').value.trim(),
-    streamlink_path: document.getElementById('s-streamlink').value.trim(),
-    iina_path: document.getElementById('s-iina').value.trim(),
-    mpv_path: document.getElementById('s-mpv').value.trim(),
-    external_player: document.getElementById('s-external-player').value,
-    refresh_interval: document.getElementById('s-interval').value,
-    kick_client_id: document.getElementById('s-kick-client-id').value.trim(),
-    kick_client_secret: document.getElementById('s-kick-client-secret').value.trim(),
-    youtube_api_key: document.getElementById('yt-api-key').value.trim(),
-    youtube_client_id: document.getElementById('yt-client-id').value.trim(),
-    youtube_client_secret: document.getElementById('yt-client-secret').value.trim(),
-    recording_path: document.getElementById('s-recording-path').value.trim(),
-    low_latency_mode: document.getElementById('s-low-latency').checked,
-    stream_codecs: document.getElementById('s-stream-codecs').value,
-    pip_enabled: document.getElementById('s-pip-enabled').checked,
-    accent_color: activeSwatch ? activeSwatch.dataset.color : '#FF9F0A',
-    keyboard_shortcuts: JSON.stringify(TwitchX.state.shortcuts || {}),
-  };
-}
-
-function _isSettingsDirty() {
-  if (!TwitchX._settingsSnapshot) return false;
-  var current = JSON.stringify(_readAllFormValues());
-  return current !== TwitchX._settingsSnapshot;
-}
+const CREDENTIAL_FIELDS = {
+  twitch: { 's-client-id': 'client_id', 's-client-secret': 'client_secret' },
+  kick: { 's-kick-client-id': 'kick_client_id', 's-kick-client-secret': 'kick_client_secret' },
+  youtube: {
+    'yt-api-key': 'youtube_api_key',
+    'yt-client-id': 'youtube_client_id',
+    'yt-client-secret': 'youtube_client_secret',
+  },
+};
 
 function _setFeedback(msg, type) {
   var fb = document.getElementById('settings-feedback');
   if (!fb) return;
   fb.textContent = msg;
   fb.className = type || '';
+}
+
+// row: the .settings-row whose control changed; it shows a quiet "Saved".
+function saveSettingsPartial(partial, row) {
+  if (!TwitchX.api) return;
+  _settingsSavedRow = row || null;
+  TwitchX.api.save_settings(JSON.stringify(partial));
+}
+
+function _markRowSaved(row) {
+  document.querySelectorAll('.settings-saved.visible').forEach(function(el) { el.classList.remove('visible'); });
+  if (_settingsSavedTimer) clearTimeout(_settingsSavedTimer);
+  if (!row) return;
+  var mark = row.querySelector('.settings-saved');
+  if (!mark) {
+    mark = document.createElement('span');
+    mark.className = 'settings-saved';
+    mark.textContent = 'Saved';
+    var control = row.querySelector('input, select, .segmented, .accent-swatches, .settings-btn.primary');
+    row.insertBefore(mark, control ? control.closest('.secret-row') || control : null);
+  }
+  mark.classList.add('visible');
+  _settingsSavedTimer = setTimeout(function() { mark.classList.remove('visible'); }, SETTINGS_SAVED_MS);
+}
+
+function _settingValue(el) {
+  if (el.type === 'checkbox') return el.checked;
+  if (el.dataset.setting === 'refresh_interval') return Math.max(30, parseInt(el.value, 10) || 60);
+  return el.tagName === 'SELECT' ? el.value : el.value.trim();
+}
+
+function _saveSettingControl(el) {
+  var partial = {};
+  partial[el.dataset.setting] = _settingValue(el);
+  if (el.dataset.setting === 'pip_enabled') {
+    TwitchX.state.pipEnabled = el.checked;
+    var pipBtn = document.getElementById('pip-player-btn');
+    if (pipBtn) pipBtn.classList.toggle('hidden', !el.checked);
+  }
+  if (el.dataset.setting === 'external_player') {
+    document.getElementById('s-mpv-group').classList.toggle('hidden', el.value !== 'mpv');
+  }
+  saveSettingsPartial(partial, el.closest('.settings-row'));
+}
+
+function _bindInstantSettings() {
+  document.querySelectorAll('#settings-modal [data-setting]').forEach(function(el) {
+    if (el.hasAttribute('data-debounce')) {
+      el.addEventListener('input', function() {
+        clearTimeout(_settingsTextTimers[el.id]);
+        _settingsTextTimers[el.id] = setTimeout(function() { _saveSettingControl(el); }, SETTINGS_TEXT_DEBOUNCE_MS);
+      });
+      // Leaving the field flushes a pending save at once.
+      el.addEventListener('blur', function() {
+        if (!_settingsTextTimers[el.id]) return;
+        clearTimeout(_settingsTextTimers[el.id]);
+        _settingsTextTimers[el.id] = null;
+        _saveSettingControl(el);
+      });
+    } else {
+      // The interval select too: change fires once per pick, never per step.
+      el.addEventListener('change', function() { _saveSettingControl(el); });
+    }
+  });
+
+  document.querySelectorAll('#theme-options [role="radio"]').forEach(function(btn) {
+    btn.addEventListener('click', function() { _pickTheme(btn.dataset.themeValue, true); });
+    btn.addEventListener('keydown', function(e) {
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].indexOf(e.key) === -1) return;
+      e.preventDefault();
+      var all = Array.from(document.querySelectorAll('#theme-options [role="radio"]'));
+      var step = (e.key === 'ArrowRight' || e.key === 'ArrowDown') ? 1 : -1;
+      var next = all[(all.indexOf(btn) + step + all.length) % all.length];
+      next.focus();
+      _pickTheme(next.dataset.themeValue, true);
+    });
+  });
+
+  document.querySelectorAll('#settings-modal [data-creds]').forEach(function(btn) {
+    btn.addEventListener('click', function() { saveCredentials(btn.dataset.creds, btn); });
+  });
+
+  var connect = document.getElementById('twitch-connect-btn');
+  if (connect) connect.addEventListener('click', function() {
+    if (!TwitchX.api) return;
+    if (TwitchX.state.currentUser) TwitchX.api.logout();
+    else TwitchX.api.login();
+  });
+}
+
+function _pickTheme(mode, save) {
+  document.querySelectorAll('#theme-options [role="radio"]').forEach(function(btn) {
+    var on = btn.dataset.themeValue === mode;
+    btn.setAttribute('aria-checked', String(on));
+    btn.classList.toggle('active', on);
+    btn.tabIndex = on ? 0 : -1;
+  });
+  if (!save) return;
+  applyTheme(mode);
+  saveSettingsPartial({ theme: mode }, document.getElementById('theme-options').closest('.settings-row'));
+}
+
+function _renderAccentSwatches(current) {
+  var container = document.getElementById('accent-swatches');
+  if (!container) return;
+  container.replaceChildren();
+  ACCENT_PALETTE.forEach(function(p) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'accent-swatch' + (p.value === current ? ' active' : '');
+    btn.style.setProperty('--swatch-color', p.value);
+    btn.title = p.label;
+    btn.dataset.color = p.value;
+    btn.setAttribute('role', 'radio');
+    btn.setAttribute('aria-label', p.label);
+    btn.setAttribute('aria-checked', String(p.value === current));
+    btn.tabIndex = p.value === current ? 0 : -1;
+    btn.addEventListener('click', function() {
+      container.querySelectorAll('.accent-swatch').forEach(function(sw) {
+        var on = sw === btn;
+        sw.classList.toggle('active', on);
+        sw.setAttribute('aria-checked', String(on));
+        sw.tabIndex = on ? 0 : -1;
+      });
+      applyAccentColor(p.value);
+      saveSettingsPartial({ accent_color: p.value }, container.closest('.settings-row'));
+    });
+    btn.addEventListener('keydown', function(e) {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      var all = Array.from(container.querySelectorAll('.accent-swatch'));
+      var next = all[(all.indexOf(btn) + (e.key === 'ArrowRight' ? 1 : -1) + all.length) % all.length];
+      next.focus();
+      next.click();
+    });
+    container.appendChild(btn);
+  });
+}
+
+function saveCredentials(platform, btn) {
+  var fields = CREDENTIAL_FIELDS[platform];
+  if (!fields) return;
+  var partial = {};
+  Object.keys(fields).forEach(function(id) {
+    partial[fields[id]] = document.getElementById(id).value.trim();
+  });
+  saveSettingsPartial(partial, btn ? btn.closest('.settings-row') : null);
+}
+
+function _credentialsDirty() {
+  var config = TwitchX.state.fullConfig || {};
+  return Object.keys(CREDENTIAL_FIELDS).some(function(platform) {
+    var fields = CREDENTIAL_FIELDS[platform];
+    return Object.keys(fields).some(function(id) {
+      var el = document.getElementById(id);
+      return el && el.value.trim() !== (config[fields[id]] || '');
+    });
+  });
+}
+
+function saveShortcuts() {
+  saveSettingsPartial({ keyboard_shortcuts: Object.assign({}, TwitchX.state.shortcuts) }, null);
+}
+
+// Status line + button of each platform row. Called on open and on every
+// auth change (account.js updateAccountChip).
+function syncSettingsAccounts() {
+  var config = TwitchX.state.fullConfig || {};
+  function setStatus(id, text, kind) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'account-status' + (kind ? ' ' + kind : '');
+  }
+  function signedIn(user) { return 'Signed in as ' + (user.display_name || user.login); }
+
+  var twitch = TwitchX.state.currentUser;
+  setStatus('twitch-cred-status', twitch ? signedIn(twitch) : 'Not connected', twitch ? 'ok' : '');
+  var connect = document.getElementById('twitch-connect-btn');
+  if (connect) connect.textContent = twitch ? 'Disconnect' : 'Connect';
+
+  var kick = TwitchX.state.kickUser;
+  setStatus('kick-cred-status', kick ? signedIn(kick) : 'Not connected', kick ? 'ok' : '');
+  var kLogin = document.getElementById('kick-login-area');
+  var kUser = document.getElementById('kick-user-area');
+  if (kLogin) kLogin.classList.toggle('hidden', !!kick);
+  if (kUser) kUser.classList.toggle('hidden', !kick);
+
+  var yt = TwitchX.state.youtubeUser;
+  if (yt) setStatus('yt-cred-status', signedIn(yt), 'ok');
+  else if (config.youtube_api_key) setStatus('yt-cred-status', 'Not connected', '');
+  else setStatus('yt-cred-status', 'API key required', 'warn');
+  var yLogin = document.getElementById('yt-login-area');
+  var yUser = document.getElementById('yt-user-area');
+  var yImport = document.getElementById('yt-import-row');
+  if (yLogin) yLogin.classList.toggle('hidden', !!yt);
+  if (yUser) yUser.classList.toggle('hidden', !yt);
+  if (yImport) yImport.classList.toggle('hidden', !yt);
+}
+
+function _openSettingsTab(tab) {
+  const tabBtn = document.querySelector('.settings-tab[data-tab="' + tab + '"]');
+  if (!tabBtn) return;
+  TwitchX.setActiveTab(Array.from(document.querySelectorAll('.settings-tab')), tabBtn);
+  document.querySelectorAll('.settings-panel').forEach(function(p) { p.classList.remove('active'); });
+  const panel = document.getElementById('settings-panel-' + tab);
+  if (panel) panel.classList.add('active');
+  if (tab === 'advanced') loadWatchStatistics();
 }
 
 // The interval dropdown only lists a few presets. A config value outside that
@@ -301,7 +473,7 @@ function _setIntervalValue(interval) {
 function openSettings() {
   if (!TwitchX.api) return;
   // The config snapshot is pushed from Python; without it the form would open
-  // with defaults and a Save would overwrite the real config.
+  // with defaults and the first change would save them over the real config.
   if (!TwitchX.state.configLoaded) {
     TwitchX._settingsPendingOpen = true;
     TwitchX.requestConfig();
@@ -314,32 +486,19 @@ function openSettings() {
   document.getElementById('s-streamlink').value = config.streamlink_path || 'streamlink';
   document.getElementById('s-iina').value = config.iina_path || '/Applications/IINA.app/Contents/MacOS/iina-cli';
   document.getElementById('s-mpv').value = config.mpv_path || '/opt/homebrew/bin/mpv';
+  document.getElementById('s-recording-path').value = config.recording_path || '';
   var extPlayer = config.external_player || 'iina';
   document.getElementById('s-external-player').value = extPlayer;
   document.getElementById('s-mpv-group').classList.toggle('hidden', extPlayer !== 'mpv');
   _setIntervalValue(String(config.refresh_interval || 60));
   document.getElementById('s-kick-client-id').value = config.kick_client_id || '';
   document.getElementById('s-kick-client-secret').value = config.kick_client_secret || '';
-  if (config.kick_display_name) {
-    document.getElementById('kick-login-area').classList.add('hidden');
-    document.getElementById('kick-user-area').classList.remove('hidden');
-    document.getElementById('kick-user-display').textContent = 'Logged in as ' + config.kick_display_name;
-  } else {
-    document.getElementById('kick-login-area').classList.remove('hidden');
-    document.getElementById('kick-user-area').classList.add('hidden');
-  }
   document.getElementById('yt-api-key').value = config.youtube_api_key || '';
   document.getElementById('yt-client-id').value = config.youtube_client_id || '';
   document.getElementById('yt-client-secret').value = config.youtube_client_secret || '';
-  if (config.youtube_display_name) {
-    document.getElementById('yt-login-area').classList.add('hidden');
-    document.getElementById('yt-user-area').classList.remove('hidden');
-    document.getElementById('yt-display-name').textContent = 'Logged in as ' + config.youtube_display_name;
-    document.getElementById('yt-quota-display').textContent = 'Quota remaining: ' + (config.youtube_quota_remaining != null ? config.youtube_quota_remaining : '?');
-  } else {
-    document.getElementById('yt-login-area').classList.remove('hidden');
-    document.getElementById('yt-user-area').classList.add('hidden');
-  }
+  document.getElementById('yt-quota-display').textContent = config.youtube_display_name
+    ? 'Quota remaining: ' + (config.youtube_quota_remaining != null ? config.youtube_quota_remaining : '?')
+    : '';
   document.getElementById('yt-test-result').classList.add('hidden');
   if (config.keyboard_shortcuts) {
     TwitchX.state.shortcuts = Object.assign({}, TwitchX.DEFAULT_SHORTCUTS, config.keyboard_shortcuts);
@@ -347,100 +506,20 @@ function openSettings() {
   document.getElementById('s-pip-enabled').checked = !!config.pip_enabled;
   document.getElementById('s-low-latency').checked = !!config.low_latency_mode;
   document.getElementById('s-stream-codecs').value = config.stream_codecs || 'auto';
-  var currentTheme = config.theme || 'dark';
-  document.querySelectorAll('input[name="theme"]').forEach(function(radio) {
-    radio.checked = radio.value === currentTheme;
-  });
-  var currentAccent = config.accent_color || '#FF9F0A';
-  var swatchContainer = document.getElementById('accent-swatches');
-  if (swatchContainer) {
-    swatchContainer.replaceChildren();
-    ACCENT_PALETTE.forEach(function(p) {
-      var btn = document.createElement('button');
-      btn.className = 'accent-swatch' + (p.value === currentAccent ? ' active' : '');
-      btn.style.setProperty('--swatch-color', p.value);
-      btn.title = p.label;
-      btn.dataset.color = p.value;
-      btn.setAttribute('aria-label', 'Use ' + p.label + ' accent color');
-      btn.setAttribute('aria-pressed', String(p.value === currentAccent));
-      btn.addEventListener('click', function() {
-        document.querySelectorAll('.accent-swatch').forEach(function(s) {
-          s.classList.remove('active');
-          s.setAttribute('aria-pressed', 'false');
-        });
-        btn.classList.add('active');
-        btn.setAttribute('aria-pressed', 'true');
-        applyAccentColor(p.value);
-      });
-      swatchContainer.appendChild(btn);
-    });
-  }
-  // Auto-expand Twitch/Kick advanced sections when user already has custom credentials;
-  // collapse them when switching back to bundled so state is always fresh on open
-  var tAdv = document.getElementById('twitch-advanced-section');
-  var tToggle = document.getElementById('twitch-advanced-toggle');
-  if (config.twitch_using_bundled === false) {
-    if (tAdv) tAdv.classList.remove('hidden');
-    if (tToggle) tToggle.textContent = 'Hide custom credentials ▴';
-  } else {
-    if (tAdv) tAdv.classList.add('hidden');
-    if (tToggle) tToggle.textContent = 'Use custom credentials ▾';
-  }
-  var kAdv = document.getElementById('kick-advanced-section');
-  var kToggle = document.getElementById('kick-advanced-toggle');
-  if (config.kick_using_bundled === false) {
-    if (kAdv) kAdv.classList.remove('hidden');
-    if (kToggle) kToggle.textContent = 'Hide custom credentials ▴';
-  } else {
-    if (kAdv) kAdv.classList.add('hidden');
-    if (kToggle) kToggle.textContent = 'Use custom credentials ▾';
-  }
+  _pickTheme(config.theme || 'dark', false);
+  _renderAccentSwatches(config.accent_color || '#FF9F0A');
 
-  // Update credential status badges
-  var tBadge = document.getElementById('twitch-cred-status');
-  if (tBadge) {
-    if (config.twitch_using_bundled === false) {
-      tBadge.textContent = 'Custom credentials';
-      tBadge.className = 'cred-badge cred-custom';
-    } else {
-      tBadge.textContent = 'Built-in credentials';
-      tBadge.className = 'cred-badge cred-bundled';
-    }
-  }
-  var kBadge = document.getElementById('kick-cred-status');
-  if (kBadge) {
-    if (config.kick_using_bundled === false) {
-      kBadge.textContent = 'Custom credentials';
-      kBadge.className = 'cred-badge cred-custom';
-    } else {
-      kBadge.textContent = 'Built-in credentials';
-      kBadge.className = 'cred-badge cred-bundled';
-    }
-  }
-  var yBadge = document.getElementById('yt-cred-status');
-  if (yBadge) {
-    if (config.youtube_display_name) {
-      yBadge.textContent = 'Connected';
-      yBadge.className = 'cred-badge cred-custom';
-    } else if (config.youtube_api_key) {
-      yBadge.textContent = 'API key set';
-      yBadge.className = 'cred-badge cred-custom';
-    } else {
-      yBadge.textContent = 'API key required';
-      yBadge.className = 'cred-badge cred-missing';
-    }
-  }
+  // Custom credentials open their Advanced block; built-in ones keep it shut.
+  var tAdv = document.getElementById('twitch-advanced-section');
+  if (tAdv) tAdv.open = config.twitch_using_bundled === false;
+  var kAdv = document.getElementById('kick-advanced-section');
+  if (kAdv) kAdv.open = config.kick_using_bundled === false;
+  var yAdv = document.getElementById('yt-advanced-section');
+  if (yAdv) yAdv.open = !config.youtube_api_key;
+  syncSettingsAccounts();
 
   TwitchX.renderHotkeysSettings();
-  var accountsTab = document.querySelector('.settings-tab[data-tab="accounts"]');
-  document.querySelectorAll('.settings-tab').forEach(function(b) {
-    var isAccounts = b === accountsTab;
-    b.classList.toggle('active', isAccounts);
-    b.setAttribute('aria-selected', String(isAccounts));
-    b.tabIndex = isAccounts ? 0 : -1;
-  });
-  document.querySelectorAll('.settings-panel').forEach(function(p) { p.classList.remove('active'); });
-  document.getElementById('settings-panel-accounts').classList.add('active');
+  _openSettingsTab('accounts');
   document.getElementById('stats-loading').classList.remove('hidden');
   document.getElementById('stats-content').classList.add('hidden');
   _setFeedback('');
@@ -450,13 +529,13 @@ function openSettings() {
     overlay.setAttribute('aria-hidden', 'false');
     overlay.removeAttribute('inert');
   }
-  TwitchX._settingsSnapshot = JSON.stringify(_readAllFormValues());
   var versionEl = document.getElementById('settings-version-footer');
   if (versionEl) {
-    versionEl.textContent = TwitchX.state.version ? 'v' + TwitchX.state.version : '';
+    versionEl.textContent = TwitchX.state.version ? 'TwitchX ' + TwitchX.state.version : '';
   }
-  var closeBtn = document.getElementById('close-settings');
-  if (closeBtn) closeBtn.focus();
+  // Focus starts on the section list, like a native settings window.
+  var activeTab = document.querySelector('.settings-tab.active');
+  if (activeTab) activeTab.focus({ preventScroll: true });
 }
 
 function openSettingsToTab(tab) {
@@ -467,32 +546,28 @@ function openSettingsToTab(tab) {
   openSettings();
   if (!TwitchX.state.configLoaded) return;
   TwitchX._settingsPendingTab = null;
-  const tabBtn = document.querySelector('.settings-tab[data-tab="' + tab + '"]');
-  document.querySelectorAll('.settings-tab').forEach(function(b) {
-    var active = b === tabBtn;
-    b.classList.toggle('active', active);
-    b.setAttribute('aria-selected', String(active));
-    b.tabIndex = active ? 0 : -1;
-  });
-  document.querySelectorAll('.settings-panel').forEach(function(p) { p.classList.remove('active'); });
-  const panel = document.getElementById('settings-panel-' + tab);
-  if (panel) panel.classList.add('active');
-  if (tab === 'advanced') {
-    loadWatchStatistics();
-  }
+  _openSettingsTab(tab);
 }
 
 function closeSettings() {
-  if (_isSettingsDirty()) {
-    if (!window.confirm('You have unsaved changes. Discard them?')) return;
+  // Everything else is already saved; typed-in credentials are not until
+  // their Save button is pressed.
+  if (_credentialsDirty()) {
+    if (!window.confirm('Discard the credentials you have not saved?')) return;
   }
+  // Flush text fields still waiting on their debounce.
+  Object.keys(_settingsTextTimers).forEach(function(id) {
+    if (!_settingsTextTimers[id]) return;
+    clearTimeout(_settingsTextTimers[id]);
+    _settingsTextTimers[id] = null;
+    _saveSettingControl(document.getElementById(id));
+  });
   var overlay = document.getElementById('settings-overlay');
   if (overlay) {
     overlay.classList.remove('visible');
     overlay.setAttribute('aria-hidden', 'true');
     overlay.setAttribute('inert', '');
   }
-  TwitchX._settingsSnapshot = null;
   if (TwitchX._settingsReturnFocus && TwitchX._settingsReturnFocus.focus) {
     TwitchX._settingsReturnFocus.focus();
     TwitchX._settingsReturnFocus = null;
@@ -513,43 +588,16 @@ function testConnection() {
   TwitchX.api.test_connection(cid, cs);
 }
 
-function saveSettings() {
-  const pipEnabled = document.getElementById('s-pip-enabled').checked;
-  var activeSwatchEl = document.querySelector('.accent-swatch.active');
-  var accentColor = activeSwatchEl ? activeSwatchEl.dataset.color : '#FF9F0A';
-  const data = {
-    theme: _getSelectedTheme(),
-    client_id: document.getElementById('s-client-id').value.trim(),
-    client_secret: document.getElementById('s-client-secret').value.trim(),
-    streamlink_path: document.getElementById('s-streamlink').value.trim(),
-    iina_path: document.getElementById('s-iina').value.trim(),
-    refresh_interval: Math.max(30, parseInt(document.getElementById('s-interval').value, 10) || 60),
-    kick_client_id: document.getElementById('s-kick-client-id').value.trim(),
-    kick_client_secret: document.getElementById('s-kick-client-secret').value.trim(),
-    youtube_api_key: document.getElementById('yt-api-key').value.trim(),
-    youtube_client_id: document.getElementById('yt-client-id').value.trim(),
-    youtube_client_secret: document.getElementById('yt-client-secret').value.trim(),
-    external_player: document.getElementById('s-external-player').value,
-    mpv_path: document.getElementById('s-mpv').value.trim(),
-    keyboard_shortcuts: Object.assign({}, TwitchX.state.shortcuts),
-    pip_enabled: pipEnabled,
-    low_latency_mode: document.getElementById('s-low-latency').checked,
-    stream_codecs: document.getElementById('s-stream-codecs').value,
-    recording_path: document.getElementById('s-recording-path').value.trim(),
-    accent_color: accentColor,
-  };
-  TwitchX.state.pipEnabled = pipEnabled;
-  const pipBtn = document.getElementById('pip-player-btn');
-  if (pipBtn) pipBtn.classList.toggle('hidden', !pipEnabled);
-  _setFeedback('Saving...', '');
-  if (TwitchX.api) TwitchX.api.save_settings(JSON.stringify(data));
-  TwitchX._settingsSnapshot = JSON.stringify(_readAllFormValues());
-}
+window.onSettingsSaved = function() {
+  _markRowSaved(_settingsSavedRow);
+  _settingsSavedRow = null;
+  if (document.getElementById('settings-overlay').classList.contains('visible')) syncSettingsAccounts();
+};
 
-// save_settings rejected the payload; without this the feedback line
-// would stay on "Saving..." forever.
+// save_settings rejected the payload.
 window.onSettingsError = function(data) {
   var msg = (data && data.message) || 'Could not save settings';
+  _settingsSavedRow = null;
   _setFeedback('Error: ' + msg, 'error');
 };
 
@@ -575,7 +623,12 @@ TwitchX.openSettingsToTab = openSettingsToTab;
 TwitchX.closeSettings = closeSettings;
 TwitchX.toggleSecret = toggleSecret;
 TwitchX.testConnection = testConnection;
-TwitchX.saveSettings = saveSettings;
+TwitchX.saveSettingsPartial = saveSettingsPartial;
+TwitchX.saveCredentials = saveCredentials;
+TwitchX.saveShortcuts = saveShortcuts;
+TwitchX.syncSettingsAccounts = syncSettingsAccounts;
+TwitchX._bindInstantSettings = _bindInstantSettings;
+TwitchX.showSettingsTab = _openSettingsTab;
 TwitchX.loadWatchStatistics = loadWatchStatistics;
 TwitchX.renderWatchStats = renderWatchStats;
-TwitchX._toggleStatsCompact = _toggleStatsCompact;
+

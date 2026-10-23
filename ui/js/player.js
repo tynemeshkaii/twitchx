@@ -1386,19 +1386,14 @@ function updateRecordButton() {
   var btn = document.getElementById('record-btn');
   var dot = document.getElementById('record-dot');
   if (!btn) return;
-  if (TwitchX._recordingActive) {
-    TwitchX.setIconText(btn, 'stop', 12, 'Stop REC');
-    btn.classList.add('recording');
-    btn.title = 'Stop Recording';
-    btn.setAttribute('aria-label', 'Stop Recording');
-    if (dot) dot.classList.remove('hidden');
-  } else {
-    TwitchX.setIconText(btn, 'record', 12, 'REC');
-    btn.classList.remove('recording');
-    btn.title = 'Start Recording';
-    btn.setAttribute('aria-label', 'Start Recording');
-    if (dot) dot.classList.add('hidden');
-  }
+  // A "…" menu item: icon + label.
+  var recording = !!TwitchX._recordingActive;
+  var label = document.createElement('span');
+  label.className = 'record-btn-label';
+  label.textContent = recording ? 'Stop recording' : 'Start recording';
+  btn.replaceChildren(TwitchX.makeIcon(recording ? 'stop' : 'record', 16), document.createTextNode(' '), label);
+  btn.classList.toggle('recording', recording);
+  if (dot) dot.classList.toggle('hidden', !recording);
 }
 
 TwitchX.toggleRecording = toggleRecording;
@@ -1466,7 +1461,7 @@ function showStatsOverlay() {
   var overlay = document.getElementById('stats-overlay');
   var btn = document.getElementById('stats-overlay-btn');
   if (overlay) overlay.classList.remove('hidden');
-  if (btn) btn.classList.add('active');
+  if (btn) btn.setAttribute('aria-checked', 'true');
   var video = getPlayerVideo();
   if (video && typeof video.getVideoPlaybackQuality === 'function') {
     var q = video.getVideoPlaybackQuality();
@@ -1485,7 +1480,7 @@ function hideStatsOverlay() {
   var overlay = document.getElementById('stats-overlay');
   var btn = document.getElementById('stats-overlay-btn');
   if (overlay) overlay.classList.add('hidden');
-  if (btn) btn.classList.remove('active');
+  if (btn) btn.setAttribute('aria-checked', 'false');
 }
 
 function toggleStatsOverlay() {
@@ -1743,10 +1738,10 @@ function _clearPlayerOverlayTimer() {
 function _playerOverlayPinned() {
   var video = getPlayerVideo();
   if (video && video.src && video.paused) return true;
-  if (document.querySelector('#player-overlay .player-menu:not(.hidden)')) return true;
-  var overlay = document.getElementById('player-overlay');
+  if (document.querySelector('#player-stage .player-menu:not(.hidden)')) return true;
   var active = document.activeElement;
-  return !!(overlay && active && overlay.contains(active) && active.matches(':focus-visible'));
+  var bar = active && active.closest && active.closest('#player-overlay, #player-header');
+  return !!(bar && active.matches(':focus-visible'));
 }
 
 function hidePlayerOverlay() {
@@ -1790,7 +1785,7 @@ function togglePlayPause() {
 /* -- Overlay menus (quality, more) -- */
 
 function _playerMenuItems(menu) {
-  return Array.from(menu.querySelectorAll('[role^="menuitem"]'));
+  return Array.from(menu.querySelectorAll('[role^="menuitem"]:not(.hidden)'));
 }
 
 function _focusPlayerMenuItem(menu, idx) {
@@ -1804,7 +1799,7 @@ function _focusPlayerMenuItem(menu, idx) {
 
 function closePlayerMenus(exceptMenu) {
   var closed = false;
-  document.querySelectorAll('#player-overlay .player-menu').forEach(function(menu) {
+  document.querySelectorAll('.player-menu').forEach(function(menu) {
     if (menu === exceptMenu || menu.classList.contains('hidden')) return;
     menu.classList.add('hidden');
     closed = true;
@@ -1918,18 +1913,23 @@ function _pickPlayerMoreItem(item) {
 function _bindPlayerOverlay() {
   var stage = _playerStage();
   var overlay = document.getElementById('player-overlay');
+  var header = document.getElementById('player-header');
   if (!stage || !overlay || stage._overlayBound) return;
   stage._overlayBound = true;
 
   stage.addEventListener('mousemove', showPlayerOverlay);
   stage.addEventListener('mouseenter', showPlayerOverlay);
   stage.addEventListener('mouseleave', hidePlayerOverlay);
-  overlay.addEventListener('focusin', function() {
-    _playerStage().classList.remove('overlay-hidden');
-    _clearPlayerOverlayTimer();
-  });
-  overlay.addEventListener('focusout', function() {
-    TwitchX._overlayHideTimer = setTimeout(hidePlayerOverlay, PLAYER_OVERLAY_IDLE_MS);
+  // Top strip and bottom bar show and hide together.
+  [overlay, header].forEach(function(bar) {
+    if (!bar) return;
+    bar.addEventListener('focusin', function() {
+      _playerStage().classList.remove('overlay-hidden');
+      _clearPlayerOverlayTimer();
+    });
+    bar.addEventListener('focusout', function() {
+      TwitchX._overlayHideTimer = setTimeout(hidePlayerOverlay, PLAYER_OVERLAY_IDLE_MS);
+    });
   });
 
   var playBtn = document.getElementById('play-pause-btn');
@@ -1950,8 +1950,11 @@ function _bindPlayerOverlay() {
 
   _bindPlayerMenu('quality-menu-btn', 'quality-menu', _pickQuality, syncQualityMenu);
   _bindPlayerMenu('player-more-btn', 'player-more-menu', _pickPlayerMoreItem);
+  // Chat "…": its items keep their own click handlers (init.js); the menu only
+  // opens, closes and handles the keyboard.
+  _bindPlayerMenu('chat-more-btn', 'chat-more-menu', function() {});
   document.addEventListener('click', function(e) {
-    if (!overlay.contains(e.target)) closePlayerMenus();
+    if (!e.target.closest || !e.target.closest('.player-menu-wrap')) closePlayerMenus();
   });
   syncQualityMenu();
 }
@@ -1962,4 +1965,6 @@ TwitchX.syncPlayPauseButton = syncPlayPauseButton;
 TwitchX.syncQualityMenu = syncQualityMenu;
 TwitchX.QUALITY_LABELS = QUALITY_LABELS;
 TwitchX.closePlayerMenus = closePlayerMenus;
+// Shared with the multistream layout menu.
+TwitchX.bindPopupMenu = _bindPlayerMenu;
 TwitchX._bindPlayerOverlay = _bindPlayerOverlay;
