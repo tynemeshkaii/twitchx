@@ -24,6 +24,8 @@ const MIN_SIZE = [700, 500];
 const SCENARIOS = {
   grid: { sizes: [MIN_SIZE] },
   welcome: { opts: { empty: true, loggedOut: true } },
+  list: { action: p => p.evaluate(() => { TwitchX.state.gridMode = 'list'; TwitchX.renderGrid(); }) },
+  sort: { action: p => p.click('#sort-menu-btn') },
   selected: { action: p => p.click('.stream-card') },
   context: { action: p => p.click('.stream-card', { button: 'right' }) },
   settings: { action: p => p.evaluate(() => TwitchX.openSettings()) },

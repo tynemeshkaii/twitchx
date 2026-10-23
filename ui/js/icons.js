@@ -32,7 +32,6 @@ var ICONS = {
   browse: '<circle cx="7.25" cy="7.25" r="4.4"/><path d="M10.35 10.35 13.6 13.6"/>',
   minimize: '<path d="M3.25 12.3h9.5"/>',
   'grid-toggle': '<rect x="2.4" y="3" width="4.3" height="4.3" rx="1.1"/><rect x="9.3" y="3" width="4.3" height="4.3" rx="1.1"/><rect x="2.4" y="8.7" width="4.3" height="4.3" rx="1.1"/><rect x="9.3" y="8.7" width="4.3" height="4.3" rx="1.1"/>',
-  'compact-toggle': '<rect x="2.3" y="2.8" width="2.8" height="2.8" rx="0.7"/><rect x="6.55" y="2.8" width="2.8" height="2.8" rx="0.7"/><rect x="10.85" y="2.8" width="2.8" height="2.8" rx="0.7"/><rect x="2.3" y="6.55" width="2.8" height="2.8" rx="0.7"/><rect x="6.55" y="6.55" width="2.8" height="2.8" rx="0.7"/><rect x="10.85" y="6.55" width="2.8" height="2.8" rx="0.7"/><rect x="2.3" y="10.35" width="2.8" height="2.8" rx="0.7"/><rect x="6.55" y="10.35" width="2.8" height="2.8" rx="0.7"/><rect x="10.85" y="10.35" width="2.8" height="2.8" rx="0.7"/>',
   'list-toggle': '<path d="M5.35 4h8.1M5.35 8h8.1M5.35 12h8.1"/><circle cx="3.2" cy="4" r=".7" fill="currentColor" stroke="none"/><circle cx="3.2" cy="8" r=".7" fill="currentColor" stroke="none"/><circle cx="3.2" cy="12" r=".7" fill="currentColor" stroke="none"/>',
   sidebar: '<rect x="2.35" y="2.75" width="11.3" height="10.5" rx="2"/><path d="M6.4 2.75v10.5"/>',
   plus: '<path d="M8 3.25v9.5M3.25 8h9.5"/>',

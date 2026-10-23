@@ -126,3 +126,9 @@
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
+.section-menu .ctx-menu-label {
+  padding: var(--space-4) var(--space-8);
+  font-size: var(--font-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--text-muted);
+}

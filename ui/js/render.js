@@ -82,11 +82,11 @@ function renderGrid() {
   if (TwitchX.multiState.open) return;
 
   const grid = document.getElementById('stream-grid');
-  grid.classList.remove('grid-mode', 'comfortable-mode', 'compact-mode', 'list-mode');
+  grid.classList.remove('grid-mode', 'list-mode');
   grid.classList.add('view', 'view-active');
   if (TwitchX.state.gridMode) grid.classList.add(TwitchX.state.gridMode + '-mode');
   grid.querySelectorAll('.stream-card').forEach(function(card) {
-    card.classList.remove('grid-mode', 'comfortable-mode', 'compact-mode', 'list-mode');
+    card.classList.remove('grid-mode', 'list-mode');
     if (TwitchX.state.gridMode) card.classList.add(TwitchX.state.gridMode + '-mode');
   });
   const empty = document.getElementById('empty-state');
@@ -153,12 +153,12 @@ function renderGrid() {
       const streamKey = TwitchX.channelKey(s.login, s.platform || 'twitch');
       const card = grid.querySelector('.stream-card[data-key="' + streamKey + '"]');
       if (!card) return;
-      card.querySelector('.card-viewers').textContent = TwitchX.formatViewers(s.viewers);
+      card.querySelectorAll('.card-viewers').forEach(function(el) { el.textContent = TwitchX.formatViewers(s.viewers); });
       _setTrend(card.querySelector('.trend'), s.viewer_trend);
       card.querySelector('.card-title').textContent = s.title;
       card.querySelector('.card-title').title = s.title;
       card.querySelector('.card-game').textContent = s.game || '';
-      card.querySelector('.uptime-badge').textContent = TwitchX.formatUptimeClock(s.started_at);
+      card.querySelectorAll('.card-uptime').forEach(function(el) { el.textContent = TwitchX.formatUptimeClock(s.started_at); });
       const wb = card.querySelector('.watching-badge');
       wb.classList.toggle('visible', TwitchX.state.watchingChannelKey === streamKey);
       card.classList.toggle('selected', TwitchX.state.selectedChannelKey === streamKey);
@@ -261,7 +261,7 @@ function buildMediaCard(o) {
   }
 
   const uptime = document.createElement('span');
-  uptime.className = 'uptime-badge';
+  uptime.className = 'uptime-badge card-uptime';
   uptime.textContent = o.corner || '';
   thumb.appendChild(uptime);
 
@@ -311,6 +311,23 @@ function buildMediaCard(o) {
   text.appendChild(sub);
 
   meta.appendChild(text);
+
+  // List mode shows viewers and uptime at the row's end instead of on the
+  // (tiny) frame; grid mode hides this.
+  const aside = document.createElement('div');
+  aside.className = 'card-aside';
+  if (o.viewers !== undefined && o.viewers !== null) {
+    const asideViewers = document.createElement('span');
+    asideViewers.className = 'card-aside-viewers card-viewers';
+    asideViewers.textContent = TwitchX.formatViewers(o.viewers);
+    aside.appendChild(asideViewers);
+  }
+  const asideUptime = document.createElement('span');
+  asideUptime.className = 'card-aside-uptime card-uptime';
+  asideUptime.textContent = o.corner || '';
+  aside.appendChild(asideUptime);
+  meta.appendChild(aside);
+
   card.appendChild(meta);
   return card;
 }

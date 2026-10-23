@@ -8,7 +8,6 @@ variables are skipped; at the time of writing those are:
   - palette.js   setIconOnly(iconEl, icon, …)       — `icon:` fields of the command list
   - render.js    EMPTY_STATE_ICONS[config.illustration] — the map's values and
                  the `|| 'info'` fallback are checked (see _map_values)
-  - init.js      iconMap[saved], DENSITY_ICONS[next] — density toggle maps
   - icons.js     renderIcon(name, size) inside mountIcons / TwitchX.icon
   - utils.js     makeIcon(name, …) inside setIconText / setIconOnly
 """

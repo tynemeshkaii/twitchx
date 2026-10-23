@@ -84,9 +84,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Restore saved grid density mode
   (function() {
-    var saved = localStorage.getItem('twitchx.grid_mode') || 'grid';
-    if (DENSITY_MODES.indexOf(saved) === -1) saved = 'grid';
-    TwitchX.state.gridMode = saved;
+    var saved = null;
+    try { saved = localStorage.getItem('twitchx.grid_mode'); } catch (e) { /* storage off */ }
+    // comfortable/compact were retired in the redesign: they become grid.
+    var validModes = DENSITY_MODES;
+    var mode = validModes.indexOf(saved) === -1 ? 'grid' : saved;
+    if (saved && saved !== mode) {
+      try { localStorage.setItem('twitchx.grid_mode', mode); } catch (e) { /* storage off */ }
+    }
+    TwitchX.state.gridMode = mode;
     _syncSortMenu();
   })();
 
@@ -172,20 +178,19 @@ TwitchX._bindSidebarEvents = function() {
 
 };
 
-const DENSITY_MODES = ['grid', 'comfortable', 'compact', 'list'];
-const DENSITY_LABELS = { grid: 'Grid', comfortable: 'Comfortable', compact: 'Compact', list: 'List' };
+const DENSITY_MODES = ['grid', 'list'];
 const SORT_LABELS = { viewers: 'Most viewers', recent: 'Recently started', alpha: 'Alphabetical' };
 
-// The sort button shows the current order; the menu marks it and names the
-// density that one click on the density item leaves behind.
+// The sort button shows the current order; the menu checks it and the view.
 function _syncSortMenu() {
   var label = document.getElementById('sort-menu-label');
   if (label) label.textContent = SORT_LABELS[TwitchX.state.sortKey] || SORT_LABELS.viewers;
   document.querySelectorAll('#sort-menu [data-sort]').forEach(function(item) {
     item.setAttribute('aria-checked', String(item.dataset.sort === TwitchX.state.sortKey));
   });
-  var density = document.getElementById('density-menu-label');
-  if (density) density.textContent = 'Density: ' + (DENSITY_LABELS[TwitchX.state.gridMode] || DENSITY_LABELS.grid);
+  document.querySelectorAll('#sort-menu [data-density]').forEach(function(item) {
+    item.setAttribute('aria-checked', String(item.dataset.density === TwitchX.state.gridMode));
+  });
 }
 
 function _sortMenuItems() {
@@ -228,10 +233,9 @@ function closeSortMenu(restoreFocus) {
 function _applySortMenuItem(item) {
   if (item.dataset.sort) {
     TwitchX.state.sortKey = item.dataset.sort;
-  } else if (item.dataset.density) {
-    var idx = DENSITY_MODES.indexOf(TwitchX.state.gridMode);
-    TwitchX.state.gridMode = DENSITY_MODES[(idx + 1) % DENSITY_MODES.length];
-    localStorage.setItem('twitchx.grid_mode', TwitchX.state.gridMode);
+  } else if (DENSITY_MODES.indexOf(item.dataset.density) !== -1) {
+    TwitchX.state.gridMode = item.dataset.density;
+    try { localStorage.setItem('twitchx.grid_mode', TwitchX.state.gridMode); } catch (e) { /* storage off */ }
   }
   _syncSortMenu();
   TwitchX.renderGrid();
@@ -1109,8 +1113,9 @@ setInterval(function() {
   document.querySelectorAll('.stream-card').forEach(function(card) {
     const started = card.dataset.started;
     if (started) {
-      const badge = card.querySelector('.uptime-badge');
-      if (badge) badge.textContent = TwitchX.formatUptimeClock(started);
+      card.querySelectorAll('.card-uptime').forEach(function(badge) {
+        badge.textContent = TwitchX.formatUptimeClock(started);
+      });
     }
   });
 }, 60000);
