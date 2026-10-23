@@ -13,6 +13,7 @@ const VIEW_IDS = [
 const CHROME_IDS = [
   'toolbar',
   'toolbar-platform-chips',
+  'section-header',
 ];
 
 const DIRECTIONS = {

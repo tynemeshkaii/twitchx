@@ -70,6 +70,7 @@
   /* ── Window chrome ─────────────────────────────────── */
   --titlebar-height: 52px;       /* one top bar: toolbar, player header, sidebar top */
   --traffic-lights-width: 80px;  /* close/minimise/zoom plus their inset */
+  --section-header-height: 48px; /* Following / Browse / channel view headings */
 
   /* ── Z-index scale ──────────────────────────────────── */
   --z-base:     1;

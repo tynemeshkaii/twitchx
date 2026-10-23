@@ -969,7 +969,7 @@ function gentleResetVideo(reason, newSrc) {
   }
 
   // Show recovery status — only after guards, so early-return paths don't leave it stale
-  setStatus('Recovering playback...', 'warn');
+  setStatus('Recovering playback...', 'info');
 
   // Cancel any previous pending gentle reset to avoid orphaned shadow videos
   if (TwitchX._gentleResetInProgress) {
@@ -1303,7 +1303,7 @@ function changeQualityLive(quality) {
   TwitchX._recovery.requestId += 1;
   const requestId = TwitchX._recovery.requestId;
   _armRefreshWatchdog();
-  TwitchX.setStatus('Switching to ' + quality + '...', 'warn');
+  TwitchX.setStatus('Switching to ' + quality + '...', 'info');
   try {
     TwitchX.api.refresh_stream_url(channel, platform, quality, requestId);
   } catch (e) {

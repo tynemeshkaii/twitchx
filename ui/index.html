@@ -27,6 +27,7 @@
 <link rel="stylesheet" href="css/components/modals.css">
 <link rel="stylesheet" href="css/components/sidebar.css">
 <link rel="stylesheet" href="css/components/search-toolbar.css">
+<link rel="stylesheet" href="css/components/section-header.css">
 <link rel="stylesheet" href="css/components/stream-card.css">
 <link rel="stylesheet" href="css/components/empty-state.css">
 <link rel="stylesheet" href="css/components/player-bar.css">
@@ -127,19 +128,35 @@
             <button class="platform-chip btn" data-platform="kick" role="tab" aria-selected="false" tabindex="-1">Kick</button>
             <button class="platform-chip btn" data-platform="youtube" role="tab" aria-selected="false" tabindex="-1">YouTube</button>
           </div>
-          <select id="sort-select" aria-label="Sort streams">
-            <option value="viewers">Most Viewers</option>
-            <option value="recent">Recently Started</option>
-            <option value="alpha">Alphabetical</option>
-          </select>
           <input id="filter-input" placeholder="Filter by game..." aria-label="Filter streams by game">
         </div>
         <div class="toolbar-group toolbar-group--right">
-          <button id="grid-toggle-btn" class="bar-btn" title="Switch density" aria-label="Toggle grid density"><span data-icon="grid-toggle" data-size="16"></span></button>
           <button id="toolbar-search-btn" class="toolbar-search" type="button" aria-keyshortcuts="Meta+K"><span data-icon="search" data-size="14"></span><span class="toolbar-search-label">Search channels, games</span><kbd class="toolbar-search-kbd">&#8984;K</kbd></button>
           <button id="toolbar-refresh-btn" class="bar-btn toolbar-refresh-btn" title="Refresh (R)" aria-label="Refresh streams"><span data-icon="refresh" data-size="16"></span></button>
         </div>
       </div>
+
+      <header id="section-header">
+        <h1 id="section-title">Following</h1>
+        <div id="section-meta">
+          <span id="section-live-count"></span>
+          <span id="total-viewers"></span>
+          <span id="updated-time"></span>
+          <span id="status-text" aria-live="polite"></span>
+        </div>
+        <div class="section-actions">
+          <div class="sort-menu-wrap">
+            <button id="sort-menu-btn" class="section-menu-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="sort-menu"><span id="sort-menu-label">Most viewers</span><span data-icon="chevron-down" data-size="12"></span></button>
+            <div id="sort-menu" class="section-menu hidden" role="menu" aria-label="Sort and density">
+              <div class="ctx-item" role="menuitemradio" data-sort="viewers" aria-checked="true" tabindex="-1">Most viewers</div>
+              <div class="ctx-item" role="menuitemradio" data-sort="recent" aria-checked="false" tabindex="-1">Recently started</div>
+              <div class="ctx-item" role="menuitemradio" data-sort="alpha" aria-checked="false" tabindex="-1">Alphabetical</div>
+              <div class="ctx-separator" role="separator"></div>
+              <div class="ctx-item" id="density-menu-item" role="menuitem" data-density="next" tabindex="-1"><span data-icon="grid-toggle" data-size="14"></span> <span id="density-menu-label">Density: Grid</span></div>
+            </div>
+          </div>
+        </div>
+      </header>
 
       <div id="view-stack">
         <div id="stream-grid" class="view view-active"></div>
@@ -149,7 +166,7 @@
           <div class="empty-subtitle"></div>
         </div>
         <div id="browse-view" class="view hidden">
-          <div id="browse-header">
+          <div id="browse-header" class="titlebar-drag">
             <button id="browse-back-btn" class="browse-back-btn hidden"><span data-icon="arrow-left" data-size="16"></span> Back</button>
             <nav id="browse-breadcrumbs" aria-label="Browse breadcrumbs"></nav>
             <div id="browse-platform-tabs" role="tablist" aria-label="Browse platform filter">
@@ -169,7 +186,7 @@
 
         <!-- Channel profile view -->
         <div id="channel-view" class="view hidden">
-          <div id="channel-header">
+          <div id="channel-header" class="titlebar-drag">
             <button id="channel-back-btn" class="browse-back-btn"><span data-icon="arrow-left" data-size="16"></span> Back</button>
             <span id="channel-header-title"></span>
           </div>

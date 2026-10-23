@@ -67,23 +67,20 @@ window.onStreamsUpdate = function(data) {
   TwitchX.renderGrid();
   TwitchX.renderSidebar();
 
-  // Update player bar
+  // Section header meta: "9 live · 495K watching · updated 15:42"
   if (data.updated_time) {
-    document.getElementById('updated-time').textContent = 'Updated ' + data.updated_time;
+    // HH:MM is enough at a glance; Python sends HH:MM:SS.
+    var shortTime = String(data.updated_time).replace(/^(\d{1,2}:\d{2}):\d{2}$/, '$1');
+    document.getElementById('updated-time').textContent = 'updated ' + shortTime;
     document.getElementById('updated-time').classList.remove('stale');
   }
   if (data.total_viewers > 0) {
     document.getElementById('total-viewers').textContent =
-      (data.total_viewers_formatted || data.total_viewers) + ' viewers';
+      (data.total_viewers_formatted || data.total_viewers) + ' watching';
   } else {
     document.getElementById('total-viewers').textContent = '';
   }
-
-  const liveCount = TwitchX.state.liveSet.size;
-  TwitchX.setStatus(
-    liveCount + ' channel' + (liveCount !== 1 ? 's' : '') + ' live',
-    liveCount > 0 ? 'success' : 'info'
-  );
+  document.getElementById('section-live-count').textContent = TwitchX.state.liveSet.size + ' live';
 
   // Throttle background image fetching when player is active
   const playerActive = document.getElementById('player-view').classList.contains('view-active');
@@ -274,7 +271,7 @@ window.onLaunchResult = function(data) {
 };
 
 window.onLaunchProgress = function(data) {
-  TwitchX.setStatus('Launching ' + data.channel + '... (' + data.elapsed + 's)', 'warn');
+  TwitchX.setStatus('Launching ' + data.channel + '... (' + data.elapsed + 's)', 'info');
   var loader = document.getElementById('stream-loader');
   if (loader) loader.classList.remove('hidden');
 };
@@ -838,8 +835,7 @@ window.onChatLogSaved = function(result) {
     return;
   }
   var reason = (result && result.error) || 'unknown error';
-  TwitchX.setStatus('Chat export failed', 'error');
-  TwitchX.showToast('Chat export failed: ' + reason, 'error');
+  TwitchX.setStatus('Chat export failed: ' + reason, 'error');
 };
 
 window.onSettingsSaved = function() {
@@ -1014,16 +1010,23 @@ window.onThumbnail = function(data) {
 };
 
 window.onStatusUpdate = function(data) {
-  TwitchX.setStatus(data.text, data.type || 'info');
+  var type = data.type || 'info';
+  // setStatus already toasts warnings and errors. The stale-data warning
+  // arrives with every failed poll and has its own banner, so it stays quiet;
+  // an explicit toast: false does too.
+  var quiet = data.stale || data.toast === false;
+  if (type === 'warn' || type === 'error') {
+    if (!quiet) TwitchX.setStatus(data.text, type);
+  } else {
+    TwitchX.setStatus(data.text, type);
+    if (data.toast === true) TwitchX.showToast(data.text, type);
+  }
   if (data.stale) {
     document.getElementById('updated-time').classList.add('stale');
     document.getElementById('sidebar-stale-banner').classList.remove('hidden');
   } else {
     document.getElementById('updated-time').classList.remove('stale');
     document.getElementById('sidebar-stale-banner').classList.add('hidden');
-  }
-  if (data.toast === true || (data.type === 'error' && data.toast !== false)) {
-    TwitchX.showToast(data.text, data.type || 'info');
   }
 };
 
@@ -1209,7 +1212,6 @@ window.onBrowseTopStreams = function(payload) {
       e.stopPropagation();
       if (!restriction.canWatch) {
         TwitchX.setStatus(restriction.reason, 'warn');
-        TwitchX.showToast(restriction.reason, 'warn');
         return;
       }
       TwitchX.hideBrowseView();

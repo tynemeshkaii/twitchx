@@ -1,0 +1,105 @@
+/* ── Section header ─────────────────────────────────────── */
+/* Title of the Following view with its live meta and the sort/density menu.
+   Replaces the meta that used to sit in the global player bar. */
+#section-header {
+  min-height: var(--section-header-height);
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: 0 var(--space-16);
+  flex-shrink: 0;
+  min-width: 0;
+}
+#section-header.hidden { display: none; }
+#section-title {
+  margin: 0;
+  font-size: var(--font-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  letter-spacing: var(--tracking-snug);
+  flex-shrink: 0;
+}
+#section-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+}
+#section-meta > span:empty { display: none; }
+/* "9 live · 495K watching · updated 15:42" */
+#section-meta > span:not(:empty) ~ span:not(:empty)::before {
+  content: '\00b7';
+  margin-right: var(--space-4);
+}
+#section-meta > span { flex-shrink: 0; }
+#status-text {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-secondary);
+}
+/* A status message briefly takes the place of "updated …". */
+#section-meta.showing-status #updated-time { display: none; }
+#updated-time.stale { color: var(--warn-yellow); }
+
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex-shrink: 0;
+}
+.sort-menu-wrap { position: relative; }
+.section-menu-btn {
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 0 var(--space-8);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
+}
+.section-menu-btn:hover,
+.section-menu-btn[aria-expanded="true"] {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+.section-menu-btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.section-menu {
+  position: absolute;
+  top: calc(100% + var(--space-4));
+  right: 0;
+  min-width: 200px;
+  padding: var(--space-4);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  z-index: var(--z-dropdown);
+}
+.section-menu.hidden { display: none; }
+.section-menu [role="menuitemradio"][aria-checked="true"] {
+  color: var(--text-primary);
+  font-weight: var(--weight-semibold);
+}
+.section-menu [role="menuitemradio"][aria-checked="true"]::after {
+  content: '\2713';
+  margin-left: auto;
+  color: var(--accent);
+}

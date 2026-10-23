@@ -151,12 +151,6 @@
 }
 #toolbar input::placeholder { color: var(--text-secondary); opacity: 0.6; }
 
-#sort-select {
-  width: 150px;
-  min-width: 0;
-  flex: 0 1 150px;
-  cursor: pointer;
-}
 #filter-input {
   width: 175px;
   min-width: 0;

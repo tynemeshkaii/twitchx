@@ -82,27 +82,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Restore saved grid density mode
   (function() {
-    var validModes = ['grid', 'comfortable', 'compact', 'list'];
     var saved = localStorage.getItem('twitchx.grid_mode') || 'grid';
-    if (validModes.indexOf(saved) === -1) saved = 'grid';
+    if (DENSITY_MODES.indexOf(saved) === -1) saved = 'grid';
     TwitchX.state.gridMode = saved;
-    var btn = document.getElementById('grid-toggle-btn');
-    if (btn) {
-      var iconMap = {
-        grid: 'grid-toggle',
-        comfortable: 'grid-toggle',
-        compact: 'compact-toggle',
-        list: 'list-toggle'
-      };
-      var titleMap = {
-        grid: 'Switch to comfortable view',
-        comfortable: 'Switch to compact view',
-        compact: 'Switch to list view',
-        list: 'Switch to grid view'
-      };
-      btn.title = titleMap[saved];
-      TwitchX.setIconOnly(btn, iconMap[saved], 16);
-    }
+    _syncSortMenu();
   })();
 
   // Apply saved mini mode
@@ -225,12 +208,105 @@ TwitchX._bindSidebarEvents = function() {
   }
 };
 
-TwitchX._bindToolbarEvents = function() {
-  const sortSelect = document.getElementById('sort-select');
-  if (sortSelect) sortSelect.addEventListener('change', function(e) {
-    TwitchX.state.sortKey = e.target.value;
-    TwitchX.renderGrid();
+const DENSITY_MODES = ['grid', 'comfortable', 'compact', 'list'];
+const DENSITY_LABELS = { grid: 'Grid', comfortable: 'Comfortable', compact: 'Compact', list: 'List' };
+const SORT_LABELS = { viewers: 'Most viewers', recent: 'Recently started', alpha: 'Alphabetical' };
+
+// The sort button shows the current order; the menu marks it and names the
+// density that one click on the density item leaves behind.
+function _syncSortMenu() {
+  var label = document.getElementById('sort-menu-label');
+  if (label) label.textContent = SORT_LABELS[TwitchX.state.sortKey] || SORT_LABELS.viewers;
+  document.querySelectorAll('#sort-menu [data-sort]').forEach(function(item) {
+    item.setAttribute('aria-checked', String(item.dataset.sort === TwitchX.state.sortKey));
   });
+  var density = document.getElementById('density-menu-label');
+  if (density) density.textContent = 'Density: ' + (DENSITY_LABELS[TwitchX.state.gridMode] || DENSITY_LABELS.grid);
+}
+
+function _sortMenuItems() {
+  return Array.from(document.querySelectorAll('#sort-menu [role^="menuitem"]'));
+}
+
+function _focusSortMenuItem(idx) {
+  var items = _sortMenuItems();
+  if (!items.length) return;
+  var next = ((idx % items.length) + items.length) % items.length;
+  items.forEach(function(item) { item.tabIndex = -1; });
+  items[next].tabIndex = 0;
+  items[next].focus();
+}
+
+function openSortMenu() {
+  var menu = document.getElementById('sort-menu');
+  var btn = document.getElementById('sort-menu-btn');
+  if (!menu || !btn) return;
+  _syncSortMenu();
+  menu.classList.remove('hidden');
+  btn.setAttribute('aria-expanded', 'true');
+  var items = _sortMenuItems();
+  var checked = items.findIndex(function(item) { return item.getAttribute('aria-checked') === 'true'; });
+  _focusSortMenuItem(Math.max(0, checked));
+}
+
+function closeSortMenu(restoreFocus) {
+  var menu = document.getElementById('sort-menu');
+  var btn = document.getElementById('sort-menu-btn');
+  if (!menu || menu.classList.contains('hidden')) return false;
+  menu.classList.add('hidden');
+  if (btn) {
+    btn.setAttribute('aria-expanded', 'false');
+    if (restoreFocus) btn.focus();
+  }
+  return true;
+}
+
+function _applySortMenuItem(item) {
+  if (item.dataset.sort) {
+    TwitchX.state.sortKey = item.dataset.sort;
+  } else if (item.dataset.density) {
+    var idx = DENSITY_MODES.indexOf(TwitchX.state.gridMode);
+    TwitchX.state.gridMode = DENSITY_MODES[(idx + 1) % DENSITY_MODES.length];
+    localStorage.setItem('twitchx.grid_mode', TwitchX.state.gridMode);
+  }
+  _syncSortMenu();
+  TwitchX.renderGrid();
+}
+
+TwitchX._bindToolbarEvents = function() {
+  var sortBtn = document.getElementById('sort-menu-btn');
+  var sortMenu = document.getElementById('sort-menu');
+  if (sortBtn) sortBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    if (!closeSortMenu(false)) openSortMenu();
+  });
+  if (sortMenu) {
+    sortMenu.addEventListener('click', function(e) {
+      var item = e.target.closest('[role^="menuitem"]');
+      if (!item) return;
+      _applySortMenuItem(item);
+      // Density is a cycle: keep the menu open so the next step is one click.
+      if (item.dataset.sort) closeSortMenu(true);
+    });
+    sortMenu.addEventListener('keydown', function(e) {
+      var items = _sortMenuItems();
+      var idx = items.indexOf(document.activeElement);
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeSortMenu(true); }
+      else if (e.key === 'Tab') { closeSortMenu(false); }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); _focusSortMenuItem(idx + 1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); _focusSortMenuItem(idx - 1); }
+      else if (e.key === 'Home') { e.preventDefault(); _focusSortMenuItem(0); }
+      else if (e.key === 'End') { e.preventDefault(); _focusSortMenuItem(items.length - 1); }
+      else if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        if (idx !== -1) items[idx].click();
+      }
+    });
+  }
+  document.addEventListener('click', function(e) {
+    if (sortMenu && !sortMenu.contains(e.target) && e.target !== sortBtn) closeSortMenu(false);
+  });
+
   const filterInput = document.getElementById('filter-input');
   if (filterInput) filterInput.addEventListener('input', function(e) {
     TwitchX.state.filterText = e.target.value;
@@ -242,30 +318,9 @@ TwitchX._bindToolbarEvents = function() {
   if (toolbarSearchBtn) toolbarSearchBtn.addEventListener('click', function() { TwitchX.openPalette(); });
   const toolbarRefreshBtn = document.getElementById('toolbar-refresh-btn');
   if (toolbarRefreshBtn) toolbarRefreshBtn.addEventListener('click', TwitchX.doRefresh);
-  var gridToggleBtn = document.getElementById('grid-toggle-btn');
-  var DENSITY_MODES = ['grid', 'comfortable', 'compact', 'list'];
-  var DENSITY_ICONS = {
-    grid: 'grid-toggle',
-    comfortable: 'grid-toggle',
-    compact: 'compact-toggle',
-    list: 'list-toggle'
-  };
-  var DENSITY_TITLES = {
-    grid: 'Switch to comfortable view',
-    comfortable: 'Switch to compact view',
-    compact: 'Switch to list view',
-    list: 'Switch to grid view'
-  };
-  if (gridToggleBtn) gridToggleBtn.addEventListener('click', function() {
-    var idx = DENSITY_MODES.indexOf(TwitchX.state.gridMode);
-    var next = DENSITY_MODES[(idx + 1) % DENSITY_MODES.length];
-    TwitchX.state.gridMode = next;
-    localStorage.setItem('twitchx.grid_mode', next);
-    gridToggleBtn.title = DENSITY_TITLES[next];
-    TwitchX.setIconOnly(gridToggleBtn, DENSITY_ICONS[next], 16);
-    TwitchX.renderGrid();
-  });
 };
+
+TwitchX.closeSortMenu = closeSortMenu;
 
 TwitchX._bindPlayerEvents = function() {
   const watchBtn = document.getElementById('watch-btn');
@@ -764,7 +819,6 @@ TwitchX._bindContextMenuEvents = function() {
     if (target.getAttribute('aria-disabled') === 'true') {
       const reason = target.dataset.disabledReason || target.title || 'This action is not available for this platform.';
       TwitchX.setStatus(reason, 'warn');
-      TwitchX.showToast(reason, 'warn');
       e.preventDefault();
       return;
     }

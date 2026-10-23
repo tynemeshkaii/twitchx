@@ -461,7 +461,6 @@ function watchChannelStream() {
   if (!p.watch_supported) {
     const reason = p.watch_disabled_reason || 'This channel cannot be watched directly right now.';
     TwitchX.setStatus(reason, 'warn');
-    TwitchX.showToast(reason, 'warn');
     return;
   }
   hideChannelView();
