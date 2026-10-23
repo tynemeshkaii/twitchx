@@ -95,6 +95,7 @@ TwitchX.switchView = function(targetId, direction) {
 
   const target = _getViewElement(targetId);
   if (!target) return;
+  if (TwitchX.syncNavForView) TwitchX.syncNavForView(targetId);
 
   const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 

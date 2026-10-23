@@ -26,6 +26,7 @@
 <link rel="stylesheet" href="css/components/forms.css">
 <link rel="stylesheet" href="css/components/modals.css">
 <link rel="stylesheet" href="css/components/sidebar.css">
+<link rel="stylesheet" href="css/components/account-popover.css">
 <link rel="stylesheet" href="css/components/search-toolbar.css">
 <link rel="stylesheet" href="css/components/section-header.css">
 <link rel="stylesheet" href="css/components/stream-card.css">
@@ -57,39 +58,11 @@
         <!-- Room for the traffic lights; shown only with the integrated title bar. -->
         <div class="sidebar-titlebar titlebar-drag" aria-hidden="true"></div>
         <button id="sidebar-collapse-btn" class="sidebar-collapse-btn" title="Collapse sidebar" aria-label="Toggle sidebar collapse"><span data-icon="chevron-left" data-size="16"></span></button>
-      </div>
-
-      <div id="profile-area">
-        <button id="login-btn" class="login-btn">Login with Twitch</button>
-        <div id="user-info" class="platform-user-info hidden">
-          <img id="user-avatar" class="platform-user-avatar is-empty" alt="" aria-hidden="true">
-          <div class="platform-user-details">
-            <div id="user-display-name" class="platform-user-name"></div>
-            <div class="platform-user-actions">
-              <button id="logout-link" class="logout-link" type="button">Logout</button>
-              <button id="import-link" class="logout-link" type="button">Import follows</button>
-            </div>
-          </div>
-          <div class="platform-status-dots" aria-label="Connected platforms"></div>
-        </div>
-      </div>
-      <div id="kick-profile-area">
-        <button id="kick-login-sidebar-btn" class="login-btn">Login with Kick</button>
-        <div id="kick-user-info" class="platform-user-info hidden">
-          <div class="platform-user-details">
-            <div id="kick-user-name" class="platform-user-name"></div>
-            <div class="platform-user-actions">
-              <button id="kick-logout-link" class="logout-link" type="button">Logout</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div id="platform-tabs" class="segmented" role="tablist" aria-label="Sidebar platform filter">
-        <button class="platform-tab btn active" data-platform="all" role="tab" aria-selected="true">All</button>
-        <button class="platform-tab btn" data-platform="twitch" role="tab" aria-selected="false" tabindex="-1">Twitch</button>
-        <button class="platform-tab btn" data-platform="kick" role="tab" aria-selected="false" tabindex="-1">Kick</button>
-        <button class="platform-tab btn" data-platform="youtube" role="tab" aria-selected="false" tabindex="-1">YouTube</button>
+        <nav id="sidebar-nav" aria-label="Sections">
+          <button class="sidebar-nav-item" type="button" data-nav="following" aria-current="page" title="Following"><span data-icon="star" data-size="16"></span><span class="sidebar-nav-label">Following</span><span id="sidebar-nav-live-count" class="sidebar-nav-count"></span></button>
+          <button class="sidebar-nav-item" type="button" data-nav="browse" title="Browse"><span data-icon="browse" data-size="16"></span><span class="sidebar-nav-label">Browse</span></button>
+          <button class="sidebar-nav-item" type="button" data-nav="multiview" title="Multi-view"><span data-icon="grid-layout" data-size="16"></span><span class="sidebar-nav-label">Multi-view</span></button>
+        </nav>
       </div>
 
       <div id="sidebar-stale-banner" class="sidebar-stale-banner hidden">
@@ -112,8 +85,13 @@
             <button id="add-btn" title="Add channel" aria-label="Add channel"><span data-icon="plus" data-size="16"></span></button>
           </div>
         </div>
-        <div id="browse-nav-wrapper">
-          <button id="browse-nav-btn" class="btn btn-secondary"><span data-icon="browse" data-size="16"></span> Browse</button>
+        <div id="account-chip-row">
+          <button id="account-chip" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="account-popover" aria-label="Accounts">
+            <span class="account-chip-avatar" aria-hidden="true"><img id="account-chip-img" class="hidden" alt=""><span id="account-chip-initial"></span></span>
+            <span id="account-chip-name" class="account-chip-name">Not signed in</span>
+            <span class="platform-status-dots" aria-label="Connected platforms"></span>
+          </button>
+          <button id="account-settings-btn" class="account-gear-btn" type="button" title="Settings (&#8984;,)" aria-label="Settings"><span data-icon="settings" data-size="16"></span></button>
         </div>
       </div>
     </aside>
@@ -427,6 +405,46 @@
   <div class="ctx-item" data-action="create-group" role="menuitem" tabindex="-1"><span data-icon="folder-plus" data-size="14"></span> Create group</div>
   <div class="ctx-item" data-action="move-to-group" role="menuitem" tabindex="-1"><span data-icon="folder-move" data-size="14"></span> Move to group</div>
   <div class="ctx-item" data-action="remove" role="menuitem" tabindex="-1"><span data-icon="close" data-size="14"></span> Remove</div>
+</div>
+
+<!-- Account popover (opened from the account chip at the bottom of the sidebar) -->
+<div id="account-popover" class="hidden" role="dialog" aria-labelledby="account-popover-title">
+  <h2 id="account-popover-title" class="account-popover-title">Accounts</h2>
+  <section class="account-section" aria-label="Twitch">
+    <div class="account-section-head"><span class="account-platform-dot twitch" aria-hidden="true"></span>Twitch</div>
+    <button id="login-btn" class="login-btn">Login with Twitch</button>
+    <div id="user-info" class="platform-user-info hidden">
+      <img id="user-avatar" class="platform-user-avatar is-empty" alt="" aria-hidden="true">
+      <div class="platform-user-details">
+        <div id="user-display-name" class="platform-user-name"></div>
+        <div class="platform-user-actions">
+          <button id="logout-link" class="logout-link" type="button">Logout</button>
+          <button id="import-link" class="logout-link" type="button">Import follows</button>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="account-section" aria-label="Kick">
+    <div class="account-section-head"><span class="account-platform-dot kick" aria-hidden="true"></span>Kick</div>
+    <button id="kick-login-sidebar-btn" class="login-btn">Login with Kick</button>
+    <div id="kick-user-info" class="platform-user-info hidden">
+      <div class="platform-user-details">
+        <div id="kick-user-name" class="platform-user-name"></div>
+        <div class="platform-user-actions">
+          <button id="kick-logout-link" class="logout-link" type="button">Logout</button>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section id="account-youtube-section" class="account-section" aria-label="YouTube">
+    <div class="account-section-head"><span class="account-platform-dot youtube" aria-hidden="true"></span>YouTube</div>
+    <div id="account-youtube-status" class="account-section-status">Not connected</div>
+    <button id="account-youtube-btn" class="logout-link" type="button">Set up in Settings</button>
+  </section>
+  <div class="account-popover-actions">
+    <button id="account-mini-mode-btn" class="account-action" type="button"><span data-icon="minimize" data-size="14"></span><span id="account-mini-mode-label">Mini mode</span><kbd>&#8679;&#8984;M</kbd></button>
+    <button id="account-settings-item" class="account-action" type="button"><span data-icon="settings" data-size="14"></span><span>Settings&#8230;</span><kbd>&#8984;,</kbd></button>
+  </div>
 </div>
 
 <!-- Group context menu -->
@@ -746,6 +764,7 @@
 <script src="js/api-bridge.js"></script>
 <script src="js/render.js"></script>
 <script src="js/sidebar.js"></script>
+<script src="js/account.js"></script>
 <script src="js/player.js"></script>
 <script src="js/multistream.js"></script>
 <script src="js/browse.js"></script>

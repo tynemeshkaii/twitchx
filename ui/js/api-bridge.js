@@ -32,12 +32,14 @@ function showUserProfile(user) {
     avatar.removeAttribute('src');
     avatar.classList.add('is-empty');
   }
+  if (TwitchX.updateAccountChip) TwitchX.updateAccountChip();
 }
 
 function hideUserProfile() {
   TwitchX.state.currentUser = null;
   document.getElementById('login-btn').classList.remove('hidden');
   document.getElementById('user-info').classList.add('hidden');
+  if (TwitchX.updateAccountChip) TwitchX.updateAccountChip();
 }
 
 function showKickProfile(user) {
@@ -46,12 +48,14 @@ function showKickProfile(user) {
   const info = document.getElementById('kick-user-info');
   info.classList.remove('hidden');
   document.getElementById('kick-user-name').textContent = user.display_name || user.login;
+  if (TwitchX.updateAccountChip) TwitchX.updateAccountChip();
 }
 
 function hideKickProfile() {
   TwitchX.state.kickUser = null;
   document.getElementById('kick-login-sidebar-btn').classList.remove('hidden');
   document.getElementById('kick-user-info').classList.add('hidden');
+  if (TwitchX.updateAccountChip) TwitchX.updateAccountChip();
 }
 
 function doLogout() {
@@ -89,9 +93,9 @@ function hydrateFavoritesFromConfig(config) {
 TwitchX.applyYoutubeGating = function() {
   const hide = !TwitchX.state.youtubeEnabled;
   document.querySelectorAll(
-    '.platform-tab[data-platform="youtube"], .platform-chip[data-platform="youtube"], .browse-platform-tab[data-platform="youtube"]'
+    '.platform-chip[data-platform="youtube"], .browse-platform-tab[data-platform="youtube"]'
   ).forEach(function(el) { el.classList.toggle('hidden', hide); });
-  ['yt-settings-section', 'yt-settings-divider'].forEach(function(id) {
+  ['yt-settings-section', 'yt-settings-divider', 'account-youtube-section'].forEach(function(id) {
     const el = document.getElementById(id);
     if (el) el.classList.toggle('hidden', hide);
   });

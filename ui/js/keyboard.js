@@ -127,6 +127,8 @@ function handleKeydown(e) {
   }
 
   if (e.key === 'Escape') {
+    if (TwitchX.closeAccountPopover && TwitchX.closeAccountPopover()) return;
+    if (TwitchX.closeSortMenu && TwitchX.closeSortMenu(true)) return;
     if (document.getElementById('context-menu').classList.contains('menu-visible')) {
       TwitchX.closeContextMenu(); return;
     }
@@ -168,6 +170,9 @@ function handleKeydown(e) {
   }
   if (e.metaKey && e.key === ',') {
     e.preventDefault(); TwitchX.openSettings(); return;
+  }
+  if (e.metaKey && e.shiftKey && (e.key === 'm' || e.key === 'M')) {
+    e.preventDefault(); TwitchX.toggleMiniMode(); return;
   }
   if (e.metaKey && e.key === 'k') {
     e.preventDefault();

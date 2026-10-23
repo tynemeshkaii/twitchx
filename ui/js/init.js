@@ -40,6 +40,8 @@ document.addEventListener('DOMContentLoaded', function() {
   if (TwitchX.applyYoutubeGating) TwitchX.applyYoutubeGating();
   TwitchX.loadPinnedStreams();
   TwitchX._bindSidebarEvents();
+  TwitchX._bindSidebarNavEvents();
+  TwitchX._bindAccountEvents();
   TwitchX._bindToolbarEvents();
   TwitchX._bindPlayerEvents();
   TwitchX._bindBrowseEvents();
@@ -147,13 +149,6 @@ TwitchX._bindSidebarEvents = function() {
     TwitchX.state.activePlatformFilter = platform;
     TwitchX.renderGrid();
     TwitchX.renderSidebar();
-    // Sync sidebar tabs and toolbar chips
-    document.querySelectorAll('.platform-tab').forEach(function(tab) {
-      var active = tab.dataset.platform === platform;
-      tab.classList.toggle('active', active);
-      tab.setAttribute('aria-selected', String(active));
-      tab.tabIndex = active ? 0 : -1;
-    });
     document.querySelectorAll('.platform-chip').forEach(function(chip) {
       var active = chip.dataset.platform === platform;
       chip.classList.toggle('active', active);
@@ -161,18 +156,6 @@ TwitchX._bindSidebarEvents = function() {
       chip.tabIndex = active ? 0 : -1;
     });
   }
-
-  // Platform tab switching (sidebar)
-  document.querySelectorAll('.platform-tab').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      setPlatformFilter(btn.dataset.platform);
-    });
-    btn.addEventListener('keydown', function(e) {
-      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-      e.preventDefault();
-      TwitchX.focusAdjacentTab(Array.from(document.querySelectorAll('.platform-tab')), btn, e.key === 'ArrowRight' ? 1 : -1);
-    });
-  });
 
   // Platform chip switching (toolbar)
   document.querySelectorAll('.platform-chip').forEach(function(btn) {
@@ -312,8 +295,6 @@ TwitchX._bindToolbarEvents = function() {
     TwitchX.state.filterText = e.target.value;
     TwitchX.renderGrid();
   });
-  const browseNavBtn = document.getElementById('browse-nav-btn');
-  if (browseNavBtn) browseNavBtn.addEventListener('click', TwitchX.showBrowseView);
   const toolbarSearchBtn = document.getElementById('toolbar-search-btn');
   if (toolbarSearchBtn) toolbarSearchBtn.addEventListener('click', function() { TwitchX.openPalette(); });
   const toolbarRefreshBtn = document.getElementById('toolbar-refresh-btn');
@@ -354,16 +335,12 @@ TwitchX._bindPlayerEvents = function() {
   if (browserBtn) browserBtn.addEventListener('click', TwitchX.doBrowser);
   const refreshBtn = document.getElementById('refresh-btn');
   if (refreshBtn) refreshBtn.addEventListener('click', TwitchX.doRefresh);
-  const settingsBtn = document.getElementById('settings-btn');
-  if (settingsBtn) settingsBtn.addEventListener('click', TwitchX.openSettings);
   const toggleChatBtn = document.getElementById('toggle-chat-btn');
   if (toggleChatBtn) toggleChatBtn.addEventListener('click', TwitchX.toggleChatPanel);
   const recordBtn = document.getElementById('record-btn');
   if (recordBtn) recordBtn.addEventListener('click', TwitchX.toggleRecording);
   const statsOverlayBtn = document.getElementById('stats-overlay-btn');
   if (statsOverlayBtn) statsOverlayBtn.addEventListener('click', TwitchX.toggleStatsOverlay);
-  var miniBtn = document.getElementById('mini-mode-btn');
-  if (miniBtn) miniBtn.addEventListener('click', TwitchX.toggleMiniMode);
 
   // Volume slider
   var muteBtn = document.getElementById('mute-btn');
@@ -958,12 +935,7 @@ TwitchX.toggleMiniMode = function() {
     }
   }
   localStorage.setItem('twitchx.mini', isMini ? '1' : '0');
-  var btn = document.getElementById('mini-mode-btn');
-  if (btn) {
-    btn.title = isMini ? 'Exit mini mode' : 'Mini mode';
-    btn.setAttribute('aria-label', isMini ? 'Exit mini mode' : 'Mini mode');
-    TwitchX.setIconOnly(btn, isMini ? 'mini-exit' : 'minimize', 16);
-  }
+  if (TwitchX.updateAccountChip) TwitchX.updateAccountChip();
 };
 
 TwitchX.applyMiniMode = function() {
@@ -972,13 +944,8 @@ TwitchX.applyMiniMode = function() {
     document.getElementById('app').classList.add('mini');
     var content = document.getElementById('content');
     if (content) content.setAttribute('inert', '');
-    var btn = document.getElementById('mini-mode-btn');
-    if (btn) {
-      btn.title = 'Exit mini mode';
-      btn.setAttribute('aria-label', 'Exit mini mode');
-      TwitchX.setIconOnly(btn, 'mini-exit', 16);
-    }
   }
+  if (TwitchX.updateAccountChip) TwitchX.updateAccountChip();
 };
 
 TwitchX._bindPaletteEvents = function() {

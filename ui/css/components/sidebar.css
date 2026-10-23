@@ -1,33 +1,9 @@
-.platform-user-info { display: flex; align-items: center; gap: var(--space-8); }
-.platform-user-avatar {
-  width: 32px; height: 32px; border-radius: 50%;
-  background: var(--bg-elevated); object-fit: cover; flex-shrink: 0;
-}
-/* Shown before the avatar arrives: plain disc, no broken-image glyph. */
-.platform-user-avatar.is-empty {
-  background: linear-gradient(135deg, var(--bg-control), var(--bg-elevated));
-  box-shadow: inset 0 0 0 1px var(--border-subtle);
-}
-.platform-user-details { flex: 1; min-width: 0; }
-.platform-user-name {
-  font-size: var(--font-sm); font-weight: var(--weight-semibold); color: var(--text-primary);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  letter-spacing: -0.01em;
-}
-.platform-user-actions { display: flex; gap: var(--space-8); margin-top: 1px; }
-.platform-user-actions a {
-  font-size: var(--font-sm); color: var(--text-muted); cursor: pointer;
-  text-decoration: none; transition: color var(--duration-fast) ease;
-}
-.platform-user-actions a:hover { color: var(--text-secondary); }
-
 /* ── Platform connection status dots ──────────────────── */
 .platform-status-dots {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  margin-left: auto;
-  padding-left: var(--space-8);
+  flex-shrink: 0;
 }
 .platform-status-dot {
   width: 7px;
@@ -41,47 +17,6 @@
 .platform-status-dot.youtube { background: var(--platform-youtube); }
 .platform-status-dot.connected {
   box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 3px var(--border-subtle);
-}
-
-/* ── Platform filter tabs (pill segmented control) ────── */
-#platform-tabs {
-  display: flex;
-  background: var(--bg-control);
-  border-radius: var(--radius-md);
-  padding: 2px;
-  gap: 2px;
-  margin: 0 var(--space-12) var(--space-8);
-  border-bottom: none;
-}
-#sidebar.collapsed-sidebar #platform-tabs {
-  display: none;
-}
-
-.platform-tab {
-  flex: 1;
-  min-height: 26px;
-  padding: var(--space-4) 0;
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--text-muted);
-  font-size: var(--font-xs);
-  font-weight: var(--weight-semibold);
-  letter-spacing: 0;
-  text-transform: none;
-  cursor: pointer;
-  font-family: inherit;
-  border-radius: calc(var(--radius-md) - 2px);
-  transition: color var(--duration-fast) ease, background var(--duration-fast) ease,
-              border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
-}
-.platform-tab:hover { color: var(--text-secondary); background: var(--hover-bg); }
-.platform-tab:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
-.platform-tab.active {
-  color: var(--text-primary);
-  font-weight: var(--weight-semibold);
-  background: var(--bg-elevated);
-  border-color: var(--border-subtle);
-  box-shadow: var(--shadow-sm);
 }
 
 /* ── Sidebar stale data banner ───────────────────────── */
@@ -661,32 +596,15 @@
 
 /* ── Sidebar footer strip ─────────────────────────────── */
 .sidebar-footer {
-  padding: var(--space-8) var(--space-12);
+  padding: var(--space-8);
   border-top: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
 }
-/* Base moved here from multistream.css, which had no business owning it. */
-#browse-nav-btn {
-  min-height: 32px;
-  display: block;
-  width: 100%;
-  padding: var(--space-8) var(--space-12);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  font-size: var(--font-sm);
-  font-family: inherit;
-  font-weight: var(--weight-medium);
-  cursor: pointer;
-  text-align: left;
-  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
-  letter-spacing: 0.01em;
-  justify-content: center;
+#sidebar.collapsed-sidebar .sidebar-footer {
+  padding: var(--space-8) var(--space-4);
 }
-
 /* Sidebar shell (moved from layout.css — layout owns the app frame only) */
 /* ── Sidebar ────────────────────────────────────────────── */
 #sidebar {
@@ -702,10 +620,8 @@
 #sidebar.collapsed-sidebar {
   width: 52px;
 }
-#sidebar.collapsed-sidebar #profile-area,
-#sidebar.collapsed-sidebar #kick-profile-area,
 #sidebar.collapsed-sidebar #favorites-header,
-#sidebar.collapsed-sidebar .sidebar-footer,
+#sidebar.collapsed-sidebar #search-area,
 #sidebar.collapsed-sidebar .section-label,
 #sidebar.collapsed-sidebar .section-meta,
 #sidebar.collapsed-sidebar .channel-name,
@@ -767,15 +683,6 @@
   grid-template-areas: "tb" "btn" "nav";
   padding-top: 0;
 }
-#profile-area {
-  padding: var(--space-12);
-  border-bottom: 1px solid var(--border-subtle);
-  min-height: 48px;
-}
-#kick-profile-area {
-  padding: var(--space-4) var(--space-12);
-  border-bottom: 1px solid var(--border-subtle);
-}
 #favorites-header {
   padding: var(--space-8) var(--space-12) var(--space-4);
   display: flex;
@@ -793,4 +700,159 @@
   flex-direction: column;
   gap: var(--space-4);
 }
-#browse-nav-wrapper { padding: 0 var(--space-8) var(--space-4); }
+
+/* ── Sidebar navigation ─────────────────────────────────── */
+#sidebar-nav {
+  grid-area: nav;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.sidebar-nav-item {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: 0 var(--space-8);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: var(--font-md);
+  font-weight: var(--weight-medium);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
+}
+.sidebar-nav-item:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+.sidebar-nav-item:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.sidebar-nav-item[aria-current="page"] {
+  background: var(--hover-bg-strong);
+  color: var(--text-primary);
+}
+.sidebar-nav-label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sidebar-nav-count {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+#sidebar.collapsed-sidebar .sidebar-nav-item {
+  width: 32px;
+  padding: 0;
+  justify-content: center;
+}
+#sidebar.collapsed-sidebar .sidebar-nav-label,
+#sidebar.collapsed-sidebar .sidebar-nav-count {
+  display: none;
+}
+
+/* ── Account chip ───────────────────────────────────────── */
+#account-chip-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+#account-chip {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: 0 var(--space-8);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: inherit;
+  cursor: pointer;
+  transition: background var(--duration-fast) ease;
+}
+#account-chip:hover,
+#account-chip[aria-expanded="true"] {
+  background: var(--hover-bg);
+}
+#account-chip:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.account-chip-avatar {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-control);
+  color: var(--text-secondary);
+  font-size: var(--font-xs);
+  font-weight: var(--weight-semibold);
+}
+#account-chip-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.account-chip-name {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  font-size: var(--font-sm);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.account-gear-btn {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
+}
+.account-gear-btn:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+.account-gear-btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+/* Rail: the chip shrinks to its avatar. */
+#sidebar.collapsed-sidebar #account-chip-row {
+  justify-content: center;
+}
+#sidebar.collapsed-sidebar #account-chip {
+  flex: 0 0 auto;
+  width: 40px;
+  padding: 0;
+  justify-content: center;
+}
+#sidebar.collapsed-sidebar .account-chip-name,
+#sidebar.collapsed-sidebar #account-chip .platform-status-dots,
+#sidebar.collapsed-sidebar .account-gear-btn {
+  display: none;
+}

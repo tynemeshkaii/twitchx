@@ -27,6 +27,7 @@ const SCENARIOS = {
   settings: { action: p => p.evaluate(() => TwitchX.openSettings()) },
   palette: { action: async p => { await p.evaluate(() => TwitchX.openPalette()); await p.keyboard.type('sh'); } },
   collapsed: { action: p => p.click('#sidebar-collapse-btn') },
+  account: { action: p => p.click('#account-chip') },
   browse: { action: p => p.evaluate(() => window.__scenario.browse()) },
   channel: { action: p => p.evaluate(() => window.__scenario.channel()) },
   player: { action: p => p.evaluate(() => window.__scenario.player()) },

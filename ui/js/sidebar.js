@@ -993,7 +993,79 @@ function updatePlatformStatusDots() {
       container.appendChild(dot);
     });
   });
+  updateNavLiveCount();
+  if (TwitchX.updateAccountChip) TwitchX.updateAccountChip();
 }
+
+/* ── Sidebar navigation ─────────────────────────────────── */
+// Following / Browse / Multi-view. The channel profile and the player keep
+// whichever item they were opened from, so switchView only reports the views
+// that own an item.
+const NAV_FOR_VIEW = {
+  'stream-grid': 'following',
+  'empty-state': 'following',
+  'browse-view': 'browse',
+  'multistream-view': 'multiview',
+};
+
+function setActiveNav(name) {
+  document.querySelectorAll('#sidebar-nav .sidebar-nav-item').forEach(function(item) {
+    if (item.dataset.nav === name) item.setAttribute('aria-current', 'page');
+    else item.removeAttribute('aria-current');
+  });
+}
+
+function syncNavForView(viewId) {
+  if (Object.prototype.hasOwnProperty.call(NAV_FOR_VIEW, viewId)) setActiveNav(NAV_FOR_VIEW[viewId]);
+}
+
+function _isViewActive(id) {
+  var el = document.getElementById(id);
+  return !!el && el.classList.contains('view-active');
+}
+
+function showFollowingView() {
+  if (TwitchX.multiState.open) { TwitchX.closeMultistreamView(); return; }
+  if (_isViewActive('player-view')) { TwitchX.hidePlayerView(); return; }
+  if (_isViewActive('channel-view')) {
+    TwitchX.channelViewSource = 'grid';
+    TwitchX.hideChannelView();
+    return;
+  }
+  if (_isViewActive('browse-view')) TwitchX.hideBrowseView();
+}
+
+function navigateTo(name) {
+  if (name === 'following') { showFollowingView(); return; }
+  if (name === 'browse') {
+    if (_isViewActive('browse-view')) return;
+    if (TwitchX.multiState.open) TwitchX.closeMultistreamView();
+    // Browse does not stop the player by itself; leaving it playing behind
+    // another view would keep its audio running.
+    if (_isViewActive('player-view')) TwitchX.hidePlayerView(true);
+    TwitchX.showBrowseView();
+    return;
+  }
+  if (name === 'multiview' && !TwitchX.multiState.open) TwitchX.openMultistreamView();
+}
+
+TwitchX._bindSidebarNavEvents = function() {
+  document.querySelectorAll('#sidebar-nav .sidebar-nav-item').forEach(function(item) {
+    item.addEventListener('click', function() { navigateTo(item.dataset.nav); });
+  });
+};
+
+function updateNavLiveCount() {
+  var el = document.getElementById('sidebar-nav-live-count');
+  if (!el) return;
+  var count = TwitchX.state.liveSet ? TwitchX.state.liveSet.size : 0;
+  el.textContent = count > 0 ? String(count) : '';
+}
+
+TwitchX.setActiveNav = setActiveNav;
+TwitchX.syncNavForView = syncNavForView;
+TwitchX.showFollowingView = showFollowingView;
+TwitchX.navigateTo = navigateTo;
 
 // Initialize sidebar sections from localStorage on load
 TwitchX.state.sidebarSections = loadSidebarSections();

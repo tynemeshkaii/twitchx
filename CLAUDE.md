@@ -72,7 +72,7 @@ make preview # скрины UI в .preview/ (Node + Playwright, см. tools/ui_p
 | `ui/api/` | Python↔JS bridge (7 компонентов, см. ниже) |
 | `ui/index.html` | Shell; `_inline_resources()` инлайнит CSS/JS (pywebview 5.x, `>=5.0,<6.0`) |
 | `ui/css/` | `tokens`, `themes/`, `reset`, `layout` (только каркас), `components/` (по одному владельцу на селектор) |
-| `ui/js/` | 19 модулей — плоские скрипты, склеиваются в один `<script>`; общий namespace `TwitchX` |
+| `ui/js/` | 20 модулей — плоские скрипты, склеиваются в один `<script>`; общий namespace `TwitchX` |
 | `tests/` | pytest, `conftest.py` с фикстурами |
 
 ---
@@ -134,7 +134,7 @@ ChatClient (ABC)      ←  BaseChatClient      ←  TwitchChatClient/KickChatCli
    ```
    Это **не** IIFE: `_inline_resources()` вырезает эту пару строк во всех файлах, кроме первого (`state.js`), и склеивает всё в один `<script>`. Любой top-level `function`/`const`/`let`/`class` виден всем модулям — повторное имя в другом файле = `SyntaxError` или тихая перезапись. Экспортируй через `TwitchX.*`, приватные хелперы называй уникально. Проверяет `tests/test_js_bundle.py` (`node --check` склейки + дубли имён).
 2. Добавь `<script src="js/mymodule.js"></script>` в `ui/index.html` в правильном месте порядка загрузки
-3. Порядок: `state → utils → view-transitions → icons → api-bridge → render → sidebar → player → multistream → browse → channel → chat → settings → context-menu → keyboard → palette → toast → callbacks → init`
+3. Порядок: `state → utils → view-transitions → icons → api-bridge → render → sidebar → account → player → multistream → browse → channel → chat → settings → context-menu → keyboard → palette → toast → callbacks → init`
 
 ### Новый UI компонент
 1. HTML в `ui/index.html`

@@ -905,6 +905,7 @@ window.onKickTestResult = function(data) {
 
 window.onYouTubeLoginComplete = function(data) {
   TwitchX.state.youtubeUser = { login: data.login, display_name: data.display_name };
+  if (TwitchX.updatePlatformStatusDots) TwitchX.updatePlatformStatusDots();
   document.getElementById('yt-login-area').classList.add('hidden');
   document.getElementById('yt-user-area').classList.remove('hidden');
   document.getElementById('yt-display-name').textContent = 'Logged in as ' + (data.display_name || data.login);
@@ -924,6 +925,7 @@ window.onYouTubeLoginError = function(msg) {
 
 window.onYouTubeLogout = function() {
   TwitchX.state.youtubeUser = null;
+  if (TwitchX.updatePlatformStatusDots) TwitchX.updatePlatformStatusDots();
   document.getElementById('yt-login-area').classList.remove('hidden');
   document.getElementById('yt-user-area').classList.add('hidden');
   document.getElementById('yt-display-name').textContent = '';
@@ -992,6 +994,7 @@ window.onAvatar = function(data) {
   const userAvatar = document.getElementById('user-avatar');
   if (userAvatar && data.platform === 'twitch' && userAvatar.dataset.key === key) {
     setAvatarSrc(userAvatar);
+    if (TwitchX.updateAccountChip) TwitchX.updateAccountChip();
   }
 };
 
