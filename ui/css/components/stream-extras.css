@@ -82,17 +82,6 @@
   padding: var(--space-12);
 }
 
-/* ── Pin Badge ──────────────────────────────────────────── */
-.pin-badge {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  font-size: var(--font-sm);
-  line-height: 1;
-  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6));
-  pointer-events: none;
-}
-
 /* ── Command Palette ────────────────────────────────────── */
 #palette-overlay {
   position: fixed;

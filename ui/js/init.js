@@ -1110,7 +1110,7 @@ setInterval(function() {
     const started = card.dataset.started;
     if (started) {
       const badge = card.querySelector('.uptime-badge');
-      if (badge) badge.textContent = TwitchX.formatUptime(started);
+      if (badge) badge.textContent = TwitchX.formatUptimeClock(started);
     }
   });
 }, 60000);

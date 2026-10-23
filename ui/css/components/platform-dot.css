@@ -1,0 +1,27 @@
+/* ── Platform dot ───────────────────────────────────────── */
+/* The one way a platform shows its colour: a small dot (8–11px) or the
+   18px glyph on a thumbnail. Never a filled button or tinted label. */
+.platform-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--icon-muted);
+}
+.platform-dot.twitch { background: var(--platform-twitch); }
+.platform-dot.kick { background: var(--platform-kick-ink); }
+.platform-dot.youtube { background: var(--platform-youtube); }
+
+/* 18px glyph over a video frame: dark disc, platform dot in the middle.
+   Frames are dark in both themes, so Kick keeps its neon value here. */
+.platform-glyph {
+  --platform-kick-ink: var(--platform-kick);
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--media-chip-bg);
+}

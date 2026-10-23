@@ -112,5 +112,5 @@
 
   /* ── Thumb overlay ──────────────────────────────────── */
   /* Thumbnails are video, dark in both themes: same scrim as the dark theme. */
-  --thumb-overlay: linear-gradient(180deg, rgba(0, 0, 0, 0.08) 0%, rgba(0, 0, 0, 0.18) 46%, rgba(0, 0, 0, 0.58) 100%);
+  --thumb-overlay: linear-gradient(180deg, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.66) 100%);
 }

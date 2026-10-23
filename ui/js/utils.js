@@ -34,6 +34,17 @@ function formatUptime(isoStr) {
   return m + 'm';
 }
 
+// "5:12" — hours:minutes, the uptime chip on a stream frame. Minutes are
+// enough: the chip refreshes once a minute (init.js).
+function formatUptimeClock(isoStr) {
+  if (!isoStr) return '';
+  const diff = Math.floor((Date.now() - new Date(isoStr).getTime()) / 1000);
+  if (!(diff >= 0)) return '';
+  const h = Math.floor(diff / 3600);
+  const m = Math.floor((diff % 3600) / 60);
+  return h + ':' + (m < 10 ? '0' : '') + m;
+}
+
 const STATUS_META_MS = 4000;
 let statusMetaTimer = null;
 
@@ -144,6 +155,7 @@ function focusAdjacentTab(buttons, currentBtn, direction) {
 TwitchX.truncate = truncate;
 TwitchX.formatViewers = formatViewers;
 TwitchX.formatUptime = formatUptime;
+TwitchX.formatUptimeClock = formatUptimeClock;
 TwitchX.setStatus = setStatus;
 TwitchX.formatMediaDate = formatMediaDate;
 TwitchX.formatDuration = formatDuration;

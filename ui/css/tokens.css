@@ -112,6 +112,14 @@
   --platform-kick-on-light: #2E8A0E;
   --platform-youtube: #FF0000;
 
+  /* ── Chips over video frames ───────────────────────── */
+  /* Thumbnails and the player are dark in both themes, so these do not
+     flip with the theme. */
+  --media-chip-bg:        rgba(0, 0, 0, 0.45);
+  --media-chip-bg-strong: rgba(0, 0, 0, 0.62);
+  --text-on-media-muted:  rgba(255, 255, 255, 0.82);
+  --icon-on-media:        rgba(255, 255, 255, 0.70);
+
   /* ── Glass shell surfaces (overlaid on theme backgrounds) ── */
   --glass-thin:   blur(12px) saturate(160%);
   --glass-thick:  blur(32px) saturate(180%);
