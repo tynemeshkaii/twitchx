@@ -4,6 +4,9 @@
   min-width: 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(228px, 100%), 1fr));
+  /* The grid has a fixed height: without this, rows shrink to min-content and
+     .card-thumb (overflow: hidden, flex item) collapses to 0px. */
+  grid-auto-rows: max-content;
   gap: var(--space-16); align-content: start;
   opacity: 1;
   transition: opacity var(--duration-view) var(--ease-view);

@@ -100,3 +100,14 @@ def test_channel_tabs_go_through_switch_channel_tab() -> None:
     assert "TwitchX.state.channelTabs.active = tab;" in _function_body(
         channel, "function switchChannelTab(btn, tab)"
     )
+
+
+def test_stream_grid_rows_size_to_content() -> None:
+    # #stream-grid has a fixed height (.view is absolutely positioned). With
+    # auto rows the grid shrinks them to min-content when space runs out, and
+    # .card-thumb (overflow: hidden, a flex item in the card column) has a
+    # min-content height of 0 — thumbnails collapsed at the default 960x640.
+    css = _read("css/components/stream-card.css")
+    match = re.search(r"#stream-grid\s*\{([^}]*)\}", css)
+    assert match, "#stream-grid rule not found"
+    assert re.search(r"grid-auto-rows:\s*max-content", match.group(1))
