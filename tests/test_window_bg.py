@@ -14,19 +14,19 @@ THEMES = Path(__file__).parent.parent / "ui" / "css" / "themes"
 
 @pytest.mark.parametrize("system_is_dark", [True, False])
 def test_explicit_modes_ignore_system(system_is_dark: bool) -> None:
-    assert window_background("dark", system_is_dark) == "#111113"
-    assert window_background("light", system_is_dark) == "#F5F5F7"
+    assert window_background("dark", system_is_dark) == "#0F1012"
+    assert window_background("light", system_is_dark) == "#FFFFFF"
 
 
 def test_auto_follows_system() -> None:
-    assert window_background("auto", True) == "#111113"
-    assert window_background("auto", False) == "#F5F5F7"
+    assert window_background("auto", True) == "#0F1012"
+    assert window_background("auto", False) == "#FFFFFF"
 
 
 @pytest.mark.parametrize("mode", ["", "hacker", "Dark", "LIGHT"])
 @pytest.mark.parametrize("system_is_dark", [True, False])
 def test_unknown_mode_falls_back_to_dark(mode: str, system_is_dark: bool) -> None:
-    assert window_background(mode, system_is_dark) == "#111113"
+    assert window_background(mode, system_is_dark) == "#0F1012"
 
 
 @pytest.mark.parametrize(

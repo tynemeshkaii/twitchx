@@ -1,9 +1,7 @@
 /* ── Player bar ─────────────────────────────────────────── */
 #player-bar {
   height: 46px;
-  background: var(--glass-bar), var(--bg-player-bar);
-  backdrop-filter: var(--glass-thick);
-  -webkit-backdrop-filter: var(--glass-thick);
+  background: var(--bg-surface);
   border-top: 1px solid var(--border-glass);
   display: flex;
   align-items: center;
@@ -23,7 +21,7 @@
 }
 
 .bar-group--left {
-  gap: var(--space-6);
+  gap: var(--space-8);
   flex: 0 0 auto;
 }
 
@@ -50,12 +48,12 @@
 }
 
 .bar-group--right {
-  gap: var(--space-2);
+  gap: 2px;
   flex: 0 0 auto;
 }
 
 .bar-group--audio {
-  gap: var(--space-2);
+  gap: 2px;
 }
 
 /* Controls */
@@ -85,7 +83,7 @@
   border-radius: var(--radius-sm);
   color: var(--text-muted);
   cursor: pointer;
-  font-size: var(--font-base);
+  font-size: var(--font-lg);
   font-family: inherit;
   display: flex;
   align-items: center;
@@ -104,30 +102,28 @@
 
 #watch-btn {
   min-height: 32px;
-  padding: 0 14px;
+  padding: 0 var(--space-16);
   background: var(--bg-control);
   color: var(--text-muted);
   border: none;
   border-radius: var(--radius-md);
   font-size: var(--font-sm);
-  font-weight: 700;
+  font-weight: var(--weight-semibold);
   cursor: not-allowed;
   font-family: inherit;
   letter-spacing: -0.01em;
   display: flex;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--space-8);
   transition: background var(--duration-fast) ease, color var(--duration-fast) ease, opacity var(--duration-fast) ease, transform var(--duration-fast) ease;
 }
 #watch-btn.active {
   background: var(--btn-primary-bg);
   color: var(--text-on-accent);
   cursor: pointer;
-  box-shadow: var(--shadow-glow-accent);
 }
 #watch-btn.active:hover {
   background: var(--btn-primary-bg-hover);
-  box-shadow: var(--shadow-glow-accent);
 }
 
 #stop-player-btn {
@@ -181,7 +177,7 @@
 
 /* Status metadata */
 #live-dot {
-  color: var(--live-red);
+  color: var(--live);
   display: none;
   align-items: center;
   justify-content: center;
@@ -205,9 +201,9 @@
 #status-text {
   font-size: var(--font-sm);
   color: var(--text-secondary);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
-#status-text.status-success { color: var(--live-green); }
+#status-text.status-success { color: var(--text-secondary); }
 #status-text.status-warn { color: var(--warn-yellow); }
 #status-text.status-error { color: var(--error-red); }
 
@@ -285,7 +281,7 @@
 
 @container (max-width: 760px) {
   #player-bar {
-    gap: var(--space-2);
+    gap: 2px;
   }
   .bar-group--center #total-viewers,
   .bar-group--center #updated-time {
@@ -354,5 +350,5 @@
   color: var(--error-red);
   display: inline-flex;
   align-items: center;
-  margin-left: 2px;
+  margin-left: var(--space-4);
 }

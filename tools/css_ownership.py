@@ -27,14 +27,19 @@ ROOT = Path(__file__).resolve().parent.parent
 CSS_DIR = ROOT / "ui" / "css"
 INDEX = ROOT / "ui" / "index.html"
 LAYER_RE = re.compile(r"/\*\s*css-layer:\s*([\w-]+)")
+GROUPING_AT_RULES = ("@media", "@supports", "@container")
 
 
 def stylesheet_order() -> list[str]:
     return re.findall(r'href="css/([^"]+)"', INDEX.read_text(encoding="utf-8"))
 
 
-def iter_rules(text: str):
-    """Yield (prelude, body, layer) for top-level rules; skip at-rule blocks."""
+def iter_rules(text: str, nested: bool = False):
+    """Yield (prelude, body, layer) for top-level rules; skip at-rule blocks.
+
+    With ``nested=True`` the rules inside @media / @supports / @container
+    blocks are yielded too (@keyframes and friends are still skipped).
+    """
     i, n = 0, len(text)
     layer: str | None = None
     while i < n:
@@ -65,6 +70,8 @@ def iter_rules(text: str):
             # A marker covers exactly the rule that follows it — otherwise the
             # exemption leaks to every remaining rule in the file.
             layer = None
+        elif nested and prelude.startswith(GROUPING_AT_RULES):
+            yield from iter_rules(text[brace + 1 : k - 1], nested=True)
         i = k
 
 

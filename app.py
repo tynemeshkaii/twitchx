@@ -16,8 +16,8 @@ from ui.api.settings_schema import clamp_refresh_interval
 # Native window background, shown before the WebView paints. Must match
 # --bg-base in ui/css/themes/dark.css and ui/css/themes/light.css — update
 # these together, or a different colour flashes at startup.
-WINDOW_BG_DARK = "#111113"
-WINDOW_BG_LIGHT = "#F5F5F7"
+WINDOW_BG_DARK = "#0F1012"
+WINDOW_BG_LIGHT = "#FFFFFF"
 
 
 def window_background(theme_mode: str, system_is_dark: bool) -> str:

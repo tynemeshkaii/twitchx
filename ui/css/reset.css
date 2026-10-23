@@ -41,7 +41,7 @@ body {
   background: var(--accent);
   color: var(--text-on-accent);
   border-radius: var(--radius-sm);
-  font-size: var(--font-md); font-weight: 600;
+  font-size: var(--font-md); font-weight: var(--weight-semibold);
   text-decoration: none;
   transition: top var(--duration-fast) ease;
 }

@@ -3,22 +3,24 @@
 :root,
 [data-theme="dark"] {
   /* ── Depth system (macOS dark mode aligned) ──────────── */
-  --bg-base:      #111113;
-  --bg-surface:   #1A1A1D;
-  --bg-elevated:  #242427;
-  --bg-overlay:   #303034;
+  --bg-base:      #0F1012;
+  --bg-surface:   #16171A;
+  --bg-elevated:  #1E2024;
+  --bg-overlay:   #272A2F;
   --bg-border:    #2B2B2F;
-  --bg-panel:     #202024;
+  --bg-panel:     #1A1B1F;
   --bg-glass:     rgba(26, 26, 29, 0.78);
   --surface-glass: rgba(36, 36, 39, 0.72);
-  --bg-control:   #27272B;
-  --bg-control-hover: #323238;
+  --bg-control:   #22242A;
+  --bg-control-hover: #2A2D33;
 
   /* ── Apple-style label hierarchy ─────────────────────── */
-  --text-primary:   #F2F2F7;
-  --text-secondary: #AEAEB2;
-  --text-muted:     #A8A8AD;
-  --text-muted-elevated: #99999F;
+  --text-primary:   #EDEEF0;
+  --text-secondary: #A1A4AB;
+  --text-muted:     #868A92;
+  --text-muted-elevated: #8A8E96;
+  /* Glyphs and dividers only — never text (fails 4.5:1 by design). */
+  --icon-muted: #5F636B;
 
   /* ── Semantic status ────────────────────────────────── */
   --live-green:  #30D158;
@@ -27,11 +29,15 @@
   --error-red:   #FF453A;
   --error-red-bright: #FF6961;
   --info-blue:   #64B5FF;
+  /* "On air" only — never success. */
+  --live:        #FF453A;
+  --viewers:     var(--text-secondary);
+  --platform-kick-ink: var(--platform-kick);
 
   /* ── Border tokens ──────────────────────────────────── */
-  --border-subtle:  rgba(255, 255, 255, 0.08);
-  --border-default: rgba(255, 255, 255, 0.13);
-  --border-strong:  rgba(255, 255, 255, 0.22);
+  --border-subtle:  rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.10);
+  --border-strong:  rgba(255, 255, 255, 0.16);
 
   /* ── Shadow tokens ──────────────────────────────────── */
   --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.24);

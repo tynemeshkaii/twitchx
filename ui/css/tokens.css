@@ -15,12 +15,8 @@
   --focus-ring-offset: hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.12);
 
   /* ── Primary button background (accent-derived) ──────── */
-  --btn-primary-bg: linear-gradient(135deg,
-    var(--accent),
-    hsl(var(--accent-h) var(--accent-s) calc(var(--accent-l) - 12%)));
-  --btn-primary-bg-hover: linear-gradient(135deg,
-    hsl(var(--accent-h) var(--accent-s) calc(var(--accent-l) + 6%)),
-    hsl(var(--accent-h) var(--accent-s) calc(var(--accent-l) - 4%)));
+  --btn-primary-bg: var(--accent);
+  --btn-primary-bg-hover: hsl(var(--accent-h) var(--accent-s) calc(var(--accent-l) + 6%));
 
   /* ── Accent-derived surfaces & borders ───────────────── */
   --surface-selected: linear-gradient(135deg,
@@ -28,40 +24,37 @@
     hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.055));
   --border-accent:    hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.22);
   --border-accent-strong: hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.45);
-  --shadow-glow-accent: 0 0 22px hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.24);
 
   /* ── Radii ────────────────────────────────────────────── */
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
-  --radius-xl: 20px;
   --radius-full: 9999px;
 
-  /* ── Spacing scale ────────────────────────────────────── */
-  --space-1:  1px;
-  --space-2:  2px;
+  /* ── Spacing scale: 4px grid ───────────────────────── */
   --space-4:  4px;
-  --space-6:  6px;
   --space-8:  8px;
-  --space-10: 10px;
   --space-12: 12px;
-  --space-14: 14px;
   --space-16: 16px;
   --space-20: 20px;
   --space-24: 24px;
   --space-32: 32px;
   --space-40: 40px;
+  --space-48: 48px;
 
-  /* ── Typography scale ───────────────────────────────── */
-  --font-2xs: 10px;
-  --font-xs:  11px;
-  --font-sm:  12px;
-  --font-md:  13px;
-  --font-base: 14px;
-  --font-lg:  16px;
-  --font-xl:  20px;
-  --font-2xl: 24px;
-  --font-3xl: 32px;
+  /* ── Typography scale: 6 sizes ──────────────────────── */
+  --font-xs:  11px;  /* badges, section labels */
+  --font-sm:  12px;  /* meta: channel, game, time */
+  --font-md:  13px;  /* body text, titles */
+  --font-lg:  15px;  /* panel headings */
+  --font-xl:  22px;  /* view headings */
+  --font-2xl: 28px;  /* rare large numbers (statistics) */
+
+  /* ── Font weights: 4 ───────────────────────────────── */
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;  /* view/modal headings and large numbers only */
 
   /* ── Tracking (letter-spacing) ──────────────────────── */
   --tracking-tight:  -0.02em;
@@ -109,6 +102,9 @@
   --platform-twitch:  #9146FF;
   --platform-kick:    #53FC18;
   --platform-kick-text: #0A0A0C;
+  /* Neon Kick green is unreadable on white: use this for Kick text/glyphs
+     in the light theme (via --platform-kick-ink). */
+  --platform-kick-on-light: #2E8A0E;
   --platform-youtube: #FF0000;
 
   /* ── Glass shell surfaces (overlaid on theme backgrounds) ── */
@@ -116,14 +112,7 @@
   --glass-thick:  blur(32px) saturate(180%);
   --glass-modal:  blur(40px) saturate(200%);
 
-  --glass-sidebar:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, transparent 120px);
-  --glass-content:
-    radial-gradient(circle at 36% -18%, var(--accent-dim), transparent 34%);
 
-  /* ── Subtle app noise texture (data-uri, 2% opacity) ───── */
-  --app-noise:
-    url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
 
   /* ── Motion choreography ──────────────────────────────── */
   --view-exit-duration: 180ms;

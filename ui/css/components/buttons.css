@@ -1,34 +1,45 @@
 .login-btn {
   width: 100%; min-height: 32px; padding: var(--space-8) var(--space-12);
-  color: var(--text-inverse);
-  border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
-  font-size: var(--font-sm); font-weight: 600; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: var(--space-8);
+  background: var(--bg-control);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default); border-radius: var(--radius-md);
+  font-size: var(--font-sm); font-weight: var(--weight-semibold); cursor: pointer;
   font-family: inherit; letter-spacing: -0.01em;
-  box-shadow: inset 0 1px 0 var(--border-subtle), var(--shadow-sm);
-  transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease,
-              box-shadow var(--duration-fast) ease;
+  transition: background var(--duration-fast) ease, transform var(--duration-fast) ease,
+              border-color var(--duration-fast) ease;
+}
+.login-btn:hover {
+  background: var(--bg-control-hover);
+  border-color: var(--border-strong);
+}
+/* Platform shown as a dot, never as a filled button. */
+.login-btn::before {
+  content: '';
+  width: 8px; height: 8px; border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--login-dot, var(--text-muted));
 }
 .login-btn:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
-#login-btn { background: var(--platform-twitch); }
-#login-btn:hover { opacity: 0.90; box-shadow: 0 0 18px color-mix(in srgb, var(--platform-twitch) 22%, transparent); }
-#kick-login-sidebar-btn { background: var(--platform-kick); color: var(--platform-kick-text); }
-#kick-login-sidebar-btn:hover { opacity: 0.90; box-shadow: 0 0 18px color-mix(in srgb, var(--platform-kick) 18%, transparent); }
+#login-btn { --login-dot: var(--platform-twitch); }
+#kick-login-sidebar-btn { --login-dot: var(--platform-kick-ink); }
 
 .btn {
   min-height: 34px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-6);
-  padding: 0 var(--space-14);
+  gap: var(--space-8);
+  padding: 0 var(--space-16);
   border-radius: var(--radius-md);
   border: 1px solid transparent;
   font-family: inherit;
   font-size: var(--font-sm);
-  font-weight: 700;
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   transition: transform var(--duration-fast) ease,
               background var(--duration-fast) ease,
@@ -52,11 +63,9 @@
   background: var(--btn-primary-bg);
   border-color: var(--accent);
   color: var(--text-on-accent);
-  box-shadow: var(--shadow-glow-accent);
 }
 .btn-primary:hover {
   background: var(--btn-primary-bg-hover);
-  box-shadow: var(--shadow-glow-accent), 0 4px 14px hsl(var(--accent-h) var(--accent-s) var(--accent-l) / 0.22);
 }
 .btn-primary:active {
   transform: scale(var(--scale-press));
@@ -99,8 +108,8 @@
 }
 .segmented {
   display: inline-flex;
-  gap: 3px;
-  padding: 3px;
+  gap: 2px;
+  padding: 2px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
   background: var(--bg-control);
@@ -109,7 +118,8 @@
 .segmented .btn,
 .segmented button {
   min-height: 28px;
-  border-radius: var(--radius-sm);
+  /* inner radius = container radius - padding */
+  border-radius: calc(var(--radius-md) - 2px);
   box-shadow: none;
   position: relative;
   z-index: 1;

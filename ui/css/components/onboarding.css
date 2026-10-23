@@ -27,7 +27,7 @@
   max-height: calc(100vh - var(--space-40));
   background: var(--bg-modal);
   border: 1px solid var(--border-glass);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-modal);
   display: flex;
   flex-direction: column;
@@ -37,13 +37,13 @@
 }
 
 .onboarding-header {
-  padding: var(--space-20) var(--space-24) var(--space-10);
+  padding: var(--space-20) var(--space-24) var(--space-8);
   text-align: center;
 }
 
 .onboarding-title {
   font-size: var(--font-2xl);
-  font-weight: 700;
+  font-weight: var(--weight-bold);
   color: var(--text-primary);
   letter-spacing: -0.02em;
   margin-bottom: var(--space-8);
@@ -73,7 +73,7 @@
 
 .onboarding-step-title {
   font-size: var(--font-lg);
-  font-weight: 700;
+  font-weight: var(--weight-bold);
   color: var(--text-primary);
   letter-spacing: -0.01em;
 }
@@ -104,7 +104,6 @@
 .onboarding-platform-card.selected {
   border-color: var(--accent);
   background: var(--accent-dim);
-  box-shadow: var(--shadow-glow-accent);
 }
 .onboarding-platform-card .platform-icon {
   width: 40px;
@@ -114,14 +113,14 @@
   align-items: center;
   justify-content: center;
   font-size: var(--font-xl);
-  font-weight: 800;
+  font-weight: var(--weight-semibold);
 }
 .onboarding-platform-card.twitch .platform-icon { background: var(--platform-twitch); color: var(--text-inverse); }
 .onboarding-platform-card.kick .platform-icon { background: var(--platform-kick); color: var(--platform-kick-text); }
 .onboarding-platform-card.youtube .platform-icon { background: var(--platform-youtube); color: var(--text-inverse); }
 .onboarding-platform-card .platform-label {
   font-size: var(--font-sm);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-secondary);
 }
 
@@ -136,7 +135,7 @@
 
 .onboarding-step-dots {
   display: flex;
-  gap: var(--space-6);
+  gap: var(--space-8);
 }
 .onboarding-step-dot {
   width: 8px;
@@ -177,7 +176,7 @@
 .onboarding-tooltip {
   position: absolute;
   max-width: 260px;
-  padding: var(--space-12) var(--space-14);
+  padding: var(--space-12) var(--space-16);
   background: var(--bg-modal);
   border: 1px solid var(--border-glass);
   border-radius: var(--radius-md);
@@ -186,7 +185,7 @@
 }
 .onboarding-tooltip-title {
   font-size: var(--font-sm);
-  font-weight: 700;
+  font-weight: var(--weight-semibold);
   color: var(--text-primary);
   margin-bottom: var(--space-4);
 }

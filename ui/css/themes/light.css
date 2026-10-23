@@ -2,9 +2,9 @@
 /* ── TwitchX Light Theme ────────────────────────────────── */
 [data-theme="light"] {
   /* ── Depth system (macOS light mode aligned) ─────────── */
-  --bg-base:      #F5F5F7;
-  --bg-surface:   #FFFFFF;
-  --bg-elevated:  #F0F0F2;
+  --bg-base:      #FFFFFF;
+  --bg-surface:   #F3F3F5;
+  --bg-elevated:  #F2F2F4;
   --bg-overlay:   #E8E8EB;
   --bg-border:    #E5E5E8;
   --bg-panel:     rgba(255, 255, 255, 0.92);
@@ -14,10 +14,12 @@
   --bg-control-hover: #E8E8EB;
 
   /* ── Apple-style label hierarchy ─────────────────────── */
-  --text-primary:   #1D1D1F;
-  --text-secondary: #5A5A5F;
-  --text-muted:     #6B6B71;
+  --text-primary:   #17181A;
+  --text-secondary: #5D6067;
+  --text-muted:     #6A6D74;
   --text-muted-elevated: #6E6E73;
+  /* Glyphs and dividers only — never text (fails 4.5:1 by design). */
+  --icon-muted: #9A9DA3;
 
   /* ── Semantic status ────────────────────────────────── */
   --live-green:  #145B28;
@@ -26,19 +28,24 @@
   --error-red:   #D32F2F;
   --error-red-bright: #FF6961;
   --info-blue:   #1565C0;
+  /* "On air" only — never success. */
+  --live:        #D32F2F;
+  --viewers:     var(--text-secondary);
+  --platform-kick-ink: var(--platform-kick-on-light);
 
   /* ── Border tokens ──────────────────────────────────── */
   --border-subtle:  rgba(0, 0, 0, 0.06);
-  --border-default: rgba(0, 0, 0, 0.10);
-  --border-strong:  rgba(0, 0, 0, 0.18);
+  --border-default: rgba(0, 0, 0, 0.09);
+  --border-strong:  rgba(0, 0, 0, 0.15);
 
   /* ── Shadow tokens ──────────────────────────────────── */
-  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.08);
-  --shadow-md: 0 10px 34px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 24px 70px rgba(0, 0, 0, 0.16);
-  --shadow-card: 0 1px 0 rgba(0, 0, 0, 0.03), 0 4px 16px rgba(0, 0, 0, 0.06);
-  --shadow-card-hover: 0 8px 28px rgba(0, 0, 0, 0.10), 0 0 0 1px rgba(0, 0, 0, 0.04);
-  --shadow-modal: 0 28px 76px rgba(0, 0, 0, 0.18), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  /* Light shadows stay faint (0.06-0.12): separation comes from borders. */
+  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 10px 34px rgba(0, 0, 0, 0.10), 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 24px 70px rgba(0, 0, 0, 0.12);
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.06);
+  --shadow-card-hover: 0 8px 28px rgba(0, 0, 0, 0.08);
+  --shadow-modal: 0 28px 76px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.08);
 
   /* ── Toast notification tokens ──────────────────────── */
   --toast-duration: 4s;
@@ -78,8 +85,10 @@
   --buffer-loaded-bg: rgba(0, 0, 0, 0.15);
 
   /* ── Surface cards ──────────────────────────────────── */
-  --surface-card:    linear-gradient(180deg, rgba(0, 0, 0, 0.02), rgba(0, 0, 0, 0.01));
-  --surface-card-hover: linear-gradient(180deg, rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.02));
+  /* Flat fills. Written as a one-colour gradient only because they sit in a
+     background layer list, where a bare colour is not allowed. */
+  --surface-card:       linear-gradient(#F2F2F4, #F2F2F4);
+  --surface-card-hover: linear-gradient(#EAEAED, #EAEAED);
 
   /* ── Overlays / structural ───────────────────────────── */
   --overlay-bg:        rgba(0, 0, 0, 0.40);
@@ -91,9 +100,9 @@
   --glass-bar:         linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(245, 245, 247, 0.88));
 
   /* ── Semantic borders (subtle) ─────────────────────── */
-  --border-card:      rgba(0, 0, 0, 0.06);
+  --border-card:      rgba(0, 0, 0, 0.09);
   --border-error:     rgba(255, 69, 58, 0.25);
-  --border-glass:     rgba(0, 0, 0, 0.08);
+  --border-glass:     rgba(0, 0, 0, 0.09);
 
   /* ── Status backgrounds (subtle) ───────────────────── */
   --status-bg-green: rgba(48, 209, 88, 0.12);
@@ -102,5 +111,6 @@
   --status-border-red: rgba(255, 69, 58, 0.22);
 
   /* ── Thumb overlay ──────────────────────────────────── */
-  --thumb-overlay: linear-gradient(180deg, rgba(0, 0, 0, 0.04) 0%, rgba(0, 0, 0, 0.10) 46%, rgba(0, 0, 0, 0.42) 100%);
+  /* Thumbnails are video, dark in both themes: same scrim as the dark theme. */
+  --thumb-overlay: linear-gradient(180deg, rgba(0, 0, 0, 0.08) 0%, rgba(0, 0, 0, 0.18) 46%, rgba(0, 0, 0, 0.58) 100%);
 }
