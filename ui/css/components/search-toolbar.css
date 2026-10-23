@@ -164,36 +164,65 @@
 }
 
 /* ── Platform chips ─────────────────────────────────────── */
-/* Owner of the chips row: layout.css used to style the bar chrome here too. */
+/* Lives inside #toolbar and borrows the shared .segmented control. */
 #toolbar-platform-chips {
-  display: flex;
-  gap: var(--space-8);
-  padding: var(--space-4) var(--space-16);
-  border-bottom: 1px solid var(--border-glass);
-  background: var(--bg-base);
   flex-shrink: 0;
 }
 #toolbar-platform-chips.hidden { display: none; }
-
 .platform-chip.btn {
-  min-height: 28px;
-  padding: 0 var(--space-16);
-  font-size: var(--font-xs);
-  font-weight: var(--weight-semibold);
-  border-radius: var(--radius-full);
-  background: transparent;
-  border: 1px solid var(--border-subtle);
+  padding: 0 var(--space-12);
+  font-size: var(--font-sm);
   color: var(--text-secondary);
-  transition: background var(--duration-fast) ease, color var(--duration-fast) ease, border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
+  background: transparent;
 }
 .platform-chip.btn:hover {
-  background: var(--hover-bg);
+  transform: none;
   color: var(--text-primary);
 }
-.platform-chip.btn.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--text-on-accent);
+
+/* ── Search field (opens the command palette) ─────────────── */
+.toolbar-search {
+  min-width: 0;
+  width: 240px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: 0 var(--space-8) 0 var(--space-12);
+  background: var(--bg-control);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  cursor: pointer;
+  transition: border-color var(--duration-fast) ease, color var(--duration-fast) ease;
+}
+.toolbar-search:hover {
+  border-color: var(--border-default);
+  color: var(--text-secondary);
+}
+.toolbar-search:focus-visible {
+  outline: none;
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 2px var(--focus-ring-offset);
+}
+.toolbar-search-label {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.toolbar-search-kbd {
+  flex-shrink: 0;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: var(--font-xs);
+  color: var(--text-muted);
 }
 
 /* Channel status badge used in compact list mode */

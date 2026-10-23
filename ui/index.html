@@ -121,6 +121,12 @@
     <main id="content">
       <div id="toolbar" class="titlebar-drag">
         <div class="toolbar-group toolbar-group--left">
+          <div id="toolbar-platform-chips" class="segmented" role="tablist" aria-label="Platform filter">
+            <button class="platform-chip btn active" data-platform="all" role="tab" aria-selected="true">All</button>
+            <button class="platform-chip btn" data-platform="twitch" role="tab" aria-selected="false" tabindex="-1">Twitch</button>
+            <button class="platform-chip btn" data-platform="kick" role="tab" aria-selected="false" tabindex="-1">Kick</button>
+            <button class="platform-chip btn" data-platform="youtube" role="tab" aria-selected="false" tabindex="-1">YouTube</button>
+          </div>
           <select id="sort-select" aria-label="Sort streams">
             <option value="viewers">Most Viewers</option>
             <option value="recent">Recently Started</option>
@@ -130,14 +136,9 @@
         </div>
         <div class="toolbar-group toolbar-group--right">
           <button id="grid-toggle-btn" class="bar-btn" title="Switch density" aria-label="Toggle grid density"><span data-icon="grid-toggle" data-size="16"></span></button>
+          <button id="toolbar-search-btn" class="toolbar-search" type="button" aria-keyshortcuts="Meta+K"><span data-icon="search" data-size="14"></span><span class="toolbar-search-label">Search channels, games</span><kbd class="toolbar-search-kbd">&#8984;K</kbd></button>
           <button id="toolbar-refresh-btn" class="bar-btn toolbar-refresh-btn" title="Refresh (R)" aria-label="Refresh streams"><span data-icon="refresh" data-size="16"></span></button>
         </div>
-      </div>
-      <div id="toolbar-platform-chips" class="segmented" role="tablist" aria-label="Toolbar platform filter">
-        <button class="platform-chip btn active" data-platform="all" role="tab" aria-selected="true">All</button>
-        <button class="platform-chip btn" data-platform="twitch" role="tab" aria-selected="false" tabindex="-1">Twitch</button>
-        <button class="platform-chip btn" data-platform="kick" role="tab" aria-selected="false" tabindex="-1">Kick</button>
-        <button class="platform-chip btn" data-platform="youtube" role="tab" aria-selected="false" tabindex="-1">YouTube</button>
       </div>
 
       <div id="view-stack">

@@ -238,6 +238,8 @@ TwitchX._bindToolbarEvents = function() {
   });
   const browseNavBtn = document.getElementById('browse-nav-btn');
   if (browseNavBtn) browseNavBtn.addEventListener('click', TwitchX.showBrowseView);
+  const toolbarSearchBtn = document.getElementById('toolbar-search-btn');
+  if (toolbarSearchBtn) toolbarSearchBtn.addEventListener('click', function() { TwitchX.openPalette(); });
   const toolbarRefreshBtn = document.getElementById('toolbar-refresh-btn');
   if (toolbarRefreshBtn) toolbarRefreshBtn.addEventListener('click', TwitchX.doRefresh);
   var gridToggleBtn = document.getElementById('grid-toggle-btn');
