@@ -131,8 +131,6 @@ TwitchX._bindSidebarEvents = function() {
   if (kickLoginBtn) kickLoginBtn.addEventListener('click', function() { if (TwitchX.api) TwitchX.api.kick_login(); });
   const kickLogoutLink = document.getElementById('kick-logout-link');
   if (kickLogoutLink) kickLogoutLink.addEventListener('click', function() { if (TwitchX.api) TwitchX.api.kick_logout(); });
-  const addBtn = document.getElementById('add-btn');
-  if (addBtn) addBtn.addEventListener('click', TwitchX.addChannel);
 
   // Sidebar collapse toggle
   var collapseBtn = document.getElementById('sidebar-collapse-btn');
@@ -169,26 +167,6 @@ TwitchX._bindSidebarEvents = function() {
     });
   });
 
-  const searchInput = document.getElementById('search-input');
-  if (searchInput) {
-    searchInput.addEventListener('input', function(e) {
-      const query = e.target.value.trim();
-      clearTimeout(TwitchX.state.searchDebounce);
-      if (!query) {
-        TwitchX.state.searchResults = [];
-        document.getElementById('search-dropdown').classList.remove('visible');
-        searchInput.setAttribute('aria-expanded', 'false');
-        return;
-      }
-      TwitchX.state.searchDebounce = setTimeout(function() {
-        const searchPlatform = TwitchX.state.activePlatformFilter === 'all' ? 'all' : TwitchX.state.activePlatformFilter;
-        if (TwitchX.api) TwitchX.api.search_channels(query, searchPlatform);
-      }, 400);
-    });
-    searchInput.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') { e.preventDefault(); TwitchX.addChannel(); }
-    });
-  }
 };
 
 const DENSITY_MODES = ['grid', 'comfortable', 'compact', 'list'];
@@ -257,6 +235,8 @@ function _applySortMenuItem(item) {
 }
 
 TwitchX._bindToolbarEvents = function() {
+  var gameChip = document.getElementById('game-filter-chip');
+  if (gameChip) gameChip.addEventListener('click', function() { TwitchX.setGameFilter(''); });
   var sortBtn = document.getElementById('sort-menu-btn');
   var sortMenu = document.getElementById('sort-menu');
   if (sortBtn) sortBtn.addEventListener('click', function(e) {
@@ -290,11 +270,6 @@ TwitchX._bindToolbarEvents = function() {
     if (sortMenu && !sortMenu.contains(e.target) && e.target !== sortBtn) closeSortMenu(false);
   });
 
-  const filterInput = document.getElementById('filter-input');
-  if (filterInput) filterInput.addEventListener('input', function(e) {
-    TwitchX.state.filterText = e.target.value;
-    TwitchX.renderGrid();
-  });
   const toolbarSearchBtn = document.getElementById('toolbar-search-btn');
   if (toolbarSearchBtn) toolbarSearchBtn.addEventListener('click', function() { TwitchX.openPalette(); });
   const toolbarRefreshBtn = document.getElementById('toolbar-refresh-btn');

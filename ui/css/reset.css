@@ -52,7 +52,7 @@ body {
    them into user-select. */
 #chat-messages, #ms-chat-messages,
 #settings-modal input, #settings-modal select, #settings-modal textarea,
-#search-input, #search-dropdown,
+#palette-input,
 #ms-add-input, #ms-add-form input,
 .channel-body-bio,
 .stream-card .card-title { user-select: text; }
@@ -93,7 +93,7 @@ body {
   .channel-media-card, .channel-media-item,
   .btn, .bar-btn, .player-header-btn, .chat-header-btn, .emote-picker-btn,
   .ms-slot, .ms-add-form input, .ms-add-form select,
-  #search-input, #filter-input, #sort-select,
+  .toolbar-search,
   .text-input, .setting-group input, .setting-group select, .mod-input {
     border-width: 1px;
     border-color: var(--border-default);

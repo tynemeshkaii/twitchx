@@ -78,13 +78,6 @@
       <div id="channel-list"></div>
 
       <div class="sidebar-footer">
-        <div id="search-area">
-          <div id="search-dropdown" role="listbox" aria-label="Search results"></div>
-          <div id="search-row">
-            <input id="search-input" placeholder="Search or add channel..." autocomplete="off" aria-label="Search or add channel" aria-controls="search-dropdown" aria-expanded="false" role="combobox" aria-haspopup="listbox" aria-autocomplete="list">
-            <button id="add-btn" title="Add channel" aria-label="Add channel"><span data-icon="plus" data-size="16"></span></button>
-          </div>
-        </div>
         <div id="account-chip-row">
           <button id="account-chip" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="account-popover" aria-label="Accounts">
             <span class="account-chip-avatar" aria-hidden="true"><img id="account-chip-img" class="hidden" alt=""><span id="account-chip-initial"></span></span>
@@ -106,7 +99,6 @@
             <button class="platform-chip btn" data-platform="kick" role="tab" aria-selected="false" tabindex="-1">Kick</button>
             <button class="platform-chip btn" data-platform="youtube" role="tab" aria-selected="false" tabindex="-1">YouTube</button>
           </div>
-          <input id="filter-input" placeholder="Filter by game..." aria-label="Filter streams by game">
         </div>
         <div class="toolbar-group toolbar-group--right">
           <button id="toolbar-search-btn" class="toolbar-search" type="button" aria-keyshortcuts="Meta+K"><span data-icon="search" data-size="14"></span><span class="toolbar-search-label">Search channels, games</span><kbd class="toolbar-search-kbd">&#8984;K</kbd></button>
@@ -123,6 +115,7 @@
           <span id="status-text" aria-live="polite"></span>
         </div>
         <div class="section-actions">
+          <button id="game-filter-chip" class="game-filter-chip hidden" type="button" aria-label="Clear game filter"><span id="game-filter-label"></span><span data-icon="close" data-size="12"></span></button>
           <div class="sort-menu-wrap">
             <button id="sort-menu-btn" class="section-menu-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="sort-menu"><span id="sort-menu-label">Most viewers</span><span data-icon="chevron-down" data-size="12"></span></button>
             <div id="sort-menu" class="section-menu hidden" role="menu" aria-label="Sort and density">

@@ -28,46 +28,43 @@ function selectChannel(login, platform) {
   TwitchX.setStatus('Selected: ' + login + ' on ' + TwitchX.platformLabel(resolvedPlatform), 'info');
 }
 
-function addChannel() {
-  const input = document.getElementById('search-input');
-  const val = input.value.trim();
-  if (val && TwitchX.api) {
-    const platform = TwitchX.state.activePlatformFilter;
-    const inputLower = val.toLowerCase();
-    let choice = null;
-    if (platform === 'all') {
-      if ((inputLower.indexOf('youtube.com/') !== -1 || val.charAt(0) === '@') && TwitchX.state.youtubeEnabled) {
-        choice = { login: val, platform: 'youtube' };
-      } else if (inputLower.indexOf('kick.com/') !== -1) {
-        choice = { login: val, platform: 'kick' };
-      } else if (inputLower.indexOf('twitch.tv/') !== -1) {
-        choice = { login: val, platform: 'twitch' };
-      } else {
-        const exactLoginMatches = TwitchX.state.searchResults.filter(function(result) {
-          return result.login && result.login.toLowerCase() === inputLower;
+// Resolve what the user typed (a name, a channel URL or an @handle) to a
+// platform and add it. `results` are the channel search results for the same
+// text, used to pick the platform of an exact login match.
+function addChannelFromQuery(query, results) {
+  const val = (query || '').trim();
+  if (!val || !TwitchX.api) return;
+  results = results || [];
+  const platform = TwitchX.state.activePlatformFilter;
+  const inputLower = val.toLowerCase();
+  let choice = null;
+  if (platform === 'all') {
+    if ((inputLower.indexOf('youtube.com/') !== -1 || val.charAt(0) === '@') && TwitchX.state.youtubeEnabled) {
+      choice = { login: val, platform: 'youtube' };
+    } else if (inputLower.indexOf('kick.com/') !== -1) {
+      choice = { login: val, platform: 'kick' };
+    } else if (inputLower.indexOf('twitch.tv/') !== -1) {
+      choice = { login: val, platform: 'twitch' };
+    } else {
+      const exactLoginMatches = results.filter(function(result) {
+        return result.login && result.login.toLowerCase() === inputLower;
+      });
+      if (exactLoginMatches.length === 1) {
+        choice = exactLoginMatches[0];
+      } else if (exactLoginMatches.length === 0 && results.length > 0) {
+        // No exact match: fall back to the top search result only if its display name matches.
+        const displayMatch = results.find(function(result) {
+          return (result.display_name || '').toLowerCase() === inputLower;
         });
-        if (exactLoginMatches.length === 1) {
-          choice = exactLoginMatches[0];
-        } else if (exactLoginMatches.length === 0 && TwitchX.state.searchResults.length > 0) {
-          // No exact match: fall back to the top search result only if its display name matches.
-          const displayMatch = TwitchX.state.searchResults.find(function(result) {
-            return (result.display_name || '').toLowerCase() === inputLower;
-          });
-          if (displayMatch) choice = displayMatch;
-        }
+        if (displayMatch) choice = displayMatch;
       }
     }
-    const targetPlatform = (choice && choice.platform) || (platform === 'all' ? 'twitch' : platform) || 'twitch';
-    const loginToAdd = (choice && choice.login) || val;
-    const displayToAdd = (choice && choice.display_name) || '';
-    TwitchX.api.add_channel(loginToAdd, targetPlatform, displayToAdd);
-    input.value = '';
-    TwitchX.state.searchResults = [];
-    document.getElementById('search-dropdown').classList.remove('visible');
   }
+  const targetPlatform = (choice && choice.platform) || (platform === 'all' ? 'twitch' : platform) || 'twitch';
+  addChannel((choice && choice.login) || val, targetPlatform, (choice && choice.display_name) || '');
 }
 
-function addChannelDirect(login, platform, displayName) {
+function addChannel(login, platform, displayName) {
   if (TwitchX.api) TwitchX.api.add_channel(login, platform || 'twitch', displayName || '');
 }
 
@@ -472,7 +469,8 @@ function watchChannelStream() {
 
 TwitchX.selectChannel = selectChannel;
 TwitchX.addChannel = addChannel;
-TwitchX.addChannelDirect = addChannelDirect;
+TwitchX.addChannelDirect = addChannel;
+TwitchX.addChannelFromQuery = addChannelFromQuery;
 TwitchX.doWatch = doWatch;
 TwitchX.resetChannelMediaPanels = resetChannelMediaPanels;
 TwitchX.getChannelMediaElements = getChannelMediaElements;

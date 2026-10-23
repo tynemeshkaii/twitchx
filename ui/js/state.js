@@ -59,8 +59,6 @@ TwitchX.state = {
   avatars: {},
   thumbnails: {},
   thumbnailFetchedAt: {},
-  searchResults: [],
-  searchDebounce: null,
   // channelKey of the profile request in flight; late replies for others are dropped.
   pendingProfileKey: '',
   hasCredentials: false,

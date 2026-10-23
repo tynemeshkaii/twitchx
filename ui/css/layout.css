@@ -90,7 +90,6 @@
   min-width: 0;
 }
 #app.mini #browse-nav-wrapper { display: none; }
-#app.mini #search-area { display: none; }
 #app.mini #kick-profile-area { display: none; }
 
 /* ── Integrated title bar ───────────────────────────────── */

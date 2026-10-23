@@ -136,93 +136,9 @@ window.onStreamsUpdate = function(data) {
   }
 };
 
+// Channel search runs from the command palette only.
 window.onSearchResults = function(results, meta) {
-  const dd = document.getElementById('search-dropdown');
-  const searchInput = document.getElementById('search-input');
-  // Drop replies for a query the user has since changed or cleared.
-  const current = searchInput ? searchInput.value.trim() : '';
-  if (!current || (meta && meta.query !== current)) return;
-  TwitchX.state.searchResults = results || [];
-  while (dd.firstChild) dd.removeChild(dd.firstChild);
-  if (!results || results.length === 0) {
-    dd.classList.remove('visible');
-    if (searchInput) searchInput.setAttribute('aria-expanded', 'false');
-    while (dd.firstChild) dd.removeChild(dd.firstChild);
-    return;
-  }
-  // Build search results using safe DOM methods
-  while (dd.firstChild) dd.removeChild(dd.firstChild);
-  results.forEach(function(r) {
-    const row = document.createElement('div');
-    row.className = 'search-result';
-    row.dataset.login = r.login;
-    row.dataset.key = TwitchX.channelKey(r.login, r.platform || 'twitch');
-    row.dataset.platform = r.platform || 'twitch';
-    row.tabIndex = 0;
-    row.setAttribute('role', 'option');
-    row.setAttribute('aria-label', 'Add ' + (r.display_name || r.login) + ' on ' + TwitchX.platformLabel(r.platform || 'twitch'));
-
-    const info = document.createElement('div');
-    info.className = 'sr-info';
-
-    const name = document.createElement('div');
-    name.className = 'sr-name';
-    name.textContent = r.display_name;
-    if (r.platform) {
-      const badge = document.createElement('span');
-      badge.className = 'platform-badge ' + r.platform;
-      badge.textContent = r.platform === 'kick' ? 'K' : r.platform === 'youtube' ? 'YT' : 'T';
-      name.appendChild(document.createTextNode(' '));
-      name.appendChild(badge);
-    }
-    info.appendChild(name);
-
-    const game = document.createElement('div');
-    game.className = 'sr-game';
-    if (r.is_live) {
-      const liveSpan = document.createElement('span');
-      liveSpan.className = 'sr-live';
-      liveSpan.textContent = 'LIVE';
-      game.appendChild(liveSpan);
-      game.appendChild(document.createTextNode(' '));
-    }
-    game.appendChild(document.createTextNode(r.game_name || ''));
-    info.appendChild(game);
-
-    const addBtn = document.createElement('button');
-    addBtn.className = 'sr-add';
-    addBtn.type = 'button';
-    addBtn.textContent = '+';
-    addBtn.title = 'Add to favorites';
-    addBtn.setAttribute(
-      'aria-label',
-      'Add ' + (r.display_name || r.login) + ' on ' + TwitchX.platformLabel(r.platform || 'twitch') + ' to favorites'
-    );
-    addBtn.addEventListener('click', function(e) {
-      e.stopPropagation();
-      TwitchX.addChannelDirect(r.login, r.platform || 'twitch', r.display_name);
-      TwitchX.state.searchResults = [];
-    });
-
-    row.appendChild(info);
-    row.appendChild(addBtn);
-    row.addEventListener('click', function() {
-      TwitchX.addChannelDirect(r.login, r.platform || 'twitch', r.display_name);
-      dd.classList.remove('visible');
-      if (searchInput) searchInput.setAttribute('aria-expanded', 'false');
-      TwitchX.state.searchResults = [];
-      document.getElementById('search-input').value = '';
-    });
-    row.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        row.click();
-      }
-    });
-    dd.appendChild(row);
-  });
-  dd.classList.add('visible');
-  if (searchInput) searchInput.setAttribute('aria-expanded', 'true');
+  if (TwitchX.receivePaletteSearch) TwitchX.receivePaletteSearch(results, meta);
 };
 
 window.onLoginComplete = function(user) {

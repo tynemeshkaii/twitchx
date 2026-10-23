@@ -151,9 +151,6 @@ function handleKeydown(e) {
       TwitchX.browseGoBack(); return;
     }
     if (TwitchX.multiState.open) { TwitchX.closeMultistreamView(); return; }
-    if (document.getElementById('search-dropdown').classList.contains('visible')) {
-      document.getElementById('search-dropdown').classList.remove('visible'); return;
-    }
     TwitchX.state.selectedChannel = null;
     TwitchX.state.selectedChannelKey = null;
     TwitchX.state.selectedPlatform = null;
