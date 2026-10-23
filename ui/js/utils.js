@@ -6,10 +6,21 @@ function truncate(s, n) {
   return s.length > n ? s.substring(0, n) + '\u2026' : s;
 }
 
+// 950, 9.7K, 88.3K, 210K, 1.2M, 12M — keep in sync with format_viewers in
+// core/utils.py. Integer half-up rounding, so 99 950 → 100K and 999 950 → 1M.
+function formatViewersTenths(tenths, suffix) {
+  const whole = Math.floor(tenths / 10);
+  const frac = tenths % 10;
+  return (frac === 0 ? String(whole) : whole + '.' + frac) + suffix;
+}
+
 function formatViewers(n) {
-  if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
-  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
-  return String(n);
+  if (!(n >= 1000)) return String(n); // also non-numbers, as before
+  const tenthsK = Math.floor((n + 50) / 100);
+  if (tenthsK < 1000) return formatViewersTenths(tenthsK, 'K');
+  const wholeK = Math.floor((n + 500) / 1000);
+  if (wholeK < 1000) return wholeK + 'K';
+  return formatViewersTenths(Math.floor((n + 50000) / 100000), 'M');
 }
 
 function formatUptime(isoStr) {
