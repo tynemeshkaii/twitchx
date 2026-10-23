@@ -190,19 +190,22 @@
   }
 }
 
+/* Same chat chrome as the player (chat.css): 44px header, status dot,
+   36px field with the send arrow inside. */
 #ms-chat-header {
+  height: 44px;
   display: flex;
   align-items: center;
   gap: var(--space-8);
-  padding: var(--space-8) var(--space-12);
+  padding: 0 var(--space-16);
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
-#ms-chat-title { font-size: var(--font-sm); font-weight: var(--weight-semibold); color: var(--text-primary); flex: 1; }
+#ms-chat-title { font-size: var(--font-md); font-weight: var(--weight-semibold); color: var(--text-primary); }
 #ms-chat-status-dot {
-  width: 7px; height: 7px;
+  width: 6px; height: 6px;
   border-radius: 50%;
-  background: var(--text-muted);
+  background: var(--icon-muted);
   flex-shrink: 0;
 }
 #ms-chat-status-dot.connected { background: var(--live-green); }
@@ -210,52 +213,27 @@
 #ms-chat-messages {
   flex: 1;
   overflow-y: auto;
-  padding: var(--space-4) var(--space-8);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
+  padding: var(--space-8);
+  font-size: var(--font-md);
+  line-height: 1.45;
+  color: var(--text-primary);
 }
 #ms-chat-new-messages {
   display: none;
   text-align: center;
   padding: var(--space-4);
-  background: var(--accent);
-  color: var(--text-on-accent);
+  background: var(--bg-elevated);
+  color: var(--accent);
   font-size: var(--font-sm);
+  font-weight: var(--weight-semibold);
+  border-top: 1px solid var(--border-subtle);
   cursor: pointer;
 }
 #ms-chat-new-messages.visible { display: block; }
 #ms-chat-input-area {
-  display: flex;
-  gap: var(--space-8);
   padding: var(--space-8);
-  border-top: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
-#ms-chat-input {
-  flex: 1;
-  padding: var(--space-4) var(--space-8);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-default);
-  background: var(--bg-elevated);
-  color: var(--text-primary);
-  font-size: var(--font-sm);
-  font-family: inherit;
-}
-#ms-chat-input:focus { outline: none; border-color: var(--border-accent); }
-#ms-chat-input:disabled { opacity: 0.45; cursor: not-allowed; }
-#ms-chat-send-btn {
-  min-height: 32px;
-  padding: var(--space-4) var(--space-12);
-  border-radius: var(--radius-sm);
-  border: none;
-  background: var(--accent);
-  color: var(--text-on-accent);
-  font-size: var(--font-sm);
-  font-weight: var(--weight-semibold);
-  cursor: pointer;
-}
-#ms-chat-send-btn:disabled { opacity: var(--disabled-opacity); cursor: not-allowed; }
 
 /* ── Drag to Multistream ────────────────────────────────── */
 .ms-slot.drag-over .ms-slot-empty {
@@ -476,7 +454,7 @@
   display: flex;
   flex-direction: column;
   background: var(--bg-surface);
-  border-left: 1px solid var(--border-glass);
+  border-left: 1px solid var(--border-subtle);
 }
 #ms-chat-panel.hidden { display: none; }
 

@@ -37,6 +37,7 @@ const SCENARIOS = {
   browse: { action: p => p.evaluate(() => window.__scenario.browse()) },
   channel: { action: p => p.evaluate(() => window.__scenario.channel()) },
   player: { sizes: [MIN_SIZE], action: p => p.evaluate(() => window.__scenario.player()) },
+  'player-menus': { action: async p => { await p.evaluate(() => { window.__scenario.player(); TwitchX.showPlayerView(); document.querySelectorAll('.toast').forEach(t => t.remove()); }); await p.click('#chat-more-btn'); await p.waitForTimeout(200); await p.mouse.move(400, 300); await p.evaluate(() => { document.getElementById('player-more-btn').click(); document.getElementById('chat-more-menu').classList.remove('hidden'); }); } },
   mini: { action: p => p.evaluate(() => TwitchX.toggleMiniMode()) },
   multistream: { action: p => p.evaluate(() => TwitchX.openMultistreamView()) },
 };

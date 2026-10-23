@@ -223,7 +223,7 @@
 /* -- Stats overlay -- */
 #stats-overlay {
   position: absolute;
-  top: var(--space-8);
+  top: var(--titlebar-height);
   right: var(--space-8);
   background: var(--bg-modal);
   backdrop-filter: blur(14px) saturate(140%);
@@ -255,85 +255,71 @@
   font-weight: var(--weight-semibold);
 }
 
-#stats-overlay-btn {
-  padding: 0;
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
-}
-
-#stats-overlay-btn:hover {
-  background: var(--hover-bg-strong);
-  color: var(--text-primary);
-}
-
-#stats-overlay-btn.active {
-  color: var(--accent);
-}
 @keyframes loader-slide {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(400%); }
 }
 
 /* ── Player header ──────────────────────────────────────── */
+/* Top strip over the picture: avatar, channel, title, "…" and close. It is
+   over video in both themes, so colours are fixed light values. */
 #player-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: var(--z-dropdown);
+  height: var(--titlebar-height);
   display: flex;
   align-items: center;
-  gap: var(--space-12);
-  padding: var(--space-8) var(--space-16);
-  background: var(--glass-bar);
-  border-bottom: 1px solid var(--border-glass);
+  gap: var(--space-8);
+  padding: 0 var(--space-8) 0 var(--space-16);
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0));
+  color: var(--text-on-overlay);
+  transition: opacity var(--duration-normal) var(--ease-default);
+}
+#player-stage.overlay-hidden #player-header {
+  opacity: 0;
+  pointer-events: none;
+}
+.player-header-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
   flex-shrink: 0;
+}
+.player-header-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 #player-channel-name {
   font-size: var(--font-md);
   font-weight: var(--weight-semibold);
-  color: var(--text-primary);
-  letter-spacing: -0.01em;
-  flex-shrink: 0;
-}
-#player-stream-title {
-  font-size: var(--font-sm);
-  color: var(--text-secondary);
-  flex: 1;
-  min-width: 0;
+  line-height: var(--leading-tight);
+  color: var(--text-on-overlay);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+#player-stream-title {
+  font-size: var(--font-sm);
+  line-height: var(--leading-tight);
+  color: var(--text-on-media-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#player-stream-title:empty { display: none; }
 #player-header-actions {
   display: flex;
+  align-items: center;
   gap: var(--space-4);
   flex-shrink: 0;
 }
-
-/* ── Player header buttons ──────────────────────────────── */
-.player-header-btn {
-  width: 32px; height: 32px;
-  padding: 0;
-  background: transparent;
-  color: var(--text-secondary);
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-family: inherit;
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
-}
-.player-header-btn:hover {
-  background: var(--hover-bg-strong);
-  color: var(--text-primary);
-}
-.player-header-btn.recording {
-  color: var(--live-red);
-}
-.player-header-btn.recording:hover {
-  background: var(--status-bg-red);
-}
+#record-btn.recording { color: var(--error-red); }
 
 /* ── Fullscreen auto-hide ─────────────────────────────── */
 #player-header.fs-hidden {
@@ -412,6 +398,12 @@
   color: var(--text-primary);
 }
 .player-menu.hidden { display: none; }
+.player-menu .ctx-item { white-space: nowrap; }
+/* Menus in the top strip and the chat header drop down instead of up. */
+.player-menu-down {
+  top: calc(100% + var(--space-4));
+  bottom: auto;
+}
 .player-menu [aria-checked="true"] { font-weight: var(--weight-semibold); }
 .player-menu [aria-checked="true"]::after {
   content: '\2713';
@@ -491,22 +483,6 @@
   padding: 0 var(--space-8);
 }
 #vod-time-display.hidden { display: none; }
-
-/* Recording button (player header) */
-#record-btn {
-  color: var(--text-secondary);
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  border-radius: var(--radius-sm);
-  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
-}
-#record-btn:hover {
-  background: var(--hover-bg-strong);
-  color: var(--error-red);
-}
-#record-btn.recording { color: var(--error-red); }
 
 /* Stream loader: thin indeterminate bar along the top of the stage. */
 #stream-loader {

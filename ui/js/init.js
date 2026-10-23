@@ -114,7 +114,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (saved === '1') {
       TwitchX.chatTimestamps = true;
       var btn = document.getElementById('chat-timestamp-btn');
-      if (btn) btn.classList.add('active');
+      if (btn) btn.setAttribute('aria-checked', 'true');
     } else {
       TwitchX.chatTimestamps = false;
     }
@@ -420,7 +420,7 @@ TwitchX._bindChatEvents = function() {
   if (chatTsBtn) chatTsBtn.addEventListener('click', function() {
     TwitchX.chatTimestamps = !TwitchX.chatTimestamps;
     localStorage.setItem('twitchx.chat_timestamps', TwitchX.chatTimestamps ? '1' : '0');
-    this.classList.toggle('active', TwitchX.chatTimestamps);
+    this.setAttribute('aria-checked', String(TwitchX.chatTimestamps));
     document.querySelectorAll('.chat-msg .msg-time').forEach(function(el) {
       el.classList.toggle('hidden', !TwitchX.chatTimestamps);
     });
@@ -459,8 +459,9 @@ TwitchX._bindChatEvents = function() {
   var chatExportBtn = document.getElementById('chat-export-btn');
   var chatExportMenu = document.getElementById('chat-export-menu');
   if (chatExportBtn) {
-    chatExportBtn.addEventListener('click', function(e) {
-      e.stopPropagation();
+    // An item of the chat "…" menu: the click has to reach that menu so it
+    // closes, so no stopPropagation here.
+    chatExportBtn.addEventListener('click', function() {
       if (chatExportMenu) {
         var opening = chatExportMenu.classList.toggle('hidden') === false;
         chatExportBtn.setAttribute('aria-expanded', String(opening));
@@ -486,7 +487,7 @@ TwitchX._bindChatEvents = function() {
     });
   }
   document.addEventListener('click', function(e) {
-    if (chatExportMenu && chatExportBtn && !chatExportMenu.contains(e.target) && e.target !== chatExportBtn) {
+    if (chatExportMenu && chatExportBtn && !chatExportMenu.contains(e.target) && !chatExportBtn.contains(e.target)) {
       chatExportMenu.classList.add('hidden');
       chatExportBtn.setAttribute('aria-expanded', 'false');
     }
@@ -536,7 +537,7 @@ TwitchX._bindChatEvents = function() {
     if (TwitchX._emotePickerOpen) {
       var picker = document.getElementById('emote-picker');
       var btn = document.getElementById('emote-picker-btn');
-      if (picker && btn && !picker.contains(e.target) && e.target !== btn) {
+      if (picker && btn && !picker.contains(e.target) && !btn.contains(e.target)) {
         TwitchX.closeEmotePicker();
       }
     }

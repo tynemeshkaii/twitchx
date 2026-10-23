@@ -219,13 +219,15 @@
             <div id="ms-chat-panel" class="hidden">
               <div id="ms-chat-header">
                 <span id="ms-chat-title">Chat</span>
-                <span id="ms-chat-status-dot"></span>
+                <span id="ms-chat-status-dot" title="Not connected"></span>
               </div>
               <div id="ms-chat-messages"></div>
               <div id="ms-chat-new-messages"><span data-icon="arrow-down" data-size="16"></span> New messages</div>
               <div id="ms-chat-input-area">
-                <input id="ms-chat-input" type="text" placeholder="Send a message..." maxlength="500" disabled aria-label="Multi-stream chat message" />
-                <button id="ms-chat-send-btn" disabled>Send</button>
+                <div class="chat-field">
+                  <input id="ms-chat-input" type="text" placeholder="Send a message..." maxlength="500" disabled aria-label="Multi-stream chat message" />
+                  <button id="ms-chat-send-btn" class="chat-field-btn chat-send-btn" type="button" title="Send" aria-label="Send message" disabled><span data-icon="send" data-size="16"></span></button>
+                </div>
               </div>
             </div>
           </div>
@@ -233,16 +235,6 @@
 
         <!-- Player view (replaces grid when a stream is playing) -->
         <div id="player-view" class="view hidden">
-          <div id="player-header" class="titlebar-drag">
-            <span id="player-channel-name"></span>
-            <span id="player-stream-title"></span>
-            <div id="player-header-actions">
-              <button id="stats-overlay-btn" class="player-header-btn hidden" title="Stream Stats" aria-label="Stream Stats"><span data-icon="chart" data-size="16"></span></button>
-              <button id="record-btn" class="player-header-btn hidden" title="Start Recording" aria-label="Start Recording"><span data-icon="record" data-size="16"></span></button>
-              <button id="toggle-chat-btn" class="player-header-btn" title="Toggle Chat (C)" aria-label="Toggle Chat"><span data-icon="chat" data-size="16"></span></button>
-              <button id="close-player-btn" class="player-header-btn" title="Close Player (Esc)" aria-label="Close Player"><span data-icon="close" data-size="16"></span></button>
-            </div>
-          </div>
           <div id="player-content">
             <!-- Video and its overlays live in their own stage so that loader,
                  buffering, error and stats are positioned against the picture
@@ -280,14 +272,28 @@
                     <div id="quality-menu" class="player-menu hidden" role="menu" aria-label="Stream quality"></div>
                   </div>
                   <button id="pip-player-btn" class="player-ctl-btn hidden" type="button" title="Picture-in-Picture (P)" aria-label="Picture in Picture"><span data-icon="pip" data-size="16"></span></button>
+                  <button id="toggle-chat-btn" class="player-ctl-btn" type="button" title="Toggle Chat (C)" aria-label="Toggle Chat"><span data-icon="chat" data-size="16"></span></button>
+                  <button id="fullscreen-player-btn" class="player-ctl-btn" type="button" title="Fullscreen (F)" aria-label="Fullscreen"><span data-icon="fullscreen" data-size="16"></span></button>
+                </div>
+              </div>
+              <!-- Top strip over the picture; fades with the bottom bar. -->
+              <div id="player-header" class="titlebar-drag">
+                <img id="player-header-avatar" class="player-header-avatar hidden" alt="">
+                <div class="player-header-text">
+                  <span id="player-channel-name"></span>
+                  <span id="player-stream-title"></span>
+                </div>
+                <div id="player-header-actions">
                   <div class="player-menu-wrap">
                     <button id="player-more-btn" class="player-ctl-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="player-more-menu" title="More" aria-label="More actions"><span data-icon="more" data-size="16"></span></button>
-                    <div id="player-more-menu" class="player-menu hidden" role="menu" aria-label="More actions">
-                      <div class="ctx-item" id="watch-external-btn" role="menuitem" tabindex="-1"><span data-icon="external-link" data-size="14"></span> Open in External Player</div>
-                      <div class="ctx-item" id="player-browser-item" role="menuitem" tabindex="-1"><span data-icon="browser" data-size="14"></span> Open in Browser</div>
+                    <div id="player-more-menu" class="player-menu player-menu-down hidden" role="menu" aria-label="More actions">
+                      <div class="ctx-item hidden" id="stats-overlay-btn" role="menuitemcheckbox" aria-checked="false" tabindex="-1"><span data-icon="chart" data-size="16"></span> Stream stats</div>
+                      <div class="ctx-item hidden" id="record-btn" role="menuitem" tabindex="-1"><span data-icon="record" data-size="16"></span> <span class="record-btn-label">Start recording</span></div>
+                      <div class="ctx-item" id="watch-external-btn" role="menuitem" tabindex="-1"><span data-icon="external-link" data-size="16"></span> Open in external player</div>
+                      <div class="ctx-item" id="player-browser-item" role="menuitem" tabindex="-1"><span data-icon="browser" data-size="16"></span> Open in browser</div>
                     </div>
                   </div>
-                  <button id="fullscreen-player-btn" class="player-ctl-btn" type="button" title="Fullscreen (F)" aria-label="Fullscreen"><span data-icon="fullscreen" data-size="16"></span></button>
+                  <button id="close-player-btn" class="player-ctl-btn" type="button" title="Close Player (Esc)" aria-label="Close Player"><span data-icon="close" data-size="16"></span></button>
                 </div>
               </div>
               <div id="stats-overlay" class="hidden">
@@ -301,13 +307,18 @@
             <div id="chat-panel">
               <div id="chat-header">
                 <span id="chat-title">Chat</span>
-                <span id="chat-status-dot"></span>
-                <span id="chat-status-text"></span>
-                <button id="chat-timestamp-btn" class="chat-header-btn" title="Toggle timestamps" aria-label="Toggle timestamps"><span data-icon="clock" data-size="14"></span></button>
-                <button id="chat-filter-btn" class="chat-header-btn" title="Chat Filters" aria-label="Chat filters" aria-expanded="false" aria-controls="chat-filter-panel"><span data-icon="filter" data-size="14"></span></button>
-                <button id="chat-export-btn" class="chat-header-btn" title="Export Chat Log" aria-label="Export chat log" aria-expanded="false" aria-controls="chat-export-menu"><span data-icon="download" data-size="14"></span></button>
-                <button id="chat-userlist-btn" class="chat-header-btn" title="Chat Users" aria-label="Chat users" aria-expanded="false" aria-controls="chat-userlist-panel"><span data-icon="users" data-size="14"></span> <span id="chat-userlist-count">0</span></button>
-                <button id="chat-mod-btn" class="chat-header-btn hidden" title="Chat Controls" aria-label="Chat moderation controls" aria-expanded="false" aria-controls="chat-mod-panel"><span data-icon="shield" data-size="14"></span> Mod</button>
+                <span id="chat-status-dot" title="Connecting"></span>
+                <span id="chat-status-text" class="hidden"></span>
+                <div class="player-menu-wrap chat-menu-wrap">
+                  <button id="chat-more-btn" class="chat-header-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="chat-more-menu" title="Chat options" aria-label="Chat options"><span data-icon="more" data-size="16"></span></button>
+                  <div id="chat-more-menu" class="player-menu player-menu-down hidden" role="menu" aria-label="Chat options">
+                    <div class="ctx-item" id="chat-timestamp-btn" role="menuitemcheckbox" aria-checked="false" tabindex="-1"><span data-icon="clock" data-size="16"></span> Timestamps</div>
+                    <div class="ctx-item" id="chat-filter-btn" role="menuitem" tabindex="-1" aria-expanded="false" aria-controls="chat-filter-panel"><span data-icon="filter" data-size="16"></span> Filters</div>
+                    <div class="ctx-item" id="chat-userlist-btn" role="menuitem" tabindex="-1" aria-expanded="false" aria-controls="chat-userlist-panel"><span data-icon="users" data-size="16"></span> Users (<span id="chat-userlist-count">0</span>)</div>
+                    <div class="ctx-item" id="chat-export-btn" role="menuitem" tabindex="-1" aria-expanded="false" aria-controls="chat-export-menu"><span data-icon="download" data-size="16"></span> Export</div>
+                    <div class="ctx-item hidden" id="chat-mod-btn" role="menuitem" tabindex="-1" aria-expanded="false" aria-controls="chat-mod-panel"><span data-icon="shield" data-size="16"></span> Mod tools</div>
+                  </div>
+                </div>
               </div>
               <div id="chat-filter-panel" class="hidden chat-filter-panel">
                 <label class="filter-row">
@@ -361,9 +372,11 @@
                 <div id="emote-grid" class="emote-grid"></div>
               </div>
               <div id="chat-input-area">
-                <button id="emote-picker-btn" class="emote-picker-btn" title="Emotes" aria-label="Open emote picker" aria-expanded="false" aria-controls="emote-picker"><span data-icon="smile" data-size="16"></span></button>
-                <input id="chat-input" type="text" placeholder="Send a message..." maxlength="500" disabled aria-label="Chat message" />
-                <button id="chat-send-btn" disabled>Send</button>
+                <div class="chat-field">
+                  <button id="emote-picker-btn" class="chat-field-btn" type="button" title="Emotes" aria-label="Open emote picker" aria-expanded="false" aria-controls="emote-picker"><span data-icon="smile" data-size="16"></span></button>
+                  <input id="chat-input" type="text" placeholder="Send a message..." maxlength="500" disabled aria-label="Chat message" />
+                  <button id="chat-send-btn" class="chat-field-btn chat-send-btn" type="button" title="Send" aria-label="Send message" disabled><span data-icon="send" data-size="16"></span></button>
+                </div>
               </div>
             </div>
           </div>

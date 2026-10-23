@@ -38,8 +38,6 @@ TWO_PX_ALLOWED = {
     ("gap", ".drag-handle"),
     ("gap", ".watching-eq"),
     ("gap", ".player-volume"),
-    ("margin-right", ".chat-msg .badge"),
-    ("margin-right", ".badge-fallback"),
     ("padding", ".mod-select"),
 }
 

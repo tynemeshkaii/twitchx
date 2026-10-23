@@ -215,6 +215,12 @@ window.onStreamReady = function(data) {
   if (pcName) pcName.textContent = data.channel || '';
   const pcTitle = document.getElementById('player-stream-title');
   if (pcTitle) pcTitle.textContent = data.title || '';
+  const pcAvatar = document.getElementById('player-header-avatar');
+  if (pcAvatar) {
+    const avatarUrl = TwitchX.state.avatars[TwitchX.state.watchingChannelKey];
+    if (avatarUrl) pcAvatar.src = avatarUrl;
+    pcAvatar.classList.toggle('hidden', !avatarUrl);
+  }
   if (TwitchX.state.playerHasChat) {
     TwitchX.chatAuthenticated = false;
     TwitchX.chatPlatform = TwitchX.state.playerPlatform;
