@@ -23,7 +23,7 @@
   /* ── Semantic status ────────────────────────────────── */
   --live-green:  #30D158;
   --live-red:    #FF453A;
-  --warn-yellow: hsl(36 100% 52%);
+  --warn-yellow: #FFD60A;
   --error-red:   #FF453A;
   --error-red-bright: #FF6961;
   --info-blue:   #64B5FF;
@@ -47,11 +47,11 @@
   --toast-bg-success: rgba(48, 209, 88, 0.20);
   --toast-bg-error:   rgba(255, 69, 58, 0.20);
   --toast-bg-info:    rgba(255, 255, 255, 0.10);
-  --toast-bg-warn:    hsl(36 100% 52% / 0.20);
+  --toast-bg-warn:    rgba(255, 214, 10, 0.20);
   --toast-border-success: rgba(48, 209, 88, 0.35);
   --toast-border-error:   rgba(255, 69, 58, 0.35);
   --toast-border-info:    rgba(255, 255, 255, 0.12);
-  --toast-border-warn:    hsl(36 100% 52% / 0.35);
+  --toast-border-warn:    rgba(255, 214, 10, 0.35);
   --toast-text-success: var(--live-green);
   /* Lighter than the raw error-red token, which sat at 3.7:1 on the tinted
      toast surface. */

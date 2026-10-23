@@ -1,15 +1,51 @@
 from __future__ import annotations
 
+import importlib
 import os
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 import webview
 
 from core.storage import get_settings, load_config
 from ui.api import TwitchXApi
 from ui.api.settings_schema import clamp_refresh_interval
+
+# Native window background, shown before the WebView paints. Must match
+# --bg-base in ui/css/themes/dark.css and ui/css/themes/light.css — update
+# these together, or a different colour flashes at startup.
+WINDOW_BG_DARK = "#111113"
+WINDOW_BG_LIGHT = "#F5F5F7"
+
+
+def window_background(theme_mode: str, system_is_dark: bool) -> str:
+    """Window background for the ``theme`` setting ("auto" | "dark" | "light")."""
+    if theme_mode == "light":
+        return WINDOW_BG_LIGHT
+    if theme_mode == "auto":
+        return WINDOW_BG_DARK if system_is_dark else WINDOW_BG_LIGHT
+    return WINDOW_BG_DARK
+
+
+def _system_is_dark() -> bool:
+    """Whether macOS is in Dark Mode; True if it cannot be determined.
+
+    Called before the window exists (no WebView/AppKit UI yet), so reading the
+    app appearance here does not need AppHelper.callAfter.
+    """
+    try:
+        # pyobjc builds AppKit lazily, so pyright cannot see its symbols.
+        appkit: Any = importlib.import_module("AppKit")
+        aqua = appkit.NSAppearanceNameAqua
+        appearance = appkit.NSApplication.sharedApplication().effectiveAppearance()
+        best = appearance.bestMatchFromAppearancesWithNames_(
+            [aqua, appkit.NSAppearanceNameDarkAqua]
+        )
+        return best != aqua
+    except Exception:
+        return True
 
 
 class TwitchXApp:
@@ -113,6 +149,8 @@ class TwitchXApp:
         html_content = html_path.read_text(encoding="utf-8")
         html_content = self._inline_resources(html_content, html_path.parent)
 
+        theme_mode = str(get_settings(self._config).get("theme", "dark"))
+        system_is_dark = _system_is_dark() if theme_mode == "auto" else True
         window = webview.create_window(
             "TwitchX",
             html=html_content,
@@ -120,7 +158,7 @@ class TwitchXApp:
             width=960,
             height=640,
             min_size=(700, 500),
-            background_color="#0E0E1A",
+            background_color=window_background(theme_mode, system_is_dark),
         )
         if window is None:
             raise RuntimeError("Failed to create the TwitchX window")

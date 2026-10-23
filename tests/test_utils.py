@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from core.utils import (
     format_viewers,
     normalize_channel_id,
@@ -14,10 +16,38 @@ class TestFormatViewers:
         assert format_viewers(1_500_000) == "1.5M"
 
     def test_thousands(self) -> None:
-        assert format_viewers(2_500) == "2.5k"
+        assert format_viewers(2_500) == "2.5K"
 
     def test_hundreds(self) -> None:
         assert format_viewers(500) == "500"
+
+    # Same table is checked against formatViewers (ui/js/utils.js) by hand
+    # with node; the two formatters must agree.
+    @pytest.mark.parametrize(
+        ("count", "expected"),
+        [
+            (0, "0"),
+            (950, "950"),
+            (999, "999"),
+            (1_000, "1K"),
+            (1_050, "1.1K"),
+            (9_700, "9.7K"),
+            (12_000, "12K"),
+            (88_300, "88.3K"),
+            (99_949, "99.9K"),
+            (99_950, "100K"),
+            (100_000, "100K"),
+            (210_000, "210K"),
+            (999_499, "999K"),
+            (999_500, "1M"),
+            (999_950, "1M"),
+            (1_000_000, "1M"),
+            (1_200_000, "1.2M"),
+            (12_000_000, "12M"),
+        ],
+    )
+    def test_boundaries(self, count: int, expected: str) -> None:
+        assert format_viewers(count) == expected
 
 
 class TestSanitizeTwitchLogin:

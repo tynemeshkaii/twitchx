@@ -5,12 +5,26 @@ import re
 _YT_ID_RE = re.compile(r"^UC[\w-]{22}$", re.IGNORECASE)
 
 
+def _tenths(tenths: int, suffix: str) -> str:
+    whole, frac = divmod(tenths, 10)
+    return f"{whole}{suffix}" if frac == 0 else f"{whole}.{frac}{suffix}"
+
+
 def format_viewers(count: int) -> str:
-    if count >= 1_000_000:
-        return f"{count / 1_000_000:.1f}M"
-    if count >= 1_000:
-        return f"{count / 1_000:.1f}k"
-    return str(count)
+    """950, 9.7K, 88.3K, 210K, 1.2M, 12M — keep in sync with formatViewers in ui/js/utils.js.
+
+    Integer half-up rounding, so a value that rounds up crosses into the next
+    unit (99 950 → 100K, 999 950 → 1M) instead of printing 100.0K or 1000K.
+    """
+    if count < 1_000:
+        return str(count)
+    tenths_k = (count + 50) // 100
+    if tenths_k < 1_000:
+        return _tenths(tenths_k, "K")
+    whole_k = (count + 500) // 1_000
+    if whole_k < 1_000:
+        return f"{whole_k}K"
+    return _tenths((count + 50_000) // 100_000, "M")
 
 
 def normalize_channel_id(raw: str) -> str:
