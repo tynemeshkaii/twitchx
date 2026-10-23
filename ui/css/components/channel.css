@@ -183,6 +183,11 @@
 }
 
 .channel-empty {
+  /* Column flex so renderEmptyState's fixed-width illustration centres too,
+     not only the text (text-align alone left it pinned to the left). */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   color: var(--text-muted);
   font-size: var(--font-sm);
   padding: 32px 0;
