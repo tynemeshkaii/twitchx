@@ -434,6 +434,19 @@ class TwitchXApi:
             logger.warning("Could not serialize config snapshot: %s", e)
             return
         self._eval_js(f"window.onConfigLoaded({payload})")
+        self._report_config_recovery()
+
+    def _report_config_recovery(self) -> None:
+        """Tell the user once if load_config() had to reset a corrupt config."""
+        backup = _storage.consume_recovery_backup()
+        if backup is None:
+            return
+        status = {
+            "text": f"Config was corrupted and reset, backup: {backup}",
+            "type": "warn",
+            "toast": True,
+        }
+        self._eval_js(f"window.onStatusUpdate({json.dumps(status)})")
 
     def request_config(self) -> None:
         """JS-callable: ask for a config push (nothing is returned to JS)."""

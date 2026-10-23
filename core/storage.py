@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import os
 import re
 import shutil
+import tempfile
 import threading
 import time
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -120,15 +123,30 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     },
 }
 
-DEFAULT_CONFIG: dict[str, Any] = {
-    "platforms": {
-        "twitch": {**DEFAULT_PLATFORM_TWITCH},
-        "kick": {**DEFAULT_PLATFORM_KICK},
-        "youtube": {**DEFAULT_PLATFORM_YOUTUBE},
-    },
-    "favorites": [],
-    "settings": {**DEFAULT_SETTINGS},
-}
+
+def _fresh_default_config() -> dict[str, Any]:
+    """Build a default config that shares no mutable objects with the module defaults."""
+    return {
+        "platforms": {
+            "twitch": copy.deepcopy(DEFAULT_PLATFORM_TWITCH),
+            "kick": copy.deepcopy(DEFAULT_PLATFORM_KICK),
+            "youtube": copy.deepcopy(DEFAULT_PLATFORM_YOUTUBE),
+        },
+        "favorites": [],
+        "settings": copy.deepcopy(DEFAULT_SETTINGS),
+    }
+
+
+DEFAULT_CONFIG: dict[str, Any] = _fresh_default_config()
+
+# Set when load_config() had to replace an unreadable config file; holds the
+# backup path until the UI reports it (see consume_recovery_backup()).
+last_recovery_backup: Path | None = None
+
+_MAX_CORRUPT_BACKUPS = 3
+
+# Reentrant: update_config holds it while load_config → save_config re-acquire.
+_config_lock = threading.RLock()
 
 # Keys that belong in platforms.twitch when migrating from v1
 _V1_PLATFORM_KEYS = {
@@ -154,21 +172,37 @@ _V1_SETTINGS_KEYS = {
 
 
 def _deep_merge(defaults: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
-    """Recursively merge override into defaults. Override values win for non-dict types."""
-    result = dict(defaults)
+    """Recursively merge override into defaults. Override values win for non-dict types.
+
+    The result shares no mutable objects with either argument, so callers may
+    mutate it freely without corrupting the module-level defaults.
+    """
+    result = copy.deepcopy(defaults)
     for key, val in override.items():
         if key in result and isinstance(result[key], dict) and isinstance(val, dict):
             result[key] = _deep_merge(result[key], val)
         else:
-            result[key] = val
+            result[key] = copy.deepcopy(val)
     return result
+
+
+def _coerce_shortcuts(value: Any) -> tuple[dict[str, str], bool]:
+    """Keep known shortcut keys with string values; fill the rest from defaults."""
+    defaults: dict[str, str] = DEFAULT_SETTINGS["keyboard_shortcuts"]
+    if not isinstance(value, dict):
+        return dict(defaults), True
+    result = {
+        key: value[key] if isinstance(value.get(key), str) else default
+        for key, default in defaults.items()
+    }
+    return result, result != value
 
 
 def _coerce_settings_types(config: dict[str, Any]) -> bool:
     """Coerce simple persisted setting types back to their default shapes."""
     settings = config.get("settings")
     if not isinstance(settings, dict):
-        config["settings"] = {**DEFAULT_SETTINGS}
+        config["settings"] = copy.deepcopy(DEFAULT_SETTINGS)
         return True
 
     changed = False
@@ -184,6 +218,17 @@ def _coerce_settings_types(config: dict[str, Any]) -> bool:
             except (TypeError, ValueError):
                 settings[key] = default
             changed = True
+        elif key == "keyboard_shortcuts":
+            settings[key], shortcuts_changed = _coerce_shortcuts(value)
+            changed = changed or shortcuts_changed
+        elif isinstance(default, bool) and isinstance(value, int):
+            # Legacy 0/1 flags are truthy-compatible; leave them as stored.
+            continue
+        elif isinstance(default, (bool, str, list, dict)) and not isinstance(
+            value, type(default)
+        ):
+            settings[key] = copy.deepcopy(default)
+            changed = True
     return changed
 
 
@@ -196,15 +241,7 @@ def _is_v1_config(stored: dict[str, Any]) -> bool:
 
 def _migrate_v1_to_v2(v1: dict[str, Any]) -> dict[str, Any]:
     """Migrate a v1 flat config to v2 nested format."""
-    v2: dict[str, Any] = {
-        "platforms": {
-            "twitch": {**DEFAULT_PLATFORM_TWITCH},
-            "kick": {**DEFAULT_PLATFORM_KICK},
-            "youtube": {**DEFAULT_PLATFORM_YOUTUBE},
-        },
-        "favorites": [],
-        "settings": {**DEFAULT_SETTINGS},
-    }
+    v2 = _fresh_default_config()
 
     # Move Twitch credentials
     for key in _V1_PLATFORM_KEYS:
@@ -398,22 +435,78 @@ def _ensure_favorite_group_order(entry: dict[str, Any], idx: int) -> dict[str, A
     return updated
 
 
+def _backup_corrupt_config() -> Path | None:
+    """Move an unreadable config aside as config.json.corrupt-<timestamp>.
+
+    Keeps at most _MAX_CORRUPT_BACKUPS backups, deleting the oldest.
+    """
+    config_file = CONFIG_FILE
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    backup = config_file.with_name(f"{config_file.name}.corrupt-{stamp}")
+    suffix = 1
+    while backup.exists():
+        backup = config_file.with_name(f"{config_file.name}.corrupt-{stamp}-{suffix}")
+        suffix += 1
+    try:
+        os.replace(config_file, backup)
+    except OSError as exc:
+        logger.error("Cannot back up corrupt config %s: %s", config_file, exc)
+        return None
+
+    backups = sorted(
+        config_file.parent.glob(f"{config_file.name}.corrupt-*"),
+        key=lambda p: (p.stat().st_mtime, p.name),
+    )
+    for old in backups[:-_MAX_CORRUPT_BACKUPS]:
+        try:
+            old.unlink()
+        except OSError as exc:
+            logger.warning("Cannot remove old config backup %s: %s", old, exc)
+    return backup
+
+
+def _recover_corrupt_config(reason: object) -> dict[str, Any]:
+    global last_recovery_backup
+    backup = _backup_corrupt_config()
+    logger.warning(
+        "Corrupt config file %s (%s), restoring defaults; backup: %s",
+        CONFIG_FILE,
+        reason,
+        backup,
+    )
+    if backup is not None:
+        last_recovery_backup = backup
+    save_config(DEFAULT_CONFIG)
+    return _deep_merge(DEFAULT_CONFIG, {})
+
+
+def consume_recovery_backup() -> Path | None:
+    """Return the pending corrupt-config backup path once, then clear it."""
+    global last_recovery_backup
+    backup, last_recovery_backup = last_recovery_backup, None
+    return backup
+
+
 def load_config() -> dict[str, Any]:
+    # Loading may rewrite the file (recovery, migration, normalization), so it
+    # serializes with save_config/update_config.
+    with _config_lock:
+        return _load_config_locked()
+
+
+def _load_config_locked() -> dict[str, Any]:
     _migrate_old_config()
     if not CONFIG_FILE.exists():
         logger.debug("Config file not found, creating default")
-        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         save_config(DEFAULT_CONFIG)
         return _deep_merge(DEFAULT_CONFIG, {})
     try:
-        with open(CONFIG_FILE) as f:
+        with open(CONFIG_FILE, encoding="utf-8") as f:
             stored = json.load(f)
-    except json.JSONDecodeError as exc:
-        logger.warning(
-            "Corrupt config file %s, restoring defaults: %s", CONFIG_FILE, exc
-        )
-        save_config(DEFAULT_CONFIG)
-        return _deep_merge(DEFAULT_CONFIG, {})
+    except (json.JSONDecodeError, UnicodeDecodeError, OSError) as exc:
+        return _recover_corrupt_config(exc)
+    if not isinstance(stored, dict):
+        return _recover_corrupt_config(f"top-level {type(stored).__name__}, not object")
 
     # Auto-migrate v1 → v2
     if _is_v1_config(stored):
@@ -430,19 +523,53 @@ def load_config() -> dict[str, Any]:
     return merged
 
 
-def save_config(config: dict[str, Any]) -> None:
-    logger.debug("Saving config to %s", CONFIG_FILE)
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = CONFIG_FILE.with_suffix(".tmp")
+def _atomic_write_json(path: Path, data: Any, *, indent: int | None = None) -> None:
+    """Write JSON to path via a unique 0600 temp file + fsync + os.replace.
+
+    Raises OSError (or TypeError/ValueError for unserializable data); the temp
+    file is removed on any failure.
+    """
+    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=".config-", suffix=".tmp")
+    tmp = Path(tmp_name)
+    fd_owned = True  # until the file object takes over closing fd
     try:
-        with open(tmp, "w") as f:
-            json.dump(config, f, indent=2)
-        os.replace(tmp, CONFIG_FILE)
+        os.chmod(tmp, 0o600)
+        with open(fd, "w", encoding="utf-8") as f:
+            fd_owned = False
+            json.dump(data, f, indent=indent)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        if fd_owned:
+            os.close(fd)
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def _ensure_config_dir() -> None:
+    CONFIG_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+
+
+def save_config(config: dict[str, Any]) -> None:
+    with _config_lock:
+        logger.debug("Saving config to %s", CONFIG_FILE)
+        try:
+            _ensure_config_dir()
+            _atomic_write_json(CONFIG_FILE, config, indent=2)
+        except OSError as exc:
+            logger.error("Cannot save config to %s: %s", CONFIG_FILE, exc)
+
+
+def ensure_config_permissions() -> None:
+    """Restrict the config dir to 0700 and config.json to 0600 (holds secrets)."""
+    try:
+        if CONFIG_DIR.is_dir():
+            os.chmod(CONFIG_DIR, 0o700)
+        if CONFIG_FILE.is_file():
+            os.chmod(CONFIG_FILE, 0o600)
     except OSError as exc:
-        logger.error("Cannot save config to %s: %s", CONFIG_FILE, exc)
-
-
-_config_lock = threading.Lock()
+        logger.warning("Cannot tighten config permissions in %s: %s", CONFIG_DIR, exc)
 
 
 def update_config(update_fn: Callable[[dict[str, Any]], None]) -> dict[str, Any]:
@@ -475,7 +602,7 @@ def get_platform_config(config: dict[str, Any], platform: str) -> dict[str, Any]
 
 def get_settings(config: dict[str, Any]) -> dict[str, Any]:
     """Get the settings section."""
-    return config.get("settings", {**DEFAULT_SETTINGS})
+    return config.get("settings", copy.deepcopy(DEFAULT_SETTINGS))
 
 
 def get_favorites(
@@ -536,22 +663,40 @@ def save_avatar(login: str, data: bytes, platform: str = "twitch") -> None:
 # ── Browse cache ──────────────────────────────────────────────
 
 
+_browse_cache_lock = threading.RLock()
+
+
+def _browse_cache_path() -> Path:
+    return CONFIG_DIR / "cache" / "browse_cache.json"
+
+
 def load_browse_cache() -> dict[str, Any]:
     """Load browse cache from disk. Returns {} on cache miss or parse error."""
     try:
-        path = CONFIG_DIR / "cache" / "browse_cache.json"
-        return json.loads(path.read_text()) if path.exists() else {}
-    except (json.JSONDecodeError, OSError):
+        path = _browse_cache_path()
+        data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except (json.JSONDecodeError, UnicodeDecodeError, OSError):
         return {}
+    return data if isinstance(data, dict) else {}
 
 
 def save_browse_cache(data: dict[str, Any]) -> None:
     """Persist browse cache to disk atomically, creating directories as needed."""
-    path = CONFIG_DIR / "cache" / "browse_cache.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data))
-    os.replace(tmp, path)
+    path = _browse_cache_path()
+    with _browse_cache_lock:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _atomic_write_json(path, data)
+
+
+def update_browse_cache(
+    update_fn: Callable[[dict[str, Any]], None],
+) -> dict[str, Any]:
+    """Atomically load the browse cache, apply update_fn, save, and return it."""
+    with _browse_cache_lock:
+        cache = load_browse_cache()
+        update_fn(cache)
+        save_browse_cache(cache)
+        return cache
 
 
 def is_browse_slot_fresh(

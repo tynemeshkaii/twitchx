@@ -1010,8 +1010,8 @@ window.onStatusUpdate = function(data) {
     document.getElementById('updated-time').classList.remove('stale');
     document.getElementById('sidebar-stale-banner').classList.add('hidden');
   }
-  if (data.type === 'error' && data.toast !== false) {
-    TwitchX.showToast(data.text, 'error');
+  if (data.toast === true || (data.type === 'error' && data.toast !== false)) {
+    TwitchX.showToast(data.text, data.type || 'info');
   }
 };
 

@@ -106,6 +106,9 @@ _configure_crash_logging()
 
 
 def main() -> None:
+    from core import storage
+
+    storage.ensure_config_permissions()
     app = TwitchXApp()
     app.mainloop()
 

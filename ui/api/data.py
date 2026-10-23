@@ -23,7 +23,7 @@ from core.storage import (
     is_browse_slot_fresh,
     load_browse_cache,
     load_config,
-    save_browse_cache,
+    update_browse_cache,
 )
 from core.utils import format_viewers
 
@@ -630,7 +630,42 @@ class DataComponent(BaseApiComponent):
     def get_browse_categories(self, platform_filter: str = "all") -> None:
         self._run_in_thread(lambda: self._fetch_browse_categories(platform_filter))
 
+    def _load_browse_cache_safe(self) -> dict[str, Any]:
+        try:
+            return load_browse_cache()
+        except Exception:
+            logger.exception("browse: cannot read cache")
+            return {}
+
+    def _store_browse_slots(self, slots: dict[str, Any]) -> None:
+        """Merge freshly fetched slots into the on-disk cache; never raises."""
+        if not slots:
+            return
+        try:
+            update_browse_cache(lambda cache: cache.update(slots))
+        except Exception:
+            logger.exception("browse: cannot write cache")
+
     def _fetch_browse_categories(self, platform_filter: str) -> None:
+        try:
+            payload = self._browse_categories_payload(platform_filter)
+        except Exception:
+            logger.exception("browse categories failed")
+            platforms = (
+                ["twitch", "kick", "youtube"]
+                if platform_filter == "all"
+                else [platform_filter]
+            )
+            payload = {
+                "items": [],
+                "errors": {p: "Failed to load categories." for p in platforms},
+                "platform_filter": platform_filter,
+                "enabled_platforms": [],
+            }
+        self._eval_js(f"window.onBrowseCategories({json.dumps(payload)})")
+        self._check_youtube_quota_warning()
+
+    def _browse_categories_payload(self, platform_filter: str) -> dict[str, Any]:
         platforms = (
             ["twitch", "kick", "youtube"]
             if platform_filter == "all"
@@ -660,7 +695,8 @@ class DataComponent(BaseApiComponent):
                     "YouTube API quota is exhausted for today. Try again after the "
                     "daily reset or add a personal API key in Settings."
                 )
-        cache = load_browse_cache()
+        cache = self._load_browse_cache_safe()
+        fresh_slots: dict[str, Any] = {}
         now = time.time()
         results: dict[str, list[dict[str, Any]]] = {}
         to_fetch: list[str] = []
@@ -700,24 +736,21 @@ class DataComponent(BaseApiComponent):
                             errors[p] = self._browse_error_message(p, result)
                         else:
                             results[p] = result
-                            cache[f"categories_{p}"] = {
+                            fresh_slots[f"categories_{p}"] = {
                                 "data": result,
                                 "fetched_at": now,
                             }
 
                 loop.run_until_complete(_fetch_categories_parallel())
-                save_browse_cache(cache)
             finally:
                 self._close_thread_loop(loop)
-        merged = _aggregate_categories(results)
-        payload = {
-            "items": merged,
+            self._store_browse_slots(fresh_slots)
+        return {
+            "items": _aggregate_categories(results),
             "errors": errors,
             "platform_filter": platform_filter,
             "enabled_platforms": enabled,
         }
-        self._eval_js(f"window.onBrowseCategories({json.dumps(payload)})")
-        self._check_youtube_quota_warning()
 
     def get_browse_top_streams(
         self,
@@ -737,6 +770,32 @@ class DataComponent(BaseApiComponent):
         platform_ids: dict[str, str],
         platform_filter: str,
     ) -> None:
+        try:
+            payload = self._browse_top_streams_payload(
+                category_name, platform_ids, platform_filter
+            )
+        except Exception:
+            logger.exception("browse top streams failed")
+            platforms = (
+                list(platform_ids) if platform_filter == "all" else [platform_filter]
+            )
+            payload = {
+                "category": category_name,
+                "streams": [],
+                "errors": {
+                    p: "Failed to load live streams." for p in platforms or ["twitch"]
+                },
+                "platform_filter": platform_filter,
+            }
+        self._eval_js(f"window.onBrowseTopStreams({json.dumps(payload)})")
+        self._check_youtube_quota_warning()
+
+    def _browse_top_streams_payload(
+        self,
+        category_name: str,
+        platform_ids: dict[str, str],
+        platform_filter: str,
+    ) -> dict[str, Any]:
         in_filter = (
             list(platform_ids.keys()) if platform_filter == "all" else [platform_filter]
         )
@@ -766,7 +825,8 @@ class DataComponent(BaseApiComponent):
                     "YouTube live Browse needs 100 quota units and today's remaining "
                     "quota is too low."
                 )
-        cache = load_browse_cache()
+        cache = self._load_browse_cache_safe()
+        fresh_slots: dict[str, Any] = {}
         now = time.time()
         all_streams: list[dict[str, Any]] = []
         to_fetch: list[str] = []
@@ -808,7 +868,7 @@ class DataComponent(BaseApiComponent):
                             errors[p] = self._browse_error_message(p, result)
                         else:
                             all_streams.extend(result)
-                            cache[f"top_streams_{p}_{platform_ids[p]}"] = {
+                            fresh_slots[f"top_streams_{p}_{platform_ids[p]}"] = {
                                 "data": result,
                                 "fetched_at": now,
                             }
@@ -816,16 +876,14 @@ class DataComponent(BaseApiComponent):
                 loop.run_until_complete(_fetch_top_streams_parallel())
             finally:
                 self._close_thread_loop(loop)
-            save_browse_cache(cache)
+            self._store_browse_slots(fresh_slots)
         all_streams.sort(key=lambda s: s.get("viewers", 0), reverse=True)
-        payload = {
+        return {
             "category": category_name,
             "streams": all_streams[:40],
             "errors": errors,
             "platform_filter": platform_filter,
         }
-        self._eval_js(f"window.onBrowseTopStreams({json.dumps(payload)})")
-        self._check_youtube_quota_warning()
 
     @staticmethod
     def _browse_error_message(platform: str, exc: BaseException) -> str:
