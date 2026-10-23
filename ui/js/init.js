@@ -21,18 +21,22 @@ document.addEventListener('keydown', function(e) {
   if (existing) {
     var msg = '"' + TwitchX.formatKeyName(e.key) + '" is already bound to "' +
               TwitchX.SHORTCUT_LABELS[existing] + '". Swap bindings?';
-    if (window.confirm(msg)) {
+    var swapped = window.confirm(msg);
+    if (swapped) {
       TwitchX.state.shortcuts[existing] = TwitchX.DEFAULT_SHORTCUTS[TwitchX._rebindAction];
       TwitchX.state.shortcuts[TwitchX._rebindAction] = e.key;
     }
     TwitchX._rebindAction = null;
     TwitchX.renderHotkeysSettings();
+    if (swapped && TwitchX.saveShortcuts) TwitchX.saveShortcuts();
     return;
   }
 
   TwitchX.state.shortcuts[TwitchX._rebindAction] = e.key;
   TwitchX._rebindAction = null;
   TwitchX.renderHotkeysSettings();
+  // Applies at once, like every other setting.
+  if (TwitchX.saveShortcuts) TwitchX.saveShortcuts();
 }, true);
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -608,45 +612,26 @@ TwitchX._bindSettingsEvents = function() {
   if (eyeToggleBtn) eyeToggleBtn.addEventListener('click', TwitchX.toggleSecret);
   const testBtn = document.getElementById('test-btn');
   if (testBtn) testBtn.addEventListener('click', TwitchX.testConnection);
-  const saveBtn = document.getElementById('save-btn');
-  if (saveBtn) saveBtn.addEventListener('click', TwitchX.saveSettings);
   const resetShortcutsBtn = document.getElementById('reset-shortcuts-btn');
   if (resetShortcutsBtn) resetShortcutsBtn.addEventListener('click', function() {
     TwitchX.state.shortcuts = Object.assign({}, TwitchX.DEFAULT_SHORTCUTS);
     TwitchX.renderHotkeysSettings();
+    TwitchX.saveShortcuts();
   });
-  const extPlayerSelect = document.getElementById('s-external-player');
-  if (extPlayerSelect) extPlayerSelect.addEventListener('change', function() {
-    document.getElementById('s-mpv-group').classList.toggle('hidden', this.value !== 'mpv');
-  });
-
-  // Stats compact toggle
-  var statsCompactBtn = document.getElementById('stats-compact-toggle');
-  if (statsCompactBtn) statsCompactBtn.addEventListener('click', TwitchX._toggleStatsCompact);
+  // Toggles, selects, paths, theme, accent and credential buttons.
+  TwitchX._bindInstantSettings();
 
   // Settings tab switching
   document.querySelectorAll('.settings-tab').forEach(function(btn) {
     btn.addEventListener('click', function() {
-      TwitchX.setActiveTab(Array.from(document.querySelectorAll('.settings-tab')), btn);
-      document.querySelectorAll('.settings-panel').forEach(function(p) { p.classList.remove('active'); });
-      document.getElementById('settings-panel-' + btn.dataset.tab).classList.add('active');
-      if (btn.dataset.tab === 'advanced') {
-        TwitchX.loadWatchStatistics();
-      }
+      TwitchX.showSettingsTab(btn.dataset.tab);
     });
+    // Vertical list: up/down move between sections (left/right kept too).
     btn.addEventListener('keydown', function(e) {
-      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      var dir = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+      if (!dir) return;
       e.preventDefault();
-      TwitchX.focusAdjacentTab(Array.from(document.querySelectorAll('.settings-tab')), btn, e.key === 'ArrowRight' ? 1 : -1);
-    });
-  });
-
-  // Theme radio buttons
-  document.querySelectorAll('input[name="theme"]').forEach(function(radio) {
-    radio.addEventListener('change', function() {
-      if (this.checked && TwitchX.applyTheme) {
-        TwitchX.applyTheme(this.value);
-      }
+      TwitchX.focusAdjacentTab(Array.from(document.querySelectorAll('.settings-tab')), btn, dir);
     });
   });
 
@@ -728,26 +713,6 @@ TwitchX._bindSettingsEvents = function() {
     document.getElementById('yt-test-btn').disabled = true;
     TwitchX.api.youtube_test_connection();
   });
-
-  TwitchX._bindAdvancedToggles();
-};
-
-TwitchX._bindAdvancedToggles = function() {
-  function _makeToggle(toggleId, sectionId, showText, hideText) {
-    var btn = document.getElementById(toggleId);
-    if (!btn) return;
-    btn.addEventListener('click', function(e) {
-      e.preventDefault();
-      var section = document.getElementById(sectionId);
-      if (!section) return;
-      var isHidden = section.classList.toggle('hidden');
-      btn.textContent = isHidden ? showText : hideText;
-    });
-  }
-  _makeToggle('twitch-advanced-toggle', 'twitch-advanced-section',
-    'Use custom credentials ▾', 'Hide custom credentials ▴');
-  _makeToggle('kick-advanced-toggle', 'kick-advanced-section',
-    'Use custom credentials ▾', 'Hide custom credentials ▴');
 };
 
 TwitchX._bindContextMenuEvents = function() {

@@ -760,17 +760,6 @@ window.onChatLogSaved = function(result) {
   TwitchX.setStatus('Chat export failed: ' + reason, 'error');
 };
 
-window.onSettingsSaved = function() {
-  var fb = document.getElementById('settings-feedback');
-  if (fb) {
-    TwitchX.setIconText(fb, 'check', 14, 'Settings saved');
-    fb.className = 'success';
-  }
-  setTimeout(function() {
-    TwitchX.closeSettings();
-  }, 600);
-};
-
 window.onKickLoginComplete = function(data) {
   TwitchX.state.kickUser = { login: data.login, display_name: data.display_name };
   TwitchX.state.kickScopes = data.scopes || TwitchX.state.kickScopes || '';

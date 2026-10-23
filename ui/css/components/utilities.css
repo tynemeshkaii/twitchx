@@ -6,9 +6,8 @@
 .flex-center { display: flex; align-items: center; justify-content: center; }
 .gap-sm { gap: var(--space-8); }
 .ml-auto { margin-left: auto; }
+.mt-1 { margin-top: var(--space-4); }
 
-/* Inline-style replacements */
-.settings-title-icon { vertical-align: -2px; margin-right: var(--space-8); }
 
 /* Feedback / status text colors */
 .feedback-success { color: var(--live-green); }

@@ -78,6 +78,8 @@ function updateAccountChip() {
   var ytSection = document.getElementById('account-youtube-section');
   if (ytSection) ytSection.classList.toggle('hidden', !TwitchX.state.youtubeEnabled);
 
+  if (TwitchX.syncSettingsAccounts) TwitchX.syncSettingsAccounts();
+
   var miniLabel = document.getElementById('account-mini-mode-label');
   if (miniLabel) {
     var isMini = document.getElementById('app').classList.contains('mini');
