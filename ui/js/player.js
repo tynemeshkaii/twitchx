@@ -1799,7 +1799,7 @@ function _focusPlayerMenuItem(menu, idx) {
 
 function closePlayerMenus(exceptMenu) {
   var closed = false;
-  document.querySelectorAll('#player-view .player-menu').forEach(function(menu) {
+  document.querySelectorAll('.player-menu').forEach(function(menu) {
     if (menu === exceptMenu || menu.classList.contains('hidden')) return;
     menu.classList.add('hidden');
     closed = true;
@@ -1965,4 +1965,6 @@ TwitchX.syncPlayPauseButton = syncPlayPauseButton;
 TwitchX.syncQualityMenu = syncQualityMenu;
 TwitchX.QUALITY_LABELS = QUALITY_LABELS;
 TwitchX.closePlayerMenus = closePlayerMenus;
+// Shared with the multistream layout menu.
+TwitchX.bindPopupMenu = _bindPlayerMenu;
 TwitchX._bindPlayerOverlay = _bindPlayerOverlay;

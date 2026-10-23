@@ -335,8 +335,8 @@ window.onMultiSlotReady = function(data) {
 
   active.querySelector('.ms-channel-name').textContent = data.channel || '';
   var badge = active.querySelector('.ms-platform-badge');
-  badge.className = 'ms-platform-badge ' + (data.platform || 'twitch');
-  badge.textContent = TwitchX.platformLabel(data.platform || 'twitch');
+  badge.className = 'ms-platform-badge platform-dot ' + (data.platform || 'twitch');
+  badge.title = TwitchX.platformLabel(data.platform || 'twitch');
   if (data.title) TwitchX.multiState.slots[idx].title = data.title;
 
   if (TwitchX.multiState.audioFocus === -1) TwitchX.setAudioFocus(idx);

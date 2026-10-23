@@ -209,15 +209,27 @@
         <!-- Multi-stream view -->
         <div id="multistream-view" class="view hidden">
           <div id="multistream-header" class="titlebar-drag">
-            <span id="multistream-title"><span data-icon="grid-layout" data-size="16"></span> Multi-stream</span>
-            <select id="ms-preset-select" aria-label="Multistream layout preset" title="Layout preset"></select>
-            <button id="ms-add-slot-btn" title="Add stream" aria-label="Add stream"><span data-icon="plus" data-size="16"></span></button>
-            <button id="ms-sidebar-btn" title="Toggle Sidebar" aria-label="Toggle Sidebar"><span data-icon="sidebar" data-size="16"></span></button>
-            <button id="ms-toggle-chat-btn" title="Toggle Chat" aria-label="Toggle Multi Chat"><span data-icon="chat" data-size="16"></span></button>
-            <button id="ms-close-btn" title="Close Multistream" aria-label="Close Multistream"><span data-icon="close" data-size="16"></span></button>
+            <span id="multistream-title">Multi-view</span>
+            <div class="player-menu-wrap">
+              <button id="ms-preset-btn" class="ms-header-btn ms-preset-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="ms-preset-menu" title="Layout"><span id="ms-preset-icon" class="ms-preset-icon"></span><span id="ms-preset-label">Grid</span><span data-icon="chevron-down" data-size="12"></span></button>
+              <div id="ms-preset-menu" class="player-menu player-menu-down hidden" role="menu" aria-label="Layout"></div>
+            </div>
+            <button id="ms-add-slot-btn" class="ms-header-btn" type="button" title="Add stream" aria-label="Add stream"><span data-icon="plus" data-size="16"></span></button>
+            <button id="ms-sidebar-btn" class="ms-header-btn" type="button" title="Toggle Sidebar" aria-label="Toggle Sidebar"><span data-icon="sidebar" data-size="16"></span></button>
+            <button id="ms-toggle-chat-btn" class="ms-header-btn" type="button" title="Toggle Chat" aria-label="Toggle Multi Chat"><span data-icon="chat" data-size="16"></span></button>
+            <button id="ms-close-btn" class="ms-header-btn" type="button" title="Close Multistream" aria-label="Close Multistream"><span data-icon="close" data-size="16"></span></button>
           </div>
           <div id="ms-sidebar-backdrop"></div>
           <div id="multistream-body">
+            <!-- Before the first stream: one centred prompt instead of four
+                 identical dashed slots. Also a drop target for the sidebar. -->
+            <div id="ms-empty-hint" class="hidden">
+              <span class="ms-empty-icon" data-icon="grid-layout" data-size="40"></span>
+              <h2 class="ms-empty-title">Add up to 4 streams</h2>
+              <p class="ms-empty-text">Pick a channel by name, or drag one here from the sidebar.</p>
+              <button id="ms-empty-add-btn" class="btn btn-primary" type="button"><span data-icon="plus" data-size="16"></span> Add stream</button>
+              <div id="ms-empty-presets" class="ms-empty-presets" role="radiogroup" aria-label="Layout"></div>
+            </div>
             <div id="multistream-grid"></div>
             <div id="ms-chat-panel" class="hidden">
               <div id="ms-chat-header">

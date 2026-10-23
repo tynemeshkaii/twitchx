@@ -1057,17 +1057,28 @@ TwitchX._initMultistreamSlots = function() {
   for (let i = 0; i < 4; i++) {
     grid.appendChild(TwitchX._createMultiSlot(i));
   }
-  const select = document.getElementById('ms-preset-select');
-  if (select) {
-    select.replaceChildren();
-    ['grid', 'focus-left', 'rows', 'columns'].forEach(function(p) {
-      const opt = document.createElement('option');
-      opt.value = p;
-      opt.textContent = { grid: 'Grid', 'focus-left': 'Focus', rows: 'Rows', columns: 'Columns' }[p];
-      select.appendChild(opt);
+  if (TwitchX._buildMultistreamPresetControls) TwitchX._buildMultistreamPresetControls();
+  const emptyAdd = document.getElementById('ms-empty-add-btn');
+  if (emptyAdd) emptyAdd.addEventListener('click', function() { TwitchX.openFirstEmptyMultiSlot(); });
+  // The empty prompt takes the same sidebar drops as a slot would.
+  const hint = document.getElementById('ms-empty-hint');
+  if (hint) {
+    hint.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      hint.classList.add('drag-over');
     });
-    select.addEventListener('change', function() {
-      if (TwitchX.setMultistreamPreset) TwitchX.setMultistreamPreset(select.value);
+    hint.addEventListener('dragleave', function(e) {
+      if (!hint.contains(e.relatedTarget)) hint.classList.remove('drag-over');
+    });
+    hint.addEventListener('drop', function(e) {
+      e.preventDefault();
+      hint.classList.remove('drag-over');
+      try {
+        const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+        const idx = TwitchX.multiState.slots.indexOf(null);
+        if (data && data.login && idx !== -1) TwitchX.addMultiSlot(idx, data.login, data.platform || 'twitch');
+      } catch (_) {}
     });
   }
   if (TwitchX._loadMultistreamPresets) TwitchX._loadMultistreamPresets();
