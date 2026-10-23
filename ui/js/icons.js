@@ -58,13 +58,18 @@ var ICONS = {
   'trend-down': '<path d="M3 5.3 6.15 8.45l2.2-2.2 4.65 4.65"/><path d="M10.1 10.9h2.9V8"/>',
   tv: '<rect x="2.25" y="3" width="11.5" height="7.8" rx="2.1"/><path d="M6.15 13h3.7"/><path d="M8 10.8V13"/>',
   'live-dot': '<circle cx="8" cy="8" r="3.7" fill="currentColor" stroke="none"/>',
-  sleeping: '<path d="M10.9 3.1A5.85 5.85 0 1 0 12.9 11c-.45.2-.95.3-1.45.3-2.1 0-3.8-1.7-3.8-3.8 0-1.8 1.25-3.3 3.25-4.4Z"/>'
+  sleeping: '<path d="M10.9 3.1A5.85 5.85 0 1 0 12.9 11c-.45.2-.95.3-1.45.3-2.1 0-3.8-1.7-3.8-3.8 0-1.8 1.25-3.3 3.25-4.4Z"/>',
+  'folder-plus': '<path d="M2.25 4.75c0-.7.55-1.25 1.25-1.25h2.6l1.4 1.5h5c.7 0 1.25.55 1.25 1.25v5.5c0 .7-.55 1.25-1.25 1.25h-9c-.7 0-1.25-.55-1.25-1.25z"/><path d="M8 7.25v3.5M6.25 9h3.5"/>',
+  'folder-move': '<path d="M2.25 4.75c0-.7.55-1.25 1.25-1.25h2.6l1.4 1.5h5c.7 0 1.25.55 1.25 1.25v5.5c0 .7-.55 1.25-1.25 1.25h-9c-.7 0-1.25-.55-1.25-1.25z"/><path d="M5.75 9h4.5"/><path d="m8.5 7.25 1.75 1.75-1.75 1.75"/>',
+  edit: '<path d="M10.45 2.85 13.15 5.55 5.75 12.95 2.45 13.55 3.05 10.25z"/><path d="M9.1 4.2 11.8 6.9"/>',
+  trash: '<path d="M2.75 4.25h10.5"/><path d="M6.25 4.25V3c0-.4.35-.75.75-.75h2c.4 0 .75.35.75.75v1.25"/><path d="m3.95 4.25.6 8.3c.05.7.6 1.2 1.25 1.2h4.4c.65 0 1.2-.5 1.25-1.2l.6-8.3"/><path d="M6.75 6.75v4.5M9.25 6.75v4.5"/>'
 };
 
 function renderIcon(name, size) {
   var body = ICONS[name];
   size = size || 16;
   if (!body) {
+    console.warn('[icons] unknown icon:', name);
     body = '<circle cx="8" cy="8" r="2.7"/>';
   }
   return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="' + ICON_STROKE_WIDTH + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + body + '</svg>';
