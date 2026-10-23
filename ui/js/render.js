@@ -173,7 +173,7 @@ function renderGrid() {
     // Request missing thumbnails
     streams.forEach(function(s) {
       const streamKey = TwitchX.channelKey(s.login, s.platform || 'twitch');
-      if (!TwitchX.state.thumbnails[streamKey] && s.thumbnail_url) {
+      if (s.thumbnail_url && TwitchX.thumbnailNeedsFetch(streamKey)) {
         TwitchX.api.get_thumbnail(streamKey, s.thumbnail_url);
       }
     });

@@ -411,6 +411,9 @@ class FavoritesComponent(BaseApiComponent):
     # ── Search ──────────────────────────────────────────────────
 
     def search_channels(self, query: str, platform: str = "twitch") -> None:
+        # Second callback argument lets JS discard replies for a stale query.
+        meta = json.dumps({"query": query, "platform": platform})
+
         def do_search() -> None:
             config = load_config()
             loop = asyncio.new_event_loop()
@@ -466,10 +469,10 @@ class FavoritesComponent(BaseApiComponent):
                     seen.add(key)
                     deduped.append(item)
 
-                self._eval_js(f"window.onSearchResults({json.dumps(deduped)})")
+                self._eval_js(f"window.onSearchResults({json.dumps(deduped)}, {meta})")
             except Exception as e:
                 logger.warning("search_channels failed: %s", e, exc_info=True)
-                self._eval_js("window.onSearchResults([])")
+                self._eval_js(f"window.onSearchResults([], {meta})")
             finally:
                 self._close_thread_loop(loop)
 

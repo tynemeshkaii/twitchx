@@ -31,6 +31,12 @@ logger = logging.getLogger(__name__)
 # older than this are considered lost and never rendered.
 _ECHO_TTL = 10.0
 
+# set_chat_mode: Helix chat-settings fields the UI may toggle, and the slow
+# mode wait range offered by the UI (Helix itself allows 3..120 seconds).
+_CHAT_MODES = frozenset({"slow_mode", "emote_mode", "subscriber_mode", "follower_mode"})
+_SLOW_WAIT_MIN = 3
+_SLOW_WAIT_MAX = 120
+
 
 def _to_utf16_offset(text: str, cp_index: int) -> int:
     """Convert a code-point index into ``text`` to a UTF-16 code-unit index (JS)."""
@@ -481,46 +487,52 @@ class ChatComponent(BaseApiComponent):
 
     # ── Persistence ──────────────────────────────────────────────
 
+    def _emit_chat_mode_error(self, error: str) -> None:
+        payload = json.dumps({"ok": False, "error": error})
+        self._eval_js(f"window.onChatModeChanged({payload})")
+
     def set_chat_mode(self, mode: str, value: bool, slow_wait: int = 30) -> None:
         """Set a Twitch chat mode (slow_mode, emote_mode, subscriber_mode, follower_mode).
 
         Only works if the logged-in user is the broadcaster of the watched channel.
         """
+        if mode not in _CHAT_MODES:
+            logger.warning("set_chat_mode: unknown mode %r", mode)
+            self._emit_chat_mode_error("Unknown chat mode")
+            return
         twitch_conf = get_platform_config(self._config, "twitch")
         user_id = twitch_conf.get("user_id", "")
         if not user_id:
-            self._eval_js(
-                "window.onChatModeChanged({ok: false, error: 'Not logged in to Twitch'})"
-            )
+            self._emit_chat_mode_error("Not logged in to Twitch")
             return
 
         target = self._api._watching
         if target is None:
-            self._eval_js(
-                "window.onChatModeChanged({ok: false, error: 'Not watching any channel'})"
-            )
+            self._emit_chat_mode_error("Not watching any channel")
             return
         if target.platform != "twitch":
-            self._eval_js(
-                "window.onChatModeChanged({ok: false, error: 'Chat modes are Twitch-only'})"
-            )
+            self._emit_chat_mode_error("Chat modes are Twitch-only")
             return
 
         def _do() -> None:
             loop = asyncio.new_event_loop()
             try:
                 twitch = self._get_platform("twitch")
-                kwargs: dict[str, Any] = {mode: value}
+                kwargs: dict[str, Any] = {mode: bool(value)}
                 if mode == "slow_mode" and value:
-                    kwargs["slow_mode_wait_time"] = slow_wait
-                ok = loop.run_until_complete(
+                    kwargs["slow_mode_wait_time"] = max(
+                        _SLOW_WAIT_MIN, min(_SLOW_WAIT_MAX, int(slow_wait))
+                    )
+                settings = loop.run_until_complete(
                     twitch.set_chat_settings(
                         broadcaster_id=user_id,
                         moderator_id=user_id,
                         **kwargs,
                     )
                 )
-                payload = json.dumps({"ok": ok, "mode": mode, "value": value})
+                payload = json.dumps(
+                    {"ok": bool(settings), "mode": mode, "value": bool(value)}
+                )
             except Exception as exc:
                 logger.warning("set_chat_mode failed: %s", exc)
                 payload = json.dumps({"ok": False, "error": str(exc)[:100]})
@@ -528,7 +540,7 @@ class ChatComponent(BaseApiComponent):
                 self._close_thread_loop(loop)
             self._eval_js(f"window.onChatModeChanged({payload})")
 
-        threading.Thread(target=_do, daemon=True).start()
+        self._run_in_thread(_do)
 
     def save_chat_width(self, width: int) -> None:
         clamped = max(250, min(500, width))

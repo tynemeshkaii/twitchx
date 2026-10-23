@@ -328,6 +328,10 @@ class TestTwitchRefreshRace:
             refresh_token="r1",
             token_expires_at=1,
             user_login="me",
+            # App-token fallback needs client creds; don't rely on the
+            # gitignored bundled core/credentials.py (absent in CI).
+            client_id="cid",
+            client_secret="csec",
         )
         httpx_mock.add_response(
             url=TWITCH_AUTH_URL,

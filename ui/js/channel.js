@@ -403,6 +403,7 @@ function showChannelView(login, platform, source) {
     p.classList.toggle('hidden', p.id !== 'channel-tab-live');
   });
 
+  TwitchX.state.pendingProfileKey = TwitchX.channelKey(login, platform);
   if (TwitchX.api) TwitchX.api.get_channel_profile(login, platform);
 
   if (TwitchX._channelProfileTimer) clearTimeout(TwitchX._channelProfileTimer);
@@ -417,6 +418,7 @@ function showChannelView(login, platform, source) {
 }
 
 function hideChannelView() {
+  TwitchX.state.pendingProfileKey = '';
   if (TwitchX.channelViewSource === 'browse') {
     TwitchX.switchView('browse-view', 'back');
   } else {

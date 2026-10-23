@@ -542,8 +542,8 @@ class TwitchClient(BasePlatformClient):
         logger.debug("PATCH %s params=%s body=%s", url, params, body)
         resp = await client.patch(url, headers=headers, params=params, json=body)
         resp.raise_for_status()
-        data = resp.json()
-        return data.get("data", [{}])[0]
+        rows = resp.json().get("data") or []
+        return rows[0] if rows else {}
 
     # ── Polymorphic helpers ────────────────────────────────────
 

@@ -480,7 +480,7 @@ class DataComponent(BaseApiComponent):
             login = u["login"].lower()
             url = u.get("profile_image_url", "")
             if url:
-                self._api._user_avatars[login] = url
+                self._api._user_avatars[f"twitch:{login}"] = url
 
         stream_items: list[dict[str, Any]] = []
         for s in twitch_streams:
@@ -980,17 +980,21 @@ class DataComponent(BaseApiComponent):
         if client is None:
             return
 
+        # Echo the requested pair so JS can drop a late reply for a channel
+        # the user has already navigated away from.
+        not_found = json.dumps({"login": login, "platform": platform, "found": False})
+
         def do_fetch() -> None:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
                 raw = loop.run_until_complete(client.get_channel_info(login))
                 if not raw:
-                    self._eval_js("window.onChannelProfile(null)")
+                    self._eval_js(f"window.onChannelProfile({not_found})")
                     return
                 profile = self._normalize_channel_info_to_profile(raw, login, platform)
                 if not profile:
-                    self._eval_js("window.onChannelProfile(null)")
+                    self._eval_js(f"window.onChannelProfile({not_found})")
                     return
                 if platform == "youtube":
                     profile["is_live"] = any(
@@ -1009,10 +1013,11 @@ class DataComponent(BaseApiComponent):
                     f.get("login") == profile["login"] and f.get("platform") == platform
                     for f in favs
                 )
+                profile["requested_login"] = login
                 self._eval_js(f"window.onChannelProfile({json.dumps(profile)})")
             except Exception as e:
                 logger.warning("get_channel_profile failed: %s", e)
-                self._eval_js("window.onChannelProfile(null)")
+                self._eval_js(f"window.onChannelProfile({not_found})")
             finally:
                 self._close_thread_loop(loop)
 

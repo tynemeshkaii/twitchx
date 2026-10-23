@@ -151,7 +151,8 @@ def test_search_channels_all_combines_kick_and_twitch_results(
 
     assert emitted
     payload = emitted[-1].split("window.onSearchResults(", 1)[1].rsplit(")", 1)[0]
-    results = json.loads(payload)
+    results, meta = json.loads(f"[{payload}]")
+    assert meta == {"query": "train", "platform": "all"}
     assert {(item["platform"], item["login"]) for item in results} == {
         ("kick", "trainwreckstv"),
         ("twitch", "train"),

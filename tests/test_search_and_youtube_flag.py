@@ -13,8 +13,17 @@ from ui.api import TwitchXApi
 
 
 def _payloads(calls: list[str], callback: str) -> list:
+    """First argument of each ``window.<callback>(...)`` call."""
+    return [args[0] for args in _call_args(calls, callback)]
+
+
+def _call_args(calls: list[str], callback: str) -> list[list]:
     prefix = f"window.{callback}("
-    return [json.loads(c[len(prefix) : -1]) for c in calls if c.startswith(prefix)]
+    return [
+        json.loads("[" + c[len(prefix) : -1] + "]")
+        for c in calls
+        if c.startswith(prefix)
+    ]
 
 
 @pytest.fixture
@@ -58,6 +67,28 @@ class TestSearchResilience:
 
         results = _payloads(api.calls, "onSearchResults")[-1]  # type: ignore[attr-defined]
         assert [(r["platform"], r["login"]) for r in results] == [("twitch", "foo")]
+
+
+class TestSearchMeta:
+    def test_results_carry_query_and_platform(self, api: TwitchXApi) -> None:
+        with (
+            patch.object(api._kick, "search_channels", AsyncMock(return_value=[])),
+            patch.object(
+                api._twitch, "search_channels", AsyncMock(return_value=[TWITCH_HIT])
+            ),
+            patch("ui.api.favorites.YOUTUBE_ENABLED", False),
+        ):
+            api.search_channels("foo", "all")
+
+        args = _call_args(api.calls, "onSearchResults")[-1]  # type: ignore[attr-defined]
+        assert args[1] == {"query": "foo", "platform": "all"}
+
+    def test_failure_still_carries_query(self, api: TwitchXApi) -> None:
+        with patch("ui.api.favorites.asyncio.gather", side_effect=RuntimeError("x")):
+            api.search_channels("bar", "kick")
+
+        args = _call_args(api.calls, "onSearchResults")[-1]  # type: ignore[attr-defined]
+        assert args == [[], {"query": "bar", "platform": "kick"}]
 
 
 class TestYouTubeDisabled:

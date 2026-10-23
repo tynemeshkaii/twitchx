@@ -178,7 +178,7 @@ class YouTubeClient(BasePlatformClient):
 
     def _effective_api_key(self) -> str:
         """Return api_key from config, or bundled default."""
-        from core import credentials as _creds
+        from core import bundled_credentials as _creds
 
         return self._platform_config().get("api_key", "") or _creds.YOUTUBE_API_KEY
 

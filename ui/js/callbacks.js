@@ -113,7 +113,7 @@ window.onStreamsUpdate = function(data) {
   if (!playerActive) {
     for (const s of TwitchX.state.streams) {
       const streamKey = TwitchX.channelKey(s.login, s.platform || 'twitch');
-      if (!TwitchX.state.thumbnails[streamKey] && s.thumbnail_url) {
+      if (s.thumbnail_url && TwitchX.thumbnailNeedsFetch(streamKey)) {
         TwitchX.api.get_thumbnail(streamKey, s.thumbnail_url);
       }
     }
@@ -131,15 +131,21 @@ window.onStreamsUpdate = function(data) {
   for (const key in TwitchX.state.thumbnails) {
     if (!keepLogins.has(key)) delete TwitchX.state.thumbnails[key];
   }
+  for (const key in TwitchX.state.thumbnailFetchedAt) {
+    if (!keepLogins.has(key)) delete TwitchX.state.thumbnailFetchedAt[key];
+  }
   for (const key in TwitchX.state.prevViewers) {
     if (!keepLogins.has(key)) delete TwitchX.state.prevViewers[key];
   }
 };
 
-window.onSearchResults = function(results) {
-  TwitchX.state.searchResults = results || [];
+window.onSearchResults = function(results, meta) {
   const dd = document.getElementById('search-dropdown');
   const searchInput = document.getElementById('search-input');
+  // Drop replies for a query the user has since changed or cleared.
+  const current = searchInput ? searchInput.value.trim() : '';
+  if (!current || (meta && meta.query !== current)) return;
+  TwitchX.state.searchResults = results || [];
   while (dd.firstChild) dd.removeChild(dd.firstChild);
   if (!results || results.length === 0) {
     dd.classList.remove('visible');
@@ -997,6 +1003,7 @@ window.onThumbnail = function(data) {
   // Backend returns the compound key in the `login` field for backwards compatibility.
   const streamKey = data.login;
   TwitchX.state.thumbnails[streamKey] = data.data;
+  TwitchX.state.thumbnailFetchedAt[streamKey] = Date.now();
   const img = document.querySelector('.stream-card[data-key="' + streamKey + '"] .thumb-img');
   if (img) {
     // A previous load error may have hidden the image — restore it before retrying.
@@ -1251,13 +1258,17 @@ window.onBrowseTopStreams = function(payload) {
 };
 
 window.onChannelProfile = function(profile) {
+  if (!profile) return;
+  const replyKey = TwitchX.channelKey(profile.requested_login || profile.login, profile.platform);
+  if (replyKey !== TwitchX.state.pendingProfileKey) return;
+  TwitchX.state.pendingProfileKey = '';
   if (TwitchX._channelProfileTimer) {
     clearTimeout(TwitchX._channelProfileTimer);
     TwitchX._channelProfileTimer = null;
   }
   document.getElementById('channel-loading').classList.add('hidden');
 
-  if (!profile) {
+  if (profile.found === false) {
     document.getElementById('channel-bio').textContent = 'Channel not found.';
     document.getElementById('channel-profile-card').classList.remove('fade-transparent');
     return;

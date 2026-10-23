@@ -41,7 +41,7 @@ ignore = ["E501"]
 [tool.pyright]
 pythonVersion = "3.11"
 typeCheckingMode = "basic"
-ignore = [".venv", "ui/native_player.py"]
+ignore = [".venv"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

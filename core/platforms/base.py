@@ -12,7 +12,7 @@ from typing import Any
 
 import httpx
 
-from core import credentials as _bundled_creds
+from core import bundled_credentials as _bundled_creds
 from core.platform import PlatformClient
 from core.storage import get_platform_config, load_config
 

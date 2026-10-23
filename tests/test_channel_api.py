@@ -44,10 +44,11 @@ def test_get_channel_profile_twitch_emits_js_callback(
     monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
     monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
 
-    api.get_channel_profile("xqc", "twitch")
+    api.get_channel_profile("XQC", "twitch")
 
     payload = _parse_channel_profile(emitted)
     assert payload["login"] == "xqc"
+    assert payload["requested_login"] == "XQC"
     assert payload["display_name"] == "xQc"
     assert payload["platform"] == "twitch"
     assert payload["is_live"] is True
@@ -167,7 +168,33 @@ def test_get_channel_profile_emits_null_on_empty_response(
 
     api.get_channel_profile("nobody", "twitch")
 
-    assert emitted[-1] == "window.onChannelProfile(null)"
+    assert _parse_channel_profile(emitted) == {
+        "login": "nobody",
+        "platform": "twitch",
+        "found": False,
+    }
+
+
+def test_get_channel_profile_emits_not_found_on_exception(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    api = TwitchXApi()
+    emitted: list[str] = []
+
+    async def fake_channel_info(login: str) -> dict:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(api._kick, "get_channel_info", fake_channel_info)
+    monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+    monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+
+    api.get_channel_profile("Someone", "kick")
+
+    assert _parse_channel_profile(emitted) == {
+        "login": "Someone",
+        "platform": "kick",
+        "found": False,
+    }
 
 
 def test_get_channel_profile_ignores_unknown_platform(

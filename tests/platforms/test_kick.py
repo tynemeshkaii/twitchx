@@ -391,7 +391,7 @@ class TestLoopLocalHttpClient:
 
 def test_get_auth_url_uses_effective_client_id(temp_config_dir):
     """get_auth_url() uses bundled client_id when config is empty."""
-    import core.credentials as creds
+    import core.bundled_credentials as creds
     from core.platforms.kick import KickClient
 
     client = KickClient()
@@ -401,7 +401,7 @@ def test_get_auth_url_uses_effective_client_id(temp_config_dir):
 
 def test_kick_login_works_without_config_credentials(temp_config_dir):
     """KickClient auth flow does not crash when config client_id/secret are empty."""
-    import core.credentials as creds
+    import core.bundled_credentials as creds
     from core.platforms.kick import KickClient
 
     client = KickClient()

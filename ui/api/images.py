@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import io
 import json
@@ -45,9 +46,9 @@ class ImagesComponent(BaseApiComponent):
                             "Cached avatar decode failed for %s: %s", login_key, exc
                         )
 
-                url = self._api._user_avatars.get(
-                    login_key, ""
-                ) or self._api._user_avatars.get(login.lower(), "")
+                url = self._api._user_avatars.get(dedup_key, "")
+                if not url and platform == "kick":
+                    url = self._resolve_kick_avatar(login_key)
                 if not url:
                     return
 
@@ -77,6 +78,30 @@ class ImagesComponent(BaseApiComponent):
             self._api._image_pool.submit(do_fetch)
         except RuntimeError:
             self._api._fetching_avatars.discard(dedup_key)
+
+    def _resolve_kick_avatar(self, slug: str) -> str:
+        """Look up a Kick profile picture URL; the live poll carries none.
+
+        Runs once per channel: the resized image then lives in the disk cache.
+        """
+        loop = asyncio.new_event_loop()
+        try:
+            info = loop.run_until_complete(self._api._kick.get_channel_info(slug))
+        except Exception as exc:
+            logger.debug("Kick avatar lookup failed for %s: %s", slug, exc)
+            return ""
+        finally:
+            self._close_thread_loop(loop)
+        if not isinstance(info, dict):
+            return ""
+        user = info.get("user")
+        url = (user.get("profile_pic") if isinstance(user, dict) else "") or info.get(
+            "profile_picture"
+        )
+        if not isinstance(url, str) or not url:
+            return ""
+        self._api._user_avatars[f"kick:{slug}"] = url
+        return url
 
     def get_thumbnail(self, login: str, url: str) -> None:
         if login in self._api._fetching_thumbnails:

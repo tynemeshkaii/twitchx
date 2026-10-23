@@ -3,12 +3,14 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import sys
 import threading
 import tomllib as _tomllib
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path as _Path
 from typing import Any
+from urllib.parse import quote, urlsplit
 
 import httpx
 
@@ -48,7 +50,11 @@ logger = logging.getLogger(__name__)
 
 
 def _read_project_version() -> str:
-    toml_path = _Path(__file__).parent.parent.parent / "pyproject.toml"
+    # A frozen PyInstaller bundle ships pyproject.toml at sys._MEIPASS
+    # (see TwitchX.spec datas); from source it sits at the repo root.
+    meipass = getattr(sys, "_MEIPASS", None)
+    root = _Path(meipass) if meipass else _Path(__file__).parent.parent.parent
+    toml_path = root / "pyproject.toml"
     try:
         with open(toml_path, "rb") as f:
             data = _tomllib.load(f)
@@ -678,17 +684,35 @@ class TwitchXApi:
     # ─── Browser / URL ───────────────────────────────────────
 
     def open_browser(self, channel: str, platform: str = "twitch") -> None:
-        if channel:
-            if platform == "kick":
-                webbrowser.open(f"https://kick.com/{channel}")
-            elif platform == "youtube":
-                webbrowser.open(f"https://youtube.com/channel/{channel}")
+        if not channel:
+            return
+        if platform == "youtube":
+            # YouTube IDs are case-sensitive: never lower-case them.
+            if channel.startswith("v:"):
+                url = f"https://youtube.com/watch?v={quote(channel[2:], safe='')}"
+            elif channel.startswith("@"):
+                url = f"https://youtube.com/@{quote(channel[1:], safe='')}"
             else:
-                webbrowser.open(f"https://twitch.tv/{channel}")
+                url = f"https://youtube.com/channel/{quote(channel, safe='')}"
+        elif platform == "kick":
+            url = f"https://kick.com/{quote(channel, safe='')}"
+        else:
+            url = f"https://twitch.tv/{quote(channel, safe='')}"
+        webbrowser.open(url)
 
     def open_url(self, url: str) -> None:
-        if url:
-            webbrowser.open(url)
+        # Links come from chat and channel bios: only web URLs may reach the
+        # OS, never file://, javascript: or app-registered schemes.
+        if not url:
+            return
+        try:
+            scheme = urlsplit(url).scheme.lower()
+        except ValueError:
+            scheme = ""
+        if scheme not in {"http", "https"}:
+            logger.warning("open_url: refusing non-http(s) URL %.200r", url)
+            return
+        webbrowser.open(url)
 
     # ─── Shared infrastructure (used by components) ────────────
 
