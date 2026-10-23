@@ -6,7 +6,8 @@ missing icon never fails loudly: it just draws a dot in a menu.
 Only string literals are checked. Names that reach the helpers through
 variables are skipped; at the time of writing those are:
   - palette.js   setIconOnly(iconEl, icon, …)       — `icon:` fields of the command list
-  - render.js    EMPTY_STATE_ICONS[config.illustration] (the `|| 'info'` fallback is checked)
+  - render.js    EMPTY_STATE_ICONS[config.illustration] — the map's values and
+                 the `|| 'info'` fallback are checked (see _map_values)
   - init.js      iconMap[saved], DENSITY_ICONS[next] — density toggle maps
   - icons.js     renderIcon(name, size) inside mountIcons / TwitchX.icon
   - utils.js     makeIcon(name, …) inside setIconText / setIconOnly
@@ -41,6 +42,15 @@ def _literals(expr: str) -> set[str]:
     return {a or b for a, b in _LITERAL.findall(expr)}
 
 
+def _map_values(source: str, name: str) -> set[str]:
+    """String values of a top-level `var|const|let NAME = { … };` object."""
+    body = re.search(rf"\b(?:var|const|let)\s+{name}\s*=\s*\{{(.*?)\}};", source, re.S)
+    assert body, f"{name} object not found"
+    return {
+        a or b for a, b in re.findall(r""":\s*(?:'([^']*)'|"([^"]*)")""", body.group(1))
+    }
+
+
 def _used_names() -> dict[str, set[str]]:
     """icon name → set of places that use it."""
     used: dict[str, set[str]] = {}
@@ -62,6 +72,10 @@ def _used_names() -> dict[str, set[str]]:
         for arg in first_arg.findall(source):
             for name in _literals(arg):
                 add(name, f"{path.name} renderIcon")
+
+    render = (UI / "js" / "render.js").read_text(encoding="utf-8")
+    for name in _map_values(render, "EMPTY_STATE_ICONS"):
+        add(name, "render.js EMPTY_STATE_ICONS")
     return used
 
 
@@ -70,6 +84,7 @@ def test_parsers_find_icons_and_usages() -> None:
     assert len(_icon_names()) > 40
     used = _used_names()
     assert "close" in used and "pin" in used and "check" in used
+    assert "render.js EMPTY_STATE_ICONS" in used["star"]
 
 
 def test_every_used_icon_exists() -> None:
