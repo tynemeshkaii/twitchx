@@ -11,6 +11,7 @@ import time
 from typing import Any
 from urllib.parse import urlencode
 
+import httpx
 from curl_cffi import requests as curl_requests
 
 from core.platforms.base import (
@@ -42,6 +43,8 @@ KICK_TYPESENSE_API_KEY = "nXIMW0iEN6sMujFYjFuhdrSwVow3pDQu"
 # GET /public/v1/channels accepts up to 50 slugs per request (docs.kick.com).
 KICK_CHANNELS_BATCH = 50
 KICK_LIVE_CACHE_TTL = 5.0
+# Seconds to wait before asking for an app token again after a failure.
+KICK_APP_TOKEN_RETRY_AFTER = 300.0
 
 
 # ── PKCE helpers ─────────────────────────────────────────────
@@ -67,6 +70,13 @@ class KickClient(BasePlatformClient):
         super().__init__()
         # slug → (fetched_at, live item or None when offline)
         self._live_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
+        # In-memory app access token (client_credentials) and its expiry. Kept
+        # out of config: access_token there means "logged-in user" to the UI
+        # and to chat, and an app token cannot send chat messages.
+        self._app_token: str = ""
+        self._app_token_expires_at: float = 0.0
+        # After a refused/failed app-token request, don't retry on every GET.
+        self._app_token_failed_at: float = 0.0
 
     def _client_timeout(self) -> float:
         return 15.0
@@ -231,6 +241,49 @@ class KickClient(BasePlatformClient):
                     return None
             return None
 
+    async def _ensure_app_token(self, stale_token: str | None = None) -> str | None:
+        """App access token (client_credentials) for the public API.
+
+        Every /public/v1 endpoint answers 401 without a bearer token, so a user
+        who never logged in to Kick needs this to see their Kick favorites.
+        ``stale_token`` forces a new token unless another caller already
+        replaced it. Returns None if there are no credentials or Kick refuses.
+        """
+        async with self._get_token_lock():
+            if (
+                self._app_token
+                and self._app_token != stale_token
+                and self._app_token_expires_at > time.time() + 60
+            ):
+                return self._app_token
+            cid, csec = self._effective_creds()
+            if not cid or not csec:
+                return None
+            if time.time() - self._app_token_failed_at < KICK_APP_TOKEN_RETRY_AFTER:
+                return None
+            try:
+                resp = await self._get_client().post(
+                    f"{KICK_AUTH_URL}/oauth/token",
+                    data={
+                        "client_id": cid,
+                        "client_secret": csec,
+                        "grant_type": "client_credentials",
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                token = data["access_token"]
+            except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+                logger.warning("Kick app token request failed: %s", exc)
+                self._app_token_failed_at = time.time()
+                return None
+            self._app_token_failed_at = 0.0
+            self._app_token = str(token)
+            self._app_token_expires_at = time.time() + float(
+                data.get("expires_in", 3600) or 3600
+            )
+            return self._app_token
+
     # ── Generic GET ──────────────────────────────────────────
 
     async def _get(
@@ -240,6 +293,10 @@ class KickClient(BasePlatformClient):
         auth_required: bool = False,
     ) -> Any:
         token = await self._ensure_token()
+        is_app_token = False
+        if not token and not auth_required:
+            token = await self._ensure_app_token()
+            is_app_token = bool(token)
         headers: dict[str, str] = {}
         if token:
             headers["Authorization"] = f"Bearer {token}"
@@ -260,7 +317,11 @@ class KickClient(BasePlatformClient):
                 continue
             if resp.status_code == 401 and token and not refreshed:
                 refreshed = True
-                new_token = await self._refresh_after_401(token)
+                new_token = (
+                    await self._ensure_app_token(stale_token=token)
+                    if is_app_token
+                    else await self._refresh_after_401(token)
+                )
                 if new_token:
                     token = new_token
                     headers["Authorization"] = f"Bearer {new_token}"
@@ -511,23 +572,42 @@ class KickClient(BasePlatformClient):
         items: list[Any] = data.get("data", []) if isinstance(data, dict) else []
         results: list[dict[str, Any]] = []
         for s in items:
-            channel = s.get("channel", {})
-            user = channel.get("user", {})
-            categories = s.get("categories", [])
-            cat = categories[0] if categories else {}
+            if not isinstance(s, dict):
+                continue
+            # The public API returns flat items (slug, stream_title, category,
+            # started_at, thumbnail URL, profile_picture); the nested
+            # channel/user/categories shape is the older payload, still read
+            # as a fallback.
+            raw_channel = s.get("channel")
+            channel: dict[str, Any] = (
+                raw_channel if isinstance(raw_channel, dict) else {}
+            )
+            raw_user = channel.get("user")
+            user: dict[str, Any] = raw_user if isinstance(raw_user, dict) else {}
+            raw_cat = s.get("category")
+            cat: dict[str, Any] = raw_cat if isinstance(raw_cat, dict) else {}
+            if not cat:
+                categories = s.get("categories")
+                if isinstance(categories, list) and categories:
+                    cat = categories[0] if isinstance(categories[0], dict) else {}
+            thumbnail = s.get("thumbnail")
+            if isinstance(thumbnail, dict):
+                thumbnail = thumbnail.get("src", "")
+            slug = s.get("slug") or channel.get("slug", "")
             results.append(
                 {
                     "platform": "kick",
-                    "channel_id": str(channel.get("id", "")),
-                    "channel_login": channel.get("slug", ""),
-                    "display_name": user.get("username", channel.get("slug", "")),
-                    "title": s.get("session_title", ""),
+                    "channel_id": _str_id(s.get("channel_id") or channel.get("id")),
+                    "channel_login": slug,
+                    "display_name": user.get("username") or slug,
+                    "title": s.get("stream_title") or s.get("session_title", ""),
                     "category": cat.get("name", ""),
-                    "category_id": str(cat.get("id", "")),
+                    "category_id": _str_id(cat.get("id")),
                     "viewers": s.get("viewer_count", 0),
-                    "started_at": s.get("created_at", ""),
-                    "thumbnail_url": (s.get("thumbnail") or {}).get("src", ""),
-                    "avatar_url": user.get("profile_pic", ""),
+                    "started_at": s.get("started_at") or s.get("created_at", ""),
+                    "thumbnail_url": thumbnail if isinstance(thumbnail, str) else "",
+                    "avatar_url": s.get("profile_picture")
+                    or user.get("profile_pic", ""),
                 }
             )
         return results

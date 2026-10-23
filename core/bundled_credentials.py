@@ -10,7 +10,9 @@ the user's own keys from config.
 from __future__ import annotations
 
 try:
-    from core import credentials as _source  # pyright: ignore[reportAttributeAccessIssue]
+    from core import (
+        credentials as _source,  # pyright: ignore[reportAttributeAccessIssue]
+    )
 
     HAS_BUNDLED_CREDENTIALS = True
 except ImportError:

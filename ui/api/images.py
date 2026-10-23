@@ -5,6 +5,9 @@ import base64
 import io
 import json
 import logging
+import threading
+import time
+from typing import Any
 
 from PIL import Image
 
@@ -14,9 +17,20 @@ from ._base import BaseApiComponent
 
 logger = logging.getLogger(__name__)
 
+# A Kick channel whose picture could not be found is not looked up again for
+# this long: each lookup costs a public-API call plus two kick.com requests,
+# and get_avatar is re-requested for every favorite on every poll.
+KICK_AVATAR_MISS_TTL = 30 * 60
+
 
 class ImagesComponent(BaseApiComponent):
     """Avatar and thumbnail fetching."""
+
+    def __init__(self, parent: Any) -> None:
+        super().__init__(parent)
+        # slug → time.monotonic() of the last failed Kick avatar lookup
+        self._kick_avatar_misses: dict[str, float] = {}
+        self._kick_avatar_lock = threading.Lock()
 
     def get_avatar(self, login: str, platform: str = "twitch") -> None:
         login_key = login if platform == "youtube" else login.lower()
@@ -83,7 +97,23 @@ class ImagesComponent(BaseApiComponent):
         """Look up a Kick profile picture URL; the live poll carries none.
 
         Runs once per channel: the resized image then lives in the disk cache.
+        A miss is remembered for KICK_AVATAR_MISS_TTL seconds.
         """
+        with self._kick_avatar_lock:
+            missed_at = self._kick_avatar_misses.get(slug)
+            if missed_at is not None:
+                if time.monotonic() - missed_at < KICK_AVATAR_MISS_TTL:
+                    return ""
+                del self._kick_avatar_misses[slug]
+        url = self._lookup_kick_avatar(slug)
+        if url:
+            self._api._user_avatars[f"kick:{slug}"] = url
+        else:
+            with self._kick_avatar_lock:
+                self._kick_avatar_misses[slug] = time.monotonic()
+        return url
+
+    def _lookup_kick_avatar(self, slug: str) -> str:
         loop = asyncio.new_event_loop()
         try:
             info = loop.run_until_complete(self._api._kick.get_channel_info(slug))
@@ -98,10 +128,7 @@ class ImagesComponent(BaseApiComponent):
         url = (user.get("profile_pic") if isinstance(user, dict) else "") or info.get(
             "profile_picture"
         )
-        if not isinstance(url, str) or not url:
-            return ""
-        self._api._user_avatars[f"kick:{slug}"] = url
-        return url
+        return url if isinstance(url, str) else ""
 
     def get_thumbnail(self, login: str, url: str) -> None:
         if login in self._api._fetching_thumbnails:

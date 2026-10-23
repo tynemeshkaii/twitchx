@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import logging
 import threading
 import time
@@ -73,6 +74,52 @@ def _refresh_rejected(resp: httpx.Response) -> bool:
     return resp.status_code in (400, 401)
 
 
+# A refresh is a single HTTP round trip; past this, assume a wedged holder
+# and proceed rather than hang the caller's thread forever.
+_TOKEN_THREAD_LOCK_TIMEOUT = 60.0
+_TOKEN_LOCK_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
+    max_workers=8, thread_name_prefix="twitchx-token-lock"
+)
+
+
+class _TokenGuard:
+    """``async with``: per-loop asyncio.Lock, then a process-wide threading.Lock."""
+
+    def __init__(self, loop_lock: asyncio.Lock, thread_lock: threading.Lock) -> None:
+        self._loop_lock = loop_lock
+        self._thread_lock = thread_lock
+        self._thread_held = False
+
+    async def __aenter__(self) -> None:
+        await self._loop_lock.acquire()
+        thread_lock = self._thread_lock
+        # A concurrent.futures future, not a loop one: its done-callback runs
+        # in the worker thread, so it still fires after the caller's loop closed.
+        cfut = _TOKEN_LOCK_EXECUTOR.submit(
+            thread_lock.acquire, True, _TOKEN_THREAD_LOCK_TIMEOUT
+        )
+        try:
+            self._thread_held = await asyncio.shield(asyncio.wrap_future(cfut))
+        except BaseException:
+            # Cancelled (e.g. wait_for timeout) while the worker still waits:
+            # release the lock as soon as that worker gets it, or it leaks.
+            def _release_late(f: concurrent.futures.Future[bool]) -> None:
+                if not f.cancelled() and f.exception() is None and f.result():
+                    thread_lock.release()
+
+            cfut.add_done_callback(_release_late)
+            self._loop_lock.release()
+            raise
+        if not self._thread_held:
+            logger.warning("Token lock wait timed out; continuing without it")
+
+    async def __aexit__(self, *exc: object) -> None:
+        if self._thread_held:
+            self._thread_held = False
+            self._thread_lock.release()
+        self._loop_lock.release()
+
+
 class BasePlatformClient(PlatformClient):
     """Shared infrastructure for all platform API clients.
 
@@ -91,6 +138,7 @@ class BasePlatformClient(PlatformClient):
     # --- Per-event-loop httpx client pooling (keyed by (loop, PLATFORM_ID)) ---
     _loop_clients: dict[tuple[asyncio.AbstractEventLoop, str], httpx.AsyncClient] = {}
     _token_locks: dict[tuple[asyncio.AbstractEventLoop, str], asyncio.Lock] = {}
+    _thread_token_locks: dict[str, threading.Lock] = {}
     _loop_state_lock = threading.Lock()
 
     def __init__(self) -> None:
@@ -140,8 +188,16 @@ class BasePlatformClient(PlatformClient):
                 self._loop_clients[key] = client
             return client
 
-    # --- Per-loop token lock ---
-    def _get_token_lock(self) -> asyncio.Lock:
+    # --- Token lock (per loop + process-wide per platform) ---
+    def _get_token_lock(self) -> _TokenGuard:
+        """Serialize token checks/refreshes across coroutines *and* threads.
+
+        Every worker thread runs its own event loop, so an asyncio.Lock alone
+        lets polling, chat and image threads refresh at the same time with the
+        same refresh token — Kick rotates it, so the losers get 400 and wipe
+        the login. The asyncio lock is taken first (one contender per loop),
+        then the platform's threading lock off-loop, so no loop ever blocks.
+        """
         loop = asyncio.get_running_loop()
         key = (loop, self.PLATFORM_ID)
         with self._loop_state_lock:
@@ -149,7 +205,11 @@ class BasePlatformClient(PlatformClient):
             if lock is None:
                 lock = asyncio.Lock()
                 self._token_locks[key] = lock
-            return lock
+            thread_lock = self._thread_token_locks.get(self.PLATFORM_ID)
+            if thread_lock is None:
+                thread_lock = threading.Lock()
+                self._thread_token_locks[self.PLATFORM_ID] = thread_lock
+        return _TokenGuard(lock, thread_lock)
 
     # --- Cleanup ---
     async def close(self) -> None:
