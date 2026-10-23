@@ -62,13 +62,6 @@ function doLogout() {
   if (TwitchX.api) TwitchX.api.logout();
 }
 
-function doBrowser() {
-  if (!TwitchX.state.selectedChannel || !TwitchX.api) return;
-  const selectedStream = TwitchX.findStreamByKey(TwitchX.state.selectedChannelKey);
-  const platform = (selectedStream && selectedStream.platform) || TwitchX.state.selectedPlatform || 'twitch';
-  TwitchX.api.open_browser(TwitchX.state.selectedChannel, platform);
-}
-
 function doRefresh() {
   if (TwitchX.api) TwitchX.api.refresh();
 }
@@ -193,7 +186,6 @@ TwitchX.hideUserProfile = hideUserProfile;
 TwitchX.showKickProfile = showKickProfile;
 TwitchX.hideKickProfile = hideKickProfile;
 TwitchX.doLogout = doLogout;
-TwitchX.doBrowser = doBrowser;
 TwitchX.doRefresh = doRefresh;
 TwitchX.hydrateFavoritesFromConfig = hydrateFavoritesFromConfig;
 TwitchX.requestConfig = requestConfig;

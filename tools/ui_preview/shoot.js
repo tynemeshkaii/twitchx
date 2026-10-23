@@ -19,8 +19,10 @@ const OUT = path.join(ROOT, '.preview');
 const APP = 'file://' + path.join(OUT, 'app.html');
 
 // name → { opts for __boot, action run after boot }
+// The minimum window (app.py min_size) for the screens most likely to clip.
+const MIN_SIZE = [700, 500];
 const SCENARIOS = {
-  grid: {},
+  grid: { sizes: [MIN_SIZE] },
   welcome: { opts: { empty: true, loggedOut: true } },
   selected: { action: p => p.click('.stream-card') },
   context: { action: p => p.click('.stream-card', { button: 'right' }) },
@@ -31,7 +33,8 @@ const SCENARIOS = {
   account: { action: p => p.click('#account-chip') },
   browse: { action: p => p.evaluate(() => window.__scenario.browse()) },
   channel: { action: p => p.evaluate(() => window.__scenario.channel()) },
-  player: { action: p => p.evaluate(() => window.__scenario.player()) },
+  player: { sizes: [MIN_SIZE], action: p => p.evaluate(() => window.__scenario.player()) },
+  mini: { action: p => p.evaluate(() => TwitchX.toggleMiniMode()) },
   multistream: { action: p => p.evaluate(() => TwitchX.openMultistreamView()) },
 };
 const SIZES = [[960, 640], [1280, 800]];
@@ -44,7 +47,7 @@ const THEMES = ['dark', 'light'];
   for (const [name, sc] of Object.entries(SCENARIOS)) {
     if (only.length && !only.includes(name)) continue;
     for (const theme of THEMES) {
-      for (const [w, h] of SIZES) {
+      for (const [w, h] of SIZES.concat(sc.sizes || [])) {
         const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 2, colorScheme: theme });
         await ctx.addInitScript(t => { try { localStorage.setItem('twitchx.theme.mode', t); } catch (e) {} }, theme);
         const page = await ctx.newPage();

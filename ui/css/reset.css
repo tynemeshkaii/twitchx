@@ -102,7 +102,7 @@ body {
   .browse-stream-card:hover, .channel-media-card:hover, .channel-media-item:hover {
     border-color: var(--border-strong);
   }
-  .stream-card.selected, .channel-item.selected,
+  #app.keyboard-selection .stream-card.selected, #app.keyboard-selection .channel-item.selected,
   .stream-card:focus-visible, .channel-item:focus-visible,
   .browse-category-card:focus-visible, .browse-stream-card:focus-visible,
   .btn:focus-visible, .bar-btn:focus-visible, .player-header-btn:focus-visible,

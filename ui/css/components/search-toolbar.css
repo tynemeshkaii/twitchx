@@ -15,10 +15,36 @@
   color: var(--text-primary);
 }
 
+/* ── Toolbar icon buttons (refresh) ─────────────────────── */
+.bar-btn {
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--font-lg);
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease, transform var(--duration-fast) ease;
+}
+.bar-btn:hover {
+  background: var(--hover-bg-strong);
+  color: var(--text-primary);
+}
+.bar-btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
 /* ── Search field (opens the command palette) ─────────────── */
 .toolbar-search {
-  min-width: 0;
-  width: 240px;
+  flex: 0 1 240px;
+  min-width: 32px;
   height: 32px;
   display: flex;
   align-items: center;
@@ -69,4 +95,13 @@
   font-weight: var(--weight-semibold);
   color: var(--text-muted);
   text-align: right;
+}
+
+/* Narrow windows: the search field keeps its icon and shortcut only. */
+@container (max-width: 560px) {
+  .toolbar-search-label { display: none; }
+  .toolbar-search { flex: 0 0 auto; }
+}
+@container (max-width: 440px) {
+  .toolbar-search-kbd { display: none; }
 }

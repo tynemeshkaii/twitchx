@@ -101,8 +101,6 @@ function showPlayerView() {
   // watchingChannel/watchingChannelKey come from onStreamReady's payload. The
   // sidebar selection may have moved during the load, or never pointed at this
   // stream (Browse, palette, VOD), and the chat filter keys off these.
-  document.getElementById('watch-btn').classList.add('active');
-  document.getElementById('stop-player-btn').classList.remove('hidden');
   document.getElementById('live-dot').classList.add('visible');
 
   const chatPanel = document.getElementById('chat-panel');
@@ -271,8 +269,6 @@ function hidePlayerView(skipViewTransition) {
   TwitchX.chatPlatform = null;
   TwitchX.chatAuthenticated = false;
   TwitchX.state.playerState = 'idle';
-  document.getElementById('watch-btn').classList.remove('active');
-  document.getElementById('stop-player-btn').classList.add('hidden');
   document.getElementById('live-dot').classList.remove('visible');
   document.getElementById('toggle-chat-btn').classList.remove('hidden');
   TwitchX.setStatus('', 'info');
@@ -356,6 +352,8 @@ function cycleStream(dir) {
     idx = (idx + dir + streams.length) % streams.length;
   }
   TwitchX.selectChannel(streams[idx].login, streams[idx].platform || 'twitch');
+  // Show the selection now that the keyboard is driving it.
+  document.getElementById('app').classList.add('keyboard-selection');
 }
 
 function togglePiP(video) {
@@ -1646,10 +1644,8 @@ function _startFullscreenAutoHide() {
   }
 
   function _showControls() {
-    var bar = document.getElementById('player-bar');
     var header = document.getElementById('player-header');
     var stats = document.getElementById('stats-overlay');
-    if (bar) bar.classList.remove('fs-hidden');
     if (header) header.classList.remove('fs-hidden');
     if (stats && TwitchX._statsOverlayActive) stats.classList.remove('hidden');
   }
@@ -1658,10 +1654,8 @@ function _startFullscreenAutoHide() {
     if (!TwitchX._fsAutoHideActive) return;
     var video = getPlayerVideo();
     if (!video || !isVideoFullscreen(video)) return;
-    var bar = document.getElementById('player-bar');
     var header = document.getElementById('player-header');
     var stats = document.getElementById('stats-overlay');
-    if (bar) bar.classList.add('fs-hidden');
     if (header) header.classList.add('fs-hidden');
     if (stats) stats.classList.add('hidden');
   }

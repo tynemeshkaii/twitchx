@@ -34,9 +34,12 @@
   border-color: var(--focus-ring);
   box-shadow: 0 0 0 2px var(--focus-ring-offset);
 }
-.stream-card.selected {
-  border-color: var(--border-accent);
-  box-shadow: 0 0 0 1px var(--border-accent);
+/* The selection only matters to the keyboard (Space = watch, ←/→ = next
+   stream); a mouse click starts the stream at once. It is drawn like focus,
+   and only after the arrow keys moved it (#app.keyboard-selection). */
+#app.keyboard-selection .stream-card.selected {
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 2px var(--focus-ring-offset);
 }
 .stream-card.offline {
   filter: grayscale(0.7);

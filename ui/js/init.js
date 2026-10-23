@@ -132,6 +132,9 @@ TwitchX._bindSidebarEvents = function() {
   const kickLogoutLink = document.getElementById('kick-logout-link');
   if (kickLogoutLink) kickLogoutLink.addEventListener('click', function() { if (TwitchX.api) TwitchX.api.kick_logout(); });
 
+  var miniExitBtn = document.getElementById('mini-exit-btn');
+  if (miniExitBtn) miniExitBtn.addEventListener('click', TwitchX.toggleMiniMode);
+
   // Sidebar collapse toggle
   var collapseBtn = document.getElementById('sidebar-collapse-btn');
   if (collapseBtn) collapseBtn.addEventListener('click', function() {
@@ -279,10 +282,6 @@ TwitchX._bindToolbarEvents = function() {
 TwitchX.closeSortMenu = closeSortMenu;
 
 TwitchX._bindPlayerEvents = function() {
-  const watchBtn = document.getElementById('watch-btn');
-  if (watchBtn) watchBtn.addEventListener('click', TwitchX.doWatch);
-  const stopBtn = document.getElementById('stop-player-btn');
-  if (stopBtn) stopBtn.addEventListener('click', function() { if (TwitchX.api) TwitchX.api.stop_player(); });
   const closeBtn = document.getElementById('close-player-btn');
   if (closeBtn) closeBtn.addEventListener('click', function() { if (TwitchX.api) TwitchX.api.stop_player(); });
   const fsBtn = document.getElementById('fullscreen-player-btn');
@@ -297,10 +296,6 @@ TwitchX._bindPlayerEvents = function() {
   if (pipBtn) pipBtn.addEventListener('click', function() {
     TwitchX.togglePiP(TwitchX.getPlayerVideo());
   });
-  const browserBtn = document.getElementById('browser-btn');
-  if (browserBtn) browserBtn.addEventListener('click', TwitchX.doBrowser);
-  const refreshBtn = document.getElementById('refresh-btn');
-  if (refreshBtn) refreshBtn.addEventListener('click', TwitchX.doRefresh);
   const toggleChatBtn = document.getElementById('toggle-chat-btn');
   if (toggleChatBtn) toggleChatBtn.addEventListener('click', TwitchX.toggleChatPanel);
   const recordBtn = document.getElementById('record-btn');
@@ -928,6 +923,10 @@ TwitchX._bindPaletteEvents = function() {
 TwitchX._bindGlobalEvents = function() {
   TwitchX.initSidebarScrollShadow();
   TwitchX.initChatScrollShadow();
+  // A mouse click on a channel starts it, so the selection ring goes away.
+  document.addEventListener('mousedown', function() {
+    document.getElementById('app').classList.remove('keyboard-selection');
+  }, true);
   document.addEventListener('keydown', function(e) {
     if ((e.key !== 'Enter' && e.key !== ' ') || !e.target.matches('a[role="button"]')) return;
     e.preventDefault();

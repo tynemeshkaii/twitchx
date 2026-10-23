@@ -31,7 +31,6 @@
 <link rel="stylesheet" href="css/components/section-header.css">
 <link rel="stylesheet" href="css/components/stream-card.css">
 <link rel="stylesheet" href="css/components/empty-state.css">
-<link rel="stylesheet" href="css/components/player-bar.css">
 <link rel="stylesheet" href="css/components/chat.css">
 <link rel="stylesheet" href="css/components/context-menu.css">
 <link rel="stylesheet" href="css/components/settings.css">
@@ -58,6 +57,7 @@
         <!-- Room for the traffic lights; shown only with the integrated title bar. -->
         <div class="sidebar-titlebar titlebar-drag" aria-hidden="true"></div>
         <button id="sidebar-collapse-btn" class="sidebar-collapse-btn" title="Collapse sidebar" aria-label="Toggle sidebar collapse"><span data-icon="chevron-left" data-size="16"></span></button>
+        <button id="mini-exit-btn" class="sidebar-collapse-btn" type="button" title="Exit mini mode (&#8679;&#8984;M)" aria-label="Exit mini mode"><span data-icon="mini-exit" data-size="16"></span></button>
         <nav id="sidebar-nav" aria-label="Sections">
           <button class="sidebar-nav-item" type="button" data-nav="following" aria-current="page" title="Following"><span data-icon="star" data-size="16"></span><span class="sidebar-nav-label">Following</span><span id="sidebar-nav-live-count" class="sidebar-nav-count"></span></button>
           <button class="sidebar-nav-item" type="button" data-nav="browse" title="Browse"><span data-icon="browse" data-size="16"></span><span class="sidebar-nav-label">Browse</span></button>
@@ -374,24 +374,6 @@
     </main>
   </div>
 
-  <!-- Player bar -->
-  <div id="player-bar">
-    <div class="bar-group bar-group--left">
-      <button id="watch-btn"><span data-icon="play" data-size="16"></span> <span class="btn-label">Watch</span></button>
-      <button id="stop-player-btn" class="hidden" title="Stop playback" aria-label="Stop"><span data-icon="stop" data-size="16"></span></button>
-    </div>
-    <div class="bar-group bar-group--center">
-      <span id="status-text" aria-live="polite"></span>
-      <span id="total-viewers" class="btn-label"></span>
-      <span id="updated-time" class="btn-label"></span>
-    </div>
-    <div class="bar-group bar-group--right">
-      <button class="bar-btn" id="browser-btn" title="Open in browser" aria-label="Open in Browser"><span data-icon="browser" data-size="16"></span></button>
-      <button class="bar-btn" id="refresh-btn" title="Refresh (R)" aria-label="Refresh streams"><span data-icon="refresh" data-size="16"></span></button>
-      <button class="bar-btn" id="mini-mode-btn" title="Mini mode" aria-label="Toggle mini mode"><span data-icon="minimize" data-size="16"></span></button>
-      <button class="bar-btn" id="settings-btn" title="Settings (&#8984;,)" aria-label="Settings"><span data-icon="settings" data-size="16"></span></button>
-    </div>
-  </div>
 </div>
 
 <!-- Context menu -->
@@ -399,6 +381,7 @@
   <div class="ctx-item" data-action="watch" role="menuitem" tabindex="-1"><span data-icon="play" data-size="14"></span> Watch in App</div>
   <div class="ctx-item" data-action="multistream" role="menuitem" tabindex="-1"><span data-icon="grid-layout" data-size="14"></span> Add to Multi-stream</div>
   <div class="ctx-item" data-action="watch-external" role="menuitem" tabindex="-1"><span data-icon="external-link" data-size="14"></span> Open in External Player</div>
+  <div class="ctx-item" data-action="browser" role="menuitem" tabindex="-1"><span data-icon="browser" data-size="14"></span> Open in Browser</div>
   <div class="ctx-separator" role="separator"></div>
   <div class="ctx-item" data-action="favorite" role="menuitem" tabindex="-1"><span data-icon="star" data-size="14"></span> Add to Favorites</div>
   <div class="ctx-item" data-action="pin" role="menuitem" tabindex="-1"><span data-icon="pin" data-size="14"></span> Pin to top</div>

@@ -304,8 +304,9 @@ function createStreamCard(s) {
   card.appendChild(info);
 
   // Events
-  card.addEventListener('click', function() { TwitchX.selectChannel(s.login, s.platform || 'twitch'); });
-  card.addEventListener('dblclick', function() { TwitchX.selectChannel(s.login, s.platform || 'twitch'); TwitchX.doWatch(); });
+  // One click starts the stream. The selection stays: the keyboard shortcuts
+  // (watch, next/previous stream) work from it.
+  card.addEventListener('click', function() { TwitchX.selectChannel(s.login, s.platform || 'twitch'); TwitchX.doWatch(); });
   card.addEventListener('contextmenu', function(e) { TwitchX.showContextMenu(e, s.login, s.platform || 'twitch'); });
   card.addEventListener('keydown', function(e) {
     if (e.key === 'Enter' || e.key === ' ') {

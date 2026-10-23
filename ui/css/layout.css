@@ -67,6 +67,7 @@
   min-width: 0;
   overflow: hidden;
   gap: var(--space-12);
+  container-type: inline-size;
 }
 #toolbar.hidden { display: none; }
 
@@ -76,8 +77,8 @@
   gap: var(--space-8);
   min-width: 0;
 }
-.toolbar-group--left { flex: 1; min-width: 0; }
-.toolbar-group--right { flex-shrink: 0; }
+.toolbar-group--left { flex: 0 0 auto; }
+.toolbar-group--right { flex: 1 1 auto; justify-content: flex-end; }
 
 /* ── Mini Mode ──────────────────────────────────────────── */
 #app.mini #content {
@@ -89,8 +90,16 @@
   border-right: none;
   min-width: 0;
 }
-#app.mini #browse-nav-wrapper { display: none; }
-#app.mini #kick-profile-area { display: none; }
+/* Mini mode keeps only the live list: no navigation, no account chip. */
+#app.mini #sidebar-nav,
+#app.mini #sidebar-collapse-btn,
+#app.mini .sidebar-footer,
+#app.mini #channel-list .sidebar-section.offline {
+  display: none;
+}
+#app.mini #mini-exit-btn {
+  display: inline-flex;
+}
 
 /* ── Integrated title bar ───────────────────────────────── */
 /* app.py adds .titlebar-integrated once the native title bar is hidden and the

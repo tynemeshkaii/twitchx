@@ -37,8 +37,6 @@ TWO_PX_ALLOWED = {
     ("gap", ".segmented"),
     ("gap", ".emote-grid"),
     ("gap", ".drag-handle"),
-    ("gap", ".bar-group--right"),
-    ("gap", "#player-bar"),
     ("gap", ".player-volume"),
     ("margin-right", ".chat-msg .badge"),
     ("margin-right", ".badge-fallback"),

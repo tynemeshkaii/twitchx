@@ -340,8 +340,7 @@ function createSidebarItem(entry, streamMap) {
 
   _setupSidebarTooltip(item, entry, streamMap);
 
-  item.addEventListener('click', function() { TwitchX.selectChannel(login, platform); });
-  item.addEventListener('dblclick', function() { TwitchX.selectChannel(login, platform); TwitchX.doWatch(); });
+  item.addEventListener('click', function() { TwitchX.selectChannel(login, platform); TwitchX.doWatch(); });
   item.addEventListener('contextmenu', function(e) { TwitchX.showSidebarContextMenu(e, login, platform); });
   item.addEventListener('keydown', function(e) {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -586,8 +585,7 @@ function createRailAvatar(entry, isLive, streamMap) {
 
   _setupSidebarTooltip(item, entry, streamMap);
 
-  item.addEventListener('click', function() { TwitchX.selectChannel(login, platform); });
-  item.addEventListener('dblclick', function() { TwitchX.selectChannel(login, platform); TwitchX.doWatch(); });
+  item.addEventListener('click', function() { TwitchX.selectChannel(login, platform); TwitchX.doWatch(); });
   item.addEventListener('contextmenu', function(e) { TwitchX.showSidebarContextMenu(e, login, platform); });
   item.addEventListener('keydown', function(e) {
     if (e.key === 'Enter' || e.key === ' ') {

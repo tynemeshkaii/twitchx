@@ -156,10 +156,10 @@
 }
 
 /* ── Icon rail — selection / watching state ─────────────── */
-.rail-avatar.selected {
-  box-shadow: 0 0 0 2px var(--border-accent);
+#app.keyboard-selection .rail-avatar.selected {
+  box-shadow: 0 0 0 3px var(--focus-ring-offset);
 }
-.rail-avatar.selected::before {
+#app.keyboard-selection .rail-avatar.selected::before {
   content: "";
   position: absolute;
   left: -7px;
@@ -172,7 +172,7 @@
 .rail-avatar.watching {
   box-shadow: 0 0 0 2px var(--border-accent);
 }
-.rail-avatar.selected.watching {
+#app.keyboard-selection .rail-avatar.selected.watching {
   box-shadow: 0 0 0 2px var(--border-accent-strong);
 }
 
@@ -444,10 +444,10 @@
   background: var(--hover-bg);
   border-color: var(--border-subtle);
 }
-.channel-item.selected {
-  background: var(--surface-selected);
-  border-color: var(--border-accent);
-  box-shadow: inset 0 1px 0 var(--border-subtle);
+/* Drawn like :focus-visible, and only for keyboard selection (see stream-card.css). */
+#app.keyboard-selection .channel-item.selected {
+  background: var(--accent-dim);
+  box-shadow: inset 0 0 0 1px var(--focus-ring);
 }
 
 .channel-item .accent-bar {
@@ -455,7 +455,7 @@
   background: transparent; border-radius: 0 2px 2px 0;
   transition: background var(--duration-fast) ease; flex-shrink: 0;
 }
-.channel-item.selected .accent-bar { background: var(--accent); opacity: 1; }
+#app.keyboard-selection .channel-item.selected .accent-bar { background: var(--accent); opacity: 1; }
 
 .channel-item .live-dot { font-size: var(--font-xs); color: var(--text-muted); flex-shrink: 0; opacity: 0.55; }
 .channel-item.live .live-dot { color: var(--live); opacity: 0.95; }
@@ -480,7 +480,6 @@
   display: block; letter-spacing: -0.005em;
 }
 .channel-item.live .name { color: var(--text-primary); font-weight: var(--weight-semibold); }
-.channel-item.selected .name { font-weight: var(--weight-semibold); }
 
 .channel-item .channel-meta {
   font-size: var(--font-xs);
@@ -668,6 +667,10 @@
 }
 #sidebar-top .sidebar-collapse-btn {
   grid-area: btn;
+}
+/* Shown only in mini mode (layout.css), in the collapse button's place. */
+#mini-exit-btn {
+  display: none;
 }
 #app.titlebar-integrated #sidebar-top .sidebar-collapse-btn {
   align-self: center;

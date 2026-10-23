@@ -156,7 +156,6 @@ function handleKeydown(e) {
     TwitchX.state.selectedPlatform = null;
     document.querySelectorAll('.stream-card').forEach(function(c) { c.classList.remove('selected'); });
     document.querySelectorAll('.channel-item').forEach(function(c) { c.classList.remove('selected'); });
-    document.getElementById('watch-btn').classList.remove('active');
     TwitchX.setStatus('', 'info');
     return;
   }

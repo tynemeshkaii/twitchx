@@ -20,7 +20,9 @@
 #player-stage {
   display: flex; flex: 1; min-width: 0;
   position: relative;
+  overflow: hidden;
   background: var(--bg-video);
+  container-type: inline-size;
 }
 #stream-video,
 #stream-video-next {
@@ -334,11 +336,6 @@
 }
 
 /* ── Fullscreen auto-hide ─────────────────────────────── */
-#player-bar.fs-hidden {
-  transform: translateY(100%); opacity: 0; pointer-events: none;
-  transition: transform var(--duration-normal) var(--ease-default),
-              opacity var(--duration-normal) var(--ease-default);
-}
 #player-header.fs-hidden {
   transform: translateY(-100%); opacity: 0; pointer-events: none;
   transition: transform var(--duration-normal) var(--ease-default),
@@ -370,7 +367,6 @@
   gap: var(--space-4);
   min-width: 0;
 }
-.player-overlay-spacer { flex: 1; }
 /* The seek bar takes the free width for VODs. */
 #seek-bar-container:not(.hidden) ~ .player-overlay-spacer { display: none; }
 .player-ctl-btn {
@@ -530,3 +526,16 @@
   background: var(--accent);
   animation: loader-slide 1.5s ease-in-out infinite;
 }
+
+/* A narrow stage (small window, wide chat) drops the least needed parts. */
+@container (max-width: 520px) {
+  #volume-slider,
+  .live-dot-label { display: none; }
+}
+@container (max-width: 380px) {
+  #pip-player-btn,
+  #vod-time-display,
+  #live-dot.visible,
+  .player-volume { display: none; }
+}
+.player-overlay-spacer { flex: 1; }
