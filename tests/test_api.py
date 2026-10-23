@@ -953,7 +953,7 @@ class TestAsyncFetchIsolation:
                     return_value=[fake_kick_stream],
                 ),
             ):
-                _, _, kick, _, _ = await api._data._async_fetch(
+                _, _, kick, _, _, _ = await api._data._async_fetch(
                     twitch_favorites=["somestreamer"],
                     kick_favorites=["streamer"],
                 )
@@ -1005,7 +1005,7 @@ class TestAsyncFetchIsolation:
                     return_value=[fake_kick_stream],
                 ),
             ):
-                _, _, kick, _, _ = await api._data._async_fetch(
+                _, _, kick, _, _, _ = await api._data._async_fetch(
                     twitch_favorites=["somestreamer"],
                     kick_favorites=["streamer"],
                     _twitch_timeout=0.05,
@@ -1044,6 +1044,8 @@ class TestParallelFetch:
     ) -> None:
         """ConnectError → _last_twitch_streams returned, twitch_error set."""
         self._setup(temp_config_dir, monkeypatch)
+        import time
+
         import httpx
 
         from ui.api import TwitchXApi
@@ -1051,6 +1053,7 @@ class TestParallelFetch:
         api = TwitchXApi()
         cached = [{"user_login": "cached_streamer", "platform": "twitch"}]
         api._last_twitch_streams = list(cached)
+        api._platform_fetched_at["twitch"] = time.time()  # recent success
 
         async def run():
             with patch.object(
@@ -1065,7 +1068,7 @@ class TestParallelFetch:
         result = loop.run_until_complete(run())
         loop.close()
 
-        twitch_streams, _, _, _, twitch_error = result
+        twitch_streams, _, _, _, twitch_error, _ = result
         assert twitch_streams == cached
         assert isinstance(twitch_error, httpx.ConnectError)
 
@@ -1094,7 +1097,7 @@ class TestParallelFetch:
         result = loop.run_until_complete(run())
         loop.close()
 
-        twitch_streams, _, _, _, twitch_error = result
+        twitch_streams, _, _, _, twitch_error, _ = result
         assert twitch_streams == fresh
         assert twitch_error is None
         assert api._last_twitch_streams == fresh
@@ -1123,7 +1126,7 @@ class TestParallelFetch:
         result = loop.run_until_complete(run())
         loop.close()
 
-        _, _, _, _, twitch_error = result
+        _, _, _, _, twitch_error, _ = result
         assert twitch_error is None
 
     def test_youtube_cache_served_when_twitch_fails(
@@ -1143,8 +1146,13 @@ class TestParallelFetch:
         api._last_youtube_fetch = time.time()  # just fetched → cache hit, no API call
 
         async def run():
-            with patch.object(
-                api._twitch, "_ensure_token", side_effect=httpx.ConnectError("down")
+            with (
+                patch.object(
+                    api._twitch,
+                    "_ensure_token",
+                    side_effect=httpx.ConnectError("down"),
+                ),
+                patch("ui.api.data.YOUTUBE_ENABLED", True),
             ):
                 return await api._data._async_fetch(
                     twitch_favorites=["somestreamer"],
@@ -1156,7 +1164,7 @@ class TestParallelFetch:
         result = loop.run_until_complete(run())
         loop.close()
 
-        _, _, _, youtube_streams, twitch_error = result
+        _, _, _, youtube_streams, twitch_error, _ = result
         assert youtube_streams == fake_yt
         assert isinstance(twitch_error, httpx.ConnectError)
 

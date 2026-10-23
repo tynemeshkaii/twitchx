@@ -18,7 +18,6 @@ from core.chats.twitch_chat import TwitchChatClient
 from core.chats.youtube_chat import YouTubeChatClient
 from core.constants import (
     CODEC_MODE_AUTO,
-    CODEC_MODES,
     WATCH_STATS_DB_NAME,
     YOUTUBE_ENABLED,
 )
@@ -27,7 +26,6 @@ from core.platforms.twitch import TwitchClient
 from core.platforms.youtube import YouTubeClient
 from core.recorder import Recorder
 from core.storage import (
-    DEFAULT_SETTINGS,
     build_favorites_meta,
     get_favorite_logins,
     get_platform_config,
@@ -43,6 +41,7 @@ from .chat import ChatComponent
 from .data import DataComponent, _aggregate_categories  # noqa: F401
 from .favorites import FavoritesComponent
 from .images import ImagesComponent
+from .settings_schema import validate_settings_payload
 from .streams import StreamsComponent
 
 logger = logging.getLogger(__name__)
@@ -57,16 +56,6 @@ def _read_project_version() -> str:
     except (OSError, KeyError, _tomllib.TOMLDecodeError) as e:
         logger.warning("Could not read project version from pyproject.toml: %s", e)
         return "0.0.0"
-
-
-_ACCENT_PALETTE = {
-    "#FF9F0A",
-    "#BF5AF2",
-    "#0A84FF",
-    "#30D158",
-    "#FF453A",
-    "#FF2D55",
-}
 
 
 class TwitchXApi:
@@ -122,6 +111,8 @@ class TwitchXApi:
         self._last_twitch_streams: list[dict[str, Any]] = []
         self._last_twitch_users: list[dict[str, Any]] = []
         self._last_kick_streams: list[dict[str, Any]] = []
+        # platform → wall-clock time of its last successful live poll
+        self._platform_fetched_at: dict[str, float] = {}
         self._user_avatars: dict[str, str] = {}
         self._fetching_avatars: set[str] = set()
         self._fetching_thumbnails: set[str] = set()
@@ -556,85 +547,70 @@ class TwitchXApi:
         }
 
     def save_settings(self, data: str) -> None:
-        parsed = json.loads(data) if isinstance(data, str) else data
+        try:
+            parsed = json.loads(data) if isinstance(data, str) else data
+        except (TypeError, ValueError):
+            parsed = None
+        if not isinstance(parsed, dict):
+            logger.warning("save_settings: payload is not a JSON object")
+            payload = json.dumps({"message": "Invalid settings data"})
+            self._eval_js(f"window.onSettingsError({payload})")
+            return
+        clean = validate_settings_payload(parsed)
+        old_interval: list[Any] = []
 
         def _apply(cfg: dict) -> None:
             tc = cfg.get("platforms", {}).get("twitch", {})
-            st = cfg.get("settings", {})
-            if "client_id" in parsed:
-                tc["client_id"] = parsed["client_id"].strip()
-            if "client_secret" in parsed:
-                tc["client_secret"] = parsed["client_secret"].strip()
-            if "quality" in parsed:
-                st["quality"] = parsed["quality"]
-            if "refresh_interval" in parsed:
-                st["refresh_interval"] = int(parsed["refresh_interval"])
-            if "streamlink_path" in parsed:
-                st["streamlink_path"] = parsed["streamlink_path"].strip()
-            if "iina_path" in parsed:
-                st["iina_path"] = parsed["iina_path"].strip()
-            if "external_player" in parsed and parsed["external_player"] in (
-                "iina",
-                "mpv",
-            ):
-                st["external_player"] = parsed["external_player"]
-            if "mpv_path" in parsed:
-                st["mpv_path"] = parsed["mpv_path"].strip()
-            if "recording_path" in parsed:
-                st["recording_path"] = parsed["recording_path"].strip()
             kc = cfg.get("platforms", {}).get("kick", {})
-            if "kick_client_id" in parsed:
-                kc["client_id"] = parsed["kick_client_id"].strip()
-            if "kick_client_secret" in parsed:
-                kc["client_secret"] = parsed["kick_client_secret"].strip()
             yc = cfg.get("platforms", {}).get("youtube", {})
-            if "youtube_api_key" in parsed:
-                yc["api_key"] = parsed["youtube_api_key"].strip()
-            if "youtube_client_id" in parsed:
-                yc["client_id"] = parsed["youtube_client_id"].strip()
-            if "youtube_client_secret" in parsed:
-                yc["client_secret"] = parsed["youtube_client_secret"].strip()
-            if "pip_enabled" in parsed:
-                st["pip_enabled"] = bool(parsed["pip_enabled"])
-            if "low_latency_mode" in parsed:
-                st["low_latency_mode"] = bool(parsed["low_latency_mode"])
-            if "stream_codecs" in parsed and parsed["stream_codecs"] in CODEC_MODES:
-                if parsed["stream_codecs"] != st.get("stream_codecs"):
-                    # The codec set is part of the signed resolve URL, so cached
-                    # resolutions made under the old set no longer apply.
-                    invalidate_resolve_cache()
-                st["stream_codecs"] = parsed["stream_codecs"]
-            if "chat_filter_sub_only" in parsed:
-                st["chat_filter_sub_only"] = bool(parsed["chat_filter_sub_only"])
-            if "chat_filter_mod_only" in parsed:
-                st["chat_filter_mod_only"] = bool(parsed["chat_filter_mod_only"])
-            if "chat_block_list" in parsed and isinstance(
-                parsed["chat_block_list"], list
+            st = cfg.get("settings", {})
+            old_interval.append(st.get("refresh_interval"))
+            for key, target, field in (
+                ("client_id", tc, "client_id"),
+                ("client_secret", tc, "client_secret"),
+                ("kick_client_id", kc, "client_id"),
+                ("kick_client_secret", kc, "client_secret"),
+                ("youtube_api_key", yc, "api_key"),
+                ("youtube_client_id", yc, "client_id"),
+                ("youtube_client_secret", yc, "client_secret"),
             ):
-                st["chat_block_list"] = [
-                    str(w)[:50] for w in parsed["chat_block_list"][:100]
-                ]
-            if "chat_anti_spam" in parsed:
-                st["chat_anti_spam"] = bool(parsed["chat_anti_spam"])
-            if "keyboard_shortcuts" in parsed and isinstance(
-                parsed["keyboard_shortcuts"], dict
+                if key in clean:
+                    target[field] = clean[key]
+            if "stream_codecs" in clean and clean["stream_codecs"] != st.get(
+                "stream_codecs"
             ):
-                known = set(DEFAULT_SETTINGS.get("keyboard_shortcuts", {}).keys())
-                validated = {
-                    k: v
-                    for k, v in parsed["keyboard_shortcuts"].items()
-                    if k in known and isinstance(v, str) and 0 < len(v) <= 50
-                }
-                st["keyboard_shortcuts"] = validated
-            if "accent_color" in parsed and parsed["accent_color"] in _ACCENT_PALETTE:
-                st["accent_color"] = parsed["accent_color"]
-            if "theme" in parsed and parsed["theme"] in ("auto", "dark", "light"):
-                st["theme"] = parsed["theme"]
+                # The codec set is part of the signed resolve URL, so cached
+                # resolutions made under the old set no longer apply.
+                invalidate_resolve_cache()
+            for key in (
+                "quality",
+                "refresh_interval",
+                "streamlink_path",
+                "iina_path",
+                "external_player",
+                "mpv_path",
+                "recording_path",
+                "pip_enabled",
+                "low_latency_mode",
+                "stream_codecs",
+                "chat_filter_sub_only",
+                "chat_filter_mod_only",
+                "chat_block_list",
+                "chat_anti_spam",
+                "keyboard_shortcuts",
+                "accent_color",
+                "theme",
+            ):
+                if key in clean:
+                    st[key] = clean[key]
 
         self._config = update_config(_apply)
 
         interval = get_settings(self._config).get("refresh_interval", 60)
-        self.start_polling(interval)
+        # Chat-filter toggles also go through here; only a real interval
+        # change should restart polling (and its immediate full refresh).
+        if interval != old_interval[-1]:
+            self.start_polling(interval)
         self.push_config()
         self._eval_js("window.onSettingsSaved()")
 

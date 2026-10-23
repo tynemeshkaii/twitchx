@@ -546,6 +546,13 @@ function saveSettings() {
   TwitchX._settingsSnapshot = JSON.stringify(_readAllFormValues());
 }
 
+// save_settings rejected the payload; without this the feedback line
+// would stay on "Saving..." forever.
+window.onSettingsError = function(data) {
+  var msg = (data && data.message) || 'Could not save settings';
+  _setFeedback('Error: ' + msg, 'error');
+};
+
 // Resume an open that was blocked waiting for the config push.
 TwitchX.onConfigApplied = function() {
   if (!TwitchX._settingsPendingOpen) return;

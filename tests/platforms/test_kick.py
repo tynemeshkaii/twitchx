@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -600,36 +601,111 @@ class TestGetCurrentUserKick:
             await client.close()
 
 
-class TestGetLiveStreamsCache:
-    @pytest.mark.asyncio
-    async def test_cache_hit_skips_http(self, monkeypatch) -> None:
+def _channel(slug: str, live: bool, **stream: object) -> dict:
+    return {
+        "slug": slug,
+        "broadcaster_user_id": 1000 + len(slug),
+        "stream_title": f"{slug} title",
+        "category": {"id": 7, "name": "Just Chatting", "thumbnail": ""},
+        "stream": {
+            "is_live": live,
+            "viewer_count": stream.get("viewer_count", 42),
+            "start_time": "2026-10-23T10:00:00Z",
+            "thumbnail": f"https://img/{slug}.jpg",
+        },
+    }
+
+
+def _channels_callback(live: set[str]):
+    def _cb(request: httpx.Request) -> httpx.Response:
+        slugs = request.url.params.get_list("slug")
+        return httpx.Response(
+            200, json={"data": [_channel(s, s in live) for s in slugs]}
+        )
+
+    return _cb
+
+
+CHANNELS_URL_RE = re.compile(r"https://api\.kick\.com/public/v1/channels.*")
+
+
+class TestGetLiveStreamsChannels:
+    async def test_batches_by_50(self, temp_config_dir, httpx_mock) -> None:
+        httpx_mock.add_callback(
+            _channels_callback(set()), url=CHANNELS_URL_RE, is_reusable=True
+        )
+        slugs = [f"user{i}" for i in range(60)]
+        client = KickClient()
+        try:
+            await client.get_live_streams(slugs)
+        finally:
+            await client.close()
+        requests = httpx_mock.get_requests()
+        assert len(requests) == 2
+        sizes = sorted(len(r.url.params.get_list("slug")) for r in requests)
+        assert sizes == [10, 50]
+
+    async def test_small_live_favorite_is_returned(
+        self, temp_config_dir, httpx_mock
+    ) -> None:
+        httpx_mock.add_callback(_channels_callback({"smallguy"}), url=CHANNELS_URL_RE)
+        client = KickClient()
+        try:
+            result = await client.get_live_streams(["SmallGuy", "offline1"])
+        finally:
+            await client.close()
+        assert [s["slug"] for s in result] == ["smallguy"]
+
+    async def test_normalized_fields(self, temp_config_dir, httpx_mock) -> None:
+        httpx_mock.add_callback(_channels_callback({"smallguy"}), url=CHANNELS_URL_RE)
+        client = KickClient()
+        try:
+            raw = (await client.get_live_streams(["smallguy"]))[0]
+            item = await client.normalize_stream_item(raw)
+        finally:
+            await client.close()
+        assert item["login"] == "smallguy"
+        assert item["display_name"] == "smallguy"
+        assert item["title"] == "smallguy title"
+        assert item["game"] == "Just Chatting"
+        assert item["viewers"] == 42
+        assert item["started_at"] == "2026-10-23T10:00:00Z"
+        assert item["thumbnail_url"] == "https://img/smallguy.jpg"
+        assert item["broadcaster_user_id"] == str(1000 + len("smallguy"))
+        assert item["platform"] == "kick"
+        # Consumer shape used by DataComponent._on_data_fetched
+        assert raw["channel"]["slug"] == "smallguy"
+        assert raw["category"]["name"] == "Just Chatting"
+
+    async def test_cache_hit_skips_http(
+        self, temp_config_dir, httpx_mock, monkeypatch
+    ) -> None:
         import time
 
         monkeypatch.setattr(time, "time", lambda: 1000.0)
+        httpx_mock.add_callback(_channels_callback({"streamer1"}), url=CHANNELS_URL_RE)
         client = KickClient()
-        call_count = 0
-
-        async def fake_get(url: str, **kwargs) -> dict:
-            nonlocal call_count
-            call_count += 1
-            return {
-                "data": [
-                    {"channel": {"slug": "streamer1"}},
-                    {"channel": {"slug": "streamer2"}},
-                ]
-            }
-
-        monkeypatch.setattr(client, "_get", fake_get)
         try:
-            r1 = await client.get_live_streams(["streamer1"])
-            assert len(r1) == 1
-            assert call_count == 1
-
-            r2 = await client.get_live_streams(["streamer2"])
-            assert len(r2) == 1
-            assert call_count == 1  # cache hit, no extra call
+            r1 = await client.get_live_streams(["streamer1", "streamer2"])
+            r2 = await client.get_live_streams(["streamer2", "streamer1"])
         finally:
             await client.close()
+        assert len(r1) == len(r2) == 1
+        assert len(httpx_mock.get_requests()) == 1
+
+
+class TestGetTopStreamsSort:
+    async def test_sort_is_viewer_count(self, temp_config_dir, httpx_mock) -> None:
+        httpx_mock.add_response(
+            url=re.compile(r"https://api\.kick\.com/public/v1/livestreams.*"),
+            json={"data": []},
+        )
+        client = KickClient()
+        try:
+            await client.get_top_streams()
+        finally:
+            await client.close()
+        assert httpx_mock.get_requests()[0].url.params["sort"] == "viewer_count"
 
 
 class TestMergeChannelPayloads:

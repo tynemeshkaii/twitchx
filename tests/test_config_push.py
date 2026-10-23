@@ -77,13 +77,13 @@ def test_save_settings_pushes_fresh_config(temp_config_dir, capture_eval_js):
     api._eval_js = capture_eval_js
     api.stop_polling()
 
-    api.save_settings(json.dumps({"quality": "720p", "theme": "light"}))
+    api.save_settings(json.dumps({"quality": "720p60", "theme": "light"}))
     api.stop_polling()
 
     capture_eval_js.assert_any("onConfigLoaded")
     capture_eval_js.assert_any("onSettingsSaved")
     snapshot = _payload(capture_eval_js.calls, "onConfigLoaded")
-    assert snapshot["settings"]["quality"] == "720p"
+    assert snapshot["settings"]["quality"] == "720p60"
     assert snapshot["settings"]["theme"] == "light"
 
 

@@ -9,10 +9,11 @@ import sys
 import threading
 import time
 from datetime import datetime
-from typing import Any
+from typing import Any, NamedTuple
 
 import httpx
 
+from core.constants import YOUTUBE_ENABLED
 from core.storage import (
     build_favorites_meta,
     get_favorite_logins,
@@ -27,8 +28,24 @@ from core.storage import (
 from core.utils import format_viewers
 
 from ._base import BaseApiComponent
+from .settings_schema import clamp_refresh_interval
 
 logger = logging.getLogger(__name__)
+
+# A platform's last good stream list may stand in for a failed poll only this
+# long (seconds, at least); after that its channels are shown offline.
+MIN_STALE_CACHE_AGE = 300
+_PLATFORM_LABELS = {"twitch": "Twitch", "kick": "Kick", "youtube": "YouTube"}
+
+
+class FetchResult(NamedTuple):
+    twitch_streams: list[dict]
+    twitch_users: list[dict]
+    kick_streams: list[dict]
+    youtube_streams: list[dict]
+    twitch_error: BaseException | None
+    # Requested platforms whose data this cycle is cached or empty-by-expiry.
+    stale_platforms: list[str]
 
 
 def _aggregate_categories(
@@ -72,6 +89,8 @@ class DataComponent(BaseApiComponent):
         self.start_polling(interval)
 
     def start_polling(self, interval_seconds: int = 60) -> None:
+        # Old configs may carry 0 or garbage; never poll faster than the floor.
+        interval_seconds = clamp_refresh_interval(interval_seconds)
         with self._api._poll_lock:
             self._api._poll_generation += 1
             my_gen = self._api._poll_generation
@@ -135,7 +154,6 @@ class DataComponent(BaseApiComponent):
                     "streams": [],
                     "favorites": [],
                     "favorites_meta": build_favorites_meta(self._config),
-                    "live_set": [],
                     "updated_time": "",
                     "total_viewers": 0,
                     "has_credentials": has_creds,
@@ -153,7 +171,6 @@ class DataComponent(BaseApiComponent):
                     "streams": [],
                     "favorites": all_favorites,
                     "favorites_meta": build_favorites_meta(self._config),
-                    "live_set": [],
                     "updated_time": "",
                     "total_viewers": 0,
                     "has_credentials": False,
@@ -195,13 +212,7 @@ class DataComponent(BaseApiComponent):
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 try:
-                    (
-                        twitch_streams,
-                        twitch_users,
-                        kick_streams,
-                        youtube_streams,
-                        twitch_error,
-                    ) = loop.run_until_complete(
+                    result = loop.run_until_complete(
                         self._async_fetch(
                             twitch_favorites, kick_favorites, youtube_favorites
                         )
@@ -210,12 +221,17 @@ class DataComponent(BaseApiComponent):
                         twitch_favorites,
                         kick_favorites,
                         youtube_favorites,
-                        twitch_streams,
-                        twitch_users,
-                        kick_streams,
-                        youtube_streams,
+                        result.twitch_streams,
+                        result.twitch_users,
+                        result.kick_streams,
+                        result.youtube_streams,
                         loop,
                     )
+                    if result.stale_platforms:
+                        self._warn_stale_platforms(result.stale_platforms)
+                    else:
+                        self._api._last_successful_fetch = time.time()
+                    twitch_error = result.twitch_error
                     if twitch_error is None:
                         return
                     if isinstance(twitch_error, httpx.ConnectError):
@@ -259,6 +275,20 @@ class DataComponent(BaseApiComponent):
         finally:
             self._api._fetch_lock.release()
 
+    def _stale_cache_max_age(self) -> float:
+        config = load_config()
+        interval = get_settings(config).get("refresh_interval", 60)
+        return max(3 * clamp_refresh_interval(interval), MIN_STALE_CACHE_AGE)
+
+    def _cache_is_usable(self, platform: str, max_age: float) -> bool:
+        fetched_at = self._api._platform_fetched_at.get(platform, 0.0)
+        return fetched_at > 0 and time.time() - fetched_at <= max_age
+
+    def _warn_stale_platforms(self, platforms: list[str]) -> None:
+        names = ", ".join(_PLATFORM_LABELS.get(p, p) for p in platforms)
+        payload = {"text": f"{names} data may be outdated", "type": "warn"}
+        self._eval_js(f"window.onStatusUpdate({json.dumps(payload)})")
+
     async def _async_fetch(
         self,
         twitch_favorites: list[str],
@@ -267,12 +297,15 @@ class DataComponent(BaseApiComponent):
         _twitch_timeout: float = 12.0,
         _kick_timeout: float = 12.0,
         _youtube_timeout: float = 20.0,
-    ) -> tuple[list[dict], list[dict], list[dict], list[dict], BaseException | None]:
+    ) -> FetchResult:
         youtube_favorites = youtube_favorites or []
+        max_age = self._stale_cache_max_age()
+        stale: list[str] = []
+        cid, csec = self._twitch._effective_creds()
+        twitch_requested = bool(twitch_favorites and cid and csec)
 
         async def _do_twitch() -> tuple[list[dict], list[dict]]:
-            cid, csec = self._twitch._effective_creds()
-            if not (twitch_favorites and cid and csec):
+            if not twitch_requested:
                 return [], []
             await self._twitch._ensure_token()
             streams, users = await asyncio.gather(
@@ -293,14 +326,18 @@ class DataComponent(BaseApiComponent):
                     self._kick.get_live_streams(kick_favorites),
                     timeout=_kick_timeout,
                 )
-                self._api._last_kick_streams = streams
-                return streams
             except Exception as e:
                 logger.warning("Kick fetch failed: %s", e)
-                return list(self._api._last_kick_streams)
+                stale.append("kick")
+                if self._cache_is_usable("kick", max_age):
+                    return list(self._api._last_kick_streams)
+                return []
+            self._api._last_kick_streams = streams
+            self._api._platform_fetched_at["kick"] = time.time()
+            return streams
 
         async def _do_youtube() -> list[dict]:
-            if not youtube_favorites:
+            if not (youtube_favorites and YOUTUBE_ENABLED):
                 return []
             yt_conf = get_platform_config(self._config, "youtube")
             settings = get_settings(self._config)
@@ -329,6 +366,7 @@ class DataComponent(BaseApiComponent):
                 return list(self._api._last_youtube_streams)
             except Exception as e:
                 logger.warning("YouTube fetch failed: %s", e)
+                stale.append("youtube")
                 return list(self._api._last_youtube_streams)
 
         twitch_result, kick_result, yt_result = await asyncio.gather(
@@ -348,17 +386,30 @@ class DataComponent(BaseApiComponent):
                 twitch_error = twitch_result
             else:
                 logger.warning("Twitch fetch failed: %s", twitch_result)
-            twitch_streams: list[dict] = list(self._api._last_twitch_streams)
-            twitch_users: list[dict] = list(self._api._last_twitch_users)
+            stale.insert(0, "twitch")
+            if self._cache_is_usable("twitch", max_age):
+                twitch_streams: list[dict] = list(self._api._last_twitch_streams)
+                twitch_users: list[dict] = list(self._api._last_twitch_users)
+            else:
+                twitch_streams, twitch_users = [], []
         else:
             twitch_streams, twitch_users = twitch_result
             self._api._last_twitch_streams = twitch_streams
             self._api._last_twitch_users = twitch_users
+            if twitch_requested:
+                self._api._platform_fetched_at["twitch"] = time.time()
 
         kick_streams: list[dict] = kick_result if isinstance(kick_result, list) else []
         youtube_streams: list[dict] = yt_result if isinstance(yt_result, list) else []
 
-        return twitch_streams, twitch_users, kick_streams, youtube_streams, twitch_error
+        return FetchResult(
+            twitch_streams,
+            twitch_users,
+            kick_streams,
+            youtube_streams,
+            twitch_error,
+            stale,
+        )
 
     def _on_data_fetched(
         self,
@@ -371,15 +422,16 @@ class DataComponent(BaseApiComponent):
         youtube_streams: list[dict],
         loop: asyncio.AbstractEventLoop | None = None,
     ) -> None:
-        self._api._last_successful_fetch = time.time()
-
-        twitch_live_logins = {s["user_login"].lower() for s in twitch_streams}
+        # Keys are "platform:login" so the same login on two platforms is two
+        # channels, matching TwitchX.channelKey on the JS side.
+        twitch_live_logins = {
+            f"twitch:{s['user_login'].lower()}" for s in twitch_streams
+        }
         kick_live_slugs = {
-            (s.get("slug", "") or s.get("channel", {}).get("slug", "")).lower()
-            for s in kick_streams
+            f"kick:{slug}" for s in kick_streams if (slug := self._kick_slug(s))
         }
         youtube_live_ids = {
-            s.get("login", "") for s in youtube_streams if s.get("login")
+            f"youtube:{s['login']}" for s in youtube_streams if s.get("login")
         }
         live_logins = twitch_live_logins | kick_live_slugs | youtube_live_ids
 
@@ -388,17 +440,15 @@ class DataComponent(BaseApiComponent):
             if newly_live:
                 unified_map: dict[str, dict] = {}
                 for s in twitch_streams:
-                    unified_map[s["user_login"].lower()] = {
+                    unified_map[f"twitch:{s['user_login'].lower()}"] = {
                         "name": s.get("user_name", s["user_login"]),
                         "title": s.get("title", ""),
                         "game": s.get("game_name", ""),
                     }
                 for s in kick_streams:
-                    slug = (
-                        s.get("slug", "") or s.get("channel", {}).get("slug", "")
-                    ).lower()
+                    slug = self._kick_slug(s)
                     if slug:
-                        unified_map[slug] = {
+                        unified_map[f"kick:{slug}"] = {
                             "name": s.get("channel", {}).get("username") or slug,
                             "title": s.get("stream_title")
                             or s.get("session_title")
@@ -410,7 +460,7 @@ class DataComponent(BaseApiComponent):
                 for s in youtube_streams:
                     cid = s.get("login", "")
                     if cid:
-                        unified_map[cid] = {
+                        unified_map[f"youtube:{cid}"] = {
                             "name": s.get("display_name", cid),
                             "title": s.get("title", ""),
                             "game": s.get("game", ""),
@@ -480,7 +530,6 @@ class DataComponent(BaseApiComponent):
                 "streams": stream_items,
                 "favorites": all_favorites,
                 "favorites_meta": favorites_meta,
-                "live_set": list(live_logins),
                 "updated_time": now,
                 "total_viewers": total,
                 "total_viewers_formatted": format_viewers(total) if total else "0",
@@ -491,6 +540,12 @@ class DataComponent(BaseApiComponent):
         self._eval_js(f"window.onStreamsUpdate({data})")
 
     # ── Helpers ─────────────────────────────────────────────────
+
+    @staticmethod
+    def _kick_slug(stream: dict[str, Any]) -> str:
+        channel = stream.get("channel")
+        nested = channel.get("slug", "") if isinstance(channel, dict) else ""
+        return str(stream.get("slug", "") or nested).lower()
 
     @staticmethod
     def _stream_login(stream: dict[str, Any]) -> str:
@@ -581,6 +636,8 @@ class DataComponent(BaseApiComponent):
             if platform_filter == "all"
             else [platform_filter]
         )
+        if not YOUTUBE_ENABLED and platform_filter == "all":
+            platforms.remove("youtube")
         config = load_config()
         enabled = [
             p
@@ -683,6 +740,8 @@ class DataComponent(BaseApiComponent):
         in_filter = (
             list(platform_ids.keys()) if platform_filter == "all" else [platform_filter]
         )
+        if not YOUTUBE_ENABLED and platform_filter == "all":
+            in_filter = [p for p in in_filter if p != "youtube"]
         platforms_to_query = [p for p in in_filter if p in platform_ids]
         errors: dict[str, str] = {}
         if not platforms_to_query:

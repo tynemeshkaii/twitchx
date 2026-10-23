@@ -189,3 +189,115 @@ def test_credential_state_fields_all_present(
         "youtube_bundled_available",
     ):
         assert key in result, f"Missing credential state field: {key}"
+
+
+# ── save_settings validation (audit #16) ─────────────────────────
+
+
+def test_validate_settings_payload_drops_malformed_fields() -> None:
+    from ui.api.settings_schema import validate_settings_payload
+
+    clean = validate_settings_payload(
+        {
+            "client_id": 123,
+            "client_secret": "  s3cret  ",
+            "quality": "4k",
+            "pip_enabled": "yes",
+            "low_latency_mode": True,
+            "refresh_interval": "99999",
+        }
+    )
+    assert clean == {
+        "client_secret": "s3cret",
+        "low_latency_mode": True,
+        "refresh_interval": 3600,
+    }
+
+
+def test_save_settings_clamps_zero_interval(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "_eval_js", lambda js: None)
+    monkeypatch.setattr(api, "start_polling", lambda interval=60: None)
+    api.save_settings(json.dumps({"refresh_interval": 0}))
+    assert load_config()["settings"]["refresh_interval"] == 30
+
+
+def test_save_settings_ignores_non_string_client_id(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[str] = []
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "_eval_js", calls.append)
+    monkeypatch.setattr(api, "start_polling", lambda interval=60: None)
+    before = load_config()["platforms"]["twitch"]["client_id"]
+    api.save_settings(json.dumps({"client_id": 123, "theme": "light"}))
+    config = load_config()
+    assert config["platforms"]["twitch"]["client_id"] == before
+    assert config["settings"]["theme"] == "light"
+    assert any("onSettingsSaved" in c for c in calls)
+
+
+@pytest.mark.parametrize("data", ["{not json", "[1, 2]", "null"])
+def test_save_settings_invalid_payload_reports_error(
+    data: str, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[str] = []
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "_eval_js", calls.append)
+    monkeypatch.setattr(api, "start_polling", lambda interval=60: None)
+    api.save_settings(data)
+    assert any("onSettingsError" in c for c in calls)
+    assert not any("onSettingsSaved" in c for c in calls)
+
+
+def test_save_settings_chat_filter_only_does_not_restart_polling(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    started: list[int] = []
+    calls: list[str] = []
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "_eval_js", calls.append)
+    monkeypatch.setattr(api, "start_polling", started.append)
+    api.save_settings(json.dumps({"chat_anti_spam": False}))
+    assert started == []
+    assert load_config()["settings"]["chat_anti_spam"] is False
+    assert any("onSettingsSaved" in c for c in calls)
+
+
+def test_save_settings_interval_change_restarts_polling(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    started: list[int] = []
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "_eval_js", lambda js: None)
+    monkeypatch.setattr(api, "start_polling", started.append)
+    api.save_settings(json.dumps({"refresh_interval": 120}))
+    assert started == [120]
+
+
+def test_start_polling_clamps_interval(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import threading
+
+    created: list[float] = []
+
+    class _FakeTimer:
+        def __init__(self, interval: float, fn: object) -> None:
+            created.append(interval)
+            self.daemon = False
+
+        def start(self) -> None:
+            pass
+
+        def cancel(self) -> None:
+            pass
+
+    api = TwitchXApi()
+    monkeypatch.setattr(api, "_eval_js", lambda js: None)
+    monkeypatch.setattr(threading, "Timer", _FakeTimer)
+    monkeypatch.setattr(api._data, "refresh", lambda: None)
+    api._data.start_polling(0)
+    assert created == [30]

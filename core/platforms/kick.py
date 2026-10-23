@@ -39,6 +39,9 @@ KICK_REDIRECT_URI = "http://localhost:3457/callback"
 OAUTH_SCOPE = "user:read channel:read chat:write"
 KICK_BROWSER_IMPERSONATION = "chrome124"
 KICK_TYPESENSE_API_KEY = "nXIMW0iEN6sMujFYjFuhdrSwVow3pDQu"
+# GET /public/v1/channels accepts up to 50 slugs per request (docs.kick.com).
+KICK_CHANNELS_BATCH = 50
+KICK_LIVE_CACHE_TTL = 5.0
 
 
 # ── PKCE helpers ─────────────────────────────────────────────
@@ -62,7 +65,8 @@ class KickClient(BasePlatformClient):
 
     def __init__(self) -> None:
         super().__init__()
-        self._livestreams_cache: tuple[float, list[dict[str, Any]]] = (0, [])
+        # slug → (fetched_at, live item or None when offline)
+        self._live_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
 
     def _client_timeout(self) -> float:
         return 15.0
@@ -347,29 +351,80 @@ class KickClient(BasePlatformClient):
 
     # ── API methods ──────────────────────────────────────────
 
+    @staticmethod
+    def _channel_to_live_item(channel: dict[str, Any]) -> dict[str, Any]:
+        """Flatten a /public/v1/channels item into the live-stream shape."""
+        slug = str(channel.get("slug", "")).lower()
+        raw_stream = channel.get("stream")
+        stream: dict[str, Any] = raw_stream if isinstance(raw_stream, dict) else {}
+        raw_category = channel.get("category")
+        category: dict[str, Any] = (
+            raw_category if isinstance(raw_category, dict) else {}
+        )
+        return {
+            "slug": slug,
+            # Channels endpoint has no username; slug is the display fallback.
+            "channel": {"slug": slug, "username": slug},
+            "stream_title": channel.get("stream_title", ""),
+            "category": category,
+            "viewer_count": stream.get("viewer_count", 0),
+            "start_time": stream.get("start_time", ""),
+            "thumbnail": stream.get("thumbnail", ""),
+            "broadcaster_user_id": channel.get("broadcaster_user_id"),
+            "channel_id": channel.get("channel_id"),
+        }
+
     async def get_live_streams(self, slugs: list[str]) -> list[dict[str, Any]]:
-        """GET /public/v1/livestreams and filter by slugs."""
+        """Live status of the given channels via GET /public/v1/channels?slug=….
+
+        The livestreams endpoint only returns the top page, so small favorites
+        would always look offline; channels-by-slug reports ``stream.is_live``
+        for each requested channel. Batches of 50, short per-slug cache.
+        """
         slugs = [s.strip().lower() for s in slugs if s and s.strip()]
-        slugs = [s for s in slugs if VALID_SLUG.match(s)]
+        slugs = list(dict.fromkeys(s for s in slugs if VALID_SLUG.match(s)))
         if not slugs:
             return []
-        # Kick's public livestreams endpoint does not support filtering by slug.
-        # We fetch all live streams and filter client-side.
-        # Short-lived cache (5s) avoids re-fetching within a single poll cycle.
-        cache_time, cache_data = self._livestreams_cache
-        if time.time() - cache_time < 5:
-            streams = cache_data
-        else:
-            data = await self._get(f"{KICK_API_URL}/public/v1/livestreams")
-            streams = data.get("data", data) if isinstance(data, dict) else data
-            self._livestreams_cache = (time.time(), streams)
-        slug_set = set(slugs)
-        return [
+        now = time.time()
+        stale = [
             s
-            for s in streams
-            if s.get("channel", {}).get("slug", "").lower() in slug_set
-            or s.get("slug", "").lower() in slug_set
+            for s in slugs
+            if s not in self._live_cache
+            or now - self._live_cache[s][0] >= KICK_LIVE_CACHE_TTL
         ]
+        if stale:
+            batches = [
+                stale[i : i + KICK_CHANNELS_BATCH]
+                for i in range(0, len(stale), KICK_CHANNELS_BATCH)
+            ]
+            responses = await asyncio.gather(
+                *[
+                    self._get(
+                        f"{KICK_API_URL}/public/v1/channels",
+                        params=[("slug", s) for s in batch],
+                    )
+                    for batch in batches
+                ]
+            )
+            fetched_at = time.time()
+            fresh: dict[str, tuple[float, dict[str, Any] | None]] = {
+                s: (fetched_at, None) for s in stale
+            }
+            for data in responses:
+                items = data.get("data", data) if isinstance(data, dict) else data
+                if not isinstance(items, list):
+                    continue
+                for channel in items:
+                    if not isinstance(channel, dict):
+                        continue
+                    stream = channel.get("stream")
+                    if not (isinstance(stream, dict) and stream.get("is_live")):
+                        continue
+                    item = self._channel_to_live_item(channel)
+                    if item["slug"] in fresh:
+                        fresh[item["slug"]] = (fetched_at, item)
+            self._live_cache.update(fresh)
+        return [item for s in slugs if (item := self._live_cache[s][1]) is not None]
 
     async def search_channels(self, query: str) -> list[dict[str, Any]]:
         """Search Kick channels via the same index used by the website."""
@@ -442,13 +497,13 @@ class KickClient(BasePlatformClient):
         category_id: str | None = None,
         limit: int = 20,
     ) -> list[dict[str, Any]]:
-        """GET /public/v1/livestreams sorted by viewers (desc).
+        """GET /public/v1/livestreams sorted by viewer count (highest first).
 
         Normalized to the cross-platform stream dict format.
         """
         params: list[tuple[str, str]] = [
             ("limit", str(min(limit, 100))),
-            ("sort", "desc"),
+            ("sort", "viewer_count"),
         ]
         if category_id:
             params.append(("category_id", category_id))
