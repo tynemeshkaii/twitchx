@@ -5,7 +5,7 @@
   background: var(--bg-control);
   color: var(--text-primary);
   border: 1px solid var(--border-default); border-radius: var(--radius-md);
-  font-size: var(--font-sm); font-weight: 600; cursor: pointer;
+  font-size: var(--font-sm); font-weight: var(--weight-semibold); cursor: pointer;
   font-family: inherit; letter-spacing: -0.01em;
   transition: background var(--duration-fast) ease, transform var(--duration-fast) ease,
               border-color var(--duration-fast) ease;
@@ -39,7 +39,7 @@
   border: 1px solid transparent;
   font-family: inherit;
   font-size: var(--font-sm);
-  font-weight: 700;
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   transition: transform var(--duration-fast) ease,
               background var(--duration-fast) ease,

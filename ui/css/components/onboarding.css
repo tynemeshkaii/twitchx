@@ -43,7 +43,7 @@
 
 .onboarding-title {
   font-size: var(--font-2xl);
-  font-weight: 700;
+  font-weight: var(--weight-bold);
   color: var(--text-primary);
   letter-spacing: -0.02em;
   margin-bottom: var(--space-8);
@@ -73,7 +73,7 @@
 
 .onboarding-step-title {
   font-size: var(--font-lg);
-  font-weight: 700;
+  font-weight: var(--weight-bold);
   color: var(--text-primary);
   letter-spacing: -0.01em;
 }
@@ -114,14 +114,14 @@
   align-items: center;
   justify-content: center;
   font-size: var(--font-xl);
-  font-weight: 800;
+  font-weight: var(--weight-semibold);
 }
 .onboarding-platform-card.twitch .platform-icon { background: var(--platform-twitch); color: var(--text-inverse); }
 .onboarding-platform-card.kick .platform-icon { background: var(--platform-kick); color: var(--platform-kick-text); }
 .onboarding-platform-card.youtube .platform-icon { background: var(--platform-youtube); color: var(--text-inverse); }
 .onboarding-platform-card .platform-label {
   font-size: var(--font-sm);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-secondary);
 }
 
@@ -186,7 +186,7 @@
 }
 .onboarding-tooltip-title {
   font-size: var(--font-sm);
-  font-weight: 700;
+  font-weight: var(--weight-semibold);
   color: var(--text-primary);
   margin-bottom: var(--space-4);
 }

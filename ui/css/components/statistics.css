@@ -8,7 +8,7 @@
   padding: var(--space-12); text-align: center; border: 1px solid var(--border-default);
 }
 .stat-value {
-  display: block; font-size: 22px; font-weight: 700;
+  display: block; font-size: var(--font-xl); font-weight: var(--weight-bold);
   color: var(--text-primary); letter-spacing: -0.03em;
   line-height: 1.2;
 }
@@ -22,7 +22,7 @@
 }
 .stats-table th {
   text-align: left; padding: 6px 8px; color: var(--text-muted);
-  font-weight: 600; border-bottom: 1px solid var(--border-default);
+  font-weight: var(--weight-semibold); border-bottom: 1px solid var(--border-default);
   font-size: var(--font-sm); text-transform: uppercase; letter-spacing: 0.04em;
 }
 .stats-table td {
@@ -38,7 +38,7 @@
   background: var(--bg-elevated); font-size: var(--font-sm);
 }
 .stats-list-item .stats-channel {
-  color: var(--text-primary); font-weight: 500;
+  color: var(--text-primary); font-weight: var(--weight-medium);
 }
 .stats-list-item .stats-value {
   color: var(--text-muted); font-size: var(--font-sm);

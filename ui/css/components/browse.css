@@ -25,7 +25,7 @@
   padding: 0;
   font: inherit;
   font-size: var(--font-md);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 .breadcrumb-link:hover { color: var(--accent); }
 .breadcrumb-separator {
@@ -37,7 +37,7 @@
 .breadcrumb-current {
   color: var(--text-primary);
   font-size: var(--font-md);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   cursor: default;
   user-select: none;
 }
@@ -47,11 +47,11 @@
   padding: 4px 10px; border-radius: var(--radius-sm);
   border: none; background: none;
   color: var(--text-secondary); cursor: pointer;
-  font-size: var(--font-sm); font-family: inherit; font-weight: 500;
+  font-size: var(--font-sm); font-family: inherit; font-weight: var(--weight-medium);
   transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
   letter-spacing: 0;
 }
-.browse-platform-tab.active { background: var(--accent); color: var(--text-on-accent); font-weight: 600; }
+.browse-platform-tab.active { background: var(--accent); color: var(--text-on-accent); font-weight: var(--weight-semibold); }
 .browse-platform-tab:hover:not(.active) {
   background: var(--hover-bg-strong); color: var(--text-primary);
 }
@@ -118,13 +118,13 @@
   justify-content: center;
   background: linear-gradient(135deg, var(--border-subtle), transparent);
   color: var(--text-muted);
-  font-size: 28px;
-  font-weight: 800;
+  font-size: var(--font-2xl);
+  font-weight: var(--weight-semibold);
 }
 .browse-category-info { padding: 7px 8px 8px; }
 .browse-category-name {
   font-size: var(--font-sm);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-primary);
   display: block;
   white-space: nowrap;
@@ -182,8 +182,8 @@
   border-radius: 4px;
   background: var(--live);
   color: var(--text-inverse);
-  font-size: var(--font-2xs);
-  font-weight: 800;
+  font-size: var(--font-xs);
+  font-weight: var(--weight-semibold);
   letter-spacing: 0.04em;
   box-shadow: 0 6px 14px rgba(0,0,0,0.25);
   z-index: 3;
@@ -220,7 +220,7 @@
 }
 .browse-stream-name {
   font-size: var(--font-sm);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-primary);
   display: block;
   white-space: nowrap;
@@ -251,7 +251,7 @@
   font-size: var(--font-sm);
   color: var(--viewers);
   font-variant-numeric: tabular-nums;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   margin-top: var(--space-4);
   display: block;
 }
@@ -270,7 +270,7 @@
   color: var(--text-secondary);
   font-family: inherit;
   font-size: var(--font-sm);
-  font-weight: 700;
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   padding: 4px 9px;
 }
@@ -322,7 +322,7 @@
 .browse-empty .empty-title {
   color: var(--text-primary);
   font-size: var(--font-md);
-  font-weight: 750;
+  font-weight: var(--weight-bold);
   margin-bottom: var(--space-4);
 }
 .browse-empty .empty-subtitle {

@@ -12,7 +12,7 @@
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-muted);
-  font-size: 22px;
+  font-size: var(--font-xl);
   cursor: pointer;
   transition: border-color var(--duration-fast), color var(--duration-fast);
 }
@@ -67,7 +67,7 @@
   background: var(--btn-primary-bg);
   color: var(--text-on-accent);
   font-size: var(--font-sm);
-  font-weight: 700;
+  font-weight: var(--weight-semibold);
   cursor: pointer;
 }
 .ms-cancel-btn {
@@ -102,8 +102,8 @@
 .ms-slot-status,
 .ms-audio-state,
 .ms-platform-badge {
-  font-size: var(--font-2xs);
-  font-weight: 800;
+  font-size: var(--font-xs);
+  font-weight: var(--weight-semibold);
   padding: 1px 4px;
   border-radius: 3px;
   background: var(--accent);
@@ -130,7 +130,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--font-sm);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-inverse);
 }
 .ms-slot-controls {
@@ -199,7 +199,7 @@
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
-#ms-chat-title { font-size: var(--font-sm); font-weight: 600; color: var(--text-primary); flex: 1; }
+#ms-chat-title { font-size: var(--font-sm); font-weight: var(--weight-semibold); color: var(--text-primary); flex: 1; }
 #ms-chat-status-dot {
   width: 7px; height: 7px;
   border-radius: 50%;
@@ -253,7 +253,7 @@
   background: var(--accent);
   color: var(--text-on-accent);
   font-size: var(--font-sm);
-  font-weight: 700;
+  font-weight: var(--weight-semibold);
   cursor: pointer;
 }
 #ms-chat-send-btn:disabled { opacity: var(--disabled-opacity); cursor: not-allowed; }
@@ -290,7 +290,7 @@
 }
 #multistream-title {
   font-size: var(--font-md);
-  font-weight: 700;
+  font-weight: var(--weight-bold);
   color: var(--text-primary);
   flex: 1;
 }

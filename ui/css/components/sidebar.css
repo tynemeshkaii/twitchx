@@ -10,7 +10,7 @@
 }
 .platform-user-details { flex: 1; min-width: 0; }
 .platform-user-name {
-  font-size: var(--font-sm); font-weight: 600; color: var(--text-primary);
+  font-size: var(--font-sm); font-weight: var(--weight-semibold); color: var(--text-primary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   letter-spacing: -0.01em;
 }
@@ -65,7 +65,7 @@
   border: 1px solid transparent;
   color: var(--text-muted);
   font-size: var(--font-xs);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   letter-spacing: 0;
   text-transform: none;
   cursor: pointer;
@@ -78,7 +78,7 @@
 .platform-tab:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .platform-tab.active {
   color: var(--text-primary);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   background: var(--bg-elevated);
   border-color: var(--border-subtle);
   box-shadow: var(--shadow-sm);
@@ -104,14 +104,14 @@
 .sidebar-stale-icon { flex-shrink: 0; }
 
 .favorites-label {
-  font-size: var(--font-sm); font-weight: 700; letter-spacing: 0;
+  font-size: var(--font-sm); font-weight: var(--weight-semibold); letter-spacing: 0;
   color: var(--text-secondary); text-transform: none;
 }
 #favorites-count-badge {
   min-width: 20px; height: 18px;
   display: inline-flex; align-items: center; justify-content: center;
   padding: 0 6px; border-radius: var(--radius-full);
-  font-size: var(--font-xs); font-weight: 700;
+  font-size: var(--font-xs); font-weight: var(--weight-semibold);
   color: var(--text-secondary);
   background: var(--border-subtle);
 }
@@ -123,7 +123,7 @@
   background: transparent; border: none;
   border-radius: var(--radius-sm);
   color: var(--text-muted); cursor: pointer;
-  font-size: var(--font-2xs); font-family: inherit;
+  font-size: var(--font-xs); font-family: inherit;
   transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
   flex-shrink: 0;
 }
@@ -275,7 +275,7 @@
   margin-top: var(--space-4); min-width: 0;
 }
 .tooltip-title {
-  font-size: var(--font-sm); font-weight: 600; color: var(--text-primary);
+  font-size: var(--font-sm); font-weight: var(--weight-semibold); color: var(--text-primary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .tooltip-game {
@@ -320,7 +320,7 @@
   min-width: 16px; height: 16px;
   padding: 0 4px; border-radius: var(--radius-full);
   background: var(--live-red); color: var(--text-inverse);
-  font-size: var(--font-2xs); font-weight: 700; line-height: 16px;
+  font-size: var(--font-xs); font-weight: var(--weight-semibold); line-height: 16px;
   text-align: center; margin-left: auto;
   border: none; font-family: inherit; cursor: pointer;
 }
@@ -415,7 +415,7 @@
 }
 
 .section-title {
-  font-size: var(--font-sm); font-weight: 600;
+  font-size: var(--font-sm); font-weight: var(--weight-semibold);
   letter-spacing: 0;
   text-transform: none;
   color: var(--text-secondary);
@@ -432,7 +432,7 @@
   min-width: 20px; height: 18px;
   display: inline-flex; align-items: center; justify-content: center;
   padding: 0 6px; border-radius: var(--radius-full);
-  font-size: var(--font-xs); font-weight: 700;
+  font-size: var(--font-xs); font-weight: var(--weight-semibold);
   color: var(--text-muted);
   background: var(--bg-control);
 }
@@ -481,7 +481,7 @@
 }
 .section-empty-title {
   font-size: var(--font-sm);
-  font-weight: 700;
+  font-weight: var(--weight-semibold);
   color: var(--text-primary);
 }
 .section-empty-subtitle {
@@ -523,7 +523,7 @@
 }
 .channel-item.selected .accent-bar { background: var(--accent); opacity: 1; }
 
-.channel-item .live-dot { font-size: 8px; color: var(--text-muted); flex-shrink: 0; opacity: 0.55; }
+.channel-item .live-dot { font-size: var(--font-xs); color: var(--text-muted); flex-shrink: 0; opacity: 0.55; }
 .channel-item.live .live-dot { color: var(--live); opacity: 0.95; }
 
 .channel-item .avatar {
@@ -545,8 +545,8 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   display: block; letter-spacing: -0.005em;
 }
-.channel-item.live .name { color: var(--text-primary); font-weight: 600; }
-.channel-item.selected .name { font-weight: 600; }
+.channel-item.live .name { color: var(--text-primary); font-weight: var(--weight-semibold); }
+.channel-item.selected .name { font-weight: var(--weight-semibold); }
 
 .channel-item .channel-meta {
   font-size: var(--font-xs);
@@ -558,7 +558,7 @@
 .channel-item .metric {
   flex-shrink: 0;
   font-size: var(--font-sm);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-muted);
   padding: 3px 0 3px 6px;
   text-align: right;
@@ -630,7 +630,7 @@
   color: var(--text-secondary);
   font-family: inherit;
   font-size: var(--font-xs);
-  font-weight: 700;
+  font-weight: var(--weight-semibold);
   text-align: left;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -681,7 +681,7 @@
   color: var(--text-secondary);
   font-size: var(--font-sm);
   font-family: inherit;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   cursor: pointer;
   text-align: left;
   transition: background var(--duration-fast) ease, color var(--duration-fast) ease;

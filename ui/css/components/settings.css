@@ -45,7 +45,7 @@
 }
 
 #settings-modal h2 {
-  font-size: 17px; font-weight: 750; margin-bottom: var(--space-16);
+  font-size: var(--font-lg); font-weight: var(--weight-bold); margin-bottom: var(--space-16);
   color: var(--text-primary); letter-spacing: -0.02em;
   padding-left: var(--settings-content-offset);
 }
@@ -94,7 +94,7 @@ select {
 .settings-footer {
   text-align: center;
   color: var(--text-muted);
-  font-size: var(--font-xs, 11px);
+  font-size: var(--font-xs);
   padding: var(--space-8) 0 0;
   user-select: text;
 }
@@ -119,7 +119,7 @@ select {
 }
 .settings-btns button {
   min-height: 32px; padding: 0 18px; border-radius: var(--radius-md);
-  font-size: var(--font-sm); font-weight: 600; cursor: pointer;
+  font-size: var(--font-sm); font-weight: var(--weight-semibold); cursor: pointer;
   font-family: inherit; transition: all var(--duration-fast) ease; border: none;
   letter-spacing: -0.01em;
 }
@@ -130,7 +130,7 @@ select {
 #test-btn:hover { border-color: var(--border-strong); }
 #save-btn {
   background: var(--btn-primary-bg);
-  color: var(--text-on-accent); font-weight: 700;
+  color: var(--text-on-accent); font-weight: var(--weight-semibold);
   box-shadow: var(--shadow-glow-accent);
 }
 #save-btn:hover {
@@ -165,7 +165,7 @@ select {
   min-height: 32px;
   flex: 0 0 auto; padding: 8px 10px;
   background: transparent; border: none;
-  color: var(--text-muted); font-size: var(--font-sm); font-weight: 600;
+  color: var(--text-muted); font-size: var(--font-sm); font-weight: var(--weight-semibold);
   cursor: pointer; font-family: inherit;
   border-radius: var(--radius-sm);
   text-align: left;
@@ -226,7 +226,7 @@ select {
   border-radius: var(--radius-md);
   color: var(--text-secondary);
   font-size: var(--font-sm);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   transition: background var(--duration-fast) ease,
               border-color var(--duration-fast) ease,
@@ -295,7 +295,7 @@ select {
   border: none;
   border-radius: var(--radius-sm);
   font-size: var(--font-md);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   font-family: inherit;
   transition: opacity var(--duration-fast) ease;
@@ -319,7 +319,7 @@ select {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   font-size: var(--font-sm);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   font-family: inherit;
   margin-bottom: 6px;
@@ -375,7 +375,7 @@ select {
 }
 .stats-grid.compact { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
 .stat-card.compact { padding: var(--space-8); }
-.stat-card.compact .stat-value { font-size: 16px; }
+.stat-card.compact .stat-value { font-size: var(--font-lg); }
 
 /* ── Stats panel header row ─────────────────────────── */
 .stats-controls {
@@ -412,7 +412,7 @@ select {
   gap: 6px;
   font-size: var(--font-md);
   color: var(--live-green);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 .bundled-app-badge svg { flex-shrink: 0; }
 
@@ -438,11 +438,11 @@ select {
   margin-bottom: 8px;
 }
 .platform-section-name {
-  font-size: var(--font-md); font-weight: 700; color: var(--text-primary);
+  font-size: var(--font-md); font-weight: var(--weight-semibold); color: var(--text-primary);
   letter-spacing: -0.01em;
 }
 .cred-badge {
-  font-size: var(--font-xs); font-weight: 600;
+  font-size: var(--font-xs); font-weight: var(--weight-semibold);
   padding: 3px 8px; border-radius: 20px;
   letter-spacing: 0.01em;
   border: 1px solid transparent;
@@ -473,14 +473,14 @@ select {
   min-height: 28px; padding: 0 12px;
   background: var(--bg-control); color: var(--text-secondary);
   border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
-  font-size: var(--font-xs); font-weight: 600; cursor: pointer; font-family: inherit;
+  font-size: var(--font-xs); font-weight: var(--weight-semibold); cursor: pointer; font-family: inherit;
   letter-spacing: -0.01em;
   transition: border-color var(--duration-fast) ease, color var(--duration-fast) ease;
 }
 .test-conn-btn:hover { border-color: var(--border-strong); color: var(--text-primary); }
 .test-conn-btn:disabled { opacity: var(--disabled-opacity); cursor: not-allowed; }
 .field-optional {
-  font-size: var(--font-xs); font-weight: 400; color: var(--text-muted);
+  font-size: var(--font-xs); font-weight: var(--weight-regular); color: var(--text-muted);
 }
 .oauth-code {
   font-family: ui-monospace, monospace; font-size: var(--font-xs);

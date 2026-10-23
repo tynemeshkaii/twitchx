@@ -85,7 +85,7 @@
   border-radius: var(--radius-sm);
   color: var(--text-muted);
   cursor: pointer;
-  font-size: var(--font-base);
+  font-size: var(--font-lg);
   font-family: inherit;
   display: flex;
   align-items: center;
@@ -110,7 +110,7 @@
   border: none;
   border-radius: var(--radius-md);
   font-size: var(--font-sm);
-  font-weight: 700;
+  font-weight: var(--weight-semibold);
   cursor: not-allowed;
   font-family: inherit;
   letter-spacing: -0.01em;
@@ -205,7 +205,7 @@
 #status-text {
   font-size: var(--font-sm);
   color: var(--text-secondary);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 #status-text.status-success { color: var(--text-secondary); }
 #status-text.status-warn { color: var(--warn-yellow); }

@@ -7,7 +7,7 @@
   flex-shrink: 0;
 }
 #chat-title {
-  font-size: var(--font-sm); font-weight: 700;
+  font-size: var(--font-sm); font-weight: var(--weight-semibold);
   color: var(--text-primary); letter-spacing: 0;
 }
 #chat-status-dot {
@@ -62,11 +62,11 @@
   border-radius: 3px;
   background: var(--surface-pressed);
   color: var(--text-muted);
-  font-size: 9px;
-  font-weight: 700;
+  font-size: var(--font-xs);
+  font-weight: var(--weight-semibold);
   vertical-align: middle;
 }
-.chat-msg .nick { font-weight: 700; cursor: pointer; color: var(--author-color, var(--text-primary)); }
+.chat-msg .nick { font-weight: var(--weight-semibold); cursor: pointer; color: var(--author-color, var(--text-primary)); }
 .chat-msg .emote {
   width: 24px;
   height: 24px;
@@ -103,7 +103,7 @@
   margin-bottom: 1px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.chat-reply-ctx .reply-nick { font-weight: 700; }
+.chat-reply-ctx .reply-nick { font-weight: var(--weight-semibold); }
 #chat-reply-bar {
   display: none; align-items: center; gap: 6px;
   padding: 4px 8px;
@@ -113,14 +113,14 @@
   max-width: 100%; overflow: hidden;
 }
 #chat-reply-bar.active { display: flex; }
-#chat-reply-bar .reply-nick { font-weight: 700; color: var(--text-primary); }
+#chat-reply-bar .reply-nick { font-weight: var(--weight-semibold); color: var(--text-primary); }
 #chat-reply-bar .reply-body {
   flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: var(--text-muted);
 }
 #chat-reply-bar .reply-close {
   background: none; border: none; color: var(--text-muted);
-  cursor: pointer; font-size: 15px; padding: 0 2px; line-height: 1;
+  cursor: pointer; font-size: var(--font-lg); padding: 0 2px; line-height: 1;
   flex-shrink: 0;
 }
 #chat-reply-bar .reply-close:hover { color: var(--text-primary); }
@@ -129,7 +129,7 @@
   text-align: center; padding: var(--space-4);
   background: var(--bg-elevated);
   color: var(--accent); cursor: pointer;
-  font-size: var(--font-sm); font-weight: 600;
+  font-size: var(--font-sm); font-weight: var(--weight-semibold);
   border-top: 1px solid var(--border-subtle);
 }
 #chat-new-messages.visible { display: block; }
@@ -171,7 +171,7 @@
   background: var(--btn-primary-bg);
   color: var(--text-on-accent); border: none;
   border-radius: var(--radius-md);
-  font-size: var(--font-sm); font-weight: 700; cursor: pointer;
+  font-size: var(--font-sm); font-weight: var(--weight-semibold); cursor: pointer;
   font-family: inherit; letter-spacing: var(--tracking-snug);
   transition: opacity var(--duration-fast) ease;
 }
@@ -191,7 +191,7 @@
   border-radius: var(--radius-sm);
   background: var(--surface-pressed);
   color: var(--text-secondary);
-  font-size: var(--font-2xs);
+  font-size: var(--font-xs);
   cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -358,7 +358,7 @@
   font-size: var(--font-xs);
 }
 .mod-panel-hint {
-  font-size: var(--font-2xs);
+  font-size: var(--font-xs);
   color: var(--text-muted);
   margin-bottom: 6px;
 }
@@ -415,7 +415,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 16px;
+  font-size: var(--font-lg);
   padding: 2px 4px;
   color: var(--text-muted);
   flex-shrink: 0;

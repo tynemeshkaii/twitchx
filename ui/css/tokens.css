@@ -52,16 +52,19 @@
   --space-32: 32px;
   --space-40: 40px;
 
-  /* ── Typography scale ───────────────────────────────── */
-  --font-2xs: 10px;
-  --font-xs:  11px;
-  --font-sm:  12px;
-  --font-md:  13px;
-  --font-base: 14px;
-  --font-lg:  16px;
-  --font-xl:  20px;
-  --font-2xl: 24px;
-  --font-3xl: 32px;
+  /* ── Typography scale: 6 sizes ──────────────────────── */
+  --font-xs:  11px;  /* badges, section labels */
+  --font-sm:  12px;  /* meta: channel, game, time */
+  --font-md:  13px;  /* body text, titles */
+  --font-lg:  15px;  /* panel headings */
+  --font-xl:  22px;  /* view headings */
+  --font-2xl: 28px;  /* rare large numbers (statistics) */
+
+  /* ── Font weights: 4 ───────────────────────────────── */
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;  /* view/modal headings and large numbers only */
 
   /* ── Tracking (letter-spacing) ──────────────────────── */
   --tracking-tight:  -0.02em;

@@ -67,7 +67,7 @@
 
 .modal-title {
   font-size: var(--font-lg);
-  font-weight: 700;
+  font-weight: var(--weight-bold);
   color: var(--text-primary);
   letter-spacing: -0.01em;
 }

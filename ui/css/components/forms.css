@@ -6,7 +6,7 @@
 .setting-label {
   display: block;
   font-size: var(--font-sm);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-secondary);
   margin-bottom: var(--space-4);
   letter-spacing: 0;

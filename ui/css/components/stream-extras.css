@@ -42,7 +42,7 @@
   width: 20px;
   height: 20px;
 }
-#stream-grid.list-mode .card-channel { font-size: var(--font-md); font-weight: 600; white-space: nowrap; }
+#stream-grid.list-mode .card-channel { font-size: var(--font-md); font-weight: var(--weight-semibold); white-space: nowrap; }
 #stream-grid.list-mode .card-viewers { margin-left: 8px; }
 #stream-grid.list-mode .card-title {
   flex: 1;
@@ -75,7 +75,7 @@
 #stream-grid.compact-mode .card-game { font-size: var(--font-xs); }
 #stream-grid.compact-mode .live-badge,
 #stream-grid.compact-mode .platform-badge,
-#stream-grid.compact-mode .uptime-badge { font-size: 8px; padding: 1px 4px; }
+#stream-grid.compact-mode .uptime-badge { font-size: var(--font-xs); padding: 1px 4px; }
 #stream-grid.comfortable-mode {
   grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
   gap: var(--space-14);
@@ -144,7 +144,7 @@
 .palette-section-header {
   padding: 8px 20px 4px;
   font-size: var(--font-xs);
-  font-weight: 700;
+  font-weight: var(--weight-semibold);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-muted);
@@ -166,7 +166,7 @@
 .palette-item.palette-active { background: var(--bg-elevated); }
 
 .palette-item-icon {
-  font-size: 15px;
+  font-size: var(--font-lg);
   width: 22px;
   text-align: center;
   flex-shrink: 0;
@@ -200,7 +200,7 @@
 }
 .palette-state-title {
   font-size: var(--font-md);
-  font-weight: 700;
+  font-weight: var(--weight-semibold);
   color: var(--text-primary);
 }
 .palette-state-detail {
