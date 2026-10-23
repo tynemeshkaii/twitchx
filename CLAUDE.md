@@ -13,7 +13,16 @@ make lint    # ruff check . && pyright .
 make fmt     # ruff format .
 make test    # uv run pytest tests/ -v
 make check   # lint + test
+make check-linux  # Linux/облако: ruff + pyright + pytest без pyobjc (см. ниже)
+make preview # скрины UI в .preview/ (Node + Playwright, см. tools/ui_preview/README.md)
 ```
+
+`make check-linux` — для облачных Linux-сессий, где `uv` не может собрать
+`pyobjc-framework-*`. Ставит зависимости проекта без pyobjc во временное
+окружение (`uv run --no-project`), гоняет `uvx ruff`, pytest и pyright через
+`tools/pyright_linux.py`: тот пропускает только `reportMissingImports` для
+`AppKit`, `Foundation`, `PyObjCTools`, `objc`, `webview.platforms.cocoa`,
+любая другая ошибка — провал. На маке используй обычный `make check`.
 
 Если `uv` недоступен: `.venv/bin/python -m pytest tests/ -q`
 
