@@ -317,3 +317,78 @@ class TestSetChatSettings:
         finally:
             loop.run_until_complete(client.close_loop_resources())
             loop.close()
+
+
+class TestSetChatSettingsEmptyResponse:
+    def test_empty_data_list_returns_empty_dict(self) -> None:
+        client = TestSetChatSettings()._make_client(patch_response={"data": []})
+
+        async def run() -> dict[str, Any]:
+            return await client.set_chat_settings(
+                broadcaster_id="111", moderator_id="111", emote_mode=True
+            )
+
+        loop = asyncio.new_event_loop()
+        try:
+            assert loop.run_until_complete(run()) == {}
+        finally:
+            loop.run_until_complete(client.close_loop_resources())
+            loop.close()
+
+
+class TestSetChatModeApi:
+    @staticmethod
+    def _api(monkeypatch: Any, settings_result: Any) -> tuple[Any, list[str], Any]:
+        from unittest.mock import AsyncMock
+
+        from core.storage import update_config
+        from ui.api import TwitchXApi
+        from ui.api.streams import WatchTarget
+
+        def _login(cfg: dict) -> None:
+            cfg["platforms"]["twitch"]["user_id"] = "111"
+
+        update_config(_login)
+        api = TwitchXApi()
+        api._watching = WatchTarget("twitch", "me")
+        calls: list[str] = []
+        monkeypatch.setattr(api, "_eval_js", calls.append)
+        monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+        mock = AsyncMock(return_value=settings_result)
+        monkeypatch.setattr(api._twitch, "set_chat_settings", mock)
+        return api, calls, mock
+
+    @staticmethod
+    def _payload(calls: list[str]) -> dict[str, Any]:
+        import json
+
+        prefix = "window.onChatModeChanged("
+        last = [c for c in calls if c.startswith(prefix)][-1]
+        return json.loads(last[len(prefix) : -1])
+
+    def test_rejects_unknown_mode(self, temp_config_dir: Any, monkeypatch: Any) -> None:
+        api, calls, mock = self._api(monkeypatch, {"emote_mode": True})
+        api.set_chat_mode("__class__", True)
+        mock.assert_not_awaited()
+        payload = self._payload(calls)
+        assert payload["ok"] is False
+        assert payload["error"]
+
+    def test_ok_is_bool_not_dict(self, temp_config_dir: Any, monkeypatch: Any) -> None:
+        api, calls, _ = self._api(monkeypatch, {"emote_mode": True})
+        api.set_chat_mode("emote_mode", True)
+        assert self._payload(calls) == {"ok": True, "mode": "emote_mode", "value": True}
+
+    def test_empty_result_is_not_ok(
+        self, temp_config_dir: Any, monkeypatch: Any
+    ) -> None:
+        api, calls, _ = self._api(monkeypatch, {})
+        api.set_chat_mode("subscriber_mode", True)
+        assert self._payload(calls)["ok"] is False
+
+    def test_slow_wait_is_clamped(self, temp_config_dir: Any, monkeypatch: Any) -> None:
+        api, _, mock = self._api(monkeypatch, {"slow_mode": True})
+        api.set_chat_mode("slow_mode", True, 1)
+        assert mock.await_args.kwargs["slow_mode_wait_time"] == 3
+        api.set_chat_mode("slow_mode", True, 9999)
+        assert mock.await_args.kwargs["slow_mode_wait_time"] == 120

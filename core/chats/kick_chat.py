@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import httpx
 import websockets
 
 from core.chat import Badge, ChatMessage, ChatSendResult, Emote
-from core.chats.base import BaseChatClient, StopReconnect
+from core.chats.base import BaseChatClient, ReconnectNow, StopReconnect
 
 logger = logging.getLogger(__name__)
 
@@ -84,23 +86,31 @@ def parse_kick_event(event: dict[str, Any]) -> ChatMessage | None:
         )
     except (json.JSONDecodeError, KeyError):
         return None
-
-    payload = data.get("message") if isinstance(data.get("message"), dict) else data
-    sender = data.get("user") or payload.get("sender")
-    if not sender:
+    if not isinstance(data, dict):
         return None
 
-    identity = sender.get("identity", {})
-    raw_color = identity.get("color", "") or ""
-    color = raw_color if raw_color else None
+    message = data.get("message")
+    payload: dict[str, Any] = message if isinstance(message, dict) else data
+    sender = data.get("user") or payload.get("sender")
+    if not sender or not isinstance(sender, dict):
+        return None
 
+    identity = sender.get("identity")
+    if not isinstance(identity, dict):
+        identity = {}
+    raw_color = identity.get("color", "") or ""
+    color = raw_color if isinstance(raw_color, str) and raw_color else None
+
+    raw_badges = identity.get("badges")
     badges = [
-        Badge(name=b["type"], icon_url="")
-        for b in identity.get("badges", [])
-        if "type" in b
+        Badge(name=str(b["type"]), icon_url="")
+        for b in (raw_badges if isinstance(raw_badges, list) else [])
+        if isinstance(b, dict) and "type" in b
     ]
 
     raw_content = payload.get("content", payload.get("message", ""))
+    if not isinstance(raw_content, str):
+        raw_content = ""
     text, emotes = parse_kick_emotes(raw_content)
 
     msg_type_raw = payload.get("type", "message")
@@ -152,6 +162,30 @@ PUSHER_URL = (
 )
 
 
+def _decode_frame(raw: Any) -> dict[str, Any] | None:
+    """Decode a Pusher frame; None for anything that is not a JSON object."""
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8", errors="replace")
+    try:
+        event = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    return event if isinstance(event, dict) else None
+
+
+def _pusher_error_code(event: dict[str, Any]) -> int | None:
+    data = event.get("data")
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except ValueError:
+            return None
+    if not isinstance(data, dict):
+        return None
+    code = data.get("code")
+    return code if isinstance(code, int) else None
+
+
 class KickChatClient(BaseChatClient):
     """Pusher WebSocket client for Kick chat."""
 
@@ -160,8 +194,12 @@ class KickChatClient(BaseChatClient):
     # Pusher delivers on multiple channel variants; deduplicate by msg_id.
     _DEDUP_MAX = 200
 
-    def __init__(self) -> None:
+    def __init__(
+        self, token_provider: Callable[[], Awaitable[str | None]] | None = None
+    ) -> None:
         super().__init__()
+        # Returns a fresh access token (refreshing if needed) or None.
+        self._token_provider = token_provider
         self._chatroom_id: int | None = None
         self._broadcaster_user_id: int | None = None
         self._token: str | None = None
@@ -177,11 +215,16 @@ class KickChatClient(BaseChatClient):
         can_send: bool | None = None,
     ) -> None:
         """Connect to Kick chat via Pusher WebSocket."""
+        if self._cancelled:
+            return
         self._channel = channel_id
+        if chatroom_id is None:
+            self._emit_status(connected=False, error="No chatroom found")
+            return
         self._chatroom_id = chatroom_id
         self._broadcaster_user_id = broadcaster_user_id
         self._running = True
-        self._loop = __import__("asyncio").get_running_loop()
+        self._loop = asyncio.get_running_loop()
         self._authenticated = (
             bool(token) if can_send is None else bool(token) and can_send
         )
@@ -199,10 +242,13 @@ class KickChatClient(BaseChatClient):
                     self._ws = ws
 
                     # Wait for connection_established
-                    raw = await ws.recv()
-                    event = json.loads(raw)
-                    if event.get("event") != "pusher:connection_established":
+                    event = _decode_frame(await ws.recv())
+                    if (
+                        event is None
+                        or event.get("event") != "pusher:connection_established"
+                    ):
                         raise ValueError("Pusher connection not established")
+                    self._mark_connected()
 
                     # Kick currently acknowledges multiple channel aliases; subscribe
                     # to all known variants so chat survives backend naming changes.
@@ -218,15 +264,24 @@ class KickChatClient(BaseChatClient):
 
                     self._emit_status(connected=True)
 
-                    while self._running:
+                    while self._should_run():
                         raw = await ws.recv()
-                        if isinstance(raw, bytes):
-                            raw = raw.decode("utf-8", errors="replace")
-                        event = json.loads(raw)
+                        event = _decode_frame(raw)
+                        if event is None:
+                            logger.debug("Skipping non-JSON Kick frame: %.80r", raw)
+                            continue
                         ev_name = event.get("event", "")
 
                         if ev_name == "pusher:ping":
                             await ws.send(json.dumps({"event": "pusher:pong"}))
+                            continue
+
+                        if ev_name == "pusher:error":
+                            code = _pusher_error_code(event)
+                            logger.warning("Kick Pusher error: %s", event.get("data"))
+                            # 4200-4299: "reconnect immediately" per Pusher protocol.
+                            if code is not None and 4200 <= code <= 4299:
+                                raise ReconnectNow()
                             continue
 
                         if ev_name in (
@@ -235,7 +290,11 @@ class KickChatClient(BaseChatClient):
                         ):
                             continue
 
-                        msg = parse_kick_event(event)
+                        try:
+                            msg = parse_kick_event(event)
+                        except (AttributeError, KeyError, TypeError, ValueError) as exc:
+                            logger.debug("Skipping malformed Kick event: %s", exc)
+                            continue
                         if msg and self._message_callback:
                             if msg.msg_id:
                                 if msg.msg_id in self._seen_msg_ids:
@@ -291,6 +350,20 @@ class KickChatClient(BaseChatClient):
                 channel_id=channel_id,
                 error="Kick chat is read-only. Re-login to send.",
             )
+        if self._token_provider is not None and self._broadcaster_user_id:
+            try:
+                fresh = await self._token_provider()
+            except Exception as exc:
+                logger.warning("Kick chat token refresh failed: %s", exc)
+                fresh = None
+            if not fresh:
+                return ChatSendResult(
+                    ok=False,
+                    platform="kick",
+                    channel_id=channel_id,
+                    error="Kick session expired. Re-login to Kick.",
+                )
+            self._token = fresh
         if not self._token or not self._broadcaster_user_id:
             return ChatSendResult(
                 ok=False,

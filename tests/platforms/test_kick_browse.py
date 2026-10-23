@@ -34,6 +34,43 @@ def test_get_categories_returns_normalized_format() -> None:
     assert cat["viewers"] == 80000
 
 
+def test_get_top_streams_parses_public_api_flat_items() -> None:
+    """Shape returned by GET /public/v1/livestreams (verified live 2026-10-23)."""
+    client = KickClient()
+    mock_data = {
+        "data": [
+            {
+                "broadcaster_user_id": 26900013,
+                "channel_id": 25883235,
+                "slug": "cavs",
+                "stream_title": "KALEM G",
+                "viewer_count": 16475,
+                "thumbnail": "https://images.kick.com/video_thumbnails/x/480.webp",
+                "started_at": "2026-10-23T09:53:51Z",
+                "category": {"id": 15, "name": "Just Chatting"},
+                "profile_picture": "https://files.kick.com/images/user/1/p.webp",
+            }
+        ]
+    }
+    with patch.object(client, "_get", return_value=mock_data):
+        result = _run(client.get_top_streams())
+    assert result == [
+        {
+            "platform": "kick",
+            "channel_id": "25883235",
+            "channel_login": "cavs",
+            "display_name": "cavs",
+            "title": "KALEM G",
+            "category": "Just Chatting",
+            "category_id": "15",
+            "viewers": 16475,
+            "started_at": "2026-10-23T09:53:51Z",
+            "thumbnail_url": "https://images.kick.com/video_thumbnails/x/480.webp",
+            "avatar_url": "https://files.kick.com/images/user/1/p.webp",
+        }
+    ]
+
+
 def test_get_top_streams_returns_normalized_format() -> None:
     client = KickClient()
     mock_data = {

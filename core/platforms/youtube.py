@@ -6,6 +6,7 @@ import hashlib
 import logging
 import os
 import re
+import secrets
 import threading
 import time
 import xml.etree.ElementTree as ET
@@ -177,7 +178,7 @@ class YouTubeClient(BasePlatformClient):
 
     def _effective_api_key(self) -> str:
         """Return api_key from config, or bundled default."""
-        from core import credentials as _creds
+        from core import bundled_credentials as _creds
 
         return self._platform_config().get("api_key", "") or _creds.YOUTUBE_API_KEY
 
@@ -617,9 +618,12 @@ class YouTubeClient(BasePlatformClient):
         self._reload_config()
         verifier = _generate_code_verifier()
         challenge = _generate_code_challenge(verifier)
+        state = secrets.token_urlsafe(32)
 
         def _apply(cfg: dict) -> None:
-            cfg.get("platforms", {}).get("youtube", {})["pkce_verifier"] = verifier
+            yc = cfg.get("platforms", {}).get("youtube", {})
+            yc["pkce_verifier"] = verifier
+            yc["oauth_state"] = state
 
         self._config = update_config(_apply)
         cid, _ = self._effective_creds()
@@ -632,6 +636,7 @@ class YouTubeClient(BasePlatformClient):
             "prompt": "consent",
             "code_challenge": challenge,
             "code_challenge_method": "S256",
+            "state": state,
         }
         return f"{YOUTUBE_AUTH_URL}?{urlencode(params)}"
 
@@ -654,7 +659,9 @@ class YouTubeClient(BasePlatformClient):
         resp.raise_for_status()
 
         def _clear_verifier(cfg: dict) -> None:
-            cfg.get("platforms", {}).get("youtube", {})["pkce_verifier"] = ""
+            yc = cfg.get("platforms", {}).get("youtube", {})
+            yc["pkce_verifier"] = ""
+            yc["oauth_state"] = ""
 
         self._config = update_config(_clear_verifier)
         return resp.json()

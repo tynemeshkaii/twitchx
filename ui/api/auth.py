@@ -3,17 +3,22 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import threading
 import time
 import webbrowser
+from collections.abc import Callable
+from typing import Any
 
 import httpx
 
-from core.oauth_server import wait_for_oauth_code
+from core.oauth_server import OAuthPortBusy, wait_for_oauth_code
 from core.platforms.kick import OAUTH_SCOPE as KICK_OAUTH_SCOPE
 from core.platforms.youtube import YOUTUBE_API_URL
 from core.storage import update_config
 
 from ._base import BaseApiComponent
+
+_LOGIN_BUSY_MSG = "Another login is already in progress"
 
 logger = logging.getLogger(__name__)
 
@@ -21,23 +26,74 @@ logger = logging.getLogger(__name__)
 class AuthComponent(BaseApiComponent):
     """OAuth authentication for all platforms."""
 
+    def __init__(self, parent: Any) -> None:
+        super().__init__(parent)
+        self._login_lock = threading.Lock()
+
+    def _try_begin_login(self, error_callback: str) -> bool:
+        """Claim the single OAuth slot; report an error and return False if taken."""
+        if self._login_lock.acquire(blocking=False):
+            return True
+        self._eval_js(f"window.{error_callback}({json.dumps(_LOGIN_BUSY_MSG)})")
+        return False
+
+    def _run_login_thread(self, fn: Callable[[], None]) -> None:
+        """Run the login worker; always free the OAuth slot when it ends."""
+
+        def runner() -> None:
+            try:
+                fn()
+            finally:
+                self._login_lock.release()
+
+        self._run_in_thread(runner)
+
+    def _await_oauth_code(
+        self, auth_url: str, error_callback: str, expected_state: str
+    ) -> str | None:
+        """Open the browser and wait for the callback code carrying our state.
+
+        Returns None when there is nothing left to do: shutdown, timeout or a
+        failure. Timeout and failure are reported to the UI and restart polling.
+        """
+        try:
+            webbrowser.open(auth_url)
+            code = wait_for_oauth_code(expected_state=expected_state)
+        except OAuthPortBusy:
+            self._eval_js(f"window.{error_callback}({json.dumps(_LOGIN_BUSY_MSG)})")
+            self._api._data.restart_polling()
+            return None
+        except Exception as exc:
+            logger.warning("OAuth wait failed: %s", exc)
+            self._eval_js(f"window.{error_callback}({json.dumps('Login failed')})")
+            self._api._data.restart_polling()
+            return None
+        if self._shutdown.is_set():
+            return None
+        if code is None:
+            self._eval_js(f'window.{error_callback}("Login timed out")')
+            self._api._data.restart_polling()
+        return code
+
     # ── Twitch ──────────────────────────────────────────────────
 
     def login(self) -> None:
-        auth_url = self._twitch.get_auth_url()
+        if not self._try_begin_login("onLoginError"):
+            return
+        try:
+            auth_url = self._twitch.get_auth_url()
+            expected_state = self._twitch._platform_config().get("oauth_state", "")
+        except Exception:
+            self._login_lock.release()
+            raise
         self._api._data.stop_polling()
         self._eval_js(
             "window.onStatusUpdate({text: 'Waiting for Twitch login...', type: 'warn'})"
         )
 
         def do_login() -> None:
-            webbrowser.open(auth_url)
-            code = wait_for_oauth_code()
-            if self._shutdown.is_set():
-                return
+            code = self._await_oauth_code(auth_url, "onLoginError", expected_state)
             if code is None:
-                self._eval_js('window.onLoginError("Login timed out")')
-                self._api._data.restart_polling()
                 return
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -93,7 +149,7 @@ class AuthComponent(BaseApiComponent):
             finally:
                 self._api._close_thread_loop(loop)
 
-        self._run_in_thread(do_login)
+        self._run_login_thread(do_login)
 
     def logout(self) -> None:
         def _clear(cfg: dict) -> None:
@@ -114,30 +170,32 @@ class AuthComponent(BaseApiComponent):
     # ── Kick ────────────────────────────────────────────────────
 
     def kick_login(self, client_id: str = "", client_secret: str = "") -> None:
-        if client_id.strip() and client_secret.strip():
-            cid = client_id.strip()
-            csec = client_secret.strip()
+        if not self._try_begin_login("onKickLoginError"):
+            return
+        try:
+            if client_id.strip() and client_secret.strip():
+                cid = client_id.strip()
+                csec = client_secret.strip()
 
-            def _save_creds(cfg: dict) -> None:
-                kc = cfg.get("platforms", {}).get("kick", {})
-                kc["client_id"] = cid
-                kc["client_secret"] = csec
+                def _save_creds(cfg: dict) -> None:
+                    kc = cfg.get("platforms", {}).get("kick", {})
+                    kc["client_id"] = cid
+                    kc["client_secret"] = csec
 
-            self._config = update_config(_save_creds)
-        auth_url = self._kick.get_auth_url()
+                self._config = update_config(_save_creds)
+            auth_url = self._kick.get_auth_url()
+            expected_state = self._kick._platform_config().get("oauth_state", "")
+        except Exception:
+            self._login_lock.release()
+            raise
         self._api._data.stop_polling()
         self._eval_js(
             "window.onStatusUpdate({text: 'Waiting for Kick login...', type: 'warn'})"
         )
 
         def do_login() -> None:
-            webbrowser.open(auth_url)
-            code = wait_for_oauth_code()
-            if self._shutdown.is_set():
-                return
+            code = self._await_oauth_code(auth_url, "onKickLoginError", expected_state)
             if code is None:
-                self._eval_js('window.onKickLoginError("Login timed out")')
-                self._api._data.restart_polling()
                 return
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -190,7 +248,7 @@ class AuthComponent(BaseApiComponent):
             finally:
                 self._api._close_thread_loop(loop)
 
-        self._run_in_thread(do_login)
+        self._run_login_thread(do_login)
 
     def kick_logout(self) -> None:
         def _clear(cfg: dict) -> None:
@@ -212,30 +270,34 @@ class AuthComponent(BaseApiComponent):
     # ── YouTube ─────────────────────────────────────────────────
 
     def youtube_login(self, client_id: str = "", client_secret: str = "") -> None:
-        if client_id.strip() and client_secret.strip():
-            cid = client_id.strip()
-            csec = client_secret.strip()
+        if not self._try_begin_login("onYouTubeLoginError"):
+            return
+        try:
+            if client_id.strip() and client_secret.strip():
+                cid = client_id.strip()
+                csec = client_secret.strip()
 
-            def _save_creds(cfg: dict) -> None:
-                yc = cfg.get("platforms", {}).get("youtube", {})
-                yc["client_id"] = cid
-                yc["client_secret"] = csec
+                def _save_creds(cfg: dict) -> None:
+                    yc = cfg.get("platforms", {}).get("youtube", {})
+                    yc["client_id"] = cid
+                    yc["client_secret"] = csec
 
-            self._config = update_config(_save_creds)
-        auth_url = self._youtube.get_auth_url()
+                self._config = update_config(_save_creds)
+            auth_url = self._youtube.get_auth_url()
+            expected_state = self._youtube._platform_config().get("oauth_state", "")
+        except Exception:
+            self._login_lock.release()
+            raise
         self._api._data.stop_polling()
         self._eval_js(
             "window.onStatusUpdate({text: 'Waiting for YouTube login...', type: 'warn'})"
         )
 
         def do_login() -> None:
-            webbrowser.open(auth_url)
-            code = wait_for_oauth_code()
-            if self._shutdown.is_set():
-                return
+            code = self._await_oauth_code(
+                auth_url, "onYouTubeLoginError", expected_state
+            )
             if code is None:
-                self._eval_js('window.onYouTubeLoginError("Login timed out")')
-                self._api._data.restart_polling()
                 return
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -286,7 +348,7 @@ class AuthComponent(BaseApiComponent):
             finally:
                 self._api._close_thread_loop(loop)
 
-        self._run_in_thread(do_login)
+        self._run_login_thread(do_login)
 
     def youtube_logout(self) -> None:
         def _clear(cfg: dict) -> None:

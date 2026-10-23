@@ -6,11 +6,18 @@ import hashlib
 import logging
 import os
 import re
+import secrets
 import time
 from typing import Any
 from urllib.parse import urlencode
 
-from core.platforms.base import BasePlatformClient
+from core.platforms.base import (
+    MAX_RATE_LIMIT_RETRIES,
+    AuthRevokedError,
+    BasePlatformClient,
+    _refresh_rejected,
+    _retry_delay,
+)
 from core.storage import token_is_valid, update_config
 
 logger = logging.getLogger(__name__)
@@ -49,10 +56,29 @@ class TwitchClient(BasePlatformClient):
                 if token_is_valid(tc):
                     return tc["access_token"]
                 if tc.get("refresh_token"):
-                    return await self.refresh_user_token()
+                    try:
+                        return await self.refresh_user_token()
+                    except AuthRevokedError:
+                        # User auth was wiped; keep working on an app token.
+                        tc = self._platform_config()
             # Fall back to app-level client_credentials
             if token_is_valid(tc):
                 return tc["access_token"]
+            return await self._refresh_app_token()
+
+    async def _refresh_after_401(self, stale_token: str) -> str:
+        """Refresh after a 401 under the token lock, at most once per stale token."""
+        async with self._get_token_lock():
+            self._reload_config()
+            tc = self._platform_config()
+            current = tc.get("access_token", "")
+            if current and current != stale_token:
+                return current
+            if tc.get("token_type") == "user" and tc.get("refresh_token"):
+                try:
+                    return await self.refresh_user_token()
+                except AuthRevokedError:
+                    pass
             return await self._refresh_app_token()
 
     async def _refresh_app_token(self) -> str:
@@ -87,9 +113,12 @@ class TwitchClient(BasePlatformClient):
         self._reload_config()
         verifier = _generate_code_verifier()
         challenge = _generate_code_challenge(verifier)
+        state = secrets.token_urlsafe(32)
 
         def _apply(cfg: dict) -> None:
-            cfg.get("platforms", {}).get("twitch", {})["pkce_verifier"] = verifier
+            tc = cfg.get("platforms", {}).get("twitch", {})
+            tc["pkce_verifier"] = verifier
+            tc["oauth_state"] = state
 
         self._config = update_config(_apply)
         cid, _ = self._effective_creds()
@@ -101,6 +130,7 @@ class TwitchClient(BasePlatformClient):
                 "scope": OAUTH_SCOPE,
                 "code_challenge": challenge,
                 "code_challenge_method": "S256",
+                "state": state,
                 "force_verify": "false",
             }
         )
@@ -124,7 +154,9 @@ class TwitchClient(BasePlatformClient):
         resp.raise_for_status()
 
         def _clear_verifier(cfg: dict) -> None:
-            cfg.get("platforms", {}).get("twitch", {})["pkce_verifier"] = ""
+            tc = cfg.get("platforms", {}).get("twitch", {})
+            tc["pkce_verifier"] = ""
+            tc["oauth_state"] = ""
 
         self._config = update_config(_clear_verifier)
         return resp.json()
@@ -141,8 +173,8 @@ class TwitchClient(BasePlatformClient):
                 "grant_type": "refresh_token",
             },
         )
-        if resp.status_code in (400, 401):
-            # Token revoked — clear user auth
+        if _refresh_rejected(resp):
+            # Refresh token revoked — clear user auth
             def _clear(cfg: dict) -> None:
                 tc = cfg.get("platforms", {}).get("twitch", {})
                 tc["access_token"] = ""
@@ -154,7 +186,8 @@ class TwitchClient(BasePlatformClient):
                 tc["user_display_name"] = ""
 
             self._config = update_config(_clear)
-            raise ValueError("User token expired. Please log in again.")
+            self._notify_auth_revoked()
+            raise AuthRevokedError("User token expired. Please log in again.")
         resp.raise_for_status()
         data = resp.json()
         new_token = data["access_token"]
@@ -209,34 +242,26 @@ class TwitchClient(BasePlatformClient):
             "Client-Id": cid,
         }
         url = f"{TWITCH_API_URL}{endpoint}"
-        logger.debug("GET %s params=%s", url, params)
         client = self._get_client()
-        resp = await client.get(url, headers=headers, params=params)
-        logger.debug("Response: %d", resp.status_code)
-        if resp.status_code != 200:
-            logger.debug("Body: %s", resp.text[:300])
-        if resp.status_code == 429:
-            retry_after = (
-                float(resp.headers.get("Ratelimit-Reset", time.time() + 2))
-                - time.time()
-            )
-            await asyncio.sleep(max(retry_after, 1))
-            return await self._get(endpoint, params)
-        if resp.status_code == 401:
-
-            def _clear_token(cfg: dict) -> None:
-                cfg.get("platforms", {}).get("twitch", {})["access_token"] = ""
-
-            self._config = update_config(_clear_token)
-            tc = self._platform_config()
-            if tc.get("token_type") == "user" and tc.get("refresh_token"):
-                token = await self.refresh_user_token()
-            else:
-                token = await self._refresh_app_token()
-            headers["Authorization"] = f"Bearer {token}"
+        rate_limit_retries = 0
+        refreshed = False
+        while True:
+            logger.debug("GET %s params=%s", url, params)
             resp = await client.get(url, headers=headers, params=params)
-        resp.raise_for_status()
-        return resp.json()
+            logger.debug("Response: %d", resp.status_code)
+            if resp.status_code != 200:
+                logger.debug("Body: %s", resp.text[:300])
+            if resp.status_code == 429 and rate_limit_retries < MAX_RATE_LIMIT_RETRIES:
+                rate_limit_retries += 1
+                await asyncio.sleep(_retry_delay(resp, 2))
+                continue
+            if resp.status_code == 401 and not refreshed:
+                refreshed = True
+                token = await self._refresh_after_401(token)
+                headers["Authorization"] = f"Bearer {token}"
+                continue
+            resp.raise_for_status()
+            return resp.json()
 
     async def get_live_streams(self, logins: list[str]) -> list[dict[str, Any]]:
         logins = [name.strip().lower() for name in logins if name and name.strip()]
@@ -517,8 +542,8 @@ class TwitchClient(BasePlatformClient):
         logger.debug("PATCH %s params=%s body=%s", url, params, body)
         resp = await client.patch(url, headers=headers, params=params, json=body)
         resp.raise_for_status()
-        data = resp.json()
-        return data.get("data", [{}])[0]
+        rows = resp.json().get("data") or []
+        return rows[0] if rows else {}
 
     # ── Polymorphic helpers ────────────────────────────────────
 

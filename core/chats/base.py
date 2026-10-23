@@ -20,6 +20,13 @@ class StopReconnect(Exception):
     """Raised by a connect_fn to signal that the reconnection loop should stop."""
 
 
+class ReconnectNow(Exception):
+    """Raised by a connect_fn to reconnect immediately (no backoff, no attempt count).
+
+    Used for server-initiated reconnects (Twitch ``RECONNECT``, Pusher 4200-4299).
+    """
+
+
 class BaseChatClient(ChatClient):
     """Shared infrastructure for chat clients.
 
@@ -37,6 +44,9 @@ class BaseChatClient(ChatClient):
         self._channel: str | None = None
         self._running = False
         self._authenticated = False
+        # Set once by cancel()/disconnect(); a cancelled client never (re)connects.
+        self._cancelled = False
+        self._reconnect_attempt = 0
 
     def on_message(self, callback: Callable[[ChatMessage], None]) -> None:
         self._message_callback = callback
@@ -57,8 +67,25 @@ class BaseChatClient(ChatClient):
                 )
             )
 
+    def cancel(self) -> None:
+        """Synchronously mark the client as stopped (safe from any thread).
+
+        Unlike disconnect() it needs no event loop, so it also covers the window
+        before connect() started: a cancelled client returns from connect() at once.
+        """
+        self._cancelled = True
+        self._running = False
+
+    def _mark_connected(self) -> None:
+        """Called by connect_fn once the server accepted the connection."""
+        self._reconnect_attempt = 0
+
+    def _should_run(self) -> bool:
+        return self._running and not self._cancelled
+
     async def disconnect(self) -> None:
         """Disconnect WebSocket and emit offline status."""
+        self._cancelled = True
         self._running = False
         if self._ws:
             with contextlib.suppress(Exception):
@@ -71,21 +98,28 @@ class BaseChatClient(ChatClient):
 
         Args:
             connect_fn: Async callable that establishes a new WebSocket connection
-                        and sets self._ws. Should raise on failure.
-                        Raise StopReconnect to exit the loop cleanly.
+                        and sets self._ws. Should raise on failure and call
+                        self._mark_connected() once the server accepted it — that
+                        resets the backoff counter, so only consecutive failed
+                        attempts count towards the limit.
+                        Raise StopReconnect to exit the loop cleanly, ReconnectNow
+                        to reconnect without delay.
         """
-        attempt = 0
-        while self._running:
+        self._reconnect_attempt = 0
+        while self._should_run():
             try:
                 await connect_fn()
-                attempt = 0  # reset on successful connection
             except StopReconnect:
                 break
+            except ReconnectNow:
+                logger.info("Chat server requested reconnect")
+                continue
             except Exception as e:
-                logger.warning("Chat reconnect error (attempt %d): %s", attempt + 1, e)
-                if not self._running:
+                attempt = self._reconnect_attempt + 1
+                logger.warning("Chat reconnect error (attempt %d): %s", attempt, e)
+                if not self._should_run():
                     break
-                attempt += 1
+                self._reconnect_attempt = attempt
                 if attempt >= len(RECONNECT_DELAYS):
                     self._emit_status(
                         connected=False, error=f"Max reconnect attempts: {e}"

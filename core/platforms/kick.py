@@ -11,12 +11,24 @@ import time
 from typing import Any
 from urllib.parse import urlencode
 
+import httpx
 from curl_cffi import requests as curl_requests
 
-from core.platforms.base import BasePlatformClient
+from core.platforms.base import (
+    MAX_RATE_LIMIT_RETRIES,
+    AuthRevokedError,
+    BasePlatformClient,
+    _refresh_rejected,
+    _retry_delay,
+)
 from core.storage import token_is_valid, update_config
 
 logger = logging.getLogger(__name__)
+
+
+def _str_id(value: object) -> str:
+    return "" if value is None else str(value)
+
 
 VALID_SLUG = re.compile(r"^[a-zA-Z0-9_-]{1,25}$")
 
@@ -28,6 +40,11 @@ KICK_REDIRECT_URI = "http://localhost:3457/callback"
 OAUTH_SCOPE = "user:read channel:read chat:write"
 KICK_BROWSER_IMPERSONATION = "chrome124"
 KICK_TYPESENSE_API_KEY = "nXIMW0iEN6sMujFYjFuhdrSwVow3pDQu"
+# GET /public/v1/channels accepts up to 50 slugs per request (docs.kick.com).
+KICK_CHANNELS_BATCH = 50
+KICK_LIVE_CACHE_TTL = 5.0
+# Seconds to wait before asking for an app token again after a failure.
+KICK_APP_TOKEN_RETRY_AFTER = 300.0
 
 
 # ── PKCE helpers ─────────────────────────────────────────────
@@ -51,7 +68,15 @@ class KickClient(BasePlatformClient):
 
     def __init__(self) -> None:
         super().__init__()
-        self._livestreams_cache: tuple[float, list[dict[str, Any]]] = (0, [])
+        # slug → (fetched_at, live item or None when offline)
+        self._live_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
+        # In-memory app access token (client_credentials) and its expiry. Kept
+        # out of config: access_token there means "logged-in user" to the UI
+        # and to chat, and an app token cannot send chat messages.
+        self._app_token: str = ""
+        self._app_token_expires_at: float = 0.0
+        # After a refused/failed app-token request, don't retry on every GET.
+        self._app_token_failed_at: float = 0.0
 
     def _client_timeout(self) -> float:
         return 15.0
@@ -102,23 +127,30 @@ class KickClient(BasePlatformClient):
         resp.raise_for_status()
 
         def _clear_verifier(cfg: dict) -> None:
-            cfg.get("platforms", {}).get("kick", {})["pkce_verifier"] = ""
+            kc = cfg.get("platforms", {}).get("kick", {})
+            kc["pkce_verifier"] = ""
+            kc["oauth_state"] = ""
 
         self._config = update_config(_clear_verifier)
         return resp.json()
 
     async def refresh_user_token(self) -> str:
-        """Refresh the user token; clear auth state on 400/401."""
+        """Refresh the user token; clear auth state only if the token is rejected.
+
+        docs.kick.com (OAuth 2.1 → refresh token) lists client_secret as required.
+        """
         kc = self._platform_config()
+        cid, csec = self._effective_creds()
         resp = await self._get_client().post(
             f"{KICK_AUTH_URL}/oauth/token",
             data={
-                "client_id": self._effective_creds()[0],
+                "client_id": cid,
+                "client_secret": csec,
                 "refresh_token": kc.get("refresh_token", ""),
                 "grant_type": "refresh_token",
             },
         )
-        if resp.status_code in (400, 401):
+        if _refresh_rejected(resp):
 
             def _clear(cfg: dict) -> None:
                 kc = cfg.get("platforms", {}).get("kick", {})
@@ -132,7 +164,8 @@ class KickClient(BasePlatformClient):
                 kc["user_display_name"] = ""
 
             self._config = update_config(_clear)
-            raise ValueError("User token expired. Please log in again.")
+            self._notify_auth_revoked()
+            raise AuthRevokedError("User token expired. Please log in again.")
         resp.raise_for_status()
         data = resp.json()
         new_token = data["access_token"]
@@ -208,6 +241,49 @@ class KickClient(BasePlatformClient):
                     return None
             return None
 
+    async def _ensure_app_token(self, stale_token: str | None = None) -> str | None:
+        """App access token (client_credentials) for the public API.
+
+        Every /public/v1 endpoint answers 401 without a bearer token, so a user
+        who never logged in to Kick needs this to see their Kick favorites.
+        ``stale_token`` forces a new token unless another caller already
+        replaced it. Returns None if there are no credentials or Kick refuses.
+        """
+        async with self._get_token_lock():
+            if (
+                self._app_token
+                and self._app_token != stale_token
+                and self._app_token_expires_at > time.time() + 60
+            ):
+                return self._app_token
+            cid, csec = self._effective_creds()
+            if not cid or not csec:
+                return None
+            if time.time() - self._app_token_failed_at < KICK_APP_TOKEN_RETRY_AFTER:
+                return None
+            try:
+                resp = await self._get_client().post(
+                    f"{KICK_AUTH_URL}/oauth/token",
+                    data={
+                        "client_id": cid,
+                        "client_secret": csec,
+                        "grant_type": "client_credentials",
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                token = data["access_token"]
+            except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+                logger.warning("Kick app token request failed: %s", exc)
+                self._app_token_failed_at = time.time()
+                return None
+            self._app_token_failed_at = 0.0
+            self._app_token = str(token)
+            self._app_token_expires_at = time.time() + float(
+                data.get("expires_in", 3600) or 3600
+            )
+            return self._app_token
+
     # ── Generic GET ──────────────────────────────────────────
 
     async def _get(
@@ -217,36 +293,41 @@ class KickClient(BasePlatformClient):
         auth_required: bool = False,
     ) -> Any:
         token = await self._ensure_token()
+        is_app_token = False
+        if not token and not auth_required:
+            token = await self._ensure_app_token()
+            is_app_token = bool(token)
         headers: dict[str, str] = {}
         if token:
             headers["Authorization"] = f"Bearer {token}"
         elif auth_required:
             raise ValueError("Authentication required but no valid token available.")
-        logger.debug("GET %s params=%s", url, params)
         client = self._get_client()
-        resp = await client.get(url, headers=headers, params=params)
-        logger.debug("Response: %d", resp.status_code)
-        if resp.status_code != 200:
-            logger.debug("Body: %s", resp.text[:300])
-        if resp.status_code == 429:
-            retry_after = float(resp.headers.get("Retry-After", "2"))
-            await asyncio.sleep(max(retry_after, 1))
-            return await self._get(url, params, auth_required)
-        if resp.status_code == 401 and token:
-            async with self._get_token_lock():
-
-                def _clear_token(cfg: dict) -> None:
-                    cfg.get("platforms", {}).get("kick", {})["access_token"] = ""
-
-                self._config = update_config(_clear_token)
-            new_token = await self._ensure_token()
-            if new_token:
-                headers["Authorization"] = f"Bearer {new_token}"
-                resp = await client.get(url, headers=headers, params=params)
-            else:
-                resp.raise_for_status()
-        resp.raise_for_status()
-        return resp.json()
+        rate_limit_retries = 0
+        refreshed = False
+        while True:
+            logger.debug("GET %s params=%s", url, params)
+            resp = await client.get(url, headers=headers, params=params)
+            logger.debug("Response: %d", resp.status_code)
+            if resp.status_code != 200:
+                logger.debug("Body: %s", resp.text[:300])
+            if resp.status_code == 429 and rate_limit_retries < MAX_RATE_LIMIT_RETRIES:
+                rate_limit_retries += 1
+                await asyncio.sleep(_retry_delay(resp, 2))
+                continue
+            if resp.status_code == 401 and token and not refreshed:
+                refreshed = True
+                new_token = (
+                    await self._ensure_app_token(stale_token=token)
+                    if is_app_token
+                    else await self._refresh_after_401(token)
+                )
+                if new_token:
+                    token = new_token
+                    headers["Authorization"] = f"Bearer {new_token}"
+                    continue
+            resp.raise_for_status()
+            return resp.json()
 
     async def _legacy_get_json(self, path: str) -> dict[str, Any]:
         """Fetch browser-protected Kick endpoints through a browser-like client."""
@@ -331,29 +412,80 @@ class KickClient(BasePlatformClient):
 
     # ── API methods ──────────────────────────────────────────
 
+    @staticmethod
+    def _channel_to_live_item(channel: dict[str, Any]) -> dict[str, Any]:
+        """Flatten a /public/v1/channels item into the live-stream shape."""
+        slug = str(channel.get("slug", "")).lower()
+        raw_stream = channel.get("stream")
+        stream: dict[str, Any] = raw_stream if isinstance(raw_stream, dict) else {}
+        raw_category = channel.get("category")
+        category: dict[str, Any] = (
+            raw_category if isinstance(raw_category, dict) else {}
+        )
+        return {
+            "slug": slug,
+            # Channels endpoint has no username; slug is the display fallback.
+            "channel": {"slug": slug, "username": slug},
+            "stream_title": channel.get("stream_title", ""),
+            "category": category,
+            "viewer_count": stream.get("viewer_count", 0),
+            "start_time": stream.get("start_time", ""),
+            "thumbnail": stream.get("thumbnail", ""),
+            "broadcaster_user_id": channel.get("broadcaster_user_id"),
+            "channel_id": channel.get("channel_id"),
+        }
+
     async def get_live_streams(self, slugs: list[str]) -> list[dict[str, Any]]:
-        """GET /public/v1/livestreams and filter by slugs."""
+        """Live status of the given channels via GET /public/v1/channels?slug=….
+
+        The livestreams endpoint only returns the top page, so small favorites
+        would always look offline; channels-by-slug reports ``stream.is_live``
+        for each requested channel. Batches of 50, short per-slug cache.
+        """
         slugs = [s.strip().lower() for s in slugs if s and s.strip()]
-        slugs = [s for s in slugs if VALID_SLUG.match(s)]
+        slugs = list(dict.fromkeys(s for s in slugs if VALID_SLUG.match(s)))
         if not slugs:
             return []
-        # Kick's public livestreams endpoint does not support filtering by slug.
-        # We fetch all live streams and filter client-side.
-        # Short-lived cache (5s) avoids re-fetching within a single poll cycle.
-        cache_time, cache_data = self._livestreams_cache
-        if time.time() - cache_time < 5:
-            streams = cache_data
-        else:
-            data = await self._get(f"{KICK_API_URL}/public/v1/livestreams")
-            streams = data.get("data", data) if isinstance(data, dict) else data
-            self._livestreams_cache = (time.time(), streams)
-        slug_set = set(slugs)
-        return [
+        now = time.time()
+        stale = [
             s
-            for s in streams
-            if s.get("channel", {}).get("slug", "").lower() in slug_set
-            or s.get("slug", "").lower() in slug_set
+            for s in slugs
+            if s not in self._live_cache
+            or now - self._live_cache[s][0] >= KICK_LIVE_CACHE_TTL
         ]
+        if stale:
+            batches = [
+                stale[i : i + KICK_CHANNELS_BATCH]
+                for i in range(0, len(stale), KICK_CHANNELS_BATCH)
+            ]
+            responses = await asyncio.gather(
+                *[
+                    self._get(
+                        f"{KICK_API_URL}/public/v1/channels",
+                        params=[("slug", s) for s in batch],
+                    )
+                    for batch in batches
+                ]
+            )
+            fetched_at = time.time()
+            fresh: dict[str, tuple[float, dict[str, Any] | None]] = {
+                s: (fetched_at, None) for s in stale
+            }
+            for data in responses:
+                items = data.get("data", data) if isinstance(data, dict) else data
+                if not isinstance(items, list):
+                    continue
+                for channel in items:
+                    if not isinstance(channel, dict):
+                        continue
+                    stream = channel.get("stream")
+                    if not (isinstance(stream, dict) and stream.get("is_live")):
+                        continue
+                    item = self._channel_to_live_item(channel)
+                    if item["slug"] in fresh:
+                        fresh[item["slug"]] = (fetched_at, item)
+            self._live_cache.update(fresh)
+        return [item for s in slugs if (item := self._live_cache[s][1]) is not None]
 
     async def search_channels(self, query: str) -> list[dict[str, Any]]:
         """Search Kick channels via the same index used by the website."""
@@ -426,13 +558,13 @@ class KickClient(BasePlatformClient):
         category_id: str | None = None,
         limit: int = 20,
     ) -> list[dict[str, Any]]:
-        """GET /public/v1/livestreams sorted by viewers (desc).
+        """GET /public/v1/livestreams sorted by viewer count (highest first).
 
         Normalized to the cross-platform stream dict format.
         """
         params: list[tuple[str, str]] = [
             ("limit", str(min(limit, 100))),
-            ("sort", "desc"),
+            ("sort", "viewer_count"),
         ]
         if category_id:
             params.append(("category_id", category_id))
@@ -440,23 +572,42 @@ class KickClient(BasePlatformClient):
         items: list[Any] = data.get("data", []) if isinstance(data, dict) else []
         results: list[dict[str, Any]] = []
         for s in items:
-            channel = s.get("channel", {})
-            user = channel.get("user", {})
-            categories = s.get("categories", [])
-            cat = categories[0] if categories else {}
+            if not isinstance(s, dict):
+                continue
+            # The public API returns flat items (slug, stream_title, category,
+            # started_at, thumbnail URL, profile_picture); the nested
+            # channel/user/categories shape is the older payload, still read
+            # as a fallback.
+            raw_channel = s.get("channel")
+            channel: dict[str, Any] = (
+                raw_channel if isinstance(raw_channel, dict) else {}
+            )
+            raw_user = channel.get("user")
+            user: dict[str, Any] = raw_user if isinstance(raw_user, dict) else {}
+            raw_cat = s.get("category")
+            cat: dict[str, Any] = raw_cat if isinstance(raw_cat, dict) else {}
+            if not cat:
+                categories = s.get("categories")
+                if isinstance(categories, list) and categories:
+                    cat = categories[0] if isinstance(categories[0], dict) else {}
+            thumbnail = s.get("thumbnail")
+            if isinstance(thumbnail, dict):
+                thumbnail = thumbnail.get("src", "")
+            slug = s.get("slug") or channel.get("slug", "")
             results.append(
                 {
                     "platform": "kick",
-                    "channel_id": str(channel.get("id", "")),
-                    "channel_login": channel.get("slug", ""),
-                    "display_name": user.get("username", channel.get("slug", "")),
-                    "title": s.get("session_title", ""),
+                    "channel_id": _str_id(s.get("channel_id") or channel.get("id")),
+                    "channel_login": slug,
+                    "display_name": user.get("username") or slug,
+                    "title": s.get("stream_title") or s.get("session_title", ""),
                     "category": cat.get("name", ""),
-                    "category_id": str(cat.get("id", "")),
+                    "category_id": _str_id(cat.get("id")),
                     "viewers": s.get("viewer_count", 0),
-                    "started_at": s.get("created_at", ""),
-                    "thumbnail_url": (s.get("thumbnail") or {}).get("src", ""),
-                    "avatar_url": user.get("profile_pic", ""),
+                    "started_at": s.get("started_at") or s.get("created_at", ""),
+                    "thumbnail_url": thumbnail if isinstance(thumbnail, str) else "",
+                    "avatar_url": s.get("profile_picture")
+                    or user.get("profile_pic", ""),
                 }
             )
         return results
@@ -541,6 +692,6 @@ class KickClient(BasePlatformClient):
             "thumbnail_url": thumbnail_url,
             "viewer_trend": None,
             "platform": "kick",
-            "broadcaster_user_id": raw.get("broadcaster_user_id"),
-            "channel_id": raw.get("channel_id"),
+            "broadcaster_user_id": _str_id(raw.get("broadcaster_user_id")),
+            "channel_id": _str_id(raw.get("channel_id")),
         }

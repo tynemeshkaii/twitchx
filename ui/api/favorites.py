@@ -5,7 +5,8 @@ import json
 import logging
 from typing import Any
 
-from core.storage import get_platform_config, update_config
+from core.constants import YOUTUBE_ENABLED
+from core.storage import get_platform_config, load_config, update_config
 
 from ._base import BaseApiComponent
 
@@ -143,6 +144,15 @@ class FavoritesComponent(BaseApiComponent):
     def add_channel(
         self, username: str, platform: str = "twitch", display_name: str = ""
     ) -> None:
+        if platform == "youtube" and not YOUTUBE_ENABLED:
+            self._eval_js(
+                "window.onStatusUpdate("
+                + json.dumps(
+                    {"text": "YouTube is disabled in this build", "type": "error"}
+                )
+                + ")"
+            )
+            return
         client = self._get_platform(platform)
         if client is None:
             self._eval_js(
@@ -401,49 +411,45 @@ class FavoritesComponent(BaseApiComponent):
     # ── Search ──────────────────────────────────────────────────
 
     def search_channels(self, query: str, platform: str = "twitch") -> None:
+        # Second callback argument lets JS discard replies for a stale query.
+        meta = json.dumps({"query": query, "platform": platform})
+
         def do_search() -> None:
+            config = load_config()
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
+
+            async def _search(client: Any) -> list[dict[str, Any]]:
+                results = await client.search_channels(query)
+                return [await client.normalize_search_result(r) for r in results]
+
             try:
-                items: list[dict[str, Any]] = []
+                searches: dict[str, Any] = {}
                 if platform in {"kick", "all"}:
-                    kick_results = loop.run_until_complete(
-                        self._kick.search_channels(query)
-                    )
-                    items.extend(
-                        loop.run_until_complete(
-                            self._kick.normalize_search_result(result)
-                        )
-                        for result in kick_results
-                    )
-
+                    searches["kick"] = _search(self._kick)
                 if platform in {"twitch", "all"}:
-                    twitch_conf = self._get_twitch_config()
-                    if twitch_conf.get("client_id") and twitch_conf.get(
-                        "client_secret"
-                    ):
-                        twitch_results = loop.run_until_complete(
-                            self._twitch.search_channels(query)
-                        )
-                        items.extend(
-                            loop.run_until_complete(
-                                self._twitch.normalize_search_result(result)
-                            )
-                            for result in twitch_results
-                        )
-
-                if platform in {"youtube", "all"}:
-                    yt_conf = get_platform_config(self._config, "youtube")
+                    cid, csec = self._twitch._effective_creds()
+                    if cid and csec:
+                        searches["twitch"] = _search(self._twitch)
+                if platform in {"youtube", "all"} and YOUTUBE_ENABLED:
+                    yt_conf = get_platform_config(config, "youtube")
                     if yt_conf.get("api_key") or yt_conf.get("access_token"):
-                        yt_results = loop.run_until_complete(
-                            self._youtube.search_channels(query)
-                        )
-                        items.extend(
-                            loop.run_until_complete(
-                                self._youtube.normalize_search_result(result)
-                            )
-                            for result in yt_results
-                        )
+                        searches["youtube"] = _search(self._youtube)
+
+                async def _gather() -> list[Any]:
+                    return await asyncio.gather(
+                        *searches.values(), return_exceptions=True
+                    )
+
+                # One platform failing must not hide the others' results.
+                items: list[dict[str, Any]] = []
+                for name, result in zip(
+                    searches, loop.run_until_complete(_gather()), strict=True
+                ):
+                    if isinstance(result, BaseException):
+                        logger.warning("%s channel search failed: %s", name, result)
+                    else:
+                        items.extend(result)
 
                 deduped: list[dict[str, Any]] = []
                 seen: set[tuple[str, str]] = set()
@@ -463,10 +469,10 @@ class FavoritesComponent(BaseApiComponent):
                     seen.add(key)
                     deduped.append(item)
 
-                self._eval_js(f"window.onSearchResults({json.dumps(deduped)})")
+                self._eval_js(f"window.onSearchResults({json.dumps(deduped)}, {meta})")
             except Exception as e:
                 logger.warning("search_channels failed: %s", e, exc_info=True)
-                self._eval_js("window.onSearchResults([])")
+                self._eval_js(f"window.onSearchResults([], {meta})")
             finally:
                 self._close_thread_loop(loop)
 

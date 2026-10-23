@@ -58,8 +58,11 @@ TwitchX.state = {
   filterText: '',
   avatars: {},
   thumbnails: {},
+  thumbnailFetchedAt: {},
   searchResults: [],
   searchDebounce: null,
+  // channelKey of the profile request in flight; late replies for others are dropped.
+  pendingProfileKey: '',
   hasCredentials: false,
   userAvatars: {},
   kickUser: null,
@@ -149,6 +152,16 @@ TwitchX.channelKey = function(login, platform) {
   if (!login) return '';
   if (platform) return platform + ':' + login;
   return String(login);
+};
+
+// Live previews change over a stream's lifetime; refetch once they are older
+// than this. The backend dedups in-flight get_thumbnail calls per key.
+TwitchX.THUMBNAIL_TTL_MS = 5 * 60 * 1000;
+
+TwitchX.thumbnailNeedsFetch = function(streamKey) {
+  if (!TwitchX.state.thumbnails[streamKey]) return true;
+  const fetchedAt = TwitchX.state.thumbnailFetchedAt[streamKey] || 0;
+  return Date.now() - fetchedAt > TwitchX.THUMBNAIL_TTL_MS;
 };
 
 TwitchX.platformLabel = function(platform) {

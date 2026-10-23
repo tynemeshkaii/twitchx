@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
+from dataclasses import dataclass
 from typing import Any
 
 from core.codecs import twitch_codec_args
@@ -11,6 +12,7 @@ from core.launcher import launch_stream, launch_stream_mpv
 from core.storage import get_settings, load_config, update_config
 from core.stream_resolver import (
     ADAPTIVE_PLATFORMS,
+    STREAMLINK_TIMEOUT,
     invalidate_resolve_cache,
     resolve_hls_url,
 )
@@ -19,9 +21,34 @@ from ._base import BaseApiComponent
 
 logger = logging.getLogger(__name__)
 
-# streamlink itself gives up after 15s, so a longer ceiling here only delays the
-# error the user sees when the resolver thread hangs somewhere else.
-_MAX_LAUNCH_SECONDS = 20
+# An adaptive resolve may run streamlink twice (master playlist, then the
+# single-rendition fallback), each capped at STREAMLINK_TIMEOUT. The UI deadline
+# has to outlast both, or a launch that is about to succeed is reported as a
+# timeout and its result thrown away. The margin covers thread scheduling.
+_MAX_LAUNCH_SECONDS = 2 * STREAMLINK_TIMEOUT + 5
+
+
+@dataclass(frozen=True)
+class WatchTarget:
+    """What the single-stream player is showing.
+
+    A login alone is ambiguous: the same name can exist on Twitch and Kick, and
+    a VOD of a channel is not its live stream.
+    """
+
+    platform: str
+    channel: str
+    stream_type: str = "live"
+    # URL streamlink should open when it is not derivable from the channel:
+    # the VOD/clip URL, or the YouTube watch URL of the live video.
+    media_url: str | None = None
+
+    def matches(self, platform: str, channel: str, stream_type: str = "live") -> bool:
+        if self.platform != platform or self.stream_type != stream_type:
+            return False
+        if platform == "youtube":
+            return self.channel == channel  # UC IDs are case-sensitive
+        return self.channel.lower() == channel.lower()
 
 
 class StreamsComponent(BaseApiComponent):
@@ -56,6 +83,12 @@ class StreamsComponent(BaseApiComponent):
         """
         args = self._low_latency_args(platform, settings) if low_latency else []
         return args + self._codec_args(platform, settings)
+
+    def _yt_watch_url(self, video_id: str) -> str:
+        client = self._get_platform("youtube")
+        if client is not None:
+            return client.build_stream_url(video_id)
+        return f"https://www.youtube.com/watch?v={video_id}"
 
     def _invalidate_resolve_for(self, channel: str, platform: str) -> None:
         """Drop cached resolutions for one channel only.
@@ -172,13 +205,8 @@ class StreamsComponent(BaseApiComponent):
         )
 
         safe_ch = json.dumps(channel)
-        _watching = self._api._watching_channel
-        _already = _watching is not None and (
-            _watching == channel  # exact-case for YouTube UC IDs
-            if platform == "youtube"
-            else _watching.lower() == channel.lower()
-        )
-        if _already:
+        _watching = self._api._watching
+        if _watching is not None and _watching.matches(platform, channel):
             self._eval_js(
                 f"window.onStatusUpdate({{text: 'Already watching ' + {safe_ch}, type: 'info'}})"
             )
@@ -255,7 +283,11 @@ class StreamsComponent(BaseApiComponent):
 
                 logger.info("YouTube stream resolved for %s", channel)
                 self._api._chat.stop_chat()
-                self._api._watching_channel = channel
+                self._api._watching = WatchTarget(
+                    "youtube",
+                    channel,
+                    media_url=self._yt_watch_url(video_id),
+                )
                 self._start_watch_session(
                     channel, "youtube", display_name=channel, title=title
                 )
@@ -317,7 +349,7 @@ class StreamsComponent(BaseApiComponent):
 
             logger.info("Stream resolved for %s on %s", channel, platform)
             self._api._chat.stop_chat()
-            self._api._watching_channel = channel
+            self._api._watching = WatchTarget(platform, channel)
             self._start_watch_session(
                 channel, platform, display_name=channel, title=title
             )
@@ -347,7 +379,7 @@ class StreamsComponent(BaseApiComponent):
     def stop_player(self) -> None:
         self._end_watch_session()
         self._api._chat.stop_chat()
-        self._api._watching_channel = None
+        self._api._watching = None
         self._eval_js("window.onPlayerStop()")
 
     def notify_player_hidden(self) -> None:
@@ -359,7 +391,7 @@ class StreamsComponent(BaseApiComponent):
         """
         self._end_watch_session()
         self._api._chat.stop_chat()
-        self._api._watching_channel = None
+        self._api._watching = None
 
     def watch_direct(self, channel: str, platform: str, quality: str) -> None:
         if not channel:
@@ -377,13 +409,8 @@ class StreamsComponent(BaseApiComponent):
 
         self._config = update_config(_save_quality)
         safe_ch = json.dumps(channel)
-        _watching = self._api._watching_channel
-        _already = _watching is not None and (
-            _watching == channel
-            if platform == "youtube"
-            else _watching.lower() == channel.lower()
-        )
-        if _already:
+        _watching = self._api._watching
+        if _watching is not None and _watching.matches(platform, channel):
             self._eval_js(
                 f"window.onStatusUpdate({{text: 'Already watching ' + {safe_ch}, type: 'info'}})"
             )
@@ -413,7 +440,7 @@ class StreamsComponent(BaseApiComponent):
                 self._eval_js(f"window.onLaunchResult({r})")
                 return
             self._api._chat.stop_chat()
-            self._api._watching_channel = channel
+            self._api._watching = WatchTarget(platform, channel)
             self._start_watch_session(channel, platform, display_name=channel)
             stream_data = json.dumps(
                 {
@@ -616,6 +643,7 @@ class StreamsComponent(BaseApiComponent):
                     "success": result.success,
                     "message": result.message,
                     "channel": channel,
+                    "platform": platform,
                 }
             )
             self._eval_js(f"window.onLaunchResult({r})")
@@ -674,7 +702,9 @@ class StreamsComponent(BaseApiComponent):
                 return
 
             self._api._chat.stop_chat()
-            self._api._watching_channel = channel or display_name
+            self._api._watching = WatchTarget(
+                platform, channel or display_name, "vod", url
+            )
             self._start_watch_session(
                 channel or display_name,
                 platform,
@@ -699,6 +729,7 @@ class StreamsComponent(BaseApiComponent):
                     "success": True,
                     "message": f"Playing {display_name}",
                     "channel": channel or display_name,
+                    "platform": platform,
                 }
             )
             self._eval_js(f"window.onLaunchResult({result})")
@@ -782,12 +813,15 @@ class StreamsComponent(BaseApiComponent):
         self._api._chat.stop_chat()
 
     def start_recording(self) -> None:
-        """Begin recording the currently watched channel."""
-        channel = self._api._watching_channel
-        if not channel:
-            self._eval_js(
-                "window.onRecordingState({active: false, filename: null, elapsed: 0, "
-                "error: 'Not watching any channel'})"
+        """Begin recording the stream the player is showing."""
+        target = self._api._watching
+        if target is None:
+            self._emit_recording_state(error="Not watching any channel")
+            return
+        if target.stream_type != "live":
+            # A VOD or clip is already stored on the platform's servers.
+            self._emit_recording_state(
+                error="Recording is available for live streams only"
             )
             return
         config = load_config()
@@ -795,39 +829,69 @@ class StreamsComponent(BaseApiComponent):
         output_dir = settings.get("recording_path", "")
         streamlink_path = settings.get("streamlink_path", "streamlink")
 
-        stream = self._api._data._find_live_stream(channel)
-        platform = self._api._data._stream_platform(stream) if stream else "twitch"
+        # The watch target, not the live cache: the same login may be live on
+        # Twitch and Kick at once, and only one of them is on screen.
+        platform = target.platform
         platform_client = self._get_platform(platform)
-        stream_url = (
-            platform_client.build_stream_url(channel) if platform_client else channel
+        stream_url = target.media_url or (
+            platform_client.build_stream_url(target.channel)
+            if platform_client
+            else target.channel
         )
 
-        # The recorder pulls its own copy of the stream, so recording at source
-        # while watching doubles the downstream bandwidth. Recording at the
-        # quality being watched keeps that second pull proportional.
-        err = self._api._recorder.start(
-            stream_url,
-            channel,
-            output_dir,
-            streamlink_path,
-            quality=settings.get("quality", "best"),
-            extra_args=self._streamlink_args(platform, settings, low_latency=False),
-        )
-        if err:
-            safe_err = json.dumps(err)
-            self._eval_js(
-                f"window.onRecordingState({{active: false, filename: null, elapsed: 0, error: {safe_err}}})"
+        # Held across start and its "active" report so a streamlink that dies
+        # instantly cannot have its error overtaken by the "Recording: …" state.
+        with self._api._recording_lock:
+            # The recorder pulls its own copy of the stream, so recording at
+            # source while watching doubles the downstream bandwidth. Recording
+            # at the quality being watched keeps that second pull proportional.
+            err = self._api._recorder.start(
+                stream_url,
+                target.channel,
+                output_dir,
+                streamlink_path,
+                quality=settings.get("quality", "best"),
+                extra_args=self._streamlink_args(platform, settings, low_latency=False),
+                on_exit=self._on_recording_exit,
             )
-        else:
-            state = json.dumps(self._api._recorder.state_dict())
-            self._eval_js(f"window.onRecordingState({state})")
+            if err:
+                self._emit_recording_state(error=err)
+            else:
+                state = json.dumps(self._api._recorder.state_dict())
+                self._eval_js(f"window.onRecordingState({state})")
+
+    def _on_recording_exit(
+        self, returncode: int, last_line: str, filename: str, elapsed: int
+    ) -> None:
+        """streamlink ended without stop_recording: the stream ended or it failed."""
+        error = None
+        if returncode != 0:
+            error = last_line or f"streamlink exited with code {returncode}"
+            if error.lower().startswith("error:"):
+                error = error[len("error:") :].strip()
+        with self._api._recording_lock:
+            self._emit_recording_state(filename=filename, elapsed=elapsed, error=error)
+
+    def _emit_recording_state(
+        self,
+        filename: str | None = None,
+        elapsed: int = 0,
+        error: str | None = None,
+    ) -> None:
+        payload: dict[str, Any] = {
+            "active": False,
+            "filename": filename,
+            "elapsed": elapsed,
+        }
+        if error:
+            payload["error"] = error
+        self._eval_js(f"window.onRecordingState({json.dumps(payload)})")
 
     def stop_recording(self) -> None:
         """Stop an active recording."""
-        self._api._recorder.stop()
-        self._eval_js(
-            "window.onRecordingState({active: false, filename: null, elapsed: 0})"
-        )
+        with self._api._recording_lock:
+            self._api._recorder.stop()
+            self._emit_recording_state()
 
     # ── Multistream layout presets ──────────────────────────────
 

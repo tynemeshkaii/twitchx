@@ -24,7 +24,7 @@ make check   # lint + test
 ### Перед тем как писать код
 
 1. Запусти `make lint` — убедись, что текущий код чистый
-2. Для JS-изменений: файлы в `ui/js/` — **всегда `const TwitchX = window.TwitchX;`**, никогда `var` (ломает inline merge в pywebview)
+2. Для JS-изменений: файлы в `ui/js/` — **всегда `const TwitchX = window.TwitchX;`**, никогда `var` (ломает inline merge в pywebview); top-level имена глобальны во всех модулях
 3. Для новых Python-модулей: добавь в `core/`, унаследуй от существующего base class
 
 ### После изменений
@@ -57,15 +57,15 @@ make check   # lint + test
 | `core/chats/` | `TwitchChatClient`, `KickChatClient`, `YouTubeChatClient` |
 | `core/storage.py` | Config v2, миграции, avatar cache |
 | `core/constants.py` | Все константы |
-| `core/credentials.py` | Bundled OAuth fallback |
+| `core/bundled_credentials.py` | Единая точка импорта bundled OAuth-ключей: `core/credentials.py` (gitignored) → fallback на пустые из `core/credentials_example.py` (чистый checkout, CI) |
 | `core/watch_stats.py` | SQLite-трекер статистики просмотров |
 | `core/stream_resolver.py` | `resolve_hls_url(url, platform_client, quality)` |
 | `core/launcher.py` | IINA/mpv launch |
 | `core/recorder.py` | Запись стрима через streamlink |
 | `ui/api/` | Python↔JS bridge (7 компонентов, см. ниже) |
-| `ui/index.html` | Shell, pywebview 6.x требует inline ресурсов |
+| `ui/index.html` | Shell; `_inline_resources()` инлайнит CSS/JS (pywebview 5.x, `>=5.0,<6.0`) |
 | `ui/css/` | `tokens`, `reset`, `layout`, `components`, `views`, `player` |
-| `ui/js/` | 18 модулей (IIFE + `TwitchX` namespace) |
+| `ui/js/` | 19 модулей — плоские скрипты, склеиваются в один `<script>`; общий namespace `TwitchX` |
 | `tests/` | pytest, `conftest.py` с фикстурами |
 
 ---
@@ -119,12 +119,14 @@ ChatClient (ABC)      ←  BaseChatClient      ←  TwitchChatClient/KickChatCli
 ### Новый JS-модуль
 1. Создай `ui/js/mymodule.js` с шаблоном:
    ```js
-   (function() {
-     const TwitchX = window.TwitchX;
-     // ... код ...
-   })();
+   window.TwitchX = window.TwitchX || {};
+   const TwitchX = window.TwitchX;
+
+   // ... код: top-level имена ГЛОБАЛЬНЫ для всех модулей ...
+   TwitchX.myFeature = function() { /* ... */ };
    ```
-2. Добавь `<script src="ui/js/mymodule.js"></script>` в `ui/index.html` в правильном месте порядка загрузки
+   Это **не** IIFE: `_inline_resources()` вырезает эту пару строк во всех файлах, кроме первого (`state.js`), и склеивает всё в один `<script>`. Любой top-level `function`/`const`/`let`/`class` виден всем модулям — повторное имя в другом файле = `SyntaxError` или тихая перезапись. Экспортируй через `TwitchX.*`, приватные хелперы называй уникально. Проверяет `tests/test_js_bundle.py` (`node --check` склейки + дубли имён).
+2. Добавь `<script src="js/mymodule.js"></script>` в `ui/index.html` в правильном месте порядка загрузки
 3. Порядок: `state → utils → view-transitions → icons → api-bridge → render → sidebar → player → multistream → browse → channel → chat → settings → context-menu → keyboard → palette → toast → callbacks → init`
 
 ### Новый UI компонент
@@ -150,9 +152,10 @@ def test_my_feature(temp_config_dir, run_sync, capture_eval_js):
 
 ## Критические правила
 
-### pywebview 6.x
+### pywebview 5.x (`pywebview>=5.0,<6.0`)
 - `_inline_resources()` в `app.py` мержит все JS в **один** `<script>` блок
-- Каждый модуль **обязан** начинаться с `const TwitchX = window.TwitchX;` — не `var`, не `window.TwitchX.X = ...` напрямую
+- Каждый модуль **обязан** начинаться ровно с пары `window.TwitchX = window.TwitchX || {};\nconst TwitchX = window.TwitchX;` — её вырезают во всех файлах кроме первого; не `var`, не `window.TwitchX.X = ...` напрямую
+- **Top-level имена глобальны во всех модулях** — дубль `function foo` / `const foo` в двух файлах ломает склейку
 - `var` → `SyntaxError: Identifier 'TwitchX' has already been declared` — ломает всё приложение
 
 ### Watch methods — выбирай правильный
@@ -167,6 +170,7 @@ def test_my_feature(temp_config_dir, run_sync, capture_eval_js):
 
 ### Credentials
 - Все проверки через `_effective_creds()` (config → bundled fallback)
+- Bundled ключи импортировать только из `core.bundled_credentials`, никогда `core.credentials` напрямую (файла нет в git/CI). Тесты, которым нужны client creds, кладут их в config, а не полагаются на bundled
 - Twitch `exchange_code` требует `client_secret` в POST body (RFC 6749 §4.1.3)
 
 ### Platform identity

@@ -229,7 +229,7 @@ def test_get_auth_url_stores_pkce_verifier(temp_config_dir):
 
 def test_get_auth_url_uses_effective_client_id(temp_config_dir):
     """get_auth_url() uses bundled client_id when config is empty."""
-    import core.credentials as creds
+    import core.bundled_credentials as creds
     from core.platforms.twitch import TwitchClient
 
     client = TwitchClient()

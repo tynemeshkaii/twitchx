@@ -12,6 +12,7 @@ import pytest
 from core.chat import ChatMessage, ChatSendResult
 from core.storage import DEFAULT_CONFIG, load_config, save_config
 from ui.api import TwitchXApi
+from ui.api.streams import WatchTarget
 
 
 def test_add_channel_accepts_kick_url_with_hyphen(
@@ -150,11 +151,41 @@ def test_search_channels_all_combines_kick_and_twitch_results(
 
     assert emitted
     payload = emitted[-1].split("window.onSearchResults(", 1)[1].rsplit(")", 1)[0]
-    results = json.loads(payload)
+    results, meta = json.loads(f"[{payload}]")
+    assert meta == {"query": "train", "platform": "all"}
     assert {(item["platform"], item["login"]) for item in results} == {
         ("kick", "trainwreckstv"),
         ("twitch", "train"),
     }
+
+
+def test_twitch_search_uses_bundled_credentials(
+    temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Empty config client_id/secret must not disable Twitch search."""
+    from unittest.mock import AsyncMock
+
+    api = TwitchXApi()
+    emitted: list[str] = []
+    assert not api._get_twitch_config().get("client_id")
+
+    twitch_search = AsyncMock(
+        return_value=[
+            {"broadcaster_login": "foo", "display_name": "Foo", "is_live": False}
+        ]
+    )
+    monkeypatch.setattr(api._twitch, "search_channels", twitch_search)
+    monkeypatch.setattr(api._kick, "search_channels", AsyncMock(return_value=[]))
+    monkeypatch.setattr(api._twitch, "_effective_creds", lambda: ("bid", "bsecret"))
+    monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+    monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+
+    api.search_channels("foo", "twitch")
+
+    twitch_search.assert_awaited_once_with("foo")
+    assert emitted
+    assert "window.onSearchResults(" in emitted[-1]
+    assert '"foo"' in emitted[-1]
 
 
 @pytest.mark.asyncio
@@ -179,7 +210,7 @@ async def test_build_kick_stream_item_maps_current_public_payload() -> None:
     assert item["title"] == "CATCHING CHILD PREDATORS!"
     assert item["thumbnail_url"].endswith("/480.webp")
     assert item["game"] == "IRL"
-    assert item["broadcaster_user_id"] == 21725177
+    assert item["broadcaster_user_id"] == "21725177"
 
 
 def test_save_settings_clears_credentials_when_empty(
@@ -352,7 +383,7 @@ def test_watch_is_noop_when_already_watching_same_channel(
     temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     api = TwitchXApi()
-    api._watching_channel = "shroud"
+    api._watching = WatchTarget("twitch", "shroud")
     api._live_streams = [
         {
             "login": "shroud",
@@ -376,7 +407,7 @@ def test_watch_is_noop_case_insensitive(
     temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     api = TwitchXApi()
-    api._watching_channel = "Shroud"
+    api._watching = WatchTarget("twitch", "Shroud")
     api._live_streams = [
         {
             "login": "shroud",
@@ -419,7 +450,7 @@ def test_watch_starts_new_session_after_ending_previous(
 
     api.watch("one", "best")
     first_session = api._active_watch_session
-    api._watching_channel = None
+    api._watching = None
     api.watch("two", "best")
 
     recent = api._watch_stats.get_recent_sessions(10)
@@ -584,6 +615,9 @@ def test_start_chat_kick_uses_chatroom_and_scope_for_send_auth(
     class FakeKickChatClient:
         platform = "kick"
 
+        def __init__(self, token_provider: object = None) -> None:
+            captured["token_provider"] = token_provider
+
         def on_message(self, _callback: object) -> None:
             return None
 
@@ -625,6 +659,7 @@ def test_start_chat_kick_uses_chatroom_and_scope_for_send_auth(
     assert captured["chatroom_id"] == 20466645
     assert captured["broadcaster_user_id"] == 21725177
     assert captured["can_send"] is True
+    assert captured["token_provider"] == api._kick._ensure_token
 
 
 def test_send_chat_kick_emits_send_result_without_local_echo(
@@ -920,7 +955,7 @@ class TestAsyncFetchIsolation:
                     return_value=[fake_kick_stream],
                 ),
             ):
-                _, _, kick, _, _ = await api._data._async_fetch(
+                _, _, kick, _, _, _ = await api._data._async_fetch(
                     twitch_favorites=["somestreamer"],
                     kick_favorites=["streamer"],
                 )
@@ -972,7 +1007,7 @@ class TestAsyncFetchIsolation:
                     return_value=[fake_kick_stream],
                 ),
             ):
-                _, _, kick, _, _ = await api._data._async_fetch(
+                _, _, kick, _, _, _ = await api._data._async_fetch(
                     twitch_favorites=["somestreamer"],
                     kick_favorites=["streamer"],
                     _twitch_timeout=0.05,
@@ -1011,6 +1046,8 @@ class TestParallelFetch:
     ) -> None:
         """ConnectError → _last_twitch_streams returned, twitch_error set."""
         self._setup(temp_config_dir, monkeypatch)
+        import time
+
         import httpx
 
         from ui.api import TwitchXApi
@@ -1018,6 +1055,7 @@ class TestParallelFetch:
         api = TwitchXApi()
         cached = [{"user_login": "cached_streamer", "platform": "twitch"}]
         api._last_twitch_streams = list(cached)
+        api._platform_fetched_at["twitch"] = time.time()  # recent success
 
         async def run():
             with patch.object(
@@ -1032,7 +1070,7 @@ class TestParallelFetch:
         result = loop.run_until_complete(run())
         loop.close()
 
-        twitch_streams, _, _, _, twitch_error = result
+        twitch_streams, _, _, _, twitch_error, _ = result
         assert twitch_streams == cached
         assert isinstance(twitch_error, httpx.ConnectError)
 
@@ -1061,7 +1099,7 @@ class TestParallelFetch:
         result = loop.run_until_complete(run())
         loop.close()
 
-        twitch_streams, _, _, _, twitch_error = result
+        twitch_streams, _, _, _, twitch_error, _ = result
         assert twitch_streams == fresh
         assert twitch_error is None
         assert api._last_twitch_streams == fresh
@@ -1090,7 +1128,7 @@ class TestParallelFetch:
         result = loop.run_until_complete(run())
         loop.close()
 
-        _, _, _, _, twitch_error = result
+        _, _, _, _, twitch_error, _ = result
         assert twitch_error is None
 
     def test_youtube_cache_served_when_twitch_fails(
@@ -1110,8 +1148,13 @@ class TestParallelFetch:
         api._last_youtube_fetch = time.time()  # just fetched → cache hit, no API call
 
         async def run():
-            with patch.object(
-                api._twitch, "_ensure_token", side_effect=httpx.ConnectError("down")
+            with (
+                patch.object(
+                    api._twitch,
+                    "_ensure_token",
+                    side_effect=httpx.ConnectError("down"),
+                ),
+                patch("ui.api.data.YOUTUBE_ENABLED", True),
             ):
                 return await api._data._async_fetch(
                     twitch_favorites=["somestreamer"],
@@ -1123,7 +1166,7 @@ class TestParallelFetch:
         result = loop.run_until_complete(run())
         loop.close()
 
-        _, _, _, youtube_streams, twitch_error = result
+        _, _, _, youtube_streams, twitch_error, _ = result
         assert youtube_streams == fake_yt
         assert isinstance(twitch_error, httpx.ConnectError)
 
@@ -1633,7 +1676,7 @@ class TestLoginWithoutCustomCredentials:
         monkeypatch.setattr(api._data, "restart_polling", lambda: None)
 
         monkeypatch.setattr("ui.api.auth.webbrowser.open", lambda url: None)
-        monkeypatch.setattr("ui.api.auth.wait_for_oauth_code", lambda: None)
+        monkeypatch.setattr("ui.api.auth.wait_for_oauth_code", lambda **kw: None)
 
         api.login()
 
@@ -1655,7 +1698,7 @@ class TestLoginWithoutCustomCredentials:
         monkeypatch.setattr(api._data, "restart_polling", lambda: None)
 
         monkeypatch.setattr("ui.api.auth.webbrowser.open", lambda url: None)
-        monkeypatch.setattr("ui.api.auth.wait_for_oauth_code", lambda: None)
+        monkeypatch.setattr("ui.api.auth.wait_for_oauth_code", lambda **kw: None)
 
         api.kick_login()
 
@@ -1677,7 +1720,7 @@ class TestLoginWithoutCustomCredentials:
         monkeypatch.setattr(api._data, "restart_polling", lambda: None)
 
         monkeypatch.setattr("ui.api.auth.webbrowser.open", lambda url: None)
-        monkeypatch.setattr("ui.api.auth.wait_for_oauth_code", lambda: None)
+        monkeypatch.setattr("ui.api.auth.wait_for_oauth_code", lambda **kw: None)
 
         api.youtube_login()
 
@@ -1786,7 +1829,11 @@ def test_on_data_fetched_skips_normalize_when_loop_is_none(
 
 
 def _multi_resolve_ok(
-    ch: str, q: str, sl: str = "streamlink", platform_client: Any = None, extra_args: Any = None
+    ch: str,
+    q: str,
+    sl: str = "streamlink",
+    platform_client: Any = None,
+    extra_args: Any = None,
 ) -> tuple[str, str]:
     return "https://hls.example.com/s.m3u8", ""
 
@@ -1806,10 +1853,17 @@ class TestWatchDirect:
         captured: dict[str, str] = {}
 
         def fake_resolve(
-            ch: str, q: str, sl: str = "streamlink", platform_client: Any = None, extra_args: Any = None, **kw
+            ch: str,
+            q: str,
+            sl: str = "streamlink",
+            platform_client: Any = None,
+            extra_args: Any = None,
+            **kw,
         ) -> tuple[str, str]:
             captured["channel"] = ch
-            captured["platform"] = platform_client.PLATFORM_ID if platform_client else ""
+            captured["platform"] = (
+                platform_client.PLATFORM_ID if platform_client else ""
+            )
             return "https://example.com/direct.m3u8", ""
 
         monkeypatch.setattr("ui.api.streams.resolve_hls_url", fake_resolve)
@@ -1855,7 +1909,7 @@ class TestWatchDirect:
         self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         api = TwitchXApi()
-        api._watching_channel = "Pokimane"
+        api._watching = WatchTarget("twitch", "Pokimane")
         emitted: list[str] = []
         monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
@@ -1872,7 +1926,10 @@ class TestWatchDirect:
         emitted: list[str] = []
         monkeypatch.setattr(
             "ui.api.streams.resolve_hls_url",
-            lambda ch, q, sl, platform_client=None, extra_args=None, **kw: (None, "boom"),
+            lambda ch, q, sl, platform_client=None, extra_args=None, **kw: (
+                None,
+                "boom",
+            ),
         )
         monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
@@ -1904,7 +1961,10 @@ class TestWatchMediaErrors:
         emitted: list[str] = []
         monkeypatch.setattr(
             "ui.api.streams.resolve_hls_url",
-            lambda ch, q, sl, platform_client=None, extra_args=None, **kw: (None, "no vod"),
+            lambda ch, q, sl, platform_client=None, extra_args=None, **kw: (
+                None,
+                "no vod",
+            ),
         )
         monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
@@ -1951,7 +2011,7 @@ class TestRecording:
         self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         api = TwitchXApi()
-        api._watching_channel = None
+        api._watching = None
         emitted: list[str] = []
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
 
@@ -1963,12 +2023,16 @@ class TestRecording:
         self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         api = TwitchXApi()
-        api._watching_channel = "xqc"
+        api._watching = WatchTarget("twitch", "xqc")
         emitted: list[str] = []
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
         rec = MagicMock()
         rec.start.return_value = None
-        rec.state_dict.return_value = {"active": True, "filename": "xqc.ts", "elapsed": 0}
+        rec.state_dict.return_value = {
+            "active": True,
+            "filename": "xqc.ts",
+            "elapsed": 0,
+        }
         api._recorder = rec
 
         api.start_recording()
@@ -1981,7 +2045,7 @@ class TestRecording:
         self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         api = TwitchXApi()
-        api._watching_channel = "xqc"
+        api._watching = WatchTarget("twitch", "xqc")
         emitted: list[str] = []
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
         rec = MagicMock()
@@ -2003,6 +2067,215 @@ class TestRecording:
         api.stop_recording()
 
         assert any("onRecordingState" in c and "false" in c for c in emitted)
+
+    def test_start_recording_vod_is_refused(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        api = TwitchXApi()
+        api._watching = WatchTarget(
+            "twitch", "xqc", "vod", "https://www.twitch.tv/videos/123"
+        )
+        emitted: list[str] = []
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+        rec = MagicMock()
+        api._recorder = rec
+
+        api.start_recording()
+
+        rec.start.assert_not_called()
+        assert any("live streams only" in c for c in emitted)
+
+    def test_start_recording_uses_watched_platform_not_live_cache(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Twitch foo is live too, but the player shows Kick foo."""
+        api = TwitchXApi()
+        api._live_streams = [{"login": "foo", "title": "T", "platform": "twitch"}]
+        api._watching = WatchTarget("kick", "foo")
+        monkeypatch.setattr(api, "_eval_js", lambda code: None)
+        rec = MagicMock()
+        rec.start.return_value = None
+        rec.state_dict.return_value = {"active": True, "filename": "f.ts", "elapsed": 0}
+        api._recorder = rec
+
+        api.start_recording()
+
+        assert rec.start.call_args[0][0] == "https://kick.com/foo"
+
+    def test_start_recording_youtube_uses_video_url(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        api = TwitchXApi()
+        api._watching = WatchTarget(
+            "youtube", "UCAbC", "live", "https://www.youtube.com/watch?v=vid1"
+        )
+        monkeypatch.setattr(api, "_eval_js", lambda code: None)
+        rec = MagicMock()
+        rec.start.return_value = None
+        rec.state_dict.return_value = {"active": True, "filename": "f.ts", "elapsed": 0}
+        api._recorder = rec
+
+        api.start_recording()
+
+        assert rec.start.call_args[0][0] == "https://www.youtube.com/watch?v=vid1"
+
+    def test_recording_crash_reports_error(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        api = TwitchXApi()
+        api._watching = WatchTarget("twitch", "xqc")
+        emitted: list[str] = []
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+        rec = MagicMock()
+        rec.start.return_value = None
+        rec.state_dict.return_value = {"active": True, "filename": "f.ts", "elapsed": 0}
+        api._recorder = rec
+
+        api.start_recording()
+        on_exit = rec.start.call_args[1]["on_exit"]
+        on_exit(1, "error: No playable streams found on this URL", "/r/f.ts", 2)
+
+        payload = _payload(emitted[-1])
+        assert payload["active"] is False
+        assert payload["filename"] == "/r/f.ts"
+        assert payload["error"] == "No playable streams found on this URL"
+
+    def test_recording_stream_end_reports_without_error(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        api = TwitchXApi()
+        api._watching = WatchTarget("twitch", "xqc")
+        emitted: list[str] = []
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+        rec = MagicMock()
+        rec.start.return_value = None
+        rec.state_dict.return_value = {"active": True, "filename": "f.ts", "elapsed": 0}
+        api._recorder = rec
+
+        api.start_recording()
+        rec.start.call_args[1]["on_exit"](0, "[cli][info] Stream ended", "/r/f.ts", 60)
+
+        payload = _payload(emitted[-1])
+        assert payload["active"] is False
+        assert "error" not in payload
+
+
+class TestWatchTarget:
+    def _sync(self, api: TwitchXApi, monkeypatch: pytest.MonkeyPatch) -> list[str]:
+        emitted: list[str] = []
+        monkeypatch.setattr(api, "_run_in_thread", lambda fn: fn())
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+        monkeypatch.setattr(api._streams, "_start_launch_timer", lambda: None)
+        monkeypatch.setattr(api._streams, "_cancel_launch_timer", lambda: None)
+        monkeypatch.setattr(api, "start_chat", lambda *a, **kw: None)
+        monkeypatch.setattr(
+            "ui.api.streams.resolve_hls_url",
+            lambda ch, q, sl, platform_client=None, extra_args=None, **kw: (
+                "https://example.com/x.m3u8",
+                "",
+            ),
+        )
+        return emitted
+
+    def test_same_login_other_platform_is_not_already_watching(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        api = TwitchXApi()
+        api._watching = WatchTarget("twitch", "foo")
+        emitted = self._sync(api, monkeypatch)
+
+        api.watch_direct("foo", "kick", "best")
+
+        assert not any("Already watching" in c for c in emitted)
+        assert any("onStreamReady" in c for c in emitted)
+        assert api._watching == WatchTarget("kick", "foo")
+
+    def test_same_platform_and_login_is_already_watching(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        api = TwitchXApi()
+        api._watching = WatchTarget("twitch", "Foo")
+        emitted = self._sync(api, monkeypatch)
+
+        api.watch_direct("foo", "twitch", "best")
+
+        assert any("Already watching" in c for c in emitted)
+        assert not any("onStreamReady" in c for c in emitted)
+
+    def test_youtube_match_is_case_sensitive(self) -> None:
+        target = WatchTarget("youtube", "UCabc")
+        assert target.matches("youtube", "UCabc")
+        assert not target.matches("youtube", "ucabc")
+        assert WatchTarget("twitch", "Foo").matches("twitch", "foo")
+        assert not WatchTarget("twitch", "foo").matches("kick", "foo")
+
+    def test_watch_media_sets_vod_target(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        api = TwitchXApi()
+        emitted = self._sync(api, monkeypatch)
+        url = "https://www.twitch.tv/videos/123"
+
+        api.watch_media(url, "best", platform="twitch", channel="xqc")
+
+        assert api._watching == WatchTarget("twitch", "xqc", "vod", url)
+        result = [c for c in emitted if "onLaunchResult" in c][-1]
+        assert _payload(result)["platform"] == "twitch"
+
+    def test_live_vod_of_same_channel_is_not_already_watching(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A VOD of xqc playing must not block opening xqc's live stream."""
+        api = TwitchXApi()
+        api._watching = WatchTarget("twitch", "xqc", "vod", "https://x/videos/1")
+        emitted = self._sync(api, monkeypatch)
+
+        api.watch_direct("xqc", "twitch", "best")
+
+        assert not any("Already watching" in c for c in emitted)
+
+
+class TestLaunchTimeout:
+    def test_launch_deadline_outlasts_resolver(self) -> None:
+        from core.stream_resolver import STREAMLINK_TIMEOUT
+        from ui.api.streams import _MAX_LAUNCH_SECONDS
+
+        # Master playlist attempt + single-rendition fallback, each capped.
+        assert _MAX_LAUNCH_SECONDS > 2 * STREAMLINK_TIMEOUT
+
+    def test_slow_resolve_is_not_timed_out(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A resolve that takes 25s must still reach the player."""
+        api = TwitchXApi()
+        emitted: list[str] = []
+        monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
+        timers: list[Any] = []
+
+        class FakeTimer:
+            def __init__(self, interval: float, fn: Any) -> None:
+                self.fn = fn
+                self.daemon = False
+                self.cancelled = False
+
+            def start(self) -> None:
+                timers.append(self)
+
+            def cancel(self) -> None:
+                self.cancelled = True
+
+        monkeypatch.setattr("ui.api.streams.threading.Timer", FakeTimer)
+
+        launch_id = api._streams._begin_launch("slow")
+        # 3s ticks: drive the clock to 27s.
+        for _ in range(9):
+            pending = [t for t in timers if not t.cancelled]
+            timers.clear()
+            for t in pending:
+                t.fn()
+
+        assert not any("Timed out" in c for c in emitted)
+        assert api._streams._finish_launch(launch_id) is True
 
 
 class TestMultistreamPresets:
@@ -2052,7 +2325,7 @@ class TestStopAndNotify:
         self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         api = TwitchXApi()
-        api._watching_channel = "xqc"
+        api._watching = WatchTarget("twitch", "xqc")
         emitted: list[str] = []
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
 
@@ -2065,7 +2338,7 @@ class TestStopAndNotify:
         self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         api = TwitchXApi()
-        api._watching_channel = "xqc"
+        api._watching = WatchTarget("twitch", "xqc")
         emitted: list[str] = []
         monkeypatch.setattr(api, "_eval_js", lambda code: emitted.append(code))
 

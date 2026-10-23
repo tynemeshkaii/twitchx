@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import logging
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -42,12 +43,29 @@ h1 { color: #FF6B6B; }
  """
 
 
+class OAuthPortBusy(Exception):
+    """The local OAuth callback port could not be bound."""
+
+
+def _state_matches(expected: str | None, received: str | None) -> bool:
+    if expected is None:
+        return True
+    return received is not None and hmac.compare_digest(expected, received)
+
+
 def wait_for_oauth_code(
-    port: int = OAUTH_PORT, timeout: int = OAUTH_TIMEOUT_SECONDS
+    port: int = OAUTH_PORT,
+    timeout: int = OAUTH_TIMEOUT_SECONDS,
+    expected_state: str | None = None,
 ) -> str | None:
-    """Start a temporary HTTP server and wait for Twitch OAuth callback.
+    """Start a temporary HTTP server and wait for the OAuth callback.
+
+    When ``expected_state`` is given, a callback whose ``state`` differs gets
+    an error page and is ignored: the server keeps waiting, so a forged
+    request cannot cut the real login short.
 
     Returns the authorization code, or None on timeout.
+    Raises OAuthPortBusy if the callback port cannot be bound.
     """
     result: list[str | None] = [None]
     server_ready = threading.Event()
@@ -63,6 +81,15 @@ def wait_for_oauth_code(
 
             params = parse_qs(parsed.query)
             code = params.get("code", [None])[0]
+            state = params.get("state", [None])[0]
+
+            if not _state_matches(expected_state, state):
+                logger.warning("OAuth callback rejected: state mismatch")
+                self.send_response(400)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(_ERROR_HTML.encode())
+                return
 
             if code:
                 logger.info("OAuth authorization code received")
@@ -84,7 +111,11 @@ def wait_for_oauth_code(
         def log_message(self, format: str, *args: object) -> None:
             pass  # Suppress request logging
 
-    server = HTTPServer(("127.0.0.1", port), Handler)
+    try:
+        server = HTTPServer(("127.0.0.1", port), Handler)
+    except OSError as exc:
+        logger.warning("OAuth server cannot bind port %d: %s", port, exc)
+        raise OAuthPortBusy(f"OAuth port {port} unavailable: {exc}") from exc
     server.timeout = timeout
     logger.info("OAuth server listening on port %d (timeout=%ds)", port, timeout)
     server_ready.set()
@@ -96,12 +127,15 @@ def wait_for_oauth_code(
     thread.start()
     server_ready.wait()
 
-    thread.join(timeout=timeout)
-    if thread.is_alive():
-        logger.warning("OAuth server timed out after %ds", timeout)
-        server.shutdown()
-        thread.join(timeout=5)
-    else:
-        logger.debug("OAuth server shut down")
+    try:
+        thread.join(timeout=timeout)
+        if thread.is_alive():
+            logger.warning("OAuth server timed out after %ds", timeout)
+            server.shutdown()
+            thread.join(timeout=5)
+        else:
+            logger.debug("OAuth server shut down")
+    finally:
+        server.server_close()
 
     return result[0]

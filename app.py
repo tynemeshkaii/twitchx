@@ -9,6 +9,7 @@ import webview
 
 from core.storage import get_settings, load_config
 from ui.api import TwitchXApi
+from ui.api.settings_schema import clamp_refresh_interval
 
 
 class TwitchXApp:
@@ -30,7 +31,9 @@ class TwitchXApp:
         # JS never reads config synchronously (the bridge returns Promises) —
         # push the snapshot as soon as the document is ready.
         self._api.push_config()
-        interval = get_settings(self._config).get("refresh_interval", 60)
+        interval = clamp_refresh_interval(
+            get_settings(self._config).get("refresh_interval", 60)
+        )
         self._api.start_polling(interval)
 
     @staticmethod

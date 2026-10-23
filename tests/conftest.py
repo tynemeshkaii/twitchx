@@ -17,6 +17,27 @@ from ui.api import TwitchXApi
 
 
 @pytest.fixture(autouse=True)
+def _no_kick_app_token(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep KickClient from requesting a client_credentials app token.
+
+    Whether bundled Kick keys exist depends on the local (gitignored)
+    core/credentials.py, so without this the request count of every Kick
+    HTTP test would differ between a dev machine and CI. Tests of the app
+    token itself opt out with @pytest.mark.kick_app_token.
+    """
+    if request.node.get_closest_marker("kick_app_token"):
+        return
+    from core.platforms.kick import KickClient
+
+    async def _none(self: Any, stale_token: str | None = None) -> None:
+        return None
+
+    monkeypatch.setattr(KickClient, "_ensure_app_token", _none)
+
+
+@pytest.fixture(autouse=True)
 def _no_socks_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
     """Remove SOCKS proxy env vars so httpx.Client() initializes without socksio."""
     for key in (

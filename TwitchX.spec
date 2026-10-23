@@ -16,6 +16,7 @@ datas = [
     ("ui/index.html", "ui"),
     ("ui/css", "ui/css"),
     ("ui/js", "ui/js"),
+    ("pyproject.toml", "."),  # read by ui.api._read_project_version
 ]
 
 a = Analysis(

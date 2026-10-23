@@ -96,8 +96,9 @@ function showPlayerView() {
   var pLoader = document.getElementById('player-loader');
   if (pLoader) pLoader.classList.remove('hidden');
 
-  TwitchX.state.watchingChannel = TwitchX.state.selectedChannel;
-  TwitchX.state.watchingChannelKey = TwitchX.state.selectedChannelKey;
+  // watchingChannel/watchingChannelKey come from onStreamReady's payload. The
+  // sidebar selection may have moved during the load, or never pointed at this
+  // stream (Browse, palette, VOD), and the chat filter keys off these.
   document.getElementById('watch-btn').classList.add('active');
   document.getElementById('stop-player-btn').classList.remove('hidden');
   document.getElementById('live-dot').classList.add('visible');

@@ -976,7 +976,7 @@ def test_get_auth_url_stores_pkce_verifier(temp_config_dir):
 
 
 def test_effective_api_key_returns_bundled_when_config_empty(temp_config_dir):
-    import core.credentials as creds
+    import core.bundled_credentials as creds
     from core.platforms.youtube import YouTubeClient
 
     client = YouTubeClient()

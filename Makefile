@@ -24,7 +24,7 @@ cov-html:
 
 check: lint test
 
-push:
-	git add .
+push:  # commits tracked files only: new files must be `git add`-ed explicitly
+	git add -u
 	git commit -m "update $$(date '+%Y-%m-%d %H:%M')" || true
 	git push

@@ -78,7 +78,7 @@ function applyTheme(mode) {
   localStorage.setItem('twitchx.theme.resolved', resolved);
 }
 
-function formatDuration(seconds) {
+function formatStatsDuration(seconds) {
   if (!seconds || seconds < 0) return '0m';
   if (seconds < 60) return seconds + 's';
   var m = Math.floor(seconds / 60);
@@ -109,7 +109,7 @@ function renderWatchStats(stats) {
   if (!stats) return;
 
   if (stats.today) {
-    document.getElementById('stat-today-time').textContent = formatDuration(stats.today.total_sec);
+    document.getElementById('stat-today-time').textContent = formatStatsDuration(stats.today.total_sec);
     document.getElementById('stat-today-streams').textContent = stats.today.streams_count || 0;
     document.getElementById('stat-today-channels').textContent = stats.today.unique_channels || 0;
   }
@@ -135,7 +135,7 @@ function renderWatchStats(stats) {
       var cells = [
         row.date,
         row.platform.charAt(0).toUpperCase() + row.platform.slice(1),
-        formatDuration(row.total_sec),
+        formatStatsDuration(row.total_sec),
         String(row.streams_count),
         String(row.unique_channels),
       ];
@@ -156,7 +156,7 @@ function renderWatchStats(stats) {
   }
 
   if (stats.total) {
-    document.getElementById('stat-total-time').textContent = formatDuration(stats.total.total_sec);
+    document.getElementById('stat-total-time').textContent = formatStatsDuration(stats.total.total_sec);
     document.getElementById('stat-total-channels').textContent = stats.total.unique_channels || 0;
   }
 
@@ -180,7 +180,7 @@ function renderWatchStats(stats) {
 
       var rightSpan = document.createElement('span');
       rightSpan.className = 'stats-value';
-      rightSpan.textContent = formatDuration(ch.total_sec) + ' \u00b7 ' + ch.sessions_count + ' sessions';
+      rightSpan.textContent = formatStatsDuration(ch.total_sec) + ' \u00b7 ' + ch.sessions_count + ' sessions';
 
       item.appendChild(leftSpan);
       item.appendChild(rightSpan);
@@ -545,6 +545,13 @@ function saveSettings() {
   if (TwitchX.api) TwitchX.api.save_settings(JSON.stringify(data));
   TwitchX._settingsSnapshot = JSON.stringify(_readAllFormValues());
 }
+
+// save_settings rejected the payload; without this the feedback line
+// would stay on "Saving..." forever.
+window.onSettingsError = function(data) {
+  var msg = (data && data.message) || 'Could not save settings';
+  _setFeedback('Error: ' + msg, 'error');
+};
 
 // Resume an open that was blocked waiting for the config push.
 TwitchX.onConfigApplied = function() {

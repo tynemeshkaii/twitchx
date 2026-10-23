@@ -41,11 +41,14 @@ ignore = ["E501"]
 [tool.pyright]
 pythonVersion = "3.11"
 typeCheckingMode = "basic"
-ignore = [".venv", "ui/native_player.py"]
+ignore = [".venv"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "kick_app_token: run with the real KickClient._ensure_app_token (not stubbed)",
+]
 addopts = [
     "--cov=core",
     "--cov=ui",

@@ -13,8 +13,9 @@ from typing import Any
 import pytest
 
 from core.storage import get_settings, load_config
-from core.stream_resolver import _quality_arg, invalidate_resolve_cache, resolve_hls_url
+from core.stream_resolver import invalidate_resolve_cache, quality_arg, resolve_hls_url
 from ui.api import TwitchXApi
+from ui.api.streams import WatchTarget
 
 
 def _sync_api(api: TwitchXApi, monkeypatch: pytest.MonkeyPatch) -> list[str]:
@@ -69,7 +70,7 @@ class TestLaunchIsNotCancelledByARejectedClick:
             {"login": "good", "title": "G", "platform": "twitch"},
             {"login": "current", "title": "C", "platform": "twitch"},
         ]
-        api._watching_channel = "current"
+        api._watching = WatchTarget("twitch", "current")
         _sync_api(api, monkeypatch)
 
         launch_id = api._streams._begin_launch("good")
@@ -126,10 +127,10 @@ class TestCodecSettingRoundTrip:
 
 class TestQualityLadderDirection:
     def test_audio_only_never_falls_back_to_video_source(self) -> None:
-        assert "best" not in _quality_arg("audio_only")
+        assert "best" not in quality_arg("audio_only")
 
     def test_lowest_video_never_falls_back_to_source(self) -> None:
-        assert "best" not in _quality_arg("160p")
+        assert "best" not in quality_arg("160p")
 
 
 class TestMasterFallbackUsesTheCache:
@@ -182,9 +183,7 @@ class TestRecordingArguments:
         settings = get_settings(load_config())
 
         playback = api._streams._streamlink_args("twitch", settings)
-        recording = api._streams._streamlink_args(
-            "twitch", settings, low_latency=False
-        )
+        recording = api._streams._streamlink_args("twitch", settings, low_latency=False)
 
         assert "--twitch-low-latency" in playback
         assert "--twitch-low-latency" not in recording

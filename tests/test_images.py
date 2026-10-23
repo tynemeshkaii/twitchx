@@ -68,7 +68,7 @@ class TestGetAvatar:
         api = _create_api()
         api._eval_js = capture_eval_js
         api._image_pool.submit = lambda fn: fn()
-        api._user_avatars["netuser"] = "https://example.com/avatar.png"
+        api._user_avatars["twitch:netuser"] = "https://example.com/avatar.png"
 
         raw_png = _make_png(100, 100, "green")
         mock_resp = MagicMock()
@@ -95,7 +95,7 @@ class TestGetAvatar:
         api = _create_api()
         api._eval_js = capture_eval_js
         api._image_pool.submit = lambda fn: fn()
-        api._user_avatars["saveuser"] = "https://example.com/avatar.png"
+        api._user_avatars["kick:saveuser"] = "https://example.com/avatar.png"
 
         raw_png = _make_png(80, 80)
         mock_resp = MagicMock()
@@ -115,6 +115,53 @@ class TestGetAvatar:
         assert isinstance(args[1], bytes)
         assert args[2] == "kick"
 
+    def test_same_login_on_other_platform_does_not_share_avatar(
+        self, temp_config_dir: Path, capture_eval_js: Any
+    ) -> None:
+        api = _create_api()
+        api._eval_js = capture_eval_js
+        api._image_pool.submit = lambda fn: fn()
+        api._user_avatars["twitch:dup"] = "https://example.com/twitch.png"
+
+        async def no_info(slug: str) -> dict:
+            return {}
+
+        api._kick.get_channel_info = no_info  # type: ignore[method-assign]
+
+        with patch("ui.api.images.get_cached_avatar", return_value=None):
+            api._images.get_avatar("dup", platform="kick")
+
+        api._http.get.assert_not_called()
+
+    def test_kick_avatar_resolved_from_channel_info(
+        self, temp_config_dir: Path, capture_eval_js: Any
+    ) -> None:
+        api = _create_api()
+        api._eval_js = capture_eval_js
+        api._image_pool.submit = lambda fn: fn()
+        requested: list[str] = []
+
+        async def fake_info(slug: str) -> dict:
+            requested.append(slug)
+            return {"slug": slug, "user": {"profile_pic": "https://kick/pic.png"}}
+
+        api._kick.get_channel_info = fake_info  # type: ignore[method-assign]
+        mock_resp = MagicMock()
+        mock_resp.content = _make_png(80, 80)
+        api._http.get.return_value = mock_resp
+
+        with (
+            patch("ui.api.images.get_cached_avatar", return_value=None),
+            patch("ui.api.images.save_avatar") as mock_save,
+        ):
+            api._images.get_avatar("Trainwreckstv", platform="kick")
+
+        assert requested == ["trainwreckstv"]
+        api._http.get.assert_called_once_with("https://kick/pic.png")
+        assert api._user_avatars["kick:trainwreckstv"] == "https://kick/pic.png"
+        capture_eval_js.assert_any("onAvatar")
+        assert mock_save.call_args[0][2] == "kick"
+
     def test_no_url_available_silent_return(
         self, temp_config_dir: Path, capture_eval_js: Any
     ) -> None:
@@ -132,7 +179,7 @@ class TestGetAvatar:
     ) -> None:
         api = _create_api()
         api._image_pool.submit = lambda fn: fn()
-        api._user_avatars["corruptuser"] = "https://example.com/avatar.png"
+        api._user_avatars["twitch:corruptuser"] = "https://example.com/avatar.png"
 
         raw_png = _make_png(64, 64)
         mock_resp = MagicMock()
@@ -166,7 +213,7 @@ class TestGetAvatar:
         api = _create_api()
         api._eval_js = capture_eval_js
         api._image_pool.submit = lambda fn: fn()
-        api._user_avatars["erruser"] = "https://example.com/avatar.png"
+        api._user_avatars["twitch:erruser"] = "https://example.com/avatar.png"
 
         api._http = MagicMock()
         api._http.get.side_effect = Exception("connection failed")

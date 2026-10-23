@@ -744,3 +744,195 @@ class TestYouTubeTestConnection:
         data = json.loads(call.split("onYouTubeTestResult(")[1].rstrip(")"))
         assert data["success"] is False
         assert "parse error" in data["message"]
+
+
+# ═══════════════════════════════════════════════════════════════════
+# OAuth port busy / concurrent login guard
+# ═══════════════════════════════════════════════════════════════════
+
+
+class TestOAuthPortBusy:
+    def test_port_busy_reports_error_and_restarts_polling(
+        self,
+        temp_config_dir: Path,
+        capture_eval_js: Any,
+        run_sync: Any,
+        mock_twitch_client: MagicMock,
+    ) -> None:
+        from core.oauth_server import OAuthPortBusy
+
+        api = _make_api(capture_eval_js, mock_twitch=mock_twitch_client)
+
+        with (
+            patch("ui.api.auth.webbrowser.open"),
+            patch(
+                "ui.api.auth.wait_for_oauth_code",
+                side_effect=OAuthPortBusy("port busy"),
+            ),
+        ):
+            api.login()
+
+        capture_eval_js.assert_any("onLoginError")
+        capture_eval_js.assert_any("Another login is already in progress")
+        api._data.restart_polling.assert_called_once()
+
+    def test_kick_port_busy_restarts_polling(
+        self,
+        temp_config_dir: Path,
+        capture_eval_js: Any,
+        run_sync: Any,
+        mock_kick_client: MagicMock,
+    ) -> None:
+        from core.oauth_server import OAuthPortBusy
+
+        api = _make_api(capture_eval_js, mock_kick=mock_kick_client)
+
+        with (
+            patch("ui.api.auth.webbrowser.open"),
+            patch(
+                "ui.api.auth.wait_for_oauth_code",
+                side_effect=OAuthPortBusy("port busy"),
+            ),
+        ):
+            api.kick_login()
+
+        capture_eval_js.assert_any("onKickLoginError")
+        api._data.restart_polling.assert_called_once()
+
+    def test_youtube_port_busy_restarts_polling(
+        self,
+        temp_config_dir: Path,
+        capture_eval_js: Any,
+        run_sync: Any,
+        mock_youtube_client: MagicMock,
+    ) -> None:
+        from core.oauth_server import OAuthPortBusy
+
+        api = _make_api(capture_eval_js, mock_youtube=mock_youtube_client)
+
+        with (
+            patch("ui.api.auth.webbrowser.open"),
+            patch(
+                "ui.api.auth.wait_for_oauth_code",
+                side_effect=OAuthPortBusy("port busy"),
+            ),
+        ):
+            api.youtube_login()
+
+        capture_eval_js.assert_any("onYouTubeLoginError")
+        api._data.restart_polling.assert_called_once()
+
+    def test_second_login_while_first_in_progress_is_rejected(
+        self,
+        temp_config_dir: Path,
+        capture_eval_js: Any,
+        mock_twitch_client: MagicMock,
+        mock_kick_client: MagicMock,
+    ) -> None:
+        api = _make_api(
+            capture_eval_js,
+            mock_twitch=mock_twitch_client,
+            mock_kick=mock_kick_client,
+        )
+        # First login's worker thread never runs → flow stays "in progress"
+        api._run_in_thread = lambda fn: None  # type: ignore[method-assign]
+
+        api.login()
+        api.kick_login()
+
+        api._data.stop_polling.assert_called_once()
+        capture_eval_js.assert_any("onKickLoginError")
+        capture_eval_js.assert_any("Another login is already in progress")
+
+    def test_lock_released_after_login_finishes(
+        self,
+        temp_config_dir: Path,
+        capture_eval_js: Any,
+        run_sync: Any,
+        mock_twitch_client: MagicMock,
+    ) -> None:
+        api = _make_api(capture_eval_js, mock_twitch=mock_twitch_client)
+
+        with (
+            patch("ui.api.auth.webbrowser.open"),
+            patch("ui.api.auth.wait_for_oauth_code", return_value=None),
+        ):
+            api.login()
+            api.login()
+
+        assert api._data.stop_polling.call_count == 2
+
+
+# ═══════════════════════════════════════════════════════════════════
+# OAuth state + platform-initiated revocation (audit phase 2)
+# ═══════════════════════════════════════════════════════════════════
+
+
+class TestOAuthState:
+    def test_each_login_waits_for_its_own_state(
+        self, temp_config_dir: Path, capture_eval_js: Any, run_sync: Any
+    ) -> None:
+        from urllib.parse import parse_qs, urlparse
+
+        api = _make_api(capture_eval_js)
+        for platform, start in (
+            ("twitch", api.login),
+            ("kick", api.kick_login),
+            ("youtube", api.youtube_login),
+        ):
+            opened: list[str] = []
+            with (
+                patch("ui.api.auth.webbrowser.open", side_effect=opened.append),
+                patch("ui.api.auth.wait_for_oauth_code", return_value=None) as wait,
+            ):
+                start()
+            stored = load_config()["platforms"][platform]["oauth_state"]
+            url_state = parse_qs(urlparse(opened[0]).query)["state"][0]
+            assert stored and url_state == stored, platform
+            wait.assert_called_once_with(expected_state=stored)
+
+    async def test_exchange_clears_oauth_state(
+        self, temp_config_dir: Path, httpx_mock: Any
+    ) -> None:
+        from core.platforms.twitch import TWITCH_AUTH_URL, TwitchClient
+
+        client = TwitchClient()
+        client.get_auth_url()
+        assert load_config()["platforms"]["twitch"]["oauth_state"]
+        httpx_mock.add_response(url=TWITCH_AUTH_URL, json={"access_token": "t"})
+        await client.exchange_code("code")
+        await client.close()
+        tc = load_config()["platforms"]["twitch"]
+        assert tc["oauth_state"] == ""
+        assert tc["pkce_verifier"] == ""
+
+
+class TestAuthRevoked:
+    def test_twitch_revoked_resets_user_and_notifies_js(
+        self, temp_config_dir: Path, capture_eval_js: Any
+    ) -> None:
+        with patch("ui.api.httpx.Client"):
+            api = TwitchXApi()
+        api._eval_js = capture_eval_js
+        api._run_in_thread = lambda fn: fn()
+        api._current_user = {"id": "1", "login": "me"}
+
+        api._twitch.on_auth_revoked()  # type: ignore[misc]
+
+        assert api._current_user is None
+        capture_eval_js.assert_any("onLogout")
+        capture_eval_js.assert_any("Twitch session expired")
+        capture_eval_js.assert_any("onConfigLoaded")
+
+    def test_kick_revoked_notifies_js(
+        self, temp_config_dir: Path, capture_eval_js: Any
+    ) -> None:
+        with patch("ui.api.httpx.Client"):
+            api = TwitchXApi()
+        api._eval_js = capture_eval_js
+        api._run_in_thread = lambda fn: fn()
+
+        api._kick.on_auth_revoked()  # type: ignore[misc]
+
+        capture_eval_js.assert_any("onKickLogout")
+        capture_eval_js.assert_any("Kick session expired")

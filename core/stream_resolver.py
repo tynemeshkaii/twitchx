@@ -55,11 +55,17 @@ RESOLVE_CACHE_TTL_SECONDS = 60.0
 # single quality of its own.
 _MASTER_CACHE_TAG = "__master__"
 
+# Hard cap on one `streamlink --stream-url` run (interpreter start + API calls).
+# An adaptive resolve can spend this twice: master playlist, then the
+# single-rendition fallback. The launch deadline in ui/api/streams.py is
+# derived from it so the UI never gives up before the resolver does.
+STREAMLINK_TIMEOUT = 15
+
 _cache: dict[tuple[str, str, tuple[str, ...]], tuple[str, float]] = {}
 _cache_lock = threading.Lock()
 
 
-def _quality_arg(quality: str) -> str:
+def quality_arg(quality: str) -> str:
     """Build the streamlink quality argument, with a descending fallback ladder."""
     if quality == "best":
         return "best"
@@ -70,9 +76,9 @@ def _quality_arg(quality: str) -> str:
 
 
 def _cache_key(
-    stream_url: str, quality_arg: str, extra_args: list[str] | None
+    stream_url: str, quality_tag: str, extra_args: list[str] | None
 ) -> tuple[str, str, tuple[str, ...]]:
-    return (stream_url, quality_arg, tuple(extra_args or ()))
+    return (stream_url, quality_tag, tuple(extra_args or ()))
 
 
 def _cache_get(key: tuple[str, str, tuple[str, ...]]) -> str | None:
@@ -126,7 +132,7 @@ def _run_streamlink(
     if extra_args:
         cmd.extend(extra_args)
     try:
-        result = subprocess.run(cmd, capture_output=True, timeout=15)
+        result = subprocess.run(cmd, capture_output=True, timeout=STREAMLINK_TIMEOUT)
     except subprocess.TimeoutExpired:
         return None, "streamlink timed out resolving stream URL"
 
@@ -180,9 +186,9 @@ def resolve_hls_url(
         return None, "No platform client provided and channel is not a direct URL"
 
     want_master = adaptive and quality == "best"
-    quality_arg = _quality_arg(quality)
+    q_arg = quality_arg(quality)
     master_key = _cache_key(stream_url, _MASTER_CACHE_TAG, extra_args)
-    single_key = _cache_key(stream_url, quality_arg, extra_args)
+    single_key = _cache_key(stream_url, q_arg, extra_args)
 
     if want_master:
         if use_cache:
@@ -208,8 +214,8 @@ def resolve_hls_url(
             logger.debug("HLS URL served from resolve cache")
             return cached, ""
 
-    logger.debug("Running streamlink with quality=%s", quality_arg)
-    hls_url, err = _run_streamlink(resolved_sl, stream_url, quality_arg, extra_args)
+    logger.debug("Running streamlink with quality=%s", q_arg)
+    hls_url, err = _run_streamlink(resolved_sl, stream_url, q_arg, extra_args)
 
     if hls_url:
         logger.info("HLS URL resolved successfully (length=%d)", len(hls_url))

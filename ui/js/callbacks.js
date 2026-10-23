@@ -1,6 +1,23 @@
 window.TwitchX = window.TwitchX || {};
 const TwitchX = window.TwitchX;
 
+// Key ("platform:login") of the channel whose chat is on screen, or '' if none.
+TwitchX._activeChatKey = function() {
+  if (TwitchX.multiState.open) {
+    var activeSlot = TwitchX.multiState.slots[TwitchX.multiState.chatSlot];
+    return activeSlot ? TwitchX.channelKey(activeSlot.channel, activeSlot.platform) : '';
+  }
+  return TwitchX.state.watchingChannelKey || '';
+};
+
+// Chat callbacks from Python carry their source channel; events of a channel
+// we already switched away from must not leak into the current chat.
+TwitchX._isActiveChatKey = function(channelId, platform) {
+  var key = TwitchX.channelKey(channelId, platform || TwitchX.state.playerPlatform || 'twitch');
+  var active = TwitchX._activeChatKey();
+  return !key || !active || key === active;
+};
+
 window.onStreamsUpdate = function(data) {
   TwitchX.state.hasCredentials = data.has_credentials !== false;
   TwitchX.state.streamsLoaded = true;
@@ -14,11 +31,6 @@ window.onStreamsUpdate = function(data) {
   TwitchX.state.userAvatars = data.user_avatars || {};
 
   if (TwitchX.hideSkeletonGrid) TwitchX.hideSkeletonGrid();
-
-  // Phase 9: keep PiP button visibility in sync with server config
-  TwitchX.state.pipEnabled = data.pip_enabled === true;
-  const pipBtn = document.getElementById('pip-player-btn');
-  if (pipBtn) pipBtn.classList.toggle('hidden', !TwitchX.state.pipEnabled);
 
   // Compute viewer trends
   for (const s of newStreams) {
@@ -101,7 +113,7 @@ window.onStreamsUpdate = function(data) {
   if (!playerActive) {
     for (const s of TwitchX.state.streams) {
       const streamKey = TwitchX.channelKey(s.login, s.platform || 'twitch');
-      if (!TwitchX.state.thumbnails[streamKey] && s.thumbnail_url) {
+      if (s.thumbnail_url && TwitchX.thumbnailNeedsFetch(streamKey)) {
         TwitchX.api.get_thumbnail(streamKey, s.thumbnail_url);
       }
     }
@@ -119,15 +131,21 @@ window.onStreamsUpdate = function(data) {
   for (const key in TwitchX.state.thumbnails) {
     if (!keepLogins.has(key)) delete TwitchX.state.thumbnails[key];
   }
+  for (const key in TwitchX.state.thumbnailFetchedAt) {
+    if (!keepLogins.has(key)) delete TwitchX.state.thumbnailFetchedAt[key];
+  }
   for (const key in TwitchX.state.prevViewers) {
     if (!keepLogins.has(key)) delete TwitchX.state.prevViewers[key];
   }
 };
 
-window.onSearchResults = function(results) {
-  TwitchX.state.searchResults = results || [];
+window.onSearchResults = function(results, meta) {
   const dd = document.getElementById('search-dropdown');
   const searchInput = document.getElementById('search-input');
+  // Drop replies for a query the user has since changed or cleared.
+  const current = searchInput ? searchInput.value.trim() : '';
+  if (!current || (meta && meta.query !== current)) return;
+  TwitchX.state.searchResults = results || [];
   while (dd.firstChild) dd.removeChild(dd.firstChild);
   if (!results || results.length === 0) {
     dd.classList.remove('visible');
@@ -219,9 +237,13 @@ window.onLoginError = function(msg) {
   TwitchX.showToast('Login error: ' + msg, 'error');
 };
 
-window.onLogout = function() {
+window.onLogout = function(reason) {
   TwitchX.hideUserProfile();
-  TwitchX.showToast('Logged out', 'info');
+  if (reason) {
+    TwitchX.showToast(reason, 'warn');
+  } else {
+    TwitchX.showToast('Logged out', 'info');
+  }
 };
 
 window.onImportComplete = function(data) {
@@ -236,8 +258,13 @@ window.onLaunchResult = function(data) {
   var loader = document.getElementById('stream-loader');
   if (loader) loader.classList.add('hidden');
   if (data.success) {
-    TwitchX.state.watchingChannel = data.channel;
-    TwitchX.state.watchingChannelKey = TwitchX.channelKey(data.channel, data.platform || TwitchX.state.selectedPlatform || TwitchX.state.playerPlatform || 'twitch');
+    // An in-app launch already set the watched channel in onStreamReady. Only
+    // an external-player launch, with no stream in the player, may set it here:
+    // overwriting the in-app key would cut the player's chat off.
+    if (!TwitchX.state.playerPlatform) {
+      TwitchX.state.watchingChannel = data.channel;
+      TwitchX.state.watchingChannelKey = TwitchX.channelKey(data.channel, data.platform || TwitchX.state.selectedPlatform || 'twitch');
+    }
     TwitchX.setStatus(data.message, 'success');
     document.getElementById('live-dot').classList.add('visible');
     TwitchX.renderGrid();
@@ -256,6 +283,10 @@ window.onStreamReady = function(data) {
   // Clear stale chat messages from the previous stream before switching
   TwitchX.clearChatMessages();
   if (TwitchX.clearChatBatch) TwitchX.clearChatBatch();
+  // Third-party emotes belong to the previous channel; the new set arrives
+  // via onThirdPartyEmotes once start_chat fetched it.
+  TwitchX.thirdPartyEmotes = {};
+  TwitchX._cachedPickerEmotes = null;
   var loader = document.getElementById('stream-loader');
   if (loader) loader.classList.add('hidden');
 
@@ -586,6 +617,7 @@ window.onMultiSlotReady = function(data) {
   }
 
   window.onChatMessage = function(msg) {
+    if (!msg || !TwitchX._isActiveChatKey(msg.channel_id, msg.platform)) return;
     chatBatch.push(msg);
     if (!chatBatchTimer) {
       chatBatchTimer = setTimeout(function() {
@@ -628,14 +660,7 @@ window.onChatSendResult = function(result) {
 };
 
 window.onChatStatus = function(status) {
-  var statusKey = TwitchX.channelKey(status.channel_id, status.platform || TwitchX.state.playerPlatform || 'twitch');
-  if (TwitchX.multiState.open) {
-    var activeSlot = TwitchX.multiState.slots[TwitchX.multiState.chatSlot];
-    var activeMsKey = activeSlot ? TwitchX.channelKey(activeSlot.channel, activeSlot.platform) : '';
-    if (statusKey && activeMsKey && statusKey !== activeMsKey) return;
-  } else if (TwitchX.state.watchingChannelKey && statusKey && statusKey !== TwitchX.state.watchingChannelKey) {
-    return;
-  }
+  if (!status || !TwitchX._isActiveChatKey(status.channel_id, status.platform)) return;
   TwitchX.chatAuthenticated = !!(status.authenticated);
   TwitchX.chatPlatform = status.platform || TwitchX.state.playerPlatform || 'twitch';
   if (status.self_login) TwitchX.chatSelfLogin = status.self_login;
@@ -715,7 +740,10 @@ window.onChatStatus = function(status) {
 };
 
 window.onThirdPartyEmotes = function(data) {
-  if (!data || !data.emotes) return;
+  if (!data || !data.emotes || !data.channel) return;
+  // Strict: emotes of a channel that is no longer on screen are dropped.
+  var active = TwitchX._activeChatKey();
+  if (!active || active !== TwitchX.channelKey(data.channel, 'twitch')) return;
   Object.assign(TwitchX.thirdPartyEmotes, data.emotes);
   TwitchX._cachedPickerEmotes = null;
   if (TwitchX._emotePickerOpen) {
@@ -725,12 +753,39 @@ window.onThirdPartyEmotes = function(data) {
 };
 
 window.onChatUserList = function(data) {
+  if (!data || !TwitchX._isActiveChatKey(data.channel_id, data.platform)) return;
   TwitchX._chatUserList = data.users || [];
   var countEl = document.getElementById('chat-userlist-count');
   if (countEl) countEl.textContent = data.count || TwitchX._chatUserList.length;
   var panel = document.getElementById('chat-userlist-panel');
   if (panel && !panel.classList.contains('hidden')) {
     TwitchX.renderChatUserList('');
+  }
+};
+
+// Twitch rejected a message we sent (slow mode, followers-only, duplicate, ...).
+window.onChatNotice = function(data) {
+  if (!data || !TwitchX._isActiveChatKey(data.channel_id, data.platform)) return;
+  var text = data.text || 'Message was not sent';
+  window.onChatMessage({
+    channel_id: data.channel_id,
+    platform: data.platform,
+    author: '',
+    author_display: '',
+    author_color: null,
+    text: text,
+    timestamp: '',
+    badges: [],
+    emotes: [],
+    is_system: true,
+    message_type: 'notice',
+    msg_id: null,
+    is_self: false
+  });
+  TwitchX.showToast(text, 'error');
+  if (data.failed_text) {
+    var input = document.getElementById(TwitchX.multiState.open ? 'ms-chat-input' : 'chat-input');
+    if (input && !input.value) input.value = data.failed_text;
   }
 };
 
@@ -825,17 +880,18 @@ window.onKickLoginError = function(msg) {
   TwitchX.showToast('Kick login: ' + msg, 'error');
 };
 
-window.onKickLogout = function() {
+window.onKickLogout = function(reason) {
   TwitchX.state.kickUser = null;
   TwitchX.state.kickScopes = '';
   document.getElementById('kick-login-area').classList.remove('hidden');
   document.getElementById('kick-user-area').classList.add('hidden');
   document.getElementById('kick-user-display').textContent = '';
   const fb = document.getElementById('settings-feedback');
-  fb.textContent = 'Logged out from Kick';
+  fb.textContent = reason || 'Logged out from Kick';
   TwitchX.setFeedbackClass(fb, 'muted');
   TwitchX.hideKickProfile();
   TwitchX.updateChatInput();
+  if (reason) TwitchX.showToast(reason, 'warn');
 };
 
 window.onKickTestResult = function(data) {
@@ -947,6 +1003,7 @@ window.onThumbnail = function(data) {
   // Backend returns the compound key in the `login` field for backwards compatibility.
   const streamKey = data.login;
   TwitchX.state.thumbnails[streamKey] = data.data;
+  TwitchX.state.thumbnailFetchedAt[streamKey] = Date.now();
   const img = document.querySelector('.stream-card[data-key="' + streamKey + '"] .thumb-img');
   if (img) {
     // A previous load error may have hidden the image — restore it before retrying.
@@ -965,8 +1022,8 @@ window.onStatusUpdate = function(data) {
     document.getElementById('updated-time').classList.remove('stale');
     document.getElementById('sidebar-stale-banner').classList.add('hidden');
   }
-  if (data.type === 'error' && data.toast !== false) {
-    TwitchX.showToast(data.text, 'error');
+  if (data.toast === true || (data.type === 'error' && data.toast !== false)) {
+    TwitchX.showToast(data.text, data.type || 'info');
   }
 };
 
@@ -1201,13 +1258,17 @@ window.onBrowseTopStreams = function(payload) {
 };
 
 window.onChannelProfile = function(profile) {
+  if (!profile) return;
+  const replyKey = TwitchX.channelKey(profile.requested_login || profile.login, profile.platform);
+  if (replyKey !== TwitchX.state.pendingProfileKey) return;
+  TwitchX.state.pendingProfileKey = '';
   if (TwitchX._channelProfileTimer) {
     clearTimeout(TwitchX._channelProfileTimer);
     TwitchX._channelProfileTimer = null;
   }
   document.getElementById('channel-loading').classList.add('hidden');
 
-  if (!profile) {
+  if (profile.found === false) {
     document.getElementById('channel-bio').textContent = 'Channel not found.';
     document.getElementById('channel-profile-card').classList.remove('fade-transparent');
     return;

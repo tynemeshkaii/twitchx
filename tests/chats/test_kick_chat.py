@@ -646,3 +646,170 @@ class TestKickChatClientSend:
         assert result.ok is False
         assert result.error is not None
         assert "metadata is incomplete" in result.error
+
+
+# ── Phase 1 audit: cancel, robust frames, pusher errors, token provider ──
+
+_CONN_OK = json.dumps(
+    {
+        "event": "pusher:connection_established",
+        "data": json.dumps({"socket_id": "1.2", "activity_timeout": 120}),
+    }
+)
+
+
+def _chat_frame(msg_id: str, content: str) -> str:
+    return json.dumps(
+        {
+            "event": "App\\Events\\ChatMessageEvent",
+            "channel": "chatrooms.1.v2",
+            "data": json.dumps(
+                {
+                    "id": msg_id,
+                    "content": content,
+                    "type": "message",
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "sender": {
+                        "id": 1,
+                        "username": "U",
+                        "slug": "u",
+                        "identity": {"color": "", "badges": []},
+                    },
+                }
+            ),
+        }
+    )
+
+
+class TestKickCancelAndGuards:
+    async def test_cancel_before_connect_never_opens_socket(self) -> None:
+        client = KickChatClient()
+        client.cancel()
+        connect = MagicMock()
+        with patch("core.chats.kick_chat.websockets.connect", connect):
+            await client.connect(channel_id="ch", chatroom_id=1)
+        connect.assert_not_called()
+        assert client._running is False
+
+    async def test_missing_chatroom_id_does_not_subscribe(self) -> None:
+        client = KickChatClient()
+        statuses: list[Any] = []
+        client.on_status(statuses.append)
+        connect = MagicMock()
+        with patch("core.chats.kick_chat.websockets.connect", connect):
+            await client.connect(channel_id="ch", chatroom_id=None)
+        connect.assert_not_called()
+        assert statuses and statuses[-1].error == "No chatroom found"
+
+
+class TestKickRobustFrames:
+    async def test_garbage_frames_are_skipped(self) -> None:
+        client = KickChatClient()
+        received: list[ChatMessage] = []
+        client.on_message(received.append)
+        mock_ws = _make_kick_ws_mock(
+            [
+                _CONN_OK,
+                "not json at all",
+                json.dumps(["a", "list"]),
+                json.dumps({"event": "App\\Events\\ChatMessageEvent", "data": "[1]"}),
+                json.dumps(
+                    {
+                        "event": "App\\Events\\ChatMessageEvent",
+                        "data": json.dumps({"content": "x", "sender": "oops"}),
+                    }
+                ),
+                _chat_frame("m1", "survived"),
+            ]
+        )
+        async with _patch_kick_ws(mock_ws):
+            await client.connect(channel_id="ch", chatroom_id=1)
+        assert [m.text for m in received] == ["survived"]
+
+    def test_parse_kick_event_rejects_non_dict_data(self) -> None:
+        event = {"event": "App\\Events\\ChatMessageEvent", "data": "[1, 2]"}
+        assert parse_kick_event(event) is None
+
+    def test_parse_kick_event_rejects_non_dict_sender(self) -> None:
+        event = {
+            "event": "App\\Events\\ChatMessageEvent",
+            "data": {"content": "hi", "sender": ["nope"]},
+        }
+        assert parse_kick_event(event) is None
+
+    async def test_connection_established_resets_attempt_counter(self) -> None:
+        client = KickChatClient()
+        mock_ws = _make_kick_ws_mock([_CONN_OK])
+        with patch.object(client, "_mark_connected") as mark:
+            async with _patch_kick_ws(mock_ws):
+                await client.connect(channel_id="ch", chatroom_id=1)
+        mark.assert_called_once()
+
+    async def test_pusher_error_42xx_reconnects_immediately(self) -> None:
+        err = json.dumps(
+            {"event": "pusher:error", "data": {"code": 4200, "message": "reconnect"}}
+        )
+        ws1 = _make_kick_ws_mock([_CONN_OK, err])
+        ws2 = _make_kick_ws_mock([_CONN_OK])
+        sockets = [ws1, ws2]
+        opened: list[int] = []
+
+        @asynccontextmanager
+        async def fake_connect(*_a: Any, **_k: Any):  # type: ignore[type-arg]
+            opened.append(1)
+            if not sockets:
+                raise websockets.exceptions.ConnectionClosedOK(None, None)
+            yield sockets.pop(0)
+
+        sleep = AsyncMock()
+        client = KickChatClient()
+        with (
+            patch("core.chats.kick_chat.websockets.connect", fake_connect),
+            patch("core.chats.base.asyncio.sleep", sleep),
+        ):
+            await client.connect(channel_id="ch", chatroom_id=1)
+        assert len(opened) == 2
+        sleep.assert_not_called()
+
+
+def _ok_send_mocks() -> tuple[MagicMock, AsyncMock]:
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"data": {"message_id": "m", "is_sent": True}}
+    mock_client = AsyncMock()
+    mock_client.post = AsyncMock(return_value=mock_resp)
+    return mock_resp, mock_client
+
+
+class TestKickTokenProvider:
+    def _client(self, provider: Any) -> KickChatClient:
+        client = KickChatClient(token_provider=provider)
+        client._authenticated = True
+        client._running = True
+        client._token = "stale-token"
+        client._broadcaster_user_id = 777
+        client._channel = "testch"
+        return client
+
+    async def test_provider_token_used_for_send(self) -> None:
+        provider = AsyncMock(return_value="fresh-token")
+        client = self._client(provider)
+        _, mock_client = _ok_send_mocks()
+        with patch("core.chats.kick_chat.httpx.AsyncClient") as mock_cls:
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await client.send_message("hi")
+        assert result.ok is True
+        provider.assert_awaited_once()
+        headers = mock_client.post.call_args[1]["headers"]
+        assert headers["Authorization"] == "Bearer fresh-token"
+
+    async def test_provider_none_returns_relogin_error(self) -> None:
+        provider = AsyncMock(return_value=None)
+        client = self._client(provider)
+        with patch("core.chats.kick_chat.httpx.AsyncClient") as mock_cls:
+            result = await client.send_message("hi")
+        assert result.ok is False
+        assert result.error is not None
+        assert "Re-login to Kick" in result.error
+        mock_cls.assert_not_called()
