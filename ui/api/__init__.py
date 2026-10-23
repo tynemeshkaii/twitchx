@@ -79,6 +79,8 @@ class TwitchXApi:
     def __init__(self) -> None:
         # ─── Shared state owned by the orchestrator ───
         self._window: Any = None
+        # Set by app.py once the integrated title bar is live; None otherwise.
+        self._titlebar_handler: Any = None
         self._config = load_config()
         self._twitch = TwitchClient()
         self._kick = KickClient()
@@ -339,6 +341,13 @@ class TwitchXApi:
 
     def notify_player_hidden(self) -> None:
         self._streams.notify_player_hidden()
+
+    def window_titlebar_action(self, action: str) -> None:
+        """Drag ("drag") or zoom ("double-click") the window from an empty
+        spot of the integrated title bar. A no-op with the native title bar."""
+        handler = self._titlebar_handler
+        if handler is not None:
+            handler(action)
 
     def add_multi_slot(
         self, slot_idx: int, channel: str, platform: str, quality: str

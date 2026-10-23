@@ -67,6 +67,10 @@
   --leading-normal:  1.4;
   --leading-relaxed: 1.6;
 
+  /* ── Window chrome ─────────────────────────────────── */
+  --titlebar-height: 52px;       /* one top bar: toolbar, player header, sidebar top */
+  --traffic-lights-width: 80px;  /* close/minimise/zoom plus their inset */
+
   /* ── Z-index scale ──────────────────────────────────── */
   --z-base:     1;
   --z-dropdown: 100;

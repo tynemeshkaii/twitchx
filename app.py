@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import importlib
+import logging
 import os
 import re
 import sys
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +14,8 @@ import webview
 from core.storage import get_settings, load_config
 from ui.api import TwitchXApi
 from ui.api.settings_schema import clamp_refresh_interval
+
+logger = logging.getLogger(__name__)
 
 # Native window background, shown before the WebView paints. Must match
 # --bg-base in ui/css/themes/dark.css and ui/css/themes/light.css — update
@@ -64,6 +68,8 @@ class TwitchXApp:
         from PyObjCTools import AppHelper
 
         AppHelper.callAfter(self._enable_video_fullscreen)
+        if get_settings(self._config).get("integrated_titlebar", False):
+            AppHelper.callAfter(self._integrate_titlebar)
         # JS never reads config synchronously (the bridge returns Promises) —
         # push the snapshot as soon as the document is ready.
         self._api.push_config()
@@ -84,6 +90,82 @@ class TwitchXApp:
                 break
         except Exception:
             pass
+
+    @staticmethod
+    def _ns_window() -> Any:
+        from webview.platforms import cocoa
+
+        for bv in cocoa.BrowserView.instances.values():
+            return bv.window
+        return None
+
+    def _integrate_titlebar(self) -> None:
+        """Hide the native title bar and let the traffic lights sit in the sidebar.
+
+        Runs on the main thread. Any failure leaves the native title bar as it
+        was: the window must stay usable even if the AppKit calls misbehave.
+        """
+        try:
+            appkit: Any = importlib.import_module("AppKit")
+            win = self._ns_window()
+            if win is None:
+                return
+            win.setStyleMask_(
+                win.styleMask() | appkit.NSWindowStyleMaskFullSizeContentView
+            )
+            win.setTitlebarAppearsTransparent_(True)
+            win.setTitleVisibility_(appkit.NSWindowTitleHidden)
+            toolbar = appkit.NSToolbar.alloc().initWithIdentifier_("twitchx.main")
+            toolbar.setShowsBaselineSeparator_(False)
+            win.setToolbar_(toolbar)
+            # Unified toolbar style centres the traffic lights in a taller bar.
+            win.setToolbarStyle_(appkit.NSWindowToolbarStyleUnifiedCompact)
+        except Exception:
+            logger.exception("Integrated title bar failed; keeping the native one")
+            return
+        self._api._titlebar_handler = self._titlebar_action
+        # evaluate_js waits on the main thread, which this method occupies.
+        threading.Thread(
+            target=self._api._eval_js,
+            args=(
+                "document.getElementById('app').classList.add('titlebar-integrated')",
+            ),
+            daemon=True,
+        ).start()
+
+    def _titlebar_action(self, action: str) -> None:
+        """Bridge side of the title-bar drag zone (called off the main thread)."""
+        from PyObjCTools import AppHelper
+
+        AppHelper.callAfter(self._perform_titlebar_action, action)
+
+    def _perform_titlebar_action(self, action: str) -> None:
+        try:
+            appkit: Any = importlib.import_module("AppKit")
+            win = self._ns_window()
+            if win is None:
+                return
+            if action == "drag":
+                # WKWebView swallows the mouse-down, so the window never sees a
+                # drag of its own. Hand AppKit the event that is still in flight.
+                event = appkit.NSApplication.sharedApplication().currentEvent()
+                if event is not None and event.type() in (
+                    appkit.NSEventTypeLeftMouseDown,
+                    appkit.NSEventTypeLeftMouseDragged,
+                ):
+                    win.performWindowDragWithEvent_(event)
+            elif action == "double-click":
+                # Honour System Settings › Desktop & Dock › "Double-click a
+                # window's title bar to".
+                pref = appkit.NSUserDefaults.standardUserDefaults().stringForKey_(
+                    "AppleActionOnDoubleClick"
+                )
+                if pref == "Minimize":
+                    win.miniaturize_(None)
+                elif pref != "None":
+                    win.zoom_(None)
+        except Exception:
+            logger.exception("Title bar action %r failed", action)
 
     def _on_closing(self) -> None:
         """Called when the webview window is closing."""

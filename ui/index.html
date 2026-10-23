@@ -52,7 +52,9 @@
   <div id="main">
     <!-- Sidebar -->
     <aside id="sidebar">
-      <div id="sidebar-header">
+      <div id="sidebar-top">
+        <!-- Room for the traffic lights; shown only with the integrated title bar. -->
+        <div class="sidebar-titlebar titlebar-drag" aria-hidden="true"></div>
         <button id="sidebar-collapse-btn" class="sidebar-collapse-btn" title="Collapse sidebar" aria-label="Toggle sidebar collapse"><span data-icon="chevron-left" data-size="16"></span></button>
       </div>
 
@@ -117,7 +119,7 @@
 
     <!-- Content -->
     <main id="content">
-      <div id="toolbar">
+      <div id="toolbar" class="titlebar-drag">
         <div class="toolbar-group toolbar-group--left">
           <select id="sort-select" aria-label="Sort streams">
             <option value="viewers">Most Viewers</option>
@@ -216,7 +218,7 @@
 
         <!-- Multi-stream view -->
         <div id="multistream-view" class="view hidden">
-          <div id="multistream-header">
+          <div id="multistream-header" class="titlebar-drag">
             <span id="multistream-title"><span data-icon="grid-layout" data-size="16"></span> Multi-stream</span>
             <select id="ms-preset-select" aria-label="Multistream layout preset" title="Layout preset"></select>
             <button id="ms-add-slot-btn" title="Add stream" aria-label="Add stream"><span data-icon="plus" data-size="16"></span></button>
@@ -244,7 +246,7 @@
 
         <!-- Player view (replaces grid when a stream is playing) -->
         <div id="player-view" class="view hidden">
-          <div id="player-header">
+          <div id="player-header" class="titlebar-drag">
             <span id="player-channel-name"></span>
             <span id="player-stream-title"></span>
             <span id="vod-time-display" class="hidden"></span>

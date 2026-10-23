@@ -8,28 +8,6 @@
   background: var(--bg-base);
 }
 
-/* css-layer: drag-regions — macOS title-bar integration. Cross-cutting by
-   nature: it only assigns -webkit-app-region, never component styling. */
-.draggable,
-#toolbar,
-#sidebar-header,
-#multistream-header,
-#player-header {
-  -webkit-app-region: drag;
-}
-/* css-layer: drag-regions */
-.draggable button,
-.draggable input,
-.draggable select,
-#toolbar button,
-#toolbar input,
-#toolbar select,
-#sidebar-header button,
-#multistream-header button,
-#player-header button {
-  -webkit-app-region: no-drag;
-}
-
 #main {
   display: flex;
   flex: 1;
@@ -78,7 +56,7 @@
 }
 
 #toolbar {
-  height: 46px;
+  height: var(--titlebar-height);
   background: var(--bg-base);
   border-bottom: 1px solid var(--border-glass);
   display: flex;
@@ -114,3 +92,16 @@
 #app.mini #browse-nav-wrapper { display: none; }
 #app.mini #search-area { display: none; }
 #app.mini #kick-profile-area { display: none; }
+
+/* ── Integrated title bar ───────────────────────────────── */
+/* app.py adds .titlebar-integrated once the native title bar is hidden and the
+   traffic lights float over the top-left corner of the window. */
+#app.titlebar-integrated .sidebar-titlebar {
+  display: block;
+}
+/* The collapsed rail is narrower than the traffic lights. */
+#app.titlebar-integrated #sidebar.collapsed-sidebar ~ #content #toolbar,
+#app.titlebar-integrated #sidebar.collapsed-sidebar ~ #content #player-header,
+#app.titlebar-integrated #sidebar.collapsed-sidebar ~ #content #multistream-header {
+  padding-left: var(--traffic-lights-width);
+}

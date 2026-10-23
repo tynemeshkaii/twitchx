@@ -730,14 +730,42 @@
 #sidebar.collapsed-sidebar .accent-bar {
   left: 0;
 }
-#sidebar-header {
-  height: 46px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding: 0 var(--space-8);
-  border-bottom: 1px solid var(--border-subtle);
+/* Sidebar top: traffic-light row (integrated title bar only), collapse button
+   and, below, the navigation. Grid areas move the collapse button into the
+   traffic-light row when that row exists, so there is never an empty strip. */
+#sidebar-top {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "nav btn";
+  align-items: start;
+  gap: 0 var(--space-4);
+  padding: var(--space-8) var(--space-8) var(--space-4);
   flex-shrink: 0;
+}
+#app.titlebar-integrated #sidebar-top {
+  grid-template-areas: "tb btn" "nav nav";
+  padding-top: 0;
+}
+.sidebar-titlebar {
+  display: none;
+  grid-area: tb;
+  height: var(--titlebar-height);
+}
+#sidebar-top .sidebar-collapse-btn {
+  grid-area: btn;
+}
+#app.titlebar-integrated #sidebar-top .sidebar-collapse-btn {
+  align-self: center;
+}
+#sidebar.collapsed-sidebar #sidebar-top {
+  grid-template-columns: 1fr;
+  grid-template-areas: "btn" "nav";
+  justify-items: center;
+  padding: var(--space-8) var(--space-4) var(--space-4);
+}
+#app.titlebar-integrated #sidebar.collapsed-sidebar #sidebar-top {
+  grid-template-areas: "tb" "btn" "nav";
+  padding-top: 0;
 }
 #profile-area {
   padding: var(--space-12);

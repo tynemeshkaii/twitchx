@@ -97,6 +97,9 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "chat_width": 340,
     "active_platform_filter": "all",
     "pip_enabled": False,
+    # Experimental: traffic lights inside the sidebar instead of a native title
+    # bar. Off until the window drag is verified on real macOS (see app.py).
+    "integrated_titlebar": False,
     "low_latency_mode": False,
     # Which codecs to advertise to Twitch. "auto" resolves to h264+h265, plus AV1
     # when the player reports hardware-class AV1 decoding. See core/constants.py.

@@ -69,7 +69,7 @@ BACKDROP_ALLOWED = {
 }
 
 # Component-local layout lengths (a column width, not a spacing step).
-LAYOUT_VARS = {"--settings-content-offset"}
+LAYOUT_VARS = {"--settings-content-offset", "--traffic-lights-width"}
 
 REMOVED_TOKENS = ("--shadow-glow-accent", "--app-noise", "--glass-content")
 

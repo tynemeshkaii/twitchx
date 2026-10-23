@@ -51,6 +51,7 @@ document.addEventListener('DOMContentLoaded', function() {
   TwitchX._bindGlobalEvents();
   TwitchX._bindMultistreamEvents();
   TwitchX._bindPaletteEvents();
+  TwitchX._bindTitlebarEvents();
   TwitchX._initMultistreamSlots();
   TwitchX._watchFullscreenChanges();
   TwitchX._watchNetworkChanges();
@@ -945,6 +946,30 @@ TwitchX._bindGlobalEvents = function() {
     if ((e.key !== 'Enter' && e.key !== ' ') || !e.target.matches('a[role="button"]')) return;
     e.preventDefault();
     e.target.click();
+  });
+};
+
+// With the integrated title bar the window has no native strip to grab, and
+// -webkit-app-region does nothing in WKWebView. Empty spots of .titlebar-drag
+// hand the press to AppKit through the bridge instead.
+const TITLEBAR_INTERACTIVE_SELECTOR =
+  'button, a, input, select, textarea, label, [role="button"], [role="tab"], [role="option"], [tabindex]';
+
+function _isTitlebarDragTarget(e) {
+  if (e.button !== 0) return false;
+  if (!document.getElementById('app').classList.contains('titlebar-integrated')) return false;
+  if (!e.target.closest || !e.target.closest('.titlebar-drag')) return false;
+  return !e.target.closest(TITLEBAR_INTERACTIVE_SELECTOR);
+}
+
+TwitchX._bindTitlebarEvents = function() {
+  document.addEventListener('mousedown', function(e) {
+    if (!_isTitlebarDragTarget(e) || e.detail > 1) return;
+    if (TwitchX.api && TwitchX.api.window_titlebar_action) TwitchX.api.window_titlebar_action('drag');
+  });
+  document.addEventListener('dblclick', function(e) {
+    if (!_isTitlebarDragTarget(e)) return;
+    if (TwitchX.api && TwitchX.api.window_titlebar_action) TwitchX.api.window_titlebar_action('double-click');
   });
 };
 
