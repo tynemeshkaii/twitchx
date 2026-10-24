@@ -16,6 +16,12 @@ const CHROME_IDS = [
   'section-header',
 ];
 
+// Match --view-exit / --view-enter in tokens.css. The timers are a fallback
+// for a missed animationend (hidden window, reduced motion), with slack.
+const VIEW_EXIT_MS = 160;
+const VIEW_ENTER_MS = 240;
+const VIEW_FALLBACK_SLACK_MS = 60;
+
 const DIRECTIONS = {
   forward: 'anim-view-enter-right',
   back: 'anim-view-enter-left',
@@ -136,8 +142,10 @@ TwitchX.switchView = function(targetId, direction) {
   _clearAnimation(current);
   _clearAnimation(target);
 
-  _setViewVisible(target, true);
+  // opacity: 0 first, then display — otherwise the new view flashes for a
+  // frame before its entrance animation starts.
   target.classList.add('view-enter-prep');
+  _setViewVisible(target, true);
   requestAnimationFrame(function() {
     requestAnimationFrame(function() {
       target.classList.remove('view-enter-prep');
@@ -146,12 +154,18 @@ TwitchX.switchView = function(targetId, direction) {
   });
   current.classList.add('anim-view-exit');
 
+  // Each runs once (animationend or the fallback timer). A view that was
+  // re-entered before its exit finished has lost anim-view-exit: keep it.
   function onExitDone() {
+    if (!current.classList.contains('anim-view-exit')) return;
     _clearAnimation(current);
     _setViewVisible(current, false);
   }
 
+  let entered = false;
   function onEnterDone() {
+    if (entered) return;
+    entered = true;
     _clearAnimation(target);
     // Restore focus inside the new view for keyboard navigation.
     const focusTarget = _getFirstFocusable(target) || target;
@@ -162,8 +176,8 @@ TwitchX.switchView = function(targetId, direction) {
 
   current.addEventListener('animationend', onExitDone, { once: true });
   target.addEventListener('animationend', onEnterDone, { once: true });
-  setTimeout(onExitDone, 300);
-  setTimeout(onEnterDone, 350);
+  setTimeout(onExitDone, VIEW_EXIT_MS + VIEW_FALLBACK_SLACK_MS);
+  setTimeout(onEnterDone, VIEW_ENTER_MS + VIEW_FALLBACK_SLACK_MS);
 };
 
 TwitchX.viewFadeIn = function(el, showClass) {
@@ -192,7 +206,7 @@ TwitchX.viewFadeOut = function(el, hideClass, onDone) {
     if (onDone) onDone();
   }
   el.addEventListener('animationend', finish, { once: true });
-  setTimeout(finish, 250);
+  setTimeout(finish, VIEW_EXIT_MS + VIEW_FALLBACK_SLACK_MS);
 };
 
 TwitchX.hideAllViews = function() {

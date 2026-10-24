@@ -9,7 +9,7 @@
   background: var(--bg-video);
   contain: layout style paint;
   opacity: 1;
-  transition: opacity var(--duration-view) var(--ease-view);
+  transition: opacity var(--view-enter) var(--ease-out);
 }
 #player-view.view-active { display: flex; }
 #player-content {
@@ -28,11 +28,11 @@
 #stream-video-next {
   flex: 1; min-width: 0; background: var(--bg-video);
   outline: none;
-  transition: opacity 0.15s ease;
+  transition: opacity var(--duration-fast) ease;
 }
 #player-stage video.video-shadow,
 #player-stage video.video-fading {
-  transition: opacity 0.15s ease;
+  transition: opacity var(--duration-fast) ease;
 }
 /* Both the incoming and the outgoing element are taken out of flow during a
    crossfade. Leaving either one in it made the two videos share the width for
@@ -276,7 +276,7 @@
   padding: 0 var(--space-8) 0 var(--space-16);
   background: linear-gradient(to bottom, rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0));
   color: var(--text-on-overlay);
-  transition: opacity var(--duration-normal) var(--ease-default);
+  transition: opacity var(--duration-normal) var(--ease-out);
 }
 #player-stage.overlay-hidden #player-header {
   opacity: 0;
@@ -324,8 +324,8 @@
 /* ── Fullscreen auto-hide ─────────────────────────────── */
 #player-header.fs-hidden {
   transform: translateY(-100%); opacity: 0; pointer-events: none;
-  transition: transform var(--duration-normal) var(--ease-default),
-              opacity var(--duration-normal) var(--ease-default);
+  transition: transform var(--duration-normal) var(--ease-out),
+              opacity var(--duration-normal) var(--ease-out);
 }
 
 /* ── Player overlay ─────────────────────────────────────── */
@@ -340,7 +340,7 @@
   padding: var(--space-32) var(--space-12) var(--space-8);
   background: linear-gradient(to top, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0));
   color: var(--text-on-overlay);
-  transition: opacity var(--duration-normal) var(--ease-default);
+  transition: opacity var(--duration-normal) var(--ease-out);
 }
 #player-stage.overlay-hidden { cursor: none; }
 #player-stage.overlay-hidden #player-overlay {
@@ -398,6 +398,7 @@
   backdrop-filter: var(--blur-floating);
   -webkit-backdrop-filter: var(--blur-floating);
   color: var(--text-primary);
+  animation: popover-enter var(--duration-fast) var(--ease-out);
 }
 .player-menu.hidden { display: none; }
 .player-menu .ctx-item { white-space: nowrap; }
@@ -420,7 +421,6 @@
   gap: 2px;
 }
 .player-volume.hidden { display: none; }
-#mute-btn.muted { color: var(--live-red); }
 #volume-slider {
   width: 72px;
   height: 4px;

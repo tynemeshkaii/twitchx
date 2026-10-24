@@ -62,10 +62,14 @@ body {
   #multistream-grid { gap: 2px; }
 }
 @media (prefers-reduced-motion: reduce) {
+  /* Everything that moves stops: entrances, the card stagger (--i delay),
+     popovers, modals, loaders. State changes still land, instantly. */
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.05s !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
     scroll-behavior: auto !important;
   }
   #chat-messages, #ms-chat-messages { scroll-behavior: auto; }
@@ -76,6 +80,8 @@ body {
   }
 }
 @media (prefers-contrast: more) {
+  /* Rules here restate component selectors: the html prefix lets them win
+     over the component files, which load after reset.css. */
   :root {
     --text-muted: var(--text-secondary);
     --bg-border: var(--border-strong);
@@ -83,40 +89,60 @@ body {
     --border-card: var(--border-default);
     --border-glass: var(--border-default);
   }
-  #settings-modal, #context-menu, #palette-modal, #onboarding-modal,
-  #chat-filter-panel, #chat-export-menu, #chat-userlist-panel, #chat-mod-panel,
-  #group-context-menu {
+  /* Floating layers: a hard 2px edge instead of blur + shadow alone. */
+  html #settings-modal, html #context-menu, html #group-context-menu,
+  html #palette-modal, html #account-popover, html .player-menu,
+  html .section-menu, html .chat-export-menu, html #chat-filter-panel,
+  html #chat-userlist-panel, html #chat-mod-panel {
     border-width: 2px;
     border-color: var(--border-strong);
   }
-  .stream-card, .channel-item, .browse-category-card, .browse-stream-card,
-  .channel-media-card, .channel-media-item,
-  .btn, .bar-btn, .player-header-btn, .chat-header-btn, .emote-picker-btn,
-  .ms-slot, .ms-add-form input, .ms-add-form select,
-  .toolbar-search,
-  .text-input, .setting-group input, .setting-group select, .mod-input {
+  /* Controls that are only a tinted fill get a visible edge. */
+  html .segmented, html .toolbar-search, html .bar-btn,
+  html .chat-header-btn, html .emote-picker-btn, html .btn-secondary,
+  html .btn-icon, html .ms-slot, html .ms-add-form input,
+  html .ms-add-form select, html .browse-category-card {
     border-width: 1px;
+    border-style: solid;
     border-color: var(--border-default);
   }
-  .stream-card:hover, .channel-item:hover, .browse-category-card:hover,
-  .browse-stream-card:hover, .channel-media-card:hover, .channel-media-item:hover {
-    border-color: var(--border-strong);
+  html .segmented .active, html .segmented [aria-selected="true"],
+  html .segmented [aria-checked="true"],
+  html .sidebar-nav-item[aria-current="page"], html .channel-item.selected {
+    outline: 1px solid var(--border-strong);
+    outline-offset: -1px;
   }
-  #app.keyboard-selection .stream-card.selected, #app.keyboard-selection .channel-item.selected,
-  .stream-card:focus-visible, .channel-item:focus-visible,
-  .browse-category-card:focus-visible, .browse-stream-card:focus-visible,
-  .btn:focus-visible, .bar-btn:focus-visible, .player-header-btn:focus-visible,
-  .chat-header-btn:focus-visible, .emote-picker-btn:focus-visible {
-    outline: 3px solid var(--focus-ring);
+  /* The frame keeps an edge on any picture (an outline paints over it). */
+  html .stream-card .card-thumb {
+    outline: 1px solid var(--border-strong);
+    outline-offset: -1px;
+  }
+  /* Thicker focus everywhere the ring is drawn. */
+  html #app.keyboard-selection .stream-card.selected .card-thumb,
+  html .stream-card:focus-visible .card-thumb {
+    box-shadow: 0 0 0 3px var(--accent);
+  }
+  html #app.keyboard-selection .channel-item.selected,
+  html .channel-item:focus-visible, html .sidebar-nav-item:focus-visible,
+  html .browse-category-card:focus-visible, html .btn:focus-visible,
+  html .bar-btn:focus-visible, html .player-ctl-btn:focus-visible,
+  html .chat-header-btn:focus-visible, html .emote-picker-btn:focus-visible,
+  html .ctx-item:focus-visible, html #account-chip:focus-visible,
+  html .toolbar-search:focus-visible {
+    outline: 3px solid var(--accent);
     outline-offset: 2px;
+    box-shadow: none;
   }
-  .live-dot, .notif-dot {
+  /* Player overlay and header: a solid scrim, not a fade. */
+  html #player-overlay { background: rgba(0, 0, 0, 0.88); }
+  html #player-header { background: rgba(0, 0, 0, 0.88); }
+  html .live-dot, html .notif-dot {
     box-shadow: 0 0 0 1px var(--border-strong);
   }
-  .chat-msg.mention {
+  html .chat-msg.mention {
     border-left: 3px solid var(--accent);
   }
-  #chat-messages, #ms-chat-messages {
+  html #chat-messages, html #ms-chat-messages {
     border-top: 1px solid var(--border-default);
   }
 }

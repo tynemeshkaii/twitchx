@@ -79,6 +79,7 @@
   backdrop-filter: var(--blur-floating);
   -webkit-backdrop-filter: var(--blur-floating);
   overflow: hidden;
+  animation: modal-enter var(--duration-normal) var(--ease-out);
 }
 
 #palette-input {
@@ -193,24 +194,10 @@
   color: var(--text-muted);
 }
 
-/* ── Staggered card entrance for browse cards ─────────── */
-/* @keyframes card-enter lives in ui/css/animations.css */
-.browse-category-card.card-enter,
-.browse-stream-card.card-enter {
-  animation: card-enter var(--duration-slow) var(--ease-view) both;
-  opacity: 0;
+/* ── Staggered entrance for browse categories ─────────── */
+/* First load only: callbacks.js sets --i (0–7). @keyframes card-enter lives
+   in ui/css/animations.css. */
+.browse-category-card.card-enter {
+  animation: card-enter var(--duration-slow) var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 15ms);
 }
-.browse-category-card:nth-child(1).card-enter  { animation-delay: 0ms; }
-.browse-category-card:nth-child(2).card-enter  { animation-delay: 25ms; }
-.browse-category-card:nth-child(3).card-enter  { animation-delay: 50ms; }
-.browse-category-card:nth-child(4).card-enter  { animation-delay: 75ms; }
-.browse-category-card:nth-child(5).card-enter  { animation-delay: 100ms; }
-.browse-category-card:nth-child(6).card-enter  { animation-delay: 125ms; }
-.browse-category-card:nth-child(n+7).card-enter { animation-delay: 150ms; }
-.browse-stream-card:nth-child(1).card-enter  { animation-delay: 0ms; }
-.browse-stream-card:nth-child(2).card-enter  { animation-delay: 25ms; }
-.browse-stream-card:nth-child(3).card-enter  { animation-delay: 50ms; }
-.browse-stream-card:nth-child(4).card-enter  { animation-delay: 75ms; }
-.browse-stream-card:nth-child(5).card-enter  { animation-delay: 100ms; }
-.browse-stream-card:nth-child(6).card-enter  { animation-delay: 125ms; }
-.browse-stream-card:nth-child(n+7).card-enter { animation-delay: 150ms; }

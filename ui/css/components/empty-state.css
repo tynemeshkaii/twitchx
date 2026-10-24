@@ -4,7 +4,7 @@
   text-align: center; overflow-y: auto;
   background: transparent;
   opacity: 0;
-  transition: opacity var(--duration-view) var(--ease-view);
+  transition: opacity var(--view-enter) var(--ease-out);
 }
 /* #empty-state is part of #view-stack, so the view system (switchView) drives
    it with .view-active — the older .visible flag is kept as an alias so both

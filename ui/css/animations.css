@@ -4,44 +4,42 @@
 @keyframes view-exit {
   from {
     opacity: 1;
-    transform: scale(1);
   }
   to {
     opacity: 0;
-    transform: scale(0.98);
   }
 }
 
 @keyframes view-enter-from-bottom {
   from {
     opacity: 0;
-    transform: translateY(24px) scale(0.98);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: none;
   }
 }
 
 @keyframes view-enter-from-right {
   from {
     opacity: 0;
-    transform: translateX(24px) scale(0.98);
+    transform: translateX(12px);
   }
   to {
     opacity: 1;
-    transform: translateX(0) scale(1);
+    transform: none;
   }
 }
 
 @keyframes view-enter-from-left {
   from {
     opacity: 0;
-    transform: translateX(-24px) scale(0.98);
+    transform: translateX(-12px);
   }
   to {
     opacity: 1;
-    transform: translateX(0) scale(1);
+    transform: none;
   }
 }
 
@@ -49,7 +47,7 @@
 @keyframes card-enter {
   from {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -58,28 +56,6 @@
 }
 
 /* Toast */
-@keyframes toast-enter {
-  from {
-    opacity: 0;
-    transform: translateX(100%) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0) scale(1);
-  }
-}
-
-@keyframes toast-exit {
-  from {
-    opacity: 1;
-    transform: translateX(0) scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: translateX(100%) scale(0.96);
-  }
-}
-
 @keyframes toast-progress {
   from { transform: scaleX(1); }
   to { transform: scaleX(0); }
@@ -101,11 +77,23 @@
 @keyframes modal-enter {
   from {
     opacity: 0;
-    transform: scale(0.94) translateY(-10px);
+    transform: scale(0.98);
   }
   to {
     opacity: 1;
-    transform: scale(1) translateY(0);
+    transform: scale(1);
+  }
+}
+
+/* Popovers and menus shown by toggling .hidden: rise 4px into place. */
+@keyframes popover-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
 
@@ -117,31 +105,19 @@
 
 /* Utility animation classes */
 .anim-view-exit {
-  animation: view-exit var(--view-exit-duration) var(--view-exit-ease) forwards;
+  animation: view-exit var(--view-exit) var(--ease-out) forwards;
 }
 
 .anim-view-enter-bottom {
-  animation: view-enter-from-bottom var(--view-enter-duration) var(--view-enter-ease) forwards;
+  animation: view-enter-from-bottom var(--view-enter) var(--ease-out) forwards;
 }
 
 .anim-view-enter-right {
-  animation: view-enter-from-right var(--view-enter-duration) var(--view-enter-ease) forwards;
+  animation: view-enter-from-right var(--view-enter) var(--ease-out) forwards;
 }
 
 .anim-view-enter-left {
-  animation: view-enter-from-left var(--view-enter-duration) var(--view-enter-ease) forwards;
-}
-
-.anim-modal-enter {
-  animation: modal-enter var(--duration-normal) var(--ease-spring) forwards;
-}
-
-.anim-toast-enter {
-  animation: toast-enter var(--duration-normal) var(--ease-spring) forwards;
-}
-
-.anim-toast-exit {
-  animation: toast-exit var(--duration-fast) var(--ease-default) forwards;
+  animation: view-enter-from-left var(--view-enter) var(--ease-out) forwards;
 }
 
 /* Reduced motion overrides are handled in reset.css */

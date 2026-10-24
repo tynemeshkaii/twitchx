@@ -82,19 +82,15 @@
   --z-palette:  3000;
   --z-tooltip:  9999;
 
-  /* ── Animation tokens ───────────────────────────────── */
-  --duration-instant: 0.05s;
-  --duration-fast:    0.12s;
-  --duration-normal:  0.20s;
-  --duration-slow:    0.30s;
-  --duration-view:    0.28s;
-  --ease-default:     ease;
-  --ease-spring:      cubic-bezier(0.34, 1.56, 0.64, 1);
-  --ease-out-expo:    cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-view:        cubic-bezier(0.25, 0.1, 0.25, 1);
-
-  /* ── Micro-interaction tokens ───────────────────────── */
-  --scale-press:      0.96;
+  /* ── Motion ───────────────────────────────────────────── */
+  /* No spring and no press scale: hover and press change colour/opacity
+     only. One easing curve for everything that moves. */
+  --duration-fast:   150ms;  /* hover, press, popovers and menus */
+  --duration-normal: 200ms;  /* modals, toasts, small layout changes */
+  --duration-slow:   280ms;  /* card entrance, sidebar width */
+  --ease-out:        cubic-bezier(0.2, 0, 0, 1);
+  --view-exit:       160ms;  /* outgoing view fade */
+  --view-enter:      240ms;  /* incoming view fade + slide */
 
   /* ── Disabled state ─────────────────────────────────── */
   --disabled-opacity: 0.45;
@@ -119,6 +115,9 @@
   --media-chip-bg-strong: rgba(0, 0, 0, 0.62);
   --text-on-media-muted:  rgba(255, 255, 255, 0.82);
   --icon-on-media:        rgba(255, 255, 255, 0.70);
+  /* Empty frame before a thumbnail arrives: dark like the video itself. */
+  --media-placeholder:    #1C1C1E;
+  --media-placeholder-hi: #2C2C2E;
 
   /* ── Glass shell surfaces (overlaid on theme backgrounds) ── */
   --glass-thin:   blur(12px) saturate(160%);
@@ -127,14 +126,6 @@
   /* Layers that float over content (menus, popovers, palette, toasts,
      tooltips): --surface-floating + this blur + --shadow-floating. */
   --blur-floating: blur(24px) saturate(160%);
-
-
-
-  /* ── Motion choreography ──────────────────────────────── */
-  --view-exit-duration: 180ms;
-  --view-enter-duration: 280ms;
-  --view-exit-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
-  --view-enter-ease: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /*

@@ -389,6 +389,7 @@
   backdrop-filter: var(--blur-floating);
   -webkit-backdrop-filter: var(--blur-floating);
   z-index: var(--z-dropdown);
+  animation: popover-enter var(--duration-fast) var(--ease-out);
 }
 /* ── Emote picker ──────────────────────────────────────── */
 .emote-picker {

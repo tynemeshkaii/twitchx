@@ -8,15 +8,18 @@
   opacity: 0;
   pointer-events: none;
   visibility: hidden;
-  transition: opacity var(--duration-view) var(--ease-view),
-              visibility 0s var(--duration-view);
+  transition: opacity var(--duration-normal) var(--ease-out),
+              visibility 0s var(--duration-normal);
 }
 #settings-overlay.visible {
   opacity: 1;
   pointer-events: auto;
   visibility: visible;
-  transition: opacity var(--duration-view) var(--ease-view),
+  transition: opacity var(--duration-normal) var(--ease-out),
               visibility 0s 0s;
+}
+#settings-overlay.visible #settings-modal {
+  animation: modal-enter var(--duration-normal) var(--ease-out);
 }
 #settings-modal {
   width: 720px; max-width: calc(100vw - 32px);

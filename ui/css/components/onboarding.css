@@ -17,7 +17,7 @@
   pointer-events: auto;
 }
 #onboarding-overlay.visible #onboarding-modal {
-  animation: modal-enter var(--duration-normal) var(--ease-spring) forwards;
+  animation: modal-enter var(--duration-normal) var(--ease-out) forwards;
 }
 
 #onboarding-modal {
@@ -130,7 +130,7 @@
   height: 8px;
   border-radius: 50%;
   background: var(--border-default);
-  transition: background var(--duration-fast) ease, transform var(--duration-fast) ease;
+  transition: background var(--duration-fast) ease;
 }
 .onboarding-step-dot.active { background: var(--accent); }
 
