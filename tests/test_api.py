@@ -909,8 +909,12 @@ class TestPollLock:
         for t in threads:
             t.join(timeout=5)
 
-        # Only one Timer must have been created and started
-        started = [t for t in timer_starts if t.is_alive()]
+        # Exactly one timer chain must survive: started and not cancelled.
+        # is_alive() is racy here: a timer cancelled a moment ago can still be
+        # finishing its thread when we look.
+        started = [
+            t for t in timer_starts if t.ident is not None and not t.finished.is_set()
+        ]
         assert len(started) == 1, (
             f"Expected 1 active timer, got {len(started)}: {started}"
         )
