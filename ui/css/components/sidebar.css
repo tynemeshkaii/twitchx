@@ -9,15 +9,15 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--border-default);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+  /* Not connected: an empty ring. Connected: the platform colour. */
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--icon-muted);
 }
-.platform-status-dot.twitch { background: var(--platform-twitch); }
-.platform-status-dot.kick { background: var(--platform-kick-ink); }
-.platform-status-dot.youtube { background: var(--platform-youtube); }
-.platform-status-dot.connected {
-  box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 3px var(--border-subtle);
-}
+.platform-status-dot.youtube { border-radius: 1px; }
+.platform-status-dot.connected { box-shadow: none; }
+.platform-status-dot.connected.twitch { background: var(--platform-twitch); }
+.platform-status-dot.connected.kick { background: var(--platform-kick-ink); }
+.platform-status-dot.connected.youtube { background: var(--platform-youtube); }
 
 /* ── Sidebar stale data banner ───────────────────────── */
 .sidebar-stale-banner {
