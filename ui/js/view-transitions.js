@@ -75,6 +75,26 @@ function _getFirstFocusable(container) {
   return container.querySelector(selector);
 }
 
+// Moving focus to the first control of a new view helps keyboard users; after
+// a click it only paints a focus ring on that control. Track the last input.
+let _vtLastInputKeyboard = false;
+document.addEventListener('keydown', function() { _vtLastInputKeyboard = true; }, true);
+document.addEventListener('pointerdown', function() { _vtLastInputKeyboard = false; }, true);
+
+function _focusEnteredView(target) {
+  if (!target) return;
+  if (_vtLastInputKeyboard) {
+    const first = _getFirstFocusable(target);
+    if (first && first.focus) {
+      first.focus({ preventScroll: true });
+      return;
+    }
+  }
+  // Mouse: focus the view itself so Tab starts inside it, without a ring.
+  if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
+  target.focus({ preventScroll: true });
+}
+
 TwitchX.setChromeVisible = function(visible) {
   CHROME_IDS.forEach(function(id) {
     const el = document.getElementById(id);
@@ -132,8 +152,7 @@ TwitchX.switchView = function(targetId, direction) {
     _clearAnimation(target);
     _setViewVisible(current, false);
     _setViewVisible(target, true);
-    const focusTarget = _getFirstFocusable(target) || target;
-    if (focusTarget && focusTarget.focus) focusTarget.focus({ preventScroll: true });
+    _focusEnteredView(target);
     return;
   }
 
@@ -167,11 +186,7 @@ TwitchX.switchView = function(targetId, direction) {
     if (entered) return;
     entered = true;
     _clearAnimation(target);
-    // Restore focus inside the new view for keyboard navigation.
-    const focusTarget = _getFirstFocusable(target) || target;
-    if (focusTarget && focusTarget.focus) {
-      focusTarget.focus({ preventScroll: true });
-    }
+    _focusEnteredView(target);
   }
 
   current.addEventListener('animationend', onExitDone, { once: true });

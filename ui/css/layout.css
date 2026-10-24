@@ -40,6 +40,10 @@
   display: none;
   flex-direction: column;
 }
+#view-stack > .view:focus,
+#view-stack > .view:focus-visible {
+  outline: none;
+}
 #view-stack > .view.view-active {
   display: flex;
 }
