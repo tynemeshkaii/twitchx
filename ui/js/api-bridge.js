@@ -20,6 +20,8 @@ function showUserProfile(user) {
   const info = document.getElementById('user-info');
   info.classList.remove('hidden');
   document.getElementById('user-display-name').textContent = user.display_name;
+  const initial = document.getElementById('user-avatar-initial');
+  if (initial) initial.textContent = (user.display_name || user.login || '').charAt(0).toUpperCase();
   const avatar = document.getElementById('user-avatar');
   avatar.dataset.login = user.login || '';
   avatar.dataset.key = TwitchX.channelKey(avatar.dataset.login, 'twitch');

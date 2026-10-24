@@ -33,7 +33,7 @@
 }
 #section-meta > span:empty { display: none; }
 /* "9 live · 495K watching · updated 15:42" */
-#section-meta > span:not(:empty) ~ span:not(:empty)::before {
+#section-meta > span:not(:empty):not(.hidden) ~ span:not(:empty)::before {
   content: '\00b7';
   margin-right: var(--space-4);
 }
