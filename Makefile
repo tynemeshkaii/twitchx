@@ -1,4 +1,4 @@
-.PHONY: run debug lint fmt test cov cov-html check check-linux preview push
+.PHONY: run debug lint fmt test cov cov-html check check-linux preview focus-walk push
 
 run:
 	uv run python main.py
@@ -44,6 +44,13 @@ preview:
 		node tools/ui_preview/build.js && node tools/ui_preview/shoot.js $(ARGS); \
 	else \
 		echo "node not found — skipping UI preview (install Node.js to use make preview)"; \
+	fi
+
+focus-walk:
+	@if command -v node >/dev/null 2>&1; then \
+		node tools/ui_preview/build.js && node tools/ui_preview/focus-walk.js $(ARGS); \
+	else \
+		echo "node not found — skipping focus walk (install Node.js to use make focus-walk)"; \
 	fi
 
 push:  # commits tracked files only: new files must be `git add`-ed explicitly

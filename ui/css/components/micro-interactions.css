@@ -1,26 +1,9 @@
-
-/* ── Micro-interactions: button press feedback ────────── */
+/* ── Micro-interactions: press feedback ─────────────────── */
+/* Press dims the control; nothing scales or springs. Rows get the pressed
+   background instead. */
 button:not(:disabled):active,
-.login-btn:active,
-.bar-btn:active,
-.onboarding-btn:active,
-.browse-back-btn:active,
-.channel-follow-btn:active,
-.ms-confirm-btn:active,
-.ms-cancel-btn:active,
-#watch-external-btn:active,
-#fullscreen-player-btn:active,
-#pip-player-btn:active,
-#close-player-btn:active,
-.eye-btn:active,
-#chat-send-btn:not(:disabled):active,
-#ms-chat-send-btn:not(:disabled):active,
-.browse-platform-tab:not(.active):active,
-#test-btn:active,
-#kick-test-btn:active,
-#yt-test-btn:active,
-#close-settings:active {
-  transform: scale(var(--scale-press));
+.login-btn:active {
+  opacity: 0.8;
 }
 
 .channel-item:active {
@@ -36,68 +19,4 @@ button:not(:disabled):active,
   color: var(--text-secondary);
 }
 
-/* ── Reduced motion overrides ─────────────────────────── */
-@media (prefers-reduced-motion: reduce) {
-  button:not(:disabled):active,
-  .login-btn:active,
-  .bar-btn:active,
-  .player-header-btn:active,
-  .onboarding-btn:active,
-  .browse-back-btn:active,
-  .channel-follow-btn:active,
-  .channel-watch-btn:active,
-  .ms-confirm-btn:active,
-  .ms-cancel-btn:active,
-  #watch-external-btn:active,
-  #fullscreen-player-btn:active,
-  #pip-player-btn:active,
-  #close-player-btn:active,
-  .oauth-login-btn:active,
-  .import-btn:active,
-  .eye-btn:active,
-  #chat-send-btn:not(:disabled):active,
-  #ms-chat-send-btn:not(:disabled):active,
-  .channel-media-btn:active,
-  .browse-platform-tab:not(.active):active,
-  #save-btn:active,
-  #test-btn:active,
-  #kick-test-btn:active,
-  #yt-test-btn:active,
-  #close-settings:active,
-  .channel-item:active {
-    transform: none !important;
-  }
-
-  .stream-card,
-  .browse-category-card,
-  .browse-stream-card,
-  .channel-item,
-  .rail-avatar,
-  .rail-notif-dot,
-  .btn,
-  .bar-btn,
-  .player-header-btn,
-  .browse-back-btn,
-  .channel-follow-btn,
-  .channel-watch-btn,
-  .ms-confirm-btn,
-  .ms-cancel-btn,
-  #chat-send-btn,
-  #ms-chat-send-btn,
-  .channel-media-btn,
-  .browse-platform-tab,
-  #save-btn,
-  #test-btn,
-  #kick-test-btn,
-  #yt-test-btn,
-  #close-settings {
-    transition: none !important;
-  }
-
-  .stream-card:hover,
-  .browse-category-card:hover,
-  .browse-stream-card:hover,
-  .rail-avatar:hover {
-    transform: none !important;
-  }
-}
+/* Reduced motion: reset.css shortens every transition and animation. */

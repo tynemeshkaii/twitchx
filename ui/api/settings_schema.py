@@ -12,13 +12,14 @@ from core.storage import DEFAULT_SETTINGS
 REFRESH_INTERVAL_MIN = 30
 REFRESH_INTERVAL_MAX = 3600
 
+# Same swatches as ACCENT_PALETTE in ui/js/settings.js.
 _ACCENT_PALETTE = {
     "#FF9F0A",
     "#BF5AF2",
     "#0A84FF",
-    "#30D158",
-    "#FF453A",
-    "#FF2D55",
+    "#40C8E0",
+    "#5E5CE6",
+    "#8E8E93",
 }
 
 _STRING_FIELDS = (

@@ -19,7 +19,7 @@
   pointer-events: auto;
 }
 .modal-overlay.visible .modal {
-  animation: modal-enter var(--duration-normal) var(--ease-spring) forwards;
+  animation: modal-enter var(--duration-normal) var(--ease-out) forwards;
 }
 
 .modal {

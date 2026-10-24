@@ -91,7 +91,8 @@
 }
 .ms-add-form input:focus, .ms-add-form select:focus {
   outline: none;
-  border-color: var(--border-accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 .ms-platform-note {
   color: var(--text-muted);
@@ -136,7 +137,7 @@
   background: linear-gradient(to top, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0));
   color: var(--text-on-overlay);
   opacity: 0;
-  transition: opacity var(--duration-normal) var(--ease-default);
+  transition: opacity var(--duration-normal) var(--ease-out);
 }
 .ms-slot:hover .ms-overlay,
 .ms-slot:focus-within .ms-overlay { opacity: 1; }
@@ -281,7 +282,7 @@
   background: var(--bg-video);
   z-index: var(--z-base);
   opacity: 1;
-  transition: opacity var(--duration-view) var(--ease-view);
+  transition: opacity var(--view-enter) var(--ease-out);
 }
 /* Same 52px strip as the main toolbar. */
 #multistream-header {

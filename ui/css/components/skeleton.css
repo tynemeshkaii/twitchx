@@ -12,16 +12,19 @@
   border-radius: var(--radius-sm);
 }
 .skeleton-card {
+  /* Same shape as .stream-card: a bare frame with two text lines under it. */
   display: flex; flex-direction: column; gap: var(--space-8);
-  padding: var(--space-8);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 .skeleton-thumb {
   width: 100%; aspect-ratio: 16/9;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
+  /* The frame is dark in both themes, like the card it stands in for. */
+  background: linear-gradient(90deg,
+    var(--media-placeholder) 25%,
+    var(--media-placeholder-hi) 50%,
+    var(--media-placeholder) 75%);
+  background-size: 200% 100%;
 }
 .skeleton-text {
   height: 12px; border-radius: var(--radius-sm);

@@ -9,7 +9,7 @@
   grid-auto-rows: max-content;
   gap: var(--space-24) var(--space-16); align-content: start;
   opacity: 1;
-  transition: opacity var(--duration-view) var(--ease-view);
+  transition: opacity var(--view-enter) var(--ease-out);
   contain: layout style paint;
   content-visibility: auto;
   contain-intrinsic-size: auto 500px;
@@ -34,30 +34,17 @@
 .stream-card.offline .card-thumb { filter: grayscale(1); opacity: 0.55; }
 .stream-card.offline .card-text { opacity: 0.7; }
 
-/* Staggered entrance */
+/* Staggered entrance on the first load only: render.js sets --i (0–7). */
 .stream-card.card-enter {
-  animation: card-enter var(--duration-slow) var(--ease-out-expo) forwards;
-  opacity: 0;
+  animation: card-enter var(--duration-slow) var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 15ms);
 }
-.stream-card:nth-child(1).card-enter { animation-delay: 0ms; }
-.stream-card:nth-child(2).card-enter { animation-delay: 20ms; }
-.stream-card:nth-child(3).card-enter { animation-delay: 40ms; }
-.stream-card:nth-child(4).card-enter { animation-delay: 60ms; }
-.stream-card:nth-child(5).card-enter { animation-delay: 80ms; }
-.stream-card:nth-child(6).card-enter { animation-delay: 100ms; }
-.stream-card:nth-child(7).card-enter { animation-delay: 120ms; }
-.stream-card:nth-child(8).card-enter { animation-delay: 140ms; }
-.stream-card:nth-child(9).card-enter { animation-delay: 160ms; }
-.stream-card:nth-child(10).card-enter { animation-delay: 180ms; }
-.stream-card:nth-child(11).card-enter { animation-delay: 200ms; }
-.stream-card:nth-child(12).card-enter { animation-delay: 220ms; }
-.stream-card:nth-child(n+13).card-enter { animation-delay: 240ms; }
 
 .card-thumb {
   position: relative; width: 100%; aspect-ratio: 16/9; overflow: hidden;
   flex-shrink: 0;
   border-radius: var(--radius-md);
-  background: var(--bg-elevated);
+  background: var(--media-placeholder);
   transition: box-shadow var(--duration-fast) ease;
 }
 /* Bottom scrim under the viewers and uptime, so white text reads on any frame. */
@@ -81,9 +68,9 @@
 .thumb-shimmer {
   width: 100%; height: 100%;
   background: linear-gradient(90deg,
-    var(--bg-elevated) 25%,
-    var(--bg-overlay) 50%,
-    var(--bg-elevated) 75%);
+    var(--media-placeholder) 25%,
+    var(--media-placeholder-hi) 50%,
+    var(--media-placeholder) 75%);
   background-size: 400px 100%;
   animation: shimmer-card 1.4s ease-in-out infinite;
 }

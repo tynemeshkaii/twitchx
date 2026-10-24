@@ -35,8 +35,8 @@
   cursor: pointer;
   transform: translateX(120%);
   opacity: 0;
-  transition: transform var(--duration-normal) var(--ease-spring),
-              opacity var(--duration-normal) var(--ease-view);
+  transition: transform var(--duration-normal) var(--ease-out),
+              opacity var(--duration-normal) var(--ease-out);
 }
 .toast.toast--visible {
   transform: translateX(0);
@@ -45,8 +45,8 @@
 .toast.toast--leaving {
   transform: translateY(-8px);
   opacity: 0;
-  transition: transform var(--duration-fast) var(--ease-view),
-              opacity var(--duration-fast) var(--ease-view);
+  transition: transform var(--duration-fast) var(--ease-out),
+              opacity var(--duration-fast) var(--ease-out);
 }
 
 .toast--success {

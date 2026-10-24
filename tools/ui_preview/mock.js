@@ -1,5 +1,6 @@
 // Stub for window.pywebview.api plus fake data. window.__boot(opts) plays the
-// role of Python: pushes config and a streams update. opts: {empty, loggedOut, noStreams}.
+// role of Python: pushes config and a streams update.
+// opts: {empty, loggedOut, noStreams, allOffline, long}.
 // window.__scenario.* opens views that need extra callbacks (browse/channel/player).
 (function(){
   const pal = [['#7c3aed','#f472b6'],['#0ea5e9','#22d3ee'],['#f97316','#facc15'],['#10b981','#84cc16'],['#ef4444','#f97316'],['#6366f1','#06b6d4'],['#db2777','#9333ea'],['#14b8a6','#3b82f6'],['#eab308','#ef4444']];
@@ -43,17 +44,76 @@
     };
   }});
   window.__fake = {streams, favs, meta, thumb, avatar, live};
+
+  // Worst-case data: a 140-char title, 25-char names, 50 favorites, 1.2M viewers.
+  function longData(){
+    const title = 'EXTREMELY LONG STREAM TITLE that keeps going — day 47 of the 24/7 subathon, every sub adds a minute, !socials !merch !discord !sponsor';
+    const lStreams = streams.map(function(st, i){
+      const o = Object.assign({}, st);
+      if (i === 0) { o.title = title.slice(0, 140); o.viewers = 1200000; o.display_name = 'TheVeryLongestChannelName'; o.game = 'Grand Theft Auto V: Enhanced Edition'; }
+      if (i === 1) { o.display_name = 'xX_ProGamerUltimate420_Xx'; o.title = title.slice(0, 140); }
+      return o;
+    });
+    const lFavs = favs.slice(); const lMeta = Object.assign({}, meta);
+    for (let i = 0; lFavs.length < 50; i++) {
+      const login = 'offline_channel_name_' + String(i).padStart(4, '0');
+      lFavs.push(login);
+      lMeta['twitch:' + login] = {login: login, platform: 'twitch', display_name: login.slice(0, 25)};
+    }
+    lMeta[lStreams[0].platform + ':' + lStreams[0].login] = Object.assign({}, lMeta[lStreams[0].platform + ':' + lStreams[0].login], {display_name: lStreams[0].display_name});
+    lMeta[lStreams[1].platform + ':' + lStreams[1].login] = Object.assign({}, lMeta[lStreams[1].platform + ':' + lStreams[1].login], {display_name: lStreams[1].display_name});
+    return {streams: lStreams, favs: lFavs, meta: lMeta};
+  }
+
   window.__boot = function(opts){
     opts = opts||{};
     window.pywebview = {api};
     window.dispatchEvent(new Event('pywebviewready'));
+    let d = {streams: streams, favs: favs, meta: meta};
+    if (opts.long) d = longData();
+    if (opts.empty) d = {streams: [], favs: [], meta: {}};
+    if (opts.allOffline) d = {streams: [], favs: d.favs, meta: d.meta};
     window.onConfigLoaded({version:'0.9.0',has_credentials:true,youtube_enabled:true,
       current_user: opts.loggedOut?null:{login:'tynemesh',display_name:'tynemesh'},
       kick_user: opts.loggedOut?null:{login:'tyne',display_name:'tyne'},
-      favorites: opts.empty?[]:favs, favorites_meta: opts.empty?{}:meta, settings:{quality:'best'}, pip_enabled:true});
-    if (!opts.noStreams) window.onStreamsUpdate({streams: opts.empty?[]:streams, favorites: opts.empty?[]:favs, favorites_meta: opts.empty?{}:meta, updated_time:'15:42:07', total_viewers:494900, total_viewers_formatted:'495K', has_credentials:true, user_avatars:{}});
+      favorites: d.favs, favorites_meta: d.meta, settings:{quality:'best'}, pip_enabled:true});
+    if (!opts.noStreams) window.onStreamsUpdate({streams: d.streams, favorites: d.favs, favorites_meta: d.meta, updated_time:'15:42:07', total_viewers: d.streams.length ? (opts.long ? 1694900 : 494900) : 0, total_viewers_formatted: d.streams.length ? (opts.long ? '1.7M' : '495K') : '0', has_credentials:true, user_avatars:{}});
   };
   window.__scenario = {
+    // ── States (phase 4.4) ──────────────────────────────
+    'state-skeleton': function() { TwitchX.showSkeletonGrid(); },
+    'state-browse-loading': function() { TwitchX.showBrowseView(); },
+    'state-vods-loading': function() {
+      window.__scenario.channel();
+      TwitchX.switchChannelTab(document.getElementById('channel-tab-vods-btn'), 'vods');
+    },
+    'state-error-toast': function() {
+      window.onStatusUpdate({ type: 'error', text: 'Twitch API error: 401 Unauthorized — sign in again in Accounts' });
+    },
+    'state-player-error': function() {
+      window.__scenario.player();
+      document.querySelectorAll('.toast').forEach(function(t) { t.remove(); });
+      TwitchX.showPlayerError('Playback failed', 'The stream ended or the network dropped. Retry, or open it in IINA.');
+    },
+    'state-browse-errors': function() {
+      TwitchX.showBrowseView();
+      window.onBrowseCategories({ items: [], errors: { twitch: 'HTTP 401', kick: 'timed out', youtube: 'quota exceeded' } });
+    },
+    'state-browse-empty': function() {
+      TwitchX.showBrowseView();
+      window.onBrowseCategories({ items: [], errors: {} });
+    },
+    'state-channel-offline': function() {
+      TwitchX.showChannelView('hasanabi', 'twitch');
+      window.onChannelProfile({ login: 'hasanabi', display_name: 'HasanAbi', platform: 'twitch', bio: 'Political commentary and react content.', followers: 2900000, is_live: false, watch_supported: true, avatar_url: avatar(9, 'H'), can_follow: true });
+    },
+    'state-stale': function() {
+      window.onStatusUpdate({ type: 'warn', text: 'Twitch did not respond — showing data from 15:42', stale: true });
+    },
+    'state-long': function() {
+      TwitchX.state.sidebarSections.offline = false;
+      TwitchX.renderSidebar();
+    },
     browse: function() {
       TwitchX.showBrowseView();
       const cats = ['Just Chatting','VALORANT','League of Legends','Fortnite','Minecraft','GTA V','Counter-Strike 2','Elden Ring','Slots','World of Warcraft'];

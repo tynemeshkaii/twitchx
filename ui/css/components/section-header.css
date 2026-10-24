@@ -38,13 +38,16 @@
   margin-right: var(--space-4);
 }
 #section-meta > span { flex-shrink: 0; }
-#status-text {
+/* The counts stay whole; "updated …" or the status gives way with an
+   ellipsis in a narrow window. */
+#section-meta > #updated-time,
+#section-meta > #status-text {
   flex-shrink: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--text-secondary);
 }
+#status-text { color: var(--text-secondary); }
 /* A status message briefly takes the place of "updated …". */
 #section-meta.showing-status #updated-time { display: none; }
 #updated-time.stale { color: var(--warn-yellow); }
@@ -94,6 +97,7 @@
   backdrop-filter: var(--blur-floating);
   -webkit-backdrop-filter: var(--blur-floating);
   z-index: var(--z-dropdown);
+  animation: popover-enter var(--duration-fast) var(--ease-out);
 }
 .section-menu.hidden { display: none; }
 .section-menu [role="menuitemradio"][aria-checked="true"] {

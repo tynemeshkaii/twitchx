@@ -6,7 +6,7 @@
   overflow: hidden;
   background: var(--bg-base);
   opacity: 1;
-  transition: opacity var(--duration-view) var(--ease-view);
+  transition: opacity var(--view-enter) var(--ease-out);
 }
 #channel-header {
   min-height: var(--titlebar-height);

@@ -72,6 +72,18 @@ function _setTrend(trend, direction) {
   }
 }
 
+let gridCardsEntered = false;
+
+// Staggered entrance: 15ms per card via --i (see stream-card.css), capped so
+// the last card never waits more than 8 steps.
+TwitchX.markCardEnter = function(card, index) {
+  card.classList.add('card-enter');
+  card.style.setProperty('--i', String(Math.min(index, 7)));
+  card.addEventListener('animationend', function(e) {
+    if (e.target === card) card.classList.remove('card-enter');
+  });
+};
+
 function renderGrid() {
   // Skip rendering when player view is active — grid is hidden
   if (document.getElementById('player-view').classList.contains('view-active')) return;
@@ -171,9 +183,12 @@ function renderGrid() {
       if (card) grid.appendChild(card);
     });
   } else {
+    // Cards rise in only on the first fill; later rebuilds swap in place.
+    const stagger = !gridCardsEntered;
+    gridCardsEntered = true;
     const frag = document.createDocumentFragment();
-    streams.forEach(function(s) {
-      frag.appendChild(createStreamCard(s));
+    streams.forEach(function(s, i) {
+      frag.appendChild(createStreamCard(s, stagger ? i : undefined));
     });
     grid.replaceChildren(frag);
     // Request missing thumbnails
@@ -192,13 +207,14 @@ function renderGrid() {
 //   o.viewers, o.trend   number + 'up'|'down' → the chip bottom-left
 //   o.corner             uptime or duration → bottom-right
 //   o.pinned, o.watching chips top-right
+//   o.enterIndex         position for the first-load stagger (omit → no entrance)
 function buildMediaCard(o) {
   const card = document.createElement('div');
-  card.className = 'stream-card card-enter';
+  card.className = 'stream-card';
   card.tabIndex = 0;
   card.setAttribute('role', 'button');
   if (o.label) card.setAttribute('aria-label', o.label);
-  card.addEventListener('animationend', function() { card.classList.remove('card-enter'); }, { once: true });
+  if (typeof o.enterIndex === 'number') TwitchX.markCardEnter(card, o.enterIndex);
 
   const thumb = document.createElement('div');
   thumb.className = 'card-thumb';
@@ -331,7 +347,7 @@ function buildMediaCard(o) {
   return card;
 }
 
-function createStreamCard(s) {
+function createStreamCard(s, enterIndex) {
   const platform = s.platform || 'twitch';
   const streamKey = TwitchX.channelKey(s.login, platform);
   const card = buildMediaCard({
@@ -347,6 +363,7 @@ function createStreamCard(s) {
     pinned: TwitchX.isPinned(platform, s.login),
     watching: TwitchX.state.watchingChannelKey === streamKey,
     label: getStreamCardLabel(s),
+    enterIndex: enterIndex,
   });
   if (TwitchX.state.selectedChannelKey === streamKey) card.classList.add('selected');
   card.dataset.login = s.login;

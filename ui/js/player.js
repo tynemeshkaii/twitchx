@@ -288,6 +288,15 @@ function getActiveVideo() {
   return null;
 }
 
+// Muted is a different glyph, not a red tint: red is reserved for live.
+function _syncMuteButton(btn, muted) {
+  if (!btn) return;
+  if (btn.classList.contains('muted') === muted && btn.firstChild) return;
+  btn.classList.toggle('muted', muted);
+  btn.setAttribute('aria-pressed', String(muted));
+  TwitchX.setIconOnly(btn, muted ? 'volume-mute' : 'volume', 16);
+}
+
 function syncVolumeSlider(video) {
   const slider = document.getElementById('volume-slider');
   const muteBtn = document.getElementById('mute-btn');
@@ -298,7 +307,7 @@ function syncVolumeSlider(video) {
     var pct = Math.round(video.muted ? 0 : video.volume * 100);
     slider.value = pct;
     slider.style.setProperty('--volume-pct', pct + '%');
-    if (muteBtn) muteBtn.classList.toggle('muted', video.muted);
+    _syncMuteButton(muteBtn, video.muted);
   } else {
     volGroup.classList.add('hidden');
   }
@@ -333,7 +342,7 @@ function _handleVolumeSliderInput() {
   slider.style.setProperty('--volume-pct', Math.round(pct * 100) + '%');
   TwitchX.setStatus('Volume: ' + Math.round(pct * 100) + '%', 'info');
   var muteBtn = document.getElementById('mute-btn');
-  if (muteBtn) muteBtn.classList.remove('muted');
+  _syncMuteButton(muteBtn, false);
 }
 
 function _handleMuteBtnClick() {

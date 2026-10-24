@@ -10,9 +10,9 @@
   padding: var(--space-4);
   min-width: 200px;
   visibility: hidden; opacity: 0; pointer-events: none;
-  transform: scale(0.95);
-  transition: opacity var(--duration-fast) var(--ease-view),
-              transform var(--duration-fast) var(--ease-spring),
+  transform: translateY(4px);
+  transition: opacity var(--duration-fast) var(--ease-out),
+              transform var(--duration-fast) var(--ease-out),
               visibility 0s var(--duration-fast);
 }
 .ctx-item.disabled {
@@ -25,9 +25,9 @@
 }
 #context-menu.menu-visible {
   visibility: visible; opacity: 1; pointer-events: auto;
-  transform: scale(1);
-  transition: opacity var(--duration-fast) var(--ease-view),
-              transform var(--duration-fast) var(--ease-spring),
+  transform: none;
+  transition: opacity var(--duration-fast) var(--ease-out),
+              transform var(--duration-fast) var(--ease-out),
               visibility 0s 0s;
 }
 /* Menu rows everywhere (context menus, sort, quality, "…", layout):
@@ -69,15 +69,15 @@
   padding: var(--space-4);
   min-width: 200px;
   visibility: hidden; opacity: 0; pointer-events: none;
-  transform: scale(0.95);
-  transition: opacity var(--duration-fast) var(--ease-view),
-              transform var(--duration-fast) var(--ease-spring),
+  transform: translateY(4px);
+  transition: opacity var(--duration-fast) var(--ease-out),
+              transform var(--duration-fast) var(--ease-out),
               visibility 0s var(--duration-fast);
 }
 #group-context-menu.menu-visible {
   visibility: visible; opacity: 1; pointer-events: auto;
-  transform: scale(1);
-  transition: opacity var(--duration-fast) var(--ease-view),
-              transform var(--duration-fast) var(--ease-spring),
+  transform: none;
+  transition: opacity var(--duration-fast) var(--ease-out),
+              transform var(--duration-fast) var(--ease-out),
               visibility 0s 0s;
 }

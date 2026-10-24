@@ -7,7 +7,7 @@
   border: 1px solid var(--border-default); border-radius: var(--radius-md);
   font-size: var(--font-sm); font-weight: var(--weight-semibold); cursor: pointer;
   font-family: inherit; letter-spacing: -0.01em;
-  transition: background var(--duration-fast) ease, transform var(--duration-fast) ease,
+  transition: background var(--duration-fast) ease,
               border-color var(--duration-fast) ease;
 }
 .login-btn:hover {
@@ -41,13 +41,12 @@
   font-size: var(--font-sm);
   font-weight: var(--weight-semibold);
   cursor: pointer;
-  transition: transform var(--duration-fast) ease,
-              background var(--duration-fast) ease,
+  transition: background var(--duration-fast) ease,
               border-color var(--duration-fast) ease,
               color var(--duration-fast) ease,
               opacity var(--duration-fast) ease;
 }
-.btn:active { transform: scale(0.98); }
+.btn:active { opacity: 0.8; }
 .btn:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--focus-ring-offset), 0 0 0 4px var(--focus-ring);
@@ -56,7 +55,6 @@
 .btn[aria-disabled="true"] {
   opacity: var(--disabled-opacity);
   cursor: not-allowed;
-  transform: none;
 }
 .btn-primary {
   background: var(--btn-primary-bg);
@@ -65,9 +63,6 @@
 }
 .btn-primary:hover {
   background: var(--btn-primary-bg-hover);
-}
-.btn-primary:active {
-  transform: scale(var(--scale-press));
 }
 .btn-secondary {
   background: var(--bg-control);
@@ -92,18 +87,15 @@
   background: var(--hover-bg);
   color: var(--text-primary);
 }
-.btn-icon:active {
-  transform: scale(var(--scale-press));
-}
 .btn-destructive {
   background: var(--status-bg-red);
   border-color: var(--status-border-red);
-  color: var(--live-red);
+  color: var(--error-red);
 }
 .btn-destructive:hover {
-  background: var(--live-red);
+  background: var(--error-red);
   color: var(--text-inverse);
-  border-color: var(--live-red);
+  border-color: var(--error-red);
 }
 .segmented {
   display: inline-flex;
@@ -123,6 +115,13 @@
   position: relative;
   z-index: 1;
 }
+/* .segmented drops the .btn shadow, so its ring is drawn inside the segment
+   (the 2px track would clip one outside). */
+.segmented .btn:focus-visible,
+.segmented button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
 /* Unselected segments are plain text; the selected one gets the raised fill. */
 .segmented .btn {
   padding: 0 var(--space-12);
@@ -130,7 +129,6 @@
   background: transparent;
 }
 .segmented .btn:hover {
-  transform: none;
   color: var(--text-primary);
 }
 .segmented .active,

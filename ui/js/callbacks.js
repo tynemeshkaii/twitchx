@@ -944,6 +944,9 @@ window.onStatusUpdate = function(data) {
   }
 };
 
+// Browse categories rise in on the first load only (see TwitchX.markCardEnter).
+let browseCategoriesEntered = false;
+
 window.onBrowseCategories = function(payload) {
   document.getElementById('browse-loading').classList.add('hidden');
   const grid = document.getElementById('browse-categories-grid');
@@ -962,12 +965,14 @@ window.onBrowseCategories = function(payload) {
     return;
   }
   if (TwitchX.clearBrowseEmpty) TwitchX.clearBrowseEmpty();
-  categories.forEach(function(cat) {
+  const stagger = !browseCategoriesEntered;
+  browseCategoriesEntered = true;
+  categories.forEach(function(cat, i) {
     const card = document.createElement('button');
     card.type = 'button';
-    card.className = 'browse-category-card card-enter';
+    card.className = 'browse-category-card';
     card.setAttribute('aria-label', 'Browse ' + cat.name);
-    card.addEventListener('animationend', function() { card.classList.remove('card-enter'); }, { once: true });
+    if (stagger) TwitchX.markCardEnter(card, i);
     card.onclick = function() { TwitchX._triggerBrowseTopStreams(cat); };
 
     const artWrap = document.createElement('div');
