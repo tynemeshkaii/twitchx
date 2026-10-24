@@ -106,6 +106,12 @@ function renderGrid() {
 
   // Empty states
   var anyLoggedIn = TwitchX.state.currentUser || TwitchX.state.kickUser || TwitchX.state.youtubeUser;
+  // Without favorites there is nothing to sort or count: keep only the title.
+  var noFavorites = TwitchX.state.favorites.length === 0;
+  var sectionActions = document.querySelector('#section-header .section-actions');
+  if (sectionActions) sectionActions.classList.toggle('hidden', noFavorites);
+  var liveCount = document.getElementById('section-live-count');
+  if (liveCount) liveCount.classList.toggle('hidden', noFavorites);
   if (TwitchX.state.favorites.length === 0 && !anyLoggedIn) {
     grid.classList.add('hidden');
     // No brand colours here: one neutral Connect opens the account popover,
