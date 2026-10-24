@@ -52,7 +52,7 @@
 }
 .account-platform-dot.twitch { background: var(--platform-twitch); }
 .account-platform-dot.kick { background: var(--platform-kick-ink); }
-.account-platform-dot.youtube { background: var(--platform-youtube); }
+.account-platform-dot.youtube { background: var(--platform-youtube); border-radius: 1px; }
 .account-section-status {
   font-size: var(--font-sm);
   color: var(--text-muted);

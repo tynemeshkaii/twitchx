@@ -11,7 +11,11 @@
 }
 .platform-dot.twitch { background: var(--platform-twitch); }
 .platform-dot.kick { background: var(--platform-kick-ink); }
-.platform-dot.youtube { background: var(--platform-youtube); }
+.platform-dot.youtube {
+  background: var(--platform-youtube);
+  /* Square, so it never reads as the round red live dot next to it. */
+  border-radius: 1px;
+}
 
 /* 18px glyph over a video frame: dark disc, platform dot in the middle.
    Frames are dark in both themes, so Kick keeps its neon value here. */
