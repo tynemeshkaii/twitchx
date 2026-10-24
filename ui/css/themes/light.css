@@ -24,7 +24,7 @@
   /* ── Semantic status ────────────────────────────────── */
   --live-green:  #145B28;
   --live-red:    #D32F2F;
-  --warn-yellow: #8A5200;
+  --warn-yellow: #715E00;  /* yellow, not the amber accent (hue 50 vs 36) */
   --error-red:   #D32F2F;
   --error-red-bright: #FF6961;
   --info-blue:   #1565C0;
@@ -57,15 +57,15 @@
   --toast-bg-success: rgba(48, 209, 88, 0.16);
   --toast-bg-error:   rgba(255, 69, 58, 0.16);
   --toast-bg-info:    rgba(0, 0, 0, 0.07);
-  --toast-bg-warn:    hsl(36 100% 52% / 0.16);
+  --toast-bg-warn:    rgba(255, 214, 10, 0.20);
   --toast-border-success: rgba(48, 209, 88, 0.30);
   --toast-border-error:   rgba(255, 69, 58, 0.30);
   --toast-border-info:    rgba(0, 0, 0, 0.10);
-  --toast-border-warn:    hsl(36 100% 52% / 0.30);
+  --toast-border-warn:    rgba(214, 176, 0, 0.45);
   --toast-text-success: #1E7232;
   --toast-text-error:   #B72727;
   --toast-text-info:    var(--text-secondary);
-  --toast-text-warn:    #8F5500;
+  --toast-text-warn:    var(--warn-yellow);
 
   /* ── Scroll shadow tokens ───────────────────────────── */
   --scroll-shadow-size:  16px;

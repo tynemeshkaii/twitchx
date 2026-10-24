@@ -1,13 +1,16 @@
 window.TwitchX = window.TwitchX || {};
 const TwitchX = window.TwitchX;
 
+// Keep in sync with ACCENT_PALETTE in tests/test_contrast.py. No red, pink or
+// green: red is --live, green means success/connected, yellow is a warning.
+// A saved colour that is no longer here falls back to Amber.
 const ACCENT_PALETTE = [
   { value: '#FF9F0A', label: 'Amber' },
   { value: '#BF5AF2', label: 'Purple' },
   { value: '#0A84FF', label: 'Blue' },
-  { value: '#30D158', label: 'Green' },
-  { value: '#FF453A', label: 'Red' },
-  { value: '#FF2D55', label: 'Pink' },
+  { value: '#40C8E0', label: 'Teal' },
+  { value: '#5E5CE6', label: 'Indigo' },
+  { value: '#8E8E93', label: 'Graphite' },
 ];
 
 function _hexToRgb(hex) {
@@ -45,10 +48,19 @@ function _rgbToHsl(r, g, b) {
   };
 }
 
+function _relativeLuminance(rgb) {
+  function ch(c) { return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+  return 0.2126 * ch(rgb.r) + 0.7152 * ch(rgb.g) + 0.0722 * ch(rgb.b);
+}
+
 function _contrastColorForRgb(rgb) {
-  // YIQ perceived brightness; choose black or white for best contrast.
-  var yiq = ((rgb.r * 255) * 299 + (rgb.g * 255) * 587 + (rgb.b * 255) * 114) / 1000;
-  return yiq >= 128 ? '#0A0A0C' : '#FFFFFF';
+  // Black or white, whichever has the higher WCAG contrast on the accent
+  // (YIQ picked white on Blue at 3.6:1). tests/test_contrast.py mirrors this.
+  var l = _relativeLuminance(rgb);
+  var onDark = 1.05 / (l + 0.05);
+  var dark = _relativeLuminance({ r: 10 / 255, g: 10 / 255, b: 12 / 255 });
+  var onLight = (l + 0.05) / (dark + 0.05);
+  return onLight >= onDark ? '#0A0A0C' : '#FFFFFF';
 }
 
 function applyAccentColor(color) {
@@ -345,6 +357,7 @@ function _pickTheme(mode, save) {
 function _renderAccentSwatches(current) {
   var container = document.getElementById('accent-swatches');
   if (!container) return;
+  if (!ACCENT_PALETTE.some(function(p) { return p.value === current; })) current = ACCENT_PALETTE[0].value;
   container.replaceChildren();
   ACCENT_PALETTE.forEach(function(p) {
     var btn = document.createElement('button');

@@ -79,7 +79,11 @@ def _parse_hsl(value: str) -> Color:
     if saturation == 0:
         r = g = b = lightness
     else:
-        q = lightness * (1 + saturation) if lightness < 0.5 else lightness + saturation - lightness * saturation
+        q = (
+            lightness * (1 + saturation)
+            if lightness < 0.5
+            else lightness + saturation - lightness * saturation
+        )
         p = 2 * lightness - q
         r = _hue_to_rgb(p, q, hue + 1 / 3)
         g = _hue_to_rgb(p, q, hue)
@@ -126,14 +130,17 @@ def resolve_color(
     return parse_color(raw)
 
 
+# Must match ACCENT_PALETTE in ui/js/settings.js (checked below).
 ACCENT_PALETTE = [
     ("Amber", "#FF9F0A"),
     ("Purple", "#BF5AF2"),
     ("Blue", "#0A84FF"),
-    ("Green", "#30D158"),
-    ("Red", "#FF453A"),
-    ("Pink", "#FF2D55"),
+    ("Teal", "#40C8E0"),
+    ("Indigo", "#5E5CE6"),
+    ("Graphite", "#8E8E93"),
 ]
+
+ROOT = Path(__file__).parent.parent
 
 # Critical text/background pairs that must meet WCAG AA normal text (4.5:1).
 TEXT_PAIRS = [
@@ -163,16 +170,77 @@ def test_theme_text_contrast(theme: str, fg_name: str, bg_name: str) -> None:
     assert ratio >= 4.5, f"{theme}: {fg_name} on {bg_name} contrast is {ratio:.2f}:1"
 
 
+def _on_accent(accent: Color) -> Color:
+    """Black or white, whichever reads better — as settings.js picks it."""
+    dark, light = parse_color("#0A0A0C"), parse_color("#FFFFFF")
+    return (
+        dark if contrast_ratio(dark, accent) >= contrast_ratio(light, accent) else light
+    )
+
+
+def _hue(c: Color) -> float:
+    r, g, b = c.r / 255, c.g / 255, c.b / 255
+    mx, mn = max(r, g, b), min(r, g, b)
+    if mx == mn:
+        return -1.0  # grey: no hue to clash with
+    d = mx - mn
+    if mx == r:
+        h = ((g - b) / d) % 6
+    elif mx == g:
+        h = (b - r) / d + 2
+    else:
+        h = (r - g) / d + 4
+    return h * 60
+
+
+def _hue_distance(a: float, b: float) -> float:
+    d = abs(a - b) % 360
+    return min(d, 360 - d)
+
+
+@pytest.mark.parametrize("accent_name,accent_value", ACCENT_PALETTE)
+def test_accent_contrast(accent_name: str, accent_value: str) -> None:
+    accent = parse_color(accent_value)
+    # Text placed on top of accent-filled buttons must be readable.
+    btn_ratio = contrast_ratio(_on_accent(accent), accent)
+    assert btn_ratio >= 4.5, (
+        f"{accent_name}: text on the {accent_name} accent is {btn_ratio:.2f}:1"
+    )
+
+
+# An accent must not read as a status colour: red is live, green is
+# success/connected, yellow is a warning.
+STATUS_TOKENS = ("live", "live-green", "warn-yellow")
+# Amber (36°) vs systemYellow (50°) reads as orange vs yellow.
+MIN_HUE_DISTANCE = 12
+
+
 @pytest.mark.parametrize("theme", ["dark", "light"])
 @pytest.mark.parametrize("accent_name,accent_value", ACCENT_PALETTE)
-def test_accent_contrast(theme: str, accent_name: str, accent_value: str) -> None:
-    theme_path = Path(__file__).parent.parent / "ui" / "css" / "themes" / f"{theme}.css"
-    tokens = load_theme_tokens(theme_path)
-    accent = parse_color(accent_value)
-    on_accent = resolve_color(tokens, "text-on-accent")
+def test_accent_is_not_a_status_colour(
+    theme: str, accent_name: str, accent_value: str
+) -> None:
+    tokens = load_theme_tokens(ROOT / "ui" / "css" / "themes" / f"{theme}.css")
+    accent_hue = _hue(parse_color(accent_value))
+    if accent_hue < 0:
+        return
+    for token in STATUS_TOKENS:
+        status_hue = _hue(resolve_color(tokens, token))
+        distance = _hue_distance(accent_hue, status_hue)
+        assert distance >= MIN_HUE_DISTANCE, (
+            f"{theme} {accent_name} ({accent_value}) is {distance:.0f}° from --{token}"
+        )
 
-    # Text placed on top of accent-filled buttons must be readable.
-    btn_ratio = contrast_ratio(on_accent, accent)
-    assert btn_ratio >= 4.5, (
-        f"{theme} {accent_name}: text-on-accent on {accent_name} contrast is {btn_ratio:.2f}:1"
+
+def test_accent_palette_matches_settings_js_and_schema() -> None:
+    js = (ROOT / "ui" / "js" / "settings.js").read_text(encoding="utf-8")
+    block = re.search(r"const ACCENT_PALETTE = \[(.*?)\];", js, re.S)
+    assert block is not None
+    js_palette = re.findall(
+        r"value: '(#[0-9A-Fa-f]{6})', label: '(\w+)'", block.group(1)
     )
+    assert [(label, value) for value, label in js_palette] == ACCENT_PALETTE
+
+    from ui.api.settings_schema import _ACCENT_PALETTE
+
+    assert {value for _, value in ACCENT_PALETTE} == _ACCENT_PALETTE
