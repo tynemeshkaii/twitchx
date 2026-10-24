@@ -113,7 +113,7 @@
         <div class="section-actions">
           <button id="game-filter-chip" class="game-filter-chip hidden" type="button" aria-label="Clear game filter"><span id="game-filter-label"></span><span data-icon="close" data-size="12"></span></button>
           <div class="sort-menu-wrap">
-            <button id="sort-menu-btn" class="section-menu-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="sort-menu"><span id="sort-menu-label">Most viewers</span><span data-icon="chevron-down" data-size="12"></span></button>
+            <button id="sort-menu-btn" class="section-menu-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="sort-menu" aria-label="Sort and view: Most viewers"><span id="sort-menu-label">Most viewers</span><span data-icon="chevron-down" data-size="12"></span></button>
             <div id="sort-menu" class="section-menu hidden" role="menu" aria-label="Sort and density">
               <div class="ctx-item" role="menuitemradio" data-sort="viewers" aria-checked="true" tabindex="-1">Most viewers</div>
               <div class="ctx-item" role="menuitemradio" data-sort="recent" aria-checked="false" tabindex="-1">Recently started</div>
@@ -128,7 +128,7 @@
       </header>
 
       <div id="view-stack">
-        <div id="stream-grid" class="view view-active"></div>
+        <div id="stream-grid" class="view view-active" role="region" aria-label="Live channels"></div>
         <div id="empty-state" class="view hidden">
           <div class="empty-icon"></div>
           <div class="empty-title"></div>
@@ -145,7 +145,7 @@
               <button class="btn browse-platform-tab" data-platform="youtube" role="tab" aria-selected="false" tabindex="-1">YouTube</button>
             </div>
           </div>
-          <div id="browse-body">
+          <div id="browse-body" role="region" aria-label="Browse results">
             <div id="browse-categories-grid" class="browse-grid"></div>
             <div id="browse-streams-grid" class="browse-grid browse-streams-grid hidden"></div>
             <div id="browse-loading" class="browse-loading hidden">Loading...</div>

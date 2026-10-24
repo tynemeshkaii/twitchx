@@ -9,6 +9,7 @@ var ICONS = {
   fullscreen: '<path d="M5.75 2.5H3.5v2.25M10.25 2.5h2.25v2.25M12.5 10.25v2.25h-2.25M5.75 12.5H3.5v-2.25"/>',
   pip: '<rect x="2.25" y="3" width="11.5" height="8.25" rx="2"/><rect x="8.35" y="6.85" width="4.15" height="2.9" rx="0.95" fill="currentColor" stroke="none"/>',
   volume: '<path d="M3 8h2.8L8.9 5v6L5.8 8H3z"/><path d="M11 5.5a3.4 3.4 0 0 1 0 5"/><path d="M12.9 3.7a6.05 6.05 0 0 1 0 8.6"/>',
+  'volume-mute': '<path d="M3 8h2.8L8.9 5v6L5.8 8H3z"/><path d="m11 6.25 3.5 3.5M14.5 6.25 11 9.75"/>',
   record: '<circle cx="8" cy="8" r="4" fill="currentColor" stroke="none"/>',
   close: '<path d="M4.15 4.15 11.85 11.85M11.85 4.15l-7.7 7.7"/>',
   settings: '<path d="M8 5.1a2.9 2.9 0 1 0 0 5.8 2.9 2.9 0 0 0 0-5.8z"/><path d="M8 1.5v1.5M8 13v1.5M13 8h1.5M1.5 8H3M11.3 4.7l1.05-1.05M3.65 11.35l1.05-1.05M11.3 11.3l1.05 1.05M3.65 4.65l1.05 1.05"/>',

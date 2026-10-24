@@ -188,7 +188,11 @@ const SORT_LABELS = { viewers: 'Most viewers', recent: 'Recently started', alpha
 // The sort button shows the current order; the menu checks it and the view.
 function _syncSortMenu() {
   var label = document.getElementById('sort-menu-label');
-  if (label) label.textContent = SORT_LABELS[TwitchX.state.sortKey] || SORT_LABELS.viewers;
+  var current = SORT_LABELS[TwitchX.state.sortKey] || SORT_LABELS.viewers;
+  if (label) label.textContent = current;
+  // "Most viewers" alone does not say what the button changes.
+  var sortBtn = document.getElementById('sort-menu-btn');
+  if (sortBtn) sortBtn.setAttribute('aria-label', 'Sort and view: ' + current);
   document.querySelectorAll('#sort-menu [data-sort]').forEach(function(item) {
     item.setAttribute('aria-checked', String(item.dataset.sort === TwitchX.state.sortKey));
   });

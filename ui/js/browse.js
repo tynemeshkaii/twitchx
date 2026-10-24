@@ -93,7 +93,7 @@ function browseErrorSummary(errors) {
       parts.push(TwitchX.platformLabel(platform) + ': ' + errors[platform]);
     }
   });
-  return parts.join(' ');
+  return parts.join(' · ');
 }
 
 function browseStreamRestriction(stream) {
