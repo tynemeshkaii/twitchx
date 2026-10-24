@@ -15,6 +15,7 @@ make test    # uv run pytest tests/ -v
 make check   # lint + test
 make check-linux  # Linux/облако: ruff + pyright + pytest без pyobjc (см. ниже)
 make preview # скрины UI в .preview/ (Node + Playwright, см. tools/ui_preview/README.md)
+make focus-walk  # Tab ×40 по каждому экрану: невидимый фокус / кнопка без имени → exit 1
 ```
 
 `make check-linux` — для облачных Linux-сессий, где `uv` не может собрать
@@ -39,7 +40,8 @@ make preview # скрины UI в .preview/ (Node + Playwright, см. tools/ui_p
 ### После изменений
 
 - Запусти `make check` перед финализацией
-- Если трогал `ui/js/` или `ui/css/` — запусти приложение и проверь визуально (тесты не покрывают JS)
+- После правок в `ui/` — `make preview` и просмотр PNG в `.preview/` глазами (тесты не покрывают JS и вёрстку); новый экран или состояние — новый сценарий в `tools/ui_preview/scenarios.js`
+- Что зависит от WKWebView/macOS (titlebar, fullscreen, PiP, AVKit, VoiceOver) — запусти приложение на маке
 - Если добавил новый Python-модуль — напиши тесты в `tests/`
 
 ### Чего не делать
@@ -51,6 +53,11 @@ make preview # скрины UI в .preview/ (Node + Playwright, см. tools/ui_p
 - **Не lower-case YouTube channel IDs** (`UCxxxx…`) — они case-sensitive везде
 - **Не добавлять `innerHTML` с user data** — только `createElement` + `textContent`
 - **Не вызывать AppKit/AVKit вне main thread** — через `AppHelper.callAfter()`
+- **Не писать сырые px в `ui/css/components/`** — размеры текста, веса, отступы, радиусы только токенами `--font-*`, `--weight-*`, `--space-*`, `--radius-*` (`tests/test_css_tokens.py`)
+- **`backdrop-filter` только на парящих слоях** (меню, поповеры, модалки, тосты, чипы над видео — `BACKDROP_ALLOWED` в `test_css_tokens.py`); никакого свечения, градиентов на кнопках, анимации фона
+- **Не добавлять глобальные контролы вне панели или оверлея плеера** — одна функция живёт в одном месте (фильтр платформ, поиск, refresh — в панели; аккаунты — в поповере чипа; настройки — ⚙ у чипа)
+- **Движение — только токены** `--duration-fast/normal/slow`, `--ease-out`, `--view-exit/--view-enter`; ни пружин, ни `scale` на нажатие (нажатие = `opacity .8` или `--pressed-bg`). Всё новое должно гаснуть под `prefers-reduced-motion` (сценарий `grid-reduced`)
+- **Красный = live (`--live`), зелёный = успех/подключено, жёлтый = предупреждение** — акцент и состояния этими цветами не красить; палитра акцентов в `settings.js` = `ACCENT_PALETTE` в `tests/test_contrast.py` = `settings_schema.py`
 
 ---
 
@@ -71,8 +78,10 @@ make preview # скрины UI в .preview/ (Node + Playwright, см. tools/ui_p
 | `core/recorder.py` | Запись стрима через streamlink |
 | `ui/api/` | Python↔JS bridge (7 компонентов, см. ниже) |
 | `ui/index.html` | Shell; `_inline_resources()` инлайнит CSS/JS (pywebview 5.x, `>=5.0,<6.0`) |
-| `ui/css/` | `tokens`, `themes/`, `reset`, `layout` (только каркас), `components/` (по одному владельцу на селектор) |
-| `ui/js/` | 20 модулей — плоские скрипты, склеиваются в один `<script>`; общий namespace `TwitchX` |
+| `ui/css/` | `tokens`, `themes/`, `reset`, `layout` (только каркас), `components/` (по одному владельцу на селектор). Глобального плеер-бара больше нет (`player-bar.css` удалён): контролы плеера — в оверлее `player-view.css` |
+| `ui/css/components/account-popover.css` | Поповер чипа аккаунта (логины, импорт, mini mode, настройки) |
+| `ui/js/` | 20 модулей — плоские скрипты, склеиваются в один `<script>`; общий namespace `TwitchX`. `account.js` — чип и поповер аккаунта |
+| `tools/ui_preview/` | Превью-харнесс: `build.js` (склейка как в `app.py`), `mock.js` (мок моста + данные), `scenarios.js` (экраны и состояния), `shoot.js` (скрины), `focus-walk.js` (проверка фокуса) |
 | `tests/` | pytest, `conftest.py` с фикстурами |
 
 ---
@@ -169,7 +178,7 @@ def test_my_feature(temp_config_dir, run_sync, capture_eval_js):
 ### Watch methods — выбирай правильный
 | Ситуация | Метод |
 |----------|-------|
-| Канал из live grid (favorites/sidebar) | `watch(channel, quality)` |
+| Канал из live grid (favorites/sidebar) — клик по карточке/строке сразу запускает, отдельной кнопки Watch нет | `watch(channel, quality)` |
 | Канал из Browse (нет в live cache) | `watch_direct(channel, platform, quality)` |
 | VOD/clip | `watch_media(url, quality, platform, channel, title, with_chat)` |
 | Мультистрим слот | `add_multi_slot(slot_idx, channel, platform, quality)` |
@@ -238,3 +247,5 @@ uv run pytest -k "test_watch" -v      # по имени
 | Browse пустой | YouTube quota? Browse cache TTL 10 мин? `load_config()` локальный в треде? |
 | VOD запускает live / падает offline | `watch_media()` передаёт `url`, не `channel`, в `resolve_hls_url()` |
 | httpx клиенты утекают | `_close_thread_loop(loop)` в `finally`? Не bare `loop.close()`? |
+| Превью карточек схлопываются в 0px | У grid-контейнера фиксированной высоты нужен `grid-auto-rows: max-content` (`#stream-grid`, Browse, VODs) |
+| Фокус не виден на кнопке | Компонент гасит `box-shadow`/`outline` (например `.segmented .btn`) — `make focus-walk` |

@@ -56,7 +56,7 @@
 - One-click recording of current stream
 - Saves to `~/Movies/TwitchX/` (configurable)
 - Uses streamlink for lossless `.ts` capture
-- Recording indicator in player bar
+- Recording indicator in the player overlay
 
 ### Watch Statistics
 - Automatic session tracking in local SQLite database
@@ -72,13 +72,19 @@
 - **Fullscreen** — double-click or hotkey, with proper PiP coordination
 - **Keyboard shortcuts** — customizable hotkeys for all actions
 - **Breadcrumb navigation** — Following → Browse → Category flow
-- **Dark theme** — native macOS aesthetic
+- **Light, dark and Auto themes** — quiet graphite UI, one accent colour, the streams carry the colour
 
 ---
 
 ## Screenshots
 
-> _Screenshots will be added here. The app features a clean dark sidebar with online/offline channel lists, a central player view with chat panel, browse view with game categories, and a multistream grid layout._
+![Following, dark theme](docs/screenshots/following-dark.png)
+
+![Following, light theme](docs/screenshots/following-light.png)
+
+![Player with chat](docs/screenshots/player-dark.png)
+
+_Rendered from the UI preview harness (`make preview`) with mock data._
 
 ---
 
@@ -137,17 +143,17 @@ make run
 | Close player / view | `Esc` |
 | Send chat message | `Enter` |
 
-All shortcuts are customizable in Settings → Keyboard.
+All shortcuts are customizable in Settings → Advanced → Keyboard shortcuts.
 
 ### Watch a Stream
-- Click any **live** channel in the sidebar
-- Or search and click from Browse view
+- Click any **live** card or sidebar row — one click starts the stream
+- Or search (`Cmd + K`) and pick a channel, or open one from Browse
 - Double-click video for fullscreen
 - Click the **Record** button to save the stream
 
 ### Multistream
-- Click the **multistream button** in toolbar
-- Add slots by searching for channels
+- Open **Multi-view** in the sidebar
+- Add slots by name or drag a channel in from the sidebar
 - Click the **speaker icon** on a slot to focus its audio
 - Click the **chat icon** to view that slot's chat
 
@@ -172,6 +178,9 @@ make check       # lint + test
 # Coverage
 make cov         # terminal report
 make cov-html    # open htmlcov/index.html
+
+# UI screenshots (Node + Playwright, see tools/ui_preview/README.md)
+make preview     # every screen, both themes → .preview/*.png
 ```
 
 ### Project Structure
@@ -192,9 +201,10 @@ twitchx/
 │   └── constants.py        # TTL, OAuth ports, defaults
 ├── ui/
 │   ├── index.html          # App shell
-│   ├── css/                # 6 CSS modules (tokens, layout, player...)
-│   ├── js/                 # 14 JS modules (IIFE + TwitchX namespace)
+│   ├── css/                # tokens, themes, reset, layout + one file per component
+│   ├── js/                 # 20 flat modules merged into one <script> (TwitchX namespace)
 │   └── api/                # Python↔JS bridge (7 components)
+├── tools/ui_preview/       # Screenshot harness: mock bridge + Playwright
 └── tests/                  # Pytest suite with fixtures
 ```
 
@@ -212,7 +222,7 @@ main.py → app.py (TwitchXApp)
          httpx.AsyncClient  →  Twitch / Kick / YouTube APIs
 ```
 
-All network I/O runs in background threads with isolated `asyncio` event loops. The frontend is vanilla JS (IIFE modules) communicating with Python via `pywebview` bridge. Video is rendered via native `<video>` element backed by WebKit's AVPlayer integration.
+All network I/O runs in background threads with isolated `asyncio` event loops. The frontend is vanilla JS (flat modules sharing the `TwitchX` namespace) communicating with Python via `pywebview` bridge. Video is rendered via native `<video>` element backed by WebKit's AVPlayer integration.
 
 ---
 

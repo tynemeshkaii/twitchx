@@ -1,5 +1,15 @@
 # Редизайн TwitchX — общий контекст для всех фаз
 
+> **Редизайн завершён.** Все пять фаз смержены в `main`:
+> фаза 0 — [#3](https://github.com/tynemeshkaii/twitchx/pull/3),
+> фаза 1 — [#4](https://github.com/tynemeshkaii/twitchx/pull/4) и
+> [#5](https://github.com/tynemeshkaii/twitchx/pull/5),
+> фаза 2 — [#6](https://github.com/tynemeshkaii/twitchx/pull/6),
+> фаза 3 — [#7](https://github.com/tynemeshkaii/twitchx/pull/7),
+> фаза 4 — PR `Redesign phase 4: polish and release`.
+> Правила, которые держат систему (токены, движение, цвета, одна функция —
+> одно место, `make preview` / `make focus-walk`), перенесены в `CLAUDE.md`.
+
 Этот файл читает агент **каждой** фазы перед началом работы. Промпты фаз
 (`phase-0-…md` … `phase-4-…md`) ссылаются на него и не повторяют то, что
 написано здесь.
